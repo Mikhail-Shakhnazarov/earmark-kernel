@@ -1,0 +1,16 @@
+system_id: your_system
+namespace: systems/your_system
+title: Your System
+description: Path-based system authoring manifest.
+classes: []
+instructions: []
+standing_policies: []
+compiled_contexts: []
+provider_profiles: []
+workflows: []
+runtime_profile:
+  execution_surface: runtime_over_folder
+  machine_output_default: json
+  work_surface_mode: materialized_manifest
+default_compiled_context: null
+default_provider_profile: null

@@ -1,0 +1,23 @@
+name: research_standing_policy
+version: 0.2.0
+description: Minimal standing policy for research synthesis examples.
+transition_rules:
+  - dimension: review
+    from:
+      - unreviewed
+    to:
+      - accepted
+    requires_review: true
+operation_requirements:
+  - operation: export
+    minimums:
+      review: accepted
+    forbidden:
+      epistemic:
+        - unresolved
+escalations:
+  - trigger: attempted_export_without_review
+    severity: warning
+    message: Export requires accepted review standing.
+rationale: Demonstrates review-gated export.
+

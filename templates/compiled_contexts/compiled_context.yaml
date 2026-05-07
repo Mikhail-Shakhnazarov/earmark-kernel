@@ -1,0 +1,16 @@
+name: your_compiled_context
+version: 0.2.0
+description: Bounded context selection policy.
+select:
+  classes:
+    - source_note
+  relations: []
+  standing: []
+render:
+  mode: objects_and_relations
+  include_headers: true
+  include_payload: true
+  prose_template: null
+visibility:
+  redact_headers: []
+  redact_payload_paths: []

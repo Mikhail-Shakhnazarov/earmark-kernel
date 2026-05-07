@@ -1,0 +1,12 @@
+/target/
+
+# Internal planning and review material
+/docs/internal/
+/docs/archive/
+/docs/review/
+/WORKSPACE_STATUS.md
+/PRODUCTIZATION_ROADMAP.md
+/GUI_WORKBENCH_CONCEPT.md
+
+# Local workspace state
+/.earmark/

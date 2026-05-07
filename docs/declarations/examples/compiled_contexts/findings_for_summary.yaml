@@ -1,0 +1,20 @@
+name: findings_for_summary
+version: 0.2.0
+description: Compile findings for bounded summary generation.
+select:
+  classes:
+    - finding
+  standing: {}
+  relations:
+    - derived_from
+  time_range: null
+group_by: []
+render:
+  mode: work_surface_materialization
+  manifest_format: json
+  prose_template: null
+visibility:
+  include_lineage: true
+  include_constraints: true
+  include_provenance: true
+

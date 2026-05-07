@@ -1,0 +1,19 @@
+name: google_gemini
+version: 0.1.0
+description: Google Gemini provider profile.
+provider: google_gemini
+model: gemini-1.5-pro
+budget:
+  max_output_tokens: 2048
+  max_latency_ms: 30000
+allowed_operations:
+  - transform
+exposure:
+  allow_prose_objects: true
+  allow_structured_declarations: false
+  allow_work_surface_only: false
+  allow_export_requests: false
+response_contract:
+  format: json
+  must_return_candidate_only: true
+  must_include_lineage: false
