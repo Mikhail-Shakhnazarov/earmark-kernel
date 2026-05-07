@@ -1,0 +1,6 @@
+name: your_standing_policy
+version: 0.2.0
+description: Standing transition and escalation policy.
+transition_rules: []
+operation_requirements: []
+escalations: []

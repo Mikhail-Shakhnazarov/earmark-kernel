@@ -1,0 +1,23 @@
+name: gemini_research
+version: 0.2.0
+description: Google Gemini provider profile for research synthesis.
+provider: google_gemini
+model: gemini-2.5-flash
+endpoint_env: null
+auth_env: GOOGLE_API_KEY
+budget:
+  max_input_tokens: 8000
+  max_output_tokens: 4000
+  max_cost_usd: null
+  max_latency_ms: 30000
+allowed_operations:
+  - transform
+exposure:
+  allow_prose_objects: true
+  allow_structured_declarations: false
+  allow_work_surface_only: true
+  allow_export_requests: false
+response_contract:
+  format: json
+  must_return_candidate_only: true
+  must_include_lineage: false

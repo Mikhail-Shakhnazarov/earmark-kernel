@@ -1,0 +1,25 @@
+system_id: sys_research_synthesis_failing
+namespace: examples.research
+title: Research Synthesis Demo (Failing Provider)
+description: Variant system that routes through failing mock provider for error-path demo.
+classes:
+  - ../classes/source_note.yaml
+  - ../classes/finding.yaml
+  - ../classes/summary.yaml
+instructions:
+  - ../instructions/source_to_finding.md
+  - ../instructions/finding_to_summary.md
+standing_policies: []
+compiled_contexts:
+  - ../compiled_contexts/source_notes_for_extraction.yaml
+  - ../compiled_contexts/findings_for_summary.yaml
+provider_profiles:
+  - ../provider_profiles/failing_mock.yaml
+workflows:
+  - ../workflows/research_synthesis.yaml
+default_compiled_context: ../compiled_contexts/source_notes_for_extraction.yaml
+default_provider_profile: ../provider_profiles/failing_mock.yaml
+runtime_profile:
+  execution_surface: local
+  machine_output_default: markdown
+  work_surface_mode: persistent

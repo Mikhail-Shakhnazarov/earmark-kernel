@@ -1,0 +1,13 @@
+[package]
+name = "earmark-governance"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+earmark-core = { path = "../earmark-core" }
+earmark-store = { path = "../earmark-store" }
+thiserror.workspace = true
+chrono.workspace = true
+serde.workspace = true
+serde_json.workspace = true
