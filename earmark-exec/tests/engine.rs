@@ -217,7 +217,7 @@ version: "1"
 description: run compiled_context then local transform
 operations:
   - id: op_project
-    kind: project
+    kind: compile_context
     input_contracts: []
     output_contracts: [work_surface]
     instruction: null
@@ -459,7 +459,7 @@ version: "1"
 description: run compiled_context then local transform
 operations:
   - id: op_project
-    kind: project
+    kind: compile_context
     input_contracts: []
     output_contracts: [work_surface]
     instruction: null
@@ -1012,7 +1012,7 @@ version: "1"
 description: run compiled_context then local transform
 operations:
   - id: op_project
-    kind: project
+    kind: compile_context
     input_contracts: []
     output_contracts: [work_surface]
     instruction: null
@@ -1256,7 +1256,7 @@ version: "1"
 description: run compiled_context then local transform
 operations:
   - id: op_project
-    kind: project
+    kind: compile_context
     input_contracts: []
     output_contracts: [work_surface]
     instruction: null
@@ -1479,7 +1479,7 @@ version: "1"
 description: unreachable transition should fail execution
 operations:
   - id: op_project
-    kind: project
+    kind: compile_context
     input_contracts: []
     output_contracts: [work_surface]
     instruction: null
@@ -1966,7 +1966,7 @@ version: "1"
 description: test
 operations:
   - id: op0
-    kind: project
+    kind: compile_context
     input_contracts: []
     output_contracts: [ws]
     compiled_context:

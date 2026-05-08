@@ -1,79 +1,94 @@
-# Quickstart: Your First Earmark Run
+# Quickstart
 
-This tutorial gets you moving with Earmark in under 5 minutes using the built-in research synthesis demo.
+Get a working Earmark run in under 5 minutes using the built-in research synthesis demo.
 
-## 1. Installation
-
-Build the CLI from the workspace root:
+## Build the CLI
 
 ```bash
 cargo build -p earmark-cli
 alias em="$(pwd)/target/debug/earmark-cli"
 ```
 
-## 2. Initialize a Workspace
-
-Create a new directory for your work and initialize it:
+## Initialize a workspace
 
 ```bash
 mkdir my-workspace && cd my-workspace
 em init
 ```
 
-## 3. Register a System
+You should see:
 
-Use the example system manifest provided in the repository:
+```
+Workspace initialized at ./my-workspace
+```
+
+## Register a system
+
+Use the example system manifest from the repository:
 
 ```bash
 em system register ../examples/research-synthesis/declarations/systems/system.yaml
-```
-
-Activate it so your commands know which domain to use:
-
-```bash
 em system activate sys_research_synthesis
 ```
 
-## 4. Deposit Seed Data
+This registers the research synthesis domain — three object classes (`source_note`, `finding`, `summary`), two instructions, and one two-stage workflow.
 
-Deposit a few source notes into your corpus:
+## Deposit some data
+
+Put a few source notes into the corpus:
 
 ```bash
-em deposit --class source_note --title "Test Note 1" --body "AI context should be bounded."
-em deposit --class source_note --title "Test Note 2" --body "Lineage matters for auditability."
+em deposit --class source_note --title "Context Boundaries" --body "AI context should be bounded, not ambient."
+em deposit --class source_note --title "Lineage" --body "Every derived object should trace back to its source."
 ```
 
-## 5. Run a Workflow
+## Run the workflow
 
-Find an object ID to start with:
+Find your deposited objects:
 
 ```bash
 em query --class source_note
 ```
 
-Run the `research_synthesis` workflow using one of those IDs:
+Pick an object ID from the output and run the workflow:
 
 ```bash
 em workflow run research_synthesis --system-id sys_research_synthesis --with <object_id>
 ```
 
-## 6. Inspect the Results
+The output will show the run ID, created artifacts, and suggested next commands.
 
-Earmark provides rich inspection tools to see what happened:
+## Inspect the results
 
 ```bash
-# See the run status and next steps
+# What happened in the run
 em run explain latest
 
-# View the visual timeline of events
+# Visual timeline of events
 em run timeline latest
 
-# Generate a full HTML report
+# Generate an HTML report you can open in a browser
 em report run latest --output report.html
 ```
 
-## Next Steps
+`em run explain` will show you:
+- Which assignments were created
+- What objects were produced
+- Whether validation passed or failed
+- Which handoffs were emitted for successor work
 
-- Explore the [Research Synthesis Demo](research-synthesis-demo.md) for a deeper look at staged execution.
-- Read about [Context Compilation](../concepts/context-compilation.md) to understand how Earmark bounds your data.
-- Start [Building Your Own Domain](build-a-domain-definition.md).
+## What just happened?
+
+You ran a two-stage workflow:
+
+1. **Extraction**: Earmark compiled a bounded work surface containing your source notes, then extracted findings. Each finding was linked to its source through a `derived_from` relation.
+
+2. **Synthesis**: Earmark emitted a handoff from Stage 1 containing only the findings — not the original source notes. Stage 2 produced a summary from that bounded input.
+
+The key thing: Stage 2 never saw the raw source notes. It worked from the handoff. That's bounded continuation.
+
+## Next steps
+
+- [Research Synthesis Demo](research-synthesis-demo.md) — deeper walkthrough of staged execution
+- [Context Compilation](../concepts/context-compilation.md) — how Earmark decides what a runtime sees
+- [Build a Domain Definition](build-a-domain-definition.md) — define your own classes and workflows

@@ -1,0 +1,10 @@
+Rückmeldung aus einem Gespräch mit einer kommunalen Verwaltungsleitung.
+
+Die Vorgaben zur Wärmeplanung werden grundsätzlich unterstützt, aber die Umsetzung wird
+als stark top-down wahrgenommen. Für zusätzliche Aufgaben fehlen in der Verwaltung oft
+Personal und Zeit, während Fristen weiterlaufen. Gewünscht werden standardisierte Werkzeuge
+und belastbare Mustervorlagen statt punktueller Einzelberatung durch externe Büros.
+Bei interkommunaler Zusammenarbeit wird der fachliche Nutzen gesehen, gleichzeitig entsteht
+zusätzlicher Koordinationsaufwand in Abstimmung und Priorisierung. Positiv hervorgehoben
+wurde, dass NKI-Fördermittel verfügbar sind und damit ein Teil der Kosten abgefedert werden
+kann, sofern Anträge rechtzeitig vorbereitet werden.

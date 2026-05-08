@@ -3,7 +3,7 @@ version: 0.2.0
 description: Project source notes and extract findings.
 operations:
   - id: compile_source_context
-    kind: project
+    kind: compile_context
     input_contracts:
       - source_note
     output_contracts:

@@ -1,153 +1,127 @@
 # Earmark
 
-Earmark is a declarative context and execution kernel for governed AI work. It turns a corpus into bounded runtime context, executes declared transitions over that context, and records what happened as durable assignments, change sets, validations, failures, and handoffs.
+A declarative kernel for governed AI work. Earmark compiles bounded context from a corpus, executes declared transitions over that context, and records what happened as durable, inspectable artifacts.
 
-## Why This Exists
+## The Problem
 
-Most AI systems treat context as something to retrieve, append, or remember. That works for lightweight assistance, but it breaks down when work has to be inspected, resumed, reviewed, or governed.
+AI-assisted work usually runs on ambient context: a chat history, some retrieved snippets, whatever files happen to be open. That's fine for quick tasks. It falls apart when work needs to be inspected, resumed, reviewed, or handed to someone else.
 
-Ambient context has practical failure modes:
+Concrete failure modes:
 
-- A model sees more than the task should require.
-- A later step inherits hidden assumptions from an earlier prompt.
-- Failed work disappears into logs or chat history.
-- It is hard to prove which inputs produced which output.
-- Review and approval become social conventions instead of system state.
-- Continuation depends on a long conversation rather than a durable artifact.
+- A model sees more than the current task requires.
+- A later step silently inherits assumptions from an earlier prompt.
+- Failed work vanishes into logs or chat transcripts.
+- You can't prove which inputs produced which output.
+- Review and approval are social conventions, not system state.
+- Continuing work means re-reading a long conversation, not loading a durable artifact.
 
-Earmark takes a different approach. It treats context as something to compile from declared objects, relations, compiled contexts, and handoff rules. It treats execution as a series of bounded state transitions. Each transition leaves behind canonical evidence of what was assigned, produced, blocked, validated, and handed forward.
+Earmark replaces ambient context with bounded, inspectable continuation.
 
-The goal is to replace ambient context with bounded, inspectable continuation.
+## How It Works
 
-## What It Is
+You declare the shape of your domain — the types of objects, the relations between them, the rules about what each step is allowed to see — and Earmark handles the rest: compiling context, running transitions, validating results, recording failures, and emitting handoffs for successor work.
 
-Earmark is not an agent framework, vector memory layer, workflow app, or document database.
+A staged flow looks like this:
 
-It is a kernel for:
+```
+source_note → finding → briefing_card
+```
 
-- declaring the shape of a corpus
-- compiling bounded runtime context from that corpus
-- executing declared transitions over that context
-- validating the results
-- recording durable execution evidence
-- handing bounded continuation to successor work
+**Stage 1** receives raw source notes. It extracts discrete findings and records a change set showing what was created. Each finding links back to its source through a `derived_from` relation.
 
-In short: Earmark makes AI-assisted work explicit enough to audit and constrained enough to govern.
+**Stage 2** receives only the findings — not the original source notes. It produces a briefing card from that bounded input. The runtime never sees the full corpus. It sees exactly what the declarations say it should see.
 
-## Core Idea
+Between stages, a **handoff manifest** defines the bounded surface for successor work: which objects are included, which relations are allowed, which constraints apply.
 
-Instead of giving a runtime a broad repository, a long chat, or a pile of retrieved snippets, Earmark gives it a declared work surface.
+After the run, you can inspect every artifact: what was assigned, what was produced, what passed or failed validation, and what the next step can see.
 
-A typical staged flow looks like this:
+```bash
+# Inspect the run
+em run explain latest
 
-1. Define object classes such as `source_note`, `finding`, and `summary`.
-2. Define relations such as `derived_from`.
-3. Define standing rules such as draft, reviewed, supported, or completed.
-4. Define compiled contexts that compile bounded context.
-5. Define transition workflows such as `source_note -> finding -> summary`.
-6. Run the workflow.
-7. Inspect the resulting assignments, change sets, validations, failures, and handoffs.
+# See the handoff between stages
+em handoff explain <handoff_id>
 
-The runtime does not continue by remembering the last chat turn. It continues from a canonical handoff manifest.
-
-Learn more: [Concept: Staged Execution](docs/concepts/staged-execution.md) | [Concept: Handoffs](docs/concepts/handoffs.md)
+# Generate an HTML report
+em report run latest --output report.html
+```
 
 ## What Earmark Records
 
-Earmark records runtime work through staged artifacts.
+Every run produces durable artifacts:
 
-### `TransitionAssignment`
+- **Assignments** track what work was claimed, by whom, over which inputs, and whether it completed, failed, or was blocked.
+- **Change sets** record what a transition created or changed. Invalid change sets are preserved for audit — failed work doesn't disappear.
+- **Handoffs** define the bounded continuation surface: which objects, relations, and constraints the next step is allowed to use.
+- **Failures** are first-class records linked to the assignment and change set that produced them. They remain inspectable as persistent state.
 
-An assignment says: this runtime is doing this transition over this bounded input set.
+## When It's Useful
 
-Assignments make work ownership, continuation, blocking, release, expiration, supersession, and resumption explicit.
+Earmark is worth considering when:
 
-### `ChangeSet`
+- Outputs need provenance — you need to show which inputs produced which results.
+- Failures need to remain inspectable, not just logged.
+- Work spans multiple stages, and later steps should not inherit all earlier context.
+- Review and standing matter — a draft is different from an accepted finding.
+- Multiple runtimes or operators need to resume work from the same place.
+- A durable corpus is more valuable than a chat transcript.
 
-A change set says: this transition created, changed, blocked, or validated these things.
+Good candidate domains: research synthesis, policy review, compliance workflows, editorial pipelines, knowledge management, safety-sensitive triage.
 
-Change sets preserve valid and invalid work. Failed validation and execution errors produce durable failed change sets instead of disappearing.
+It's probably too heavy for one-off prompting, quick scripts, or casual personal notes.
 
-### `HandoffManifest`
+## Getting Started
 
-A handoff says: successor work may continue from this bounded surface.
+```bash
+# Build the CLI
+cargo build -p earmark-cli
+alias em="$(pwd)/target/debug/earmark-cli"
 
-Handoffs carry root objects, inherited inputs, new objects, new relations, allowed classes, allowed relation types, standing constraints, required checks, blocked conditions, and unresolved ambiguities.
+# Initialize a workspace
+mkdir my-workspace && cd my-workspace
+em init
 
-### `TransformationFailure`
-
-A failure record says: this transition failed for this reason, linked to the assignment and failed change set.
-
-Failures remain inspectable as canonical state.
-
-## Practical Uses
-
-Earmark is useful when AI work needs traceability, review, staged execution, or controlled continuation.
-
-Good candidate domains:
-
-- research synthesis
-- intelligence analysis
-- policy review
-- contract and compliance workflows
-- editorial pipelines
-- corpus maintenance
-- internal knowledge operations
-- safety-sensitive triage where later steps should not see raw input
-
-Example:
-
-```text
-source_note -> finding -> summary
+# Register and run the demo
+em system register ../examples/research-synthesis/declarations/systems/system.yaml
+em system activate sys_research_synthesis
+em deposit --class source_note --title "Test Note" --body "AI context should be bounded."
+em workflow run research_synthesis --system-id sys_research_synthesis --with <object_id>
 ```
 
-The first transition extracts findings from source notes and emits a handoff containing only the bounded successor context. The second transition summarizes from that handoff. The summary stage does not need ambient access to the original runtime context.
+See the [Quickstart Tutorial](docs/tutorials/quickstart.md) for a complete walkthrough.
 
-This fixture is implemented and tested in `earmark-exec/tests/e2e_staged.rs`.
+## Documentation
 
-Learn more: [Tutorial: Research Synthesis Demo](docs/tutorials/research-synthesis-demo.md)
+| | |
+|---|---|
+| **[Quickstart](docs/tutorials/quickstart.md)** | Get moving in 5 minutes |
+| **[Practical Guide](docs/internal/planning/PRACTICAL_GUIDE.md)** | Plain-language explanation and use cases |
+| **[Staged Execution](docs/concepts/staged-execution.md)** | How transitions, assignments, and handoffs work |
+| **[Context Compilation](docs/concepts/context-compilation.md)** | How Earmark bounds what a runtime sees |
+| **[Research Synthesis Demo](docs/tutorials/research-synthesis-demo.md)** | Walk through a complete two-stage workflow |
+| **[Build a Domain](docs/tutorials/build-a-domain-definition.md)** | Define your own classes, workflows, and system |
+| **[CLI Reference](docs/reference/cli.md)** | Command lookup |
+| **[Runtime Integration](docs/reference/runtime-integration-guide.md)** | Using Earmark from Rust or any language |
+| **[Declaration Authoring](docs/declarations/README.md)** | Examples and validation rules |
 
-## Workspace Layout
+## Current Status
 
-The repository is a Rust workspace with kernel crates, outward-facing docs, examples, and templates:
+Earmark is an operational kernel with 71 passing tests. It is not yet a packaged application.
 
-- `earmark-core`: shared types, IDs, standings, declarations, work packets, records, and staged artifacts
-- `earmark-store`: Git-backed canonical object storage
-- `earmark-index`: rebuildable SQLite index for search, relations, and active systems
-- `earmark-declarations`: declaration loading, validation, registration, and activation
-- `earmark-exec`: workflow compilation, execution, assignments, change sets, handoffs, and continuation
-- `earmark-governance`: review objects, standing transitions, export checks, and governance events
-- `earmark-connected-context`: compiled context planning and work-surface materialization
-- `earmark-runtime-tools`: runtime-facing API over the shared kernel
-- `earmark-cli`: operator-facing command line interface
-- `docs/concepts/`: architectural explanations of context compilation, staged execution, handoffs, and failures
-- `docs/tutorials/`: guided learning paths, including quickstart and the research synthesis demo
-- `docs/reference/`: CLI and artifact reference material
-- `docs/declarations/`: declaration examples and schema-oriented authoring material
-- `examples/research-synthesis/`: the runnable demo domain definition and walkthrough
-- `templates/`: scaffold templates for declaration authoring
+What works:
+- Declaration, validation, and scaffolding of domain definitions
+- Bounded context compilation from declared objects and relations
+- Staged workflow execution with assignment lifecycle management
+- Durable change sets, handoffs, and failure records
+- CLI inspection, explanation, and HTML report generation
+- Google Gemini provider adapter (mock provider is the default)
+- Versioned JSON CLI contracts at 0.2.0
 
-## Runtime Storage
+What doesn't exist yet:
+- Package distribution (you build from source)
+- GUI or web dashboard
 
-An initialized Earmark workspace uses:
-
-- `corpus/`
-- `.earmark/canonical/`
-- workspace index database path under `.earmark/`
-- `.earmark/work_surfaces/`
-- `.earmark/declarations/`
-
-Canonical state is authoritative. Derived indexes and work surfaces are rebuildable.
-
-## CLI Overview
-
-All commands support `--json`.
-
-See the complete [CLI Reference](docs/reference/cli.md).
-
-## Build And Test
-
-From the workspace root:
+## Build and Test
 
 ```bash
 cargo check --workspace
@@ -155,26 +129,10 @@ cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 
-## Documentation
-
-- [Quickstart Tutorial](docs/tutorials/quickstart.md): get moving in 5 minutes
-- [Practical Guide](PRACTICAL_GUIDE.md): plain-language explanation and use cases
-- [Core Concepts](docs/concepts/): understanding context compilation, staged execution, and handoffs
-- [Tutorials](docs/tutorials/): build-run-inspect walkthroughs
-- [Reference](docs/reference/): CLI commands, artifact types, and schemas
-- [Build a Domain Definition](docs/tutorials/build-a-domain-definition.md): define a domain, classes, workflows, and system manifests
-- [Declaration Authoring](docs/declarations/README.md): examples and validation rules
-- [Runtime Integration Guide](docs/reference/runtime-integration-guide.md): how to integrate Earmark as a governed execution substrate
-- [Runtime Contract](docs/reference/runtime-contract.md): the six-step external contract and artifact shapes
-
 ## Acknowledgments
 
-Earmark owes a real architectural debt to [Engram](https://github.com/vincents-ai/engram) and to its creator, Vincent Palmer.
-
-Engram's treatment of durable machine-readable project state, explicit context, and structured agent-operable knowledge helped open the architectural direction that Earmark develops here. Earmark takes that lineage into a more specific kernel for compiled context, staged execution, handoffs, and governed continuation.
+Earmark owes an architectural debt to [Engram](https://github.com/vincents-ai/engram) and its creator, Vincent Palmer. Engram's treatment of durable project state, explicit context, and structured agent-operable knowledge helped open the direction that Earmark develops here.
 
 ## License
 
-AGPL-3.0-or-later OR Commercial.
-
-See [LICENSE](./LICENSE) for the dual-license terms used by this project.
+AGPL-3.0-or-later OR Commercial. See [LICENSE](./LICENSE).

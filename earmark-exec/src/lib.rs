@@ -424,7 +424,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
         };
 
         let exec_result: Result<(), ExecError> = (|| match transition.operation.as_str() {
-            "project" => {
+            "compile_context" => {
                 let template_ref = transition.compiled_context.as_ref().ok_or_else(|| {
                     ExecError::InvalidWorkflow(format!(
                         "transition {} requires a compiled context reference",
@@ -450,7 +450,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                 record_transition(
                     record,
                     transition.id.clone(),
-                    "projected",
+                    "context_compiled",
                     filtered_inputs.clone(),
                     vec![work_packet_ref],
                     Some("work surface compiled".to_string()),
@@ -473,7 +473,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
 
                 let work_surface = state.compiled_context.as_ref().ok_or_else(|| {
                     ExecError::MissingWorkSurface(
-                        "transform requires a prior project operation".to_string(),
+                        "transform requires a prior compile_context operation".to_string(),
                     )
                 })?;
 

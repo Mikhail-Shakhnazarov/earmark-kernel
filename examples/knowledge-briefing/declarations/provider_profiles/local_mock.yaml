@@ -1,0 +1,19 @@
+name: local_mock
+version: 0.2.0
+description: Local mock provider profile for testing.
+provider: mock
+model: echo
+budget:
+  max_output_tokens: 1000
+  max_latency_ms: 1000
+allowed_operations:
+  - transform
+exposure:
+  allow_prose_objects: true
+  allow_structured_declarations: false
+  allow_work_surface_only: false
+  allow_export_requests: false
+response_contract:
+  format: text
+  must_return_candidate_only: true
+  must_include_lineage: false

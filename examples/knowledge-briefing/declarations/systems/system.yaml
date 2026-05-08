@@ -1,0 +1,25 @@
+system_id: sys_knowledge_briefing
+namespace: examples.knowledge
+title: Knowledge Briefing Demo
+description: A governed briefing pipeline for municipal heat planning knowledge.
+classes:
+  - ../classes/source_note.yaml
+  - ../classes/finding.yaml
+  - ../classes/briefing_card.yaml
+instructions:
+  - ../instructions/source_to_finding.md
+  - ../instructions/finding_to_briefing.md
+standing_policies: []
+compiled_contexts:
+  - ../compiled_contexts/source_notes_for_extraction.yaml
+  - ../compiled_contexts/findings_for_briefing.yaml
+provider_profiles:
+  - ../provider_profiles/local_mock.yaml
+workflows:
+  - ../workflows/knowledge_briefing.yaml
+default_compiled_context: ../compiled_contexts/source_notes_for_extraction.yaml
+default_provider_profile: ../provider_profiles/local_mock.yaml
+runtime_profile:
+  execution_surface: local
+  machine_output_default: markdown
+  work_surface_mode: persistent

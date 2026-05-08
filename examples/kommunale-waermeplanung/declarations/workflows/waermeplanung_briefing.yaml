@@ -1,0 +1,45 @@
+name: waermeplanung_briefing
+version: 0.2.0
+description: "Zweistufige Briefing-Pipeline: Befunde extrahieren, dann Briefingkarte erstellen."
+operations:
+  - id: quellnotizen_kompilieren
+    kind: compile_context
+    input_contracts: [quellnotiz]
+    output_contracts: [quellnotizen_fuer_extraktion]
+    compiled_context:
+      id: quellnotizen_fuer_extraktion
+      version_id: latest
+
+  - id: befunde_extrahieren
+    kind: transform
+    input_contracts: [quellnotizen_fuer_extraktion]
+    output_contracts: [befund]
+    instruction:
+      id: quellnotiz_zu_befund
+      version_id: latest
+
+  - id: befunde_kompilieren
+    kind: compile_context
+    input_contracts: [befund]
+    output_contracts: [befunde_fuer_briefing]
+    compiled_context:
+      id: befunde_fuer_briefing
+      version_id: latest
+
+  - id: briefing_erstellen
+    kind: transform
+    input_contracts: [befunde_fuer_briefing]
+    output_contracts: [briefingkarte]
+    instruction:
+      id: befund_zu_briefing
+      version_id: latest
+
+edges:
+  - from: quellnotizen_kompilieren
+    to: befunde_extrahieren
+  - from: befunde_extrahieren
+    to: befunde_kompilieren
+  - from: befunde_kompilieren
+    to: briefing_erstellen
+
+guards: []

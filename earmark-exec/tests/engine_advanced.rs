@@ -389,7 +389,7 @@ fn parallel_transform_leak_bug() {
         operations: vec![
             earmark_core::WorkflowOperation {
                 id: "project".to_string(),
-                kind: "project".to_string(),
+                kind: "compile_context".to_string(),
                 input_contracts: vec!["start_class".to_string()],
                 output_contracts: vec!["surface".to_string()],
                 instruction: None,

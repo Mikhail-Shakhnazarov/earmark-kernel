@@ -1,63 +1,70 @@
-# Concept: Staged Execution
+# Staged Execution
 
-Staged execution is the practice of breaking complex AI tasks into series of bounded, verifiable transitions.
+Most AI work happens in a single pass: prompt in, response out, hope for the best. If the task is complex — extracting claims from raw notes, then synthesizing a briefing from those claims — the whole thing runs in one long context window and the intermediate steps are invisible.
 
-In Earmark, execution does not happen in a single monolithic loop. It happens as a sequence of **transitions**, where each stage consumes a handoff from the previous stage and produces a new artifact for the next.
+Earmark breaks that into a sequence of **transitions**, where each stage consumes a bounded input, produces verified output, and emits a handoff for the next stage. Every step leaves behind durable evidence of what happened.
 
-## The Execution Flow
+## The Lifecycle
 
-Every transition follows a strict lifecycle to ensure durability and auditability:
+Every transition follows this sequence:
 
 ```mermaid
 sequenceDiagram
-    participant O as Operator/Runtime
+    participant O as Operator / Runtime
     participant E as Execution Engine
-    participant S as Canonical Store
+    participant S as Store
     participant V as Validator
 
-    O->>E: workflow run (with inputs/handoff)
-    E->>S: create TransitionAssignment (Assigned)
-    E->>E: compile context
-    E->>O: work packet emitted
-    O->>E: complete assignment (with candidate)
+    O->>E: workflow run (with inputs or handoff)
+    E->>S: create Assignment (status: Assigned)
+    E->>E: compile bounded context
+    E->>O: work packet
+    O->>E: complete assignment (with candidate output)
     E->>V: validate change set
     alt valid
         V->>S: persist ChangeSet (Valid)
         V->>E: emit HandoffManifest
         E->>S: update Assignment (Completed)
-        E->>O: success result
+        E->>O: success
     else invalid
         V->>S: persist ChangeSet (Invalid)
         V->>S: create TransformationFailure
         E->>S: update Assignment (Blocked)
-        E->>O: failure result
+        E->>O: failure
     end
 ```
 
-## Key Artifacts
+The important part: both paths persist artifacts. When work succeeds, you get a valid change set and a handoff. When work fails, you get an invalid change set and a failure record. Nothing disappears.
 
-### 1. Transition Assignment
-An assignment is a claim on a specific piece of work. It records who is doing the work, which inputs they are using, and the current status (Assigned, Completed, Blocked, etc.).
+## Artifacts
 
-### 2. Change Set
-A change set is the collection of delta operations (create, link, change) produced by a transition. Change sets are persisted even if they fail validation, providing an audit trail of "what went wrong."
+**Assignment** — A claim on a piece of work. Records the transition, the bounded inputs, the runtime that claimed the work, and the current status (`Assigned`, `Completed`, `Blocked`, `Released`, `Expired`, `Superseded`).
 
-### 3. Transformation Failure
-When a transition fails (either due to an execution error or a validation failure), a first-class failure record is created. This record links the failed assignment and change set to the specific error message.
+**Change Set** — The collection of creates, links, and changes produced by a transition. Persisted whether valid or invalid.
 
-## Bounded Continuation
+**Failure** — A record linking the failed assignment and change set to the specific error. Created when validation fails or execution errors out.
 
-The power of staged execution lies in **continuation**. Instead of a runtime "remembering" what it did in a chat history, it reads a **Handoff Manifest** emitted by the previous stage.
+**Handoff** — Defines the bounded input for the next stage. See [Handoffs](handoffs.md).
 
-This manifest defines the bounded set of objects and relations that the next stage is allowed to use.
+## Continuation
 
-## Why it Matters
+The point of staging is **continuation without ambient memory**.
 
-- **Auditability**: Every change is linked to a specific assignment and run.
-- **Resilience**: If a stage fails, you can resume from the last successful handoff.
-- **Governance**: You can insert human-in-the-loop review between any two stages.
+In a chat-based system, Stage 2 continues because the conversation history contains Stage 1's output. In Earmark, Stage 2 continues because it reads a handoff manifest that explicitly defines what it's allowed to see.
+
+That means:
+- Stage 2 can run in a different runtime, a different session, or a different model.
+- Stage 2 doesn't inherit Stage 1's internal reasoning or side effects.
+- You can re-run Stage 2 multiple times from the same Stage 1 handoff.
+
+## Why It Matters
+
+- **Auditability**: every object traces to the assignment and run that created it.
+- **Resilience**: if Stage 2 fails, Stage 1's handoff is still there. Resume or retry without re-running everything.
+- **Human review**: insert a review gate between any two stages by requiring standing changes before the handoff is accepted.
 
 ## See Also
-- [Concept: Handoffs](handoffs.md)
-- [Concept: Failures](failures.md)
-- [Tutorial: Quickstart](../tutorials/quickstart.md)
+
+- [Handoffs](handoffs.md) — how bounded continuation works between stages
+- [Failures](failures.md) — how failed work is preserved and inspected
+- [Quickstart](../tutorials/quickstart.md) — run a staged workflow in 5 minutes

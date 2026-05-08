@@ -101,7 +101,7 @@ version: "1"
 description: test
 operations:
   - id: op_project
-    kind: project
+    kind: compile_context
     input_contracts: []
     output_contracts: [work_surface]
     instruction: null

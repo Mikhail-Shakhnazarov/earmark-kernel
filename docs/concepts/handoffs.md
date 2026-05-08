@@ -1,65 +1,84 @@
-# Concept: Handoffs
+# Handoffs
 
-A handoff is a durable artifact that defines the bounded continuation surface for successor work.
+A handoff is the artifact that bridges two stages of work. It defines exactly what the next stage is allowed to see — nothing more.
 
-In a staged system, the output of one transition is not just a pile of objects; it is a **Handoff Manifest** that tells the next transition exactly what it is allowed to see and do.
+## The Problem It Solves
 
-## The Continuation Bridge
+In a typical AI pipeline, Stage 2 "continues" by reading the chat history or by receiving whatever the orchestrator decides to forward. There's no explicit contract about what's included and what's excluded.
 
-Handoffs bridge the gap between two independent execution runs, ensuring that context remains bounded and lineage remains intact.
+A handoff makes that contract explicit. It says:
+
+- These are the objects the next stage may use.
+- These are the relation types it may traverse.
+- These are the constraints that apply.
+- Everything else is out of scope.
 
 ```mermaid
 flowchart LR
-    subgraph Run1 [Run A: Extraction]
-        A[Assignment A] --> CS_A[Change Set A]
-        CS_A --> H[Handoff Manifest]
+    subgraph Run1 [Stage 1: Extraction]
+        A[Assignment] --> CS[Change Set]
+        CS --> H[Handoff]
     end
-    
-    subgraph Run2 [Run B: Summarization]
-        H --> A_B[Assignment B]
-        A_B --> CS_B[Change Set B]
+
+    subgraph Run2 [Stage 2: Synthesis]
+        H --> A2[Assignment]
+        A2 --> CS2[Change Set]
     end
-    
-    style H fill:#f96,stroke:#333,stroke-width:4px
+
+    style H fill:#e8a838,stroke:#333,stroke-width:3px
 ```
 
-## What's in a Handoff?
+## What's in a Handoff
 
-A `HandoffManifest` contains everything needed to reconstruct the admissible work surface for the next step:
+A `HandoffManifest` contains:
 
-- **Root Objects**: The specific objects targeted for successor work.
-- **Inherited Inputs**: Objects from the previous stage that should remain in scope.
-- **Created Objects**: New objects produced by the previous stage (e.g., findings).
-- **Admissible Classes**: A whitelist of object classes the successor is allowed to see.
-- **Allowed Relations**: The types of relations that can be traversed.
-- **Required Checks**: Validations that the successor must perform.
+- **Root objects** — the specific objects targeted for successor work
+- **Inherited inputs** — objects from the previous stage that should remain in scope
+- **Created objects** — new objects produced by the previous stage (e.g., extracted findings)
+- **Allowed classes** — which object types the successor may see
+- **Allowed relations** — which relation types may be traversed
+- **Required checks** — validations the successor must perform
 
-## Boundedness as a Standard
+## How Context Narrows
 
-Runtimes should treat handoffs as the **only** source of truth for continuation. 
+This is the key idea. Consider a two-stage workflow:
 
-By continuing from a handoff rather than ambient "chat memory," you ensure that the second model in a pipeline doesn't inherit irrelevant noise or "hallucinate" context from the first model's internal reasoning.
+```
+source_note → finding → summary
+```
 
-## Usage
+Stage 1 sees the raw source notes and produces findings. The handoff carries the findings forward but **does not include the source notes**. Stage 2 — the summarizer — works only from findings.
 
-In the CLI, you can inspect a handoff to see what it carries:
+Why? Because the summarizer's job is to synthesize verified claims, not to re-read raw material. If the findings are wrong, the right fix is to re-run Stage 1, not to give Stage 2 more context.
+
+This narrowing is not a limitation. It's the design.
+
+## Using Handoffs
+
+Inspect what a handoff carries:
 
 ```bash
 em handoff explain <handoff_id>
 ```
 
-And you can use a handoff to start a new workflow run:
+Continue work from a handoff:
 
 ```bash
 em workflow run <workflow_id> --handoff <handoff_id>
 ```
 
-## Why it Matters
+You can re-run from the same handoff multiple times — with a different model, different parameters, or after fixing the instruction.
 
-1. **Isolation**: Stages are mathematically isolated; Stage B only knows what Stage A explicitly handed forward.
-2. **Resumption**: You can re-run Stage B multiple times from the same Stage A handoff.
-3. **Collaboration**: Different agents (or a human and an agent) can handle different stages of the same work.
+## Why It Matters
+
+**Isolation.** Stages are independent. Stage 2 doesn't inherit Stage 1's prompt, internal reasoning, or error state. It inherits only the declared handoff surface.
+
+**Resumption.** If Stage 2 fails, the Stage 1 handoff is still there. Fix the problem and retry without re-running everything.
+
+**Collaboration.** Different stages can be handled by different runtimes, different models, or different people. The handoff is the contract between them.
 
 ## See Also
-- [Concept: Staged Execution](staged-execution.md)
-- [Reference: Artifact Types](../reference/artifact-types.md)
+
+- [Staged Execution](staged-execution.md) — the lifecycle that produces handoffs
+- [Failures](failures.md) — what happens when a stage doesn't produce a handoff
+- [Artifact Types](../reference/artifact-types.md) — HandoffManifest fields

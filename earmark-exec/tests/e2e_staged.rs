@@ -186,7 +186,7 @@ version: "1"
 description: extraction
 operations:
   - id: op_proj
-    kind: project
+    kind: compile_context
     input_contracts: []
     output_contracts: [ws]
     compiled_context:
@@ -225,7 +225,7 @@ version: "1"
 description: summarization
 operations:
   - id: op_proj
-    kind: project
+    kind: compile_context
     input_contracts: []
     output_contracts: [ws]
     compiled_context:

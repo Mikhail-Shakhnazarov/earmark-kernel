@@ -1,6 +1,6 @@
 # Declaration Authoring
 
-Earmark declarations describe the shape of a governed AI workflow.
+Earmark declarations describe the shape of a domain: its object types, relations, workflows, and execution rules.
 
 Declarations are the authoring surface for:
 
@@ -15,7 +15,7 @@ Declarations are the authoring surface for:
 
 The current authoring format is YAML for structured declarations and Markdown with YAML frontmatter for instructions.
 
-## Validate A Declaration
+## Validate a Declaration
 
 Use `em declare validate` before registering or depositing declaration objects.
 
@@ -26,9 +26,9 @@ em declare validate --kind workflow docs/declarations/examples/workflows/source_
 em declare validate --kind system examples/research-synthesis/declarations/systems/system.yaml
 ```
 
-## Explain A Declaration
+## Explain a Declaration
 
-Use `em declare explain` to see a concise machine-readable summary.
+Use `em declare explain` to see a plain-language summary of what a declaration does.
 
 ```bash
 em declare explain --kind compiled-context docs/declarations/examples/compiled_contexts/source_notes_for_extraction.yaml
@@ -36,7 +36,7 @@ em declare explain --kind workflow docs/declarations/examples/workflows/source_t
 em declare explain --kind system examples/research-synthesis/declarations/systems/system.yaml
 ```
 
-## Scaffold A Declaration
+## Scaffold a Declaration
 
 Use `em declare new` to scaffold from in-repo templates.
 
@@ -61,9 +61,9 @@ Supported kinds:
 - `provider-profile`
 - `system`
 
-## Path-Based System Manifests
+## System Manifests
 
-`--kind system` supports path-based manifests as the primary authoring shape. The system manifest references declaration files by relative path, and CLI register/validate/explain resolves and checks all dependencies.
+A system manifest references its declaration files by relative path. When you validate or register a system, the CLI resolves all dependencies and checks for missing references.
 
 ## Examples
 

@@ -3,7 +3,7 @@ version: 0.1.0
 description: "A two-stage research synthesis workflow."
 operations:
   - id: extract_from_all
-    kind: project
+    kind: compile_context
     input_contracts: [source_note]
     output_contracts: [source_notes_for_extraction]
     compiled_context:
@@ -19,7 +19,7 @@ operations:
       version_id: latest
 
   - id: group_findings
-    kind: project
+    kind: compile_context
     input_contracts: [finding]
     output_contracts: [findings_for_summary]
     compiled_context:

@@ -1,51 +1,90 @@
-# Reference: Declaration Schemas
+# Declaration Schemas
 
-Earmark declarations use YAML and Markdown formats, which are validated against JSON Schema definitions.
-
-## Schema Location
-
-Canonical JSON Schema files are located in the repository at:
-
-```text
-docs/declarations/schema/
-```
+Earmark declarations use YAML for structured definitions and Markdown with YAML frontmatter for instructions. The CLI validates declarations against internal schemas.
 
 ## Declaration Kinds
 
-### 1. Class Declaration
+### Class
+
 Defines an object type in the corpus.
-- **Fields**: `name`, `kind`, `payload_schema`, `required_headers`, `standing_rules`, `relation_rules`.
-- **See Example**: [Finding](../declarations/examples/classes/finding.yaml)
 
-### 2. Instruction Declaration
-Defines a specific processing operation.
-- **Format**: Markdown with YAML frontmatter.
-- **Fields**: `name`, `purpose`, `input_classes`, `output_classes`, `provider_profile`.
-- **See Example**: [Source to Finding](../declarations/examples/instructions/source_to_finding.md)
+**Fields**: `name`, `version`, `kind`, `required_headers`, `payload_schema`, `standing_rules`, `relation_rules`, `validators`.
 
-### 3. Workflow Declaration
+```yaml
+name: finding
+version: 0.2.0
+kind: object
+required_headers:
+  - title
+payload_schema: inline:any
+standing_rules:
+  allowed_epistemic: [working, supported]
+  allowed_review: [unreviewed, accepted]
+  allowed_process: [active, completed]
+relation_rules:
+  - relation_type: derived_from
+    target_classes: [source_note]
+validators: []
+```
+
+### Instruction
+
+Defines a processing operation as Markdown with YAML frontmatter.
+
+**Frontmatter fields**: `name`, `version`, `purpose`, `input_classes`, `output_classes`, `execution_policy`, `provider_profile`, `trace_policy`, `register`.
+
+**Body**: Markdown prose describing the task, constraints, and expected output structure.
+
+```markdown
+---
+name: source_to_finding
+version: 0.2.0
+purpose: Extract discrete findings from source notes.
+input_classes: [source_note]
+output_classes: [finding]
+execution_policy: runtime_permitted
+provider_profile: null
+trace_policy: summary
+register: findings
+---
+
+# Finding Extraction
+
+Extract discrete findings from the provided source notes...
+```
+
+### Workflow
+
 Defines a sequence of transitions.
-- **Fields**: `name`, `operations`, `edges`, `guards`.
-- **See Example**: [Source to Finding](../declarations/examples/workflows/source_to_finding.yaml)
+
+**Fields**: `name`, `version`, `description`, `operations`, `edges`, `guards`.
+
+Each operation has: `id`, `kind` (`compile_context` or `transform`), `input_contracts`, `output_contracts`, and either a `compiled_context` reference or an `instruction` reference.
 
 ### Compiled Context Template
-Defines rules for building an admissible work surface.
-- **Fields**: `name`, `select` (classes/standing/relations), `render` (mode/format), `visibility`.
-- **See Example**: [Source Notes](../declarations/examples/compiled_contexts/source_notes_for_extraction.yaml)
 
-### 5. System Manifest
-Binds a collection of declarations into a deployable system.
-- **Fields**: `system_id`, `namespace`, `title`, `classes`, `instructions`, `workflows`, `compiled_contexts`, `runtime_profile`.
-- **See Example**: [Research Synthesis Demo](../../examples/research-synthesis/declarations/systems/system.yaml)
+Defines rules for compiling bounded context from the store.
 
-## Validation Commands
+**Fields**: `name`, `version`, `description`, `select` (classes, standing, relations, time_range), `group_by`, `render` (mode, manifest_format, prose_template), `visibility` (include_lineage, include_constraints, include_provenance).
 
-Use the CLI to validate any declaration against these schemas:
+### Provider Profile
+
+Connects a transition to a specific LLM provider.
+
+**Fields**: `name`, `version`, `provider`, `model`, `auth_env`, `budget` (max_output_tokens, max_latency_ms), `response_contract` (format, must_return_candidate_only).
+
+### System Manifest
+
+Bundles declarations into a deployable domain.
+
+**Fields**: `system_id`, `namespace`, `title`, `description`, `classes`, `instructions`, `workflows`, `compiled_contexts`, `provider_profiles`, `standing_policies`, `default_compiled_context`, `default_provider_profile`, `runtime_profile`.
+
+## Validation
 
 ```bash
 em declare validate --kind <kind> <path>
 ```
 
-## IDE Support
+Kinds: `class`, `instruction`, `workflow`, `compiled-context`, `provider-profile`, `system`.
 
-You can associate these schemas with YAML files in editors like VS Code using the `yaml-language-server` or the Earmark VS Code extension (if installed).
+The system-level validator checks cross-references: classes mentioned in instructions must exist in the system, relation targets must reference declared classes, and workflow operations must reference declared instructions or compiled contexts.

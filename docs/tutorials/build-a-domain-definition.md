@@ -1,17 +1,22 @@
-# Tutorial: Building a Domain Definition
+# Building a Domain Definition
 
-This tutorial teaches you how to build your own domain-specific system in Earmark. We will follow the **"Build-Validate-Register-Run"** cycle.
+This tutorial teaches you how to define your own domain in Earmark: the object types, relations, workflows, and system manifest that describe a specific kind of governed work.
 
-## 1. The Design Phase
+## 1. Decide on Your Types
 
-Before writing YAML, decide on your core "Alphabet":
-- **Classes**: What are the nouns? (e.g., `contract_clause`, `violation_risk`)
-- **Relations**: How do they connect? (e.g., `extracted_from`, `violates_policy`)
-- **Workflow**: What is the sequence? (e.g., `contract -> clause -> risk_report`)
+Before writing YAML, decide three things:
 
-## 2. Scaffolding your Declarations
+- **Classes**: What are the object types? For a contract review system, these might be `contract_clause`, `violation_risk`, and `review_decision`. For a research pipeline: `source_note`, `finding`, `summary`.
 
-Use the `em declare new` command to generate templates for your classes and workflows.
+- **Relations**: How do objects connect? A finding is `derived_from` a source note. A review decision `reviews` a violation risk.
+
+- **Workflow**: What is the sequence? `contract → clause → risk_report` or `source_note → finding → summary`.
+
+Start with 2–3 classes, one relation type, and a two-stage workflow. You can add more later.
+
+## 2. Scaffold Your Declarations
+
+Use `em declare new` to generate templates:
 
 ```bash
 mkdir -p my_domain/classes
@@ -19,11 +24,35 @@ em declare new class contract_clause > my_domain/classes/clause.yaml
 em declare new class violation_risk > my_domain/classes/risk.yaml
 ```
 
-Edit these files to define your schemas and relation rules.
+Edit the generated files to define your schemas, relation rules, and standing constraints. Here's what a class declaration looks like:
 
-## 3. Creating a System Manifest
+```yaml
+name: contract_clause
+version: 0.2.0
+kind: object
+required_headers:
+  - title
+payload_schema: inline:any
+standing_rules:
+  allowed_epistemic:
+    - working
+    - supported
+  allowed_review:
+    - unreviewed
+    - accepted
+  allowed_process:
+    - active
+    - completed
+relation_rules:
+  - relation_type: extracted_from
+    target_classes:
+      - contract
+validators: []
+```
 
-A **System Manifest** is the glue that binds your declarations together. Create a `system.yaml` at the root of your domain directory:
+## 3. Create a System Manifest
+
+A system manifest ties your declarations together into a working domain. Create `system.yaml` at the root of your domain directory:
 
 ```yaml
 system_id: my_contract_reviewer
@@ -47,49 +76,57 @@ runtime_profile:
   work_surface_mode: staged
 ```
 
-## 4. Validation
+## 4. Validate
 
-Always validate your system before registering it. Earmark will check for missing references, cyclic workflows, and schema errors.
+Always validate before registering. Earmark checks for missing references, undefined classes, and schema errors:
 
 ```bash
 em declare validate my_domain/system.yaml
 ```
 
-## 5. Registration and Activation
+If something is wrong, you'll see a specific error:
 
-Once valid, register the system into your Earmark workspace:
+```
+Error: Class 'contract' referenced by relation rule in 'contract_clause' is not defined in the system.
+```
+
+Fix the error and re-validate.
+
+## 5. Register and Activate
+
+Once valid:
 
 ```bash
 em system register my_domain/system.yaml
-```
-
-Activate it to make it the default for your next commands:
-
-```bash
 em system activate my_contract_reviewer
 ```
 
-## 6. Execution
+## 6. Run
 
-Now you can deposit data and run your new workflow:
+Deposit data and run your workflow:
 
 ```bash
 em deposit --class contract --title "Lease Agreement" --body "..."
 em workflow run review_workflow --system-id my_contract_reviewer --with <object_id>
 ```
 
-## Summary of the Cycle
+## The Cycle
 
 ```mermaid
 flowchart TD
-    A[Design Schema] --> B[Scaffold YAML]
-    B --> C[Validate Manifest]
+    A[Decide types and relations] --> B[Scaffold YAML]
+    B --> C[Validate manifest]
     C -->|Errors| B
-    C -->|OK| D[Register System]
-    D --> E[Activate and Run]
+    C -->|Valid| D[Register system]
+    D --> E[Activate and run]
+    E --> F[Inspect results]
+    F --> A
 ```
+
+The loop is: design, validate, run, inspect, refine. Start small and iterate.
 
 ## Next Steps
 
-- Consult the [CLI Reference](../reference/cli.md) for advanced flags.
-- Study the [Declaration Schemas](../reference/schemas.md) for all available fields.
+- [CLI Reference](../reference/cli.md) — full command documentation
+- [Declaration Schemas](../reference/schemas.md) — all available fields and types
+- [Research Synthesis Demo](research-synthesis-demo.md) — see a complete working domain

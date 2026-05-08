@@ -157,7 +157,7 @@ fn test_six_step_flow_via_runtime_tool_surface() {
 version: "1"
 operations:
   - id: op_project
-    kind: project
+    kind: compile_context
     input_contracts: []
     output_contracts: [work_surface]
     instruction: null

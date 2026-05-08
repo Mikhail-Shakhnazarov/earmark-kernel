@@ -1,65 +1,94 @@
-# Concept: Context Compilation
+# Context Compilation
 
-Context compilation is the process of building a bounded, admissible work surface for an AI runtime.
+When a model summarizes a document, what should it be allowed to see? The full repository? Everything tagged "relevant"? Whatever the retrieval system found?
 
-Unlike retrieval-based methods (RAG), which ask "what might be relevant?", context compilation asks **"what is admissible for this specific operation?"**.
+In most AI systems, the answer is vague: the model sees whatever context was assembled at runtime, and nobody can prove exactly what was included or excluded. That's retrieval. It asks "what might be relevant?" and returns a best guess.
 
-## The Core Idea
+Context compilation asks a different question: **what is allowed for this specific operation?**
 
-In Earmark, a runtime never sees the entire corpus. Instead, it sees a **compiled context** that has been filtered, traversed, and bounded according to declarations. This ensures that:
-- Hidden assumptions from irrelevant objects are not inherited.
-- Sensitive data is excluded by default.
-- Lineage and provenance are explicitly tracked for every admitted object.
+## How It Works
 
-## How it Works
+Earmark compiles context from four declared inputs:
 
-Context is compiled through a combination of selection rules and traversal patterns:
+- **Objects** in the corpus, filtered by class (e.g., only `finding` objects, not `source_note` objects)
+- **Relations** between objects (e.g., traverse `derived_from` links to bring in lineage)
+- **Standing constraints** (e.g., only include objects with `accepted` review status)
+- **Compiled context templates** that define all of the above as a reusable declaration
+
+The result is a **work packet**: a bounded set of objects with provenance information, ready for a runtime to process.
 
 ```mermaid
 flowchart TD
-    subgraph Store [Canonical Store]
+    subgraph Store
         O[Objects]
         R[Relations]
     end
-    
-    subgraph Declarations [System Declarations]
-        CC[Compiled Context Templates]
-        SP[Standing Policies]
+
+    subgraph Declarations
+        CC[Compiled Context Template]
+        SP[Standing Constraints]
     end
-    
+
     Store --> Planner[Context Planner]
     CC --> Planner
     SP --> Planner
-    
-    Planner --> Traverser[Lineage Traverser]
-    Traverser --> |Filter by Class| Filtered[Filtered Objects]
-    Traverser --> |Traverse Relations| Filtered
-    
-    Filtered --> Materializer[Work Surface Materializer]
+
+    Planner --> Traverser[Lineage Traversal]
+    Traverser --> |Filter by class| Filtered[Filtered Objects]
+    Traverser --> |Traverse relations| Filtered
+
+    Filtered --> Materializer[Work Packet Assembly]
     Materializer --> Packet[Work Packet]
-    
-    style Store fill:#f9f,stroke:#333,stroke-width:2px
-    style Packet fill:#00ff00,stroke:#333,stroke-width:4px
 ```
 
-## Compilation Mechanisms
+## A Concrete Example
 
-### 1. Compiled Context Templates
-These are declared YAML files that specify which classes and relations are admitted. They define the "shape" of the admissible surface.
+In the research synthesis demo, there are two compiled context templates:
 
-### 2. Connected Traversal
-The system can start from a "root" object and traverse relations (e.g., `derived_from`) to a specific depth to bring in necessary lineage without exposing the whole graph.
+**`source_notes_for_extraction`** — admits only `source_note` objects. This is what the finding-extraction step sees.
 
-### 3. Standing Constraints
-Policies can exclude objects that are not in a specific state (e.g., "only admitted if `standing_review` is `accepted`").
+**`findings_for_summary`** — admits only `finding` objects and their `derived_from` relations. This is what the summarization step sees.
 
-## Why it Matters
+The summarization step cannot see the original source notes. It receives only the findings that were extracted and validated in the previous stage. That narrowing is not an accident — it's declared in the compiled context template.
 
-1. **Governance**: You can prove exactly what a model saw.
-2. **Performance**: Smaller, more focused context reduces noise and token cost.
-3. **Safety**: Prevents "leakage" of context from unrelated tasks.
+## Why It Matters
+
+**You can prove what a model saw.** The compiled context is a deterministic function of declarations and corpus state. If someone asks "did the model have access to the confidential intake notes?" you can answer definitively.
+
+**Smaller context reduces noise.** A summarizer that sees only verified findings produces better output than one that also sees raw interview transcripts, private annotations, and unrelated objects.
+
+**Different stages see different things.** A triage step might see raw intake data. A routing step might see only the extracted symptoms. A reporting step might see only reviewed findings. Each stage has its own compiled context template.
+
+## Declaring a Compiled Context
+
+A compiled context template is a YAML file:
+
+```yaml
+name: findings_for_summary
+version: 0.2.0
+description: Compile findings for summarization.
+select:
+  classes:
+    - finding
+  standing: {}
+  relations:
+    - derived_from
+  time_range: null
+group_by: []
+render:
+  mode: work_surface_compilation
+  manifest_format: json
+  prose_template: null
+visibility:
+  include_lineage: true
+  include_constraints: true
+  include_provenance: true
+```
+
+The `select` block says: include `finding` objects and traverse `derived_from` relations. Nothing else gets in.
 
 ## See Also
-- [Tutorial: Research Synthesis](../tutorials/research-synthesis-demo.md)
-- [Concept: Handoffs](handoffs.md)
-- [Reference: Compiled Context Declaration](../reference/schemas.md#compiled-context-template)
+
+- [Staged Execution](staged-execution.md) — how transitions use compiled context
+- [Handoffs](handoffs.md) — how context narrows between stages
+- [Research Synthesis Demo](../tutorials/research-synthesis-demo.md) — see context compilation in action

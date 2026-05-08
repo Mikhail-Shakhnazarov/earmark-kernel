@@ -1,21 +1,21 @@
-# Earmark Runtime Integration Guide
+# Runtime Integration Guide
 
-This guide explains how to integrate Earmark as a governed execution substrate into your application, either via the Rust SDK or the CLI bridge.
+This guide explains how to use Earmark as a governed execution substrate from your application, either through the Rust SDK or by driving the CLI as a subprocess.
 
-## 1. Architecture Overview
+## Architecture
 
-Earmark operates as a **governance kernel**. It doesn't "run" agents directly; instead, it provides bounded context through work packets, manages assignments over transitions, and validates the resulting change sets.
+Earmark doesn't run agents directly. It provides bounded context through work packets, manages assignments over transitions, and validates the resulting change sets. Your application follows this loop:
 
-The runtime (your application) follows this loop:
 1. Compile context from the kernel.
 2. Receive a work packet for a transition.
 3. Dispatch to a provider (e.g., Gemini).
 4. Deposit the result back into the kernel.
 5. Continue to the next transition using the handoff manifest.
 
-## 2. Using the Rust SDK
+## Using the Rust SDK
 
-Add the following to your `Cargo.toml`:
+Add the workspace crates to your `Cargo.toml`:
+
 ```toml
 [dependencies]
 earmark-core = { path = "..." }
@@ -38,10 +38,10 @@ let store = GitCanonicalStore::new("./workspace");
 let index = DerivedIndex::open("./workspace")?;
 let mut registry = ProviderRegistry::default();
 
-// Register the Gemini adapter
+// Register the Gemini adapter (requires GOOGLE_API_KEY env var)
 registry.register(Arc::new(GeminiAdapter::new(
     "gemini-2.5-flash".to_string(),
-    "GOOGLE_API_KEY".to_string()
+    std::env::var("GOOGLE_API_KEY").expect("GOOGLE_API_KEY must be set"),
 )));
 
 let surface = RuntimeToolSurface {
@@ -71,12 +71,11 @@ for object in outcome.emitted_objects {
 }
 ```
 
-## 3. Using the CLI Bridge (Stdio Workflow)
+## Using the CLI Bridge
 
-You can drive Earmark from any language by spawning the `em` binary as a subprocess and parsing its JSON output.
+You can drive Earmark from any language by spawning the `em` binary and parsing its JSON output.
 
-### Versioning
-All JSON output is wrapped in a versioned envelope. Always check `contract_version`.
+All JSON output is wrapped in a versioned envelope. Always check `contract_version`:
 
 ```json
 {
@@ -107,18 +106,17 @@ note_id = resp["data"]["object_id"]
 
 # Run a workflow
 run_resp = em_command([
-    "workflow", "run", "research_workflow", 
-    "--system-id", "research_system", 
+    "workflow", "run", "research_synthesis",
+    "--system-id", "sys_research_synthesis",
     "--with", note_id
 ])
 print(f"Run completed: {run_resp['data']['run_id']}")
 ```
 
-## 4. Authoring Provider Profiles
+## Provider Profiles
 
-A provider profile connects a transition to a specific provider.
+A provider profile connects a transition to a specific LLM provider. Example for Google Gemini:
 
-Example `docs/declarations/examples/provider_profiles/google_gemini.yaml`:
 ```yaml
 name: gemini_research
 version: 0.2.0
@@ -133,8 +131,12 @@ response_contract:
   must_return_candidate_only: true
 ```
 
-## 5. Error Handling
+The mock provider (`local_mock`) is the default and requires no API keys. Use it for development and testing.
 
-- **ExecError**: Check the workflow definition and inputs.
-- **DispatchFailure**: Check your API keys, network, and provider budget.
-- **RuntimeToolError**: Check for resource conflicts (e.g., duplicate assignments) or missing objects.
+## Error Handling
+
+- **ExecError**: check the workflow definition and inputs.
+- **DispatchFailure**: check API keys, network connectivity, and provider budget limits.
+- **RuntimeToolError**: check for resource conflicts (e.g., duplicate assignments) or missing objects.
+
+See the [Runtime Contract](runtime-contract.md) for the full error type reference.

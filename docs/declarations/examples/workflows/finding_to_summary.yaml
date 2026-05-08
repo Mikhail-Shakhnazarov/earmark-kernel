@@ -3,7 +3,7 @@ version: 0.2.0
 description: Project findings and summarize them.
 operations:
   - id: compile_finding_context
-    kind: project
+    kind: compile_context
     input_contracts:
       - finding
     output_contracts:

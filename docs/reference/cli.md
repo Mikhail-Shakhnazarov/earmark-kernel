@@ -1,102 +1,167 @@
-# Reference: CLI
+# CLI Reference
 
-The Earmark CLI (`em`) is the primary interface for operators and developers.
+The Earmark CLI (`em`) is the primary interface for operators and developers. All commands support `--json` for machine-readable output.
 
 ## Global Flags
 
-- `--root <path>`: Specify the workspace root (default: current directory).
-- `--json`: Output results in machine-readable JSON format.
-- `--help`: View help for any command or subcommand.
+| Flag | Description |
+|---|---|
+| `--root <path>` | Workspace root directory (default: current directory) |
+| `--json` | Output results as JSON wrapped in a versioned envelope |
+| `--help` | Help for any command or subcommand |
 
-## Workspace Management
+## Workspace
 
 ### `em init`
-Initialize a new Earmark workspace. Creates the `.earmark/` directory and required substrate.
+
+Initialize a new Earmark workspace. Creates the `.earmark/` directory and required storage structure.
 
 ### `em doctor`
-Check the health of the workspace and canonical store.
+
+Check workspace health: store integrity, index state, active system status.
 
 ### `em status`
+
 Show counts of objects, assignments, change sets, and active systems.
 
-## Declaration Management
+```bash
+em status
+# Objects: 12  Assignments: 4  Change Sets: 3  Active System: sys_research_synthesis
+```
+
+## Declarations
 
 ### `em declare validate --kind <kind> <path>`
-Validate a declaration file against its schema.
-Kinds: `class`, `instruction`, `workflow`, `system`, etc.
+
+Validate a declaration file against its schema. Returns specific errors if validation fails.
+
+Kinds: `class`, `instruction`, `workflow`, `compiled-context`, `provider-profile`, `system`.
+
+```bash
+em declare validate --kind system declarations/system.yaml
+# OK: System 'sys_research_synthesis' is valid.
+```
 
 ### `em declare explain --kind <kind> <path>`
+
 Explain what a declaration does in plain language.
 
 ### `em declare new <kind> <name>`
-Scaffold a new declaration from a template.
+
+Generate a new declaration from a built-in template.
+
+```bash
+em declare new class my_finding > declarations/classes/my_finding.yaml
+```
 
 ### `em declare list-examples`
-List built-in declaration examples.
 
-## System Management
+List built-in declaration examples available for reference.
+
+## Systems
 
 ### `em system register <manifest_path>`
-Register a path-based system manifest and its dependencies.
+
+Register a path-based system manifest and resolve its referenced declarations.
 
 ### `em system activate <system_id>`
-Set the active system for the current workspace.
+
+Set the active system for the workspace. Subsequent commands use this system by default.
 
 ### `em system list`
-List registered systems.
 
-## Data Operations
+List all registered systems and show which is active.
 
-### `em deposit --class <class> [--title <title>] [--body <body>]`
+## Data
+
+### `em deposit --class <class> [--title <title>] [--body <body>] [--payload-file <path>]`
+
 Deposit an object into the corpus.
 
+```bash
+em deposit --class source_note --title "Field Notes" --body "Municipal capacity is limited."
+# Created: obj_a1b2c3d4...  Class: source_note
+```
+
 ### `em query [--class <class>] [--title <query>]`
+
 Search the corpus through the derived index.
 
+```bash
+em query --class source_note
+# obj_a1b2c3d4  source_note  "Field Notes"
+# obj_e5f6g7h8  source_note  "Report Excerpt"
+```
+
 ### `em context compile --root <object_id> [--depth <n>]`
-Manually compile and preview a work surface.
+
+Compile and preview a work surface from a root object.
 
 ## Workflow Execution
 
 ### `em workflow run <workflow_id> --system-id <system_id> [--with <object_id>] [--handoff <handoff_id>]`
-Execute a declared workflow. 
-- `--with`: Start from a specific input object.
-- `--handoff`: Continue from a previous Stage's handoff manifest.
 
-## Inspection and Observability
+Execute a declared workflow.
+
+- `--with <id>` — start from specific input objects (repeatable)
+- `--handoff <id>` — continue from a previous stage's handoff manifest
+
+```bash
+em workflow run research_synthesis --system-id sys_research_synthesis --with obj_a1b2c3d4
+```
+
+## Inspection
 
 ### `em run list`
+
 List recent workflow runs.
 
 ### `em run explain <run_id>`
-Show a summary of a run and suggested next steps.
+
+Summary of a run: status, transitions, created artifacts, and suggested next commands. Use `latest` as shorthand for the most recent run.
 
 ### `em run timeline <run_id>`
-View a visual timeline of events in a run.
+
+Visual timeline of events in a run.
 
 ### `em run graph <run_id>`
-Generate a Mermaid relationship graph for the artifacts in a run.
+
+Mermaid relationship graph of artifacts produced during a run.
 
 ### `em run artifacts <run_id>`
-List all durable artifacts (assignments, change sets, etc.) created during a run.
+
+List all durable artifacts (assignments, change sets, handoffs, failures) created during a run.
 
 ### `em assignment explain <assignment_id>`
-Explain a specific transition assignment.
+
+Explain a transition assignment: what work was claimed, over which inputs, current status.
 
 ### `em change-set explain <change_set_id>`
-Explain the changes produced by a transition.
+
+Explain what a transition produced: created objects, validation result, linked handoff.
 
 ### `em handoff explain <handoff_id>`
-Explain the bounded context carried by a handoff.
+
+Explain a handoff: which objects it carries, which classes and relations are allowed for successor work.
 
 ### `em failure explain <failure_id>`
-Explain a transition failure and suggest recovery steps.
+
+Explain a failure: what went wrong, which assignment and change set are linked, suggested recovery.
+
+### `em failure list`
+
+List transformation failures, optionally filtered by run.
+
+## Reports
 
 ### `em report <run|handoff|system> <id> --output <path>`
-Generate a static HTML report for a specific artifact.
 
-### `em audit failures`
-List and audit transformation failures across the workspace.
+Generate a static HTML report for a specific artifact. Reports include timelines, artifact summaries, Mermaid diagrams, and are self-contained for sharing.
+
+```bash
+em report run latest --output reports/synthesis_run.html
+```
 
 ## License
+
 AGPL-3.0-or-later OR Commercial.

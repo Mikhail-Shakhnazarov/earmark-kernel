@@ -1,0 +1,10 @@
+Pilotprojekt Datenintegration, Landkreis Beispiel, Q1 2026.
+
+Im Pilot wurde eine Datenpipeline aufgebaut, um Verbrauchsdaten eines Versorgers mit
+Flurstücks- und Gebäudedaten aus dem Kataster zusammenzuführen. In der ersten Auswertung
+konnten etwa 15% der Datensätze nicht eindeutig zugeordnet werden. Hauptursachen waren
+abweichende Schreibweisen bei Straßen und Hausnummern sowie veraltete Objektkennungen.
+Eine manuelle Nachprüfung reduzierte den Anteil nicht zuordenbarer Datensätze, dennoch
+blieben 7-8% als echte Datenlücken bestehen. Diese Fälle betreffen unter anderem Gebäude
+ohne aktuelle Anschlussdaten oder veraltete Einträge. Für die Wärmeplanung sollten solche
+Lücken explizit markiert und nicht stillschweigend aus der Bewertung entfernt werden.

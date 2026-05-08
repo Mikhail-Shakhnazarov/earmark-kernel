@@ -1,24 +1,46 @@
 Earmark is dual-licensed under:
 
 1. GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later)
-2. Commercial License (LicenseRef-Commercial)
+2. Commercial License (contact the project maintainers)
 
----
+You choose which license applies to your use of the software.
 
-OPTION 1: OPEN SOURCE LICENSE (AGPL-3.0)
+OPTION 1: OPEN SOURCE (AGPL-3.0-or-later)
 
-Unless you have obtained a commercial license from the project maintainers, you are
-subject to the terms of the GNU Affero General Public License v3.0 or later.
+If you do not hold a commercial license, your use of Earmark is governed by the GNU Affero General Public License v3.0 or later.
 
-This typically means:
-- You may use this software for personal or internal business purposes.
-- If you modify this software and distribute it, or provide it as a network service,
-  you must release your source code under the AGPL-3.0.
+The full text of the AGPL-3.0 is available at:
+https://www.gnu.org/licenses/agpl-3.0.html
 
----
+In plain terms, the AGPL-3.0 permits you to:
+
+  - Use, study, and modify the software without restriction.
+  - Deploy the software internally within your organisation.
+  - Distribute or publicly deploy the software, provided that you release the complete source code of your version under the same license.
+
+The key obligation: if you run a modified version of Earmark as a network service (e.g., an API or web application that others access), you must make your source code available to those users under the AGPL-3.0. This applies even if you do not distribute binaries.
+
+If you use Earmark internally without modifications and without exposing it as a service to external users, the AGPL-3.0 imposes no source-release obligation.
 
 OPTION 2: COMMERCIAL LICENSE
 
-If you wish to use Earmark in a proprietary product, distribute it without
-source code, or offer it as a service without AGPL restrictions, you must
-obtain a commercial license from the project maintainers.
+If the AGPL-3.0 terms are incompatible with your intended use — for example, if you want to:
+
+  - Include Earmark in a proprietary product or service
+  - Distribute Earmark without releasing your source code
+  - Offer Earmark as part of a hosted service without AGPL obligations
+
+then you must obtain a commercial license from the project maintainers.
+
+Commercial licensing terms are negotiated individually. Contact:
+
+  Mikhail Shakhnazarov
+  mikhail@shakhnazarov.com
+
+SCOPE
+
+This license applies to all source code, documentation, example declarations, seed corpora, and tooling included in this repository. Third-party dependencies are subject to their own licenses (see Cargo.lock for details).
+
+PRIOR ART AND EMPLOYMENT NOTICE
+
+Earmark was designed and developed as an independent project before any employment relationship with any organisation. This repository was made public and licensed under the terms above prior to any such relationship. The intellectual property in this repository belongs to the original author under the terms of this license.

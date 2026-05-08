@@ -1,10 +1,10 @@
-# Earmark Stdio Bridge
+# Stdio Bridge
 
-The Earmark CLI (`em`) is designed to be used as a subprocess bridge for non-Rust runtimes. By using the `--json` flag, you get machine-readable output that follows a stable contract.
+The Earmark CLI (`em`) is designed to work as a subprocess bridge for non-Rust runtimes. Use `--json` to get machine-readable output that follows a stable versioned contract.
 
-## 1. The JSON Envelope
+## JSON Envelope
 
-Every successful CLI call with `--json` returns a JSON object with this structure:
+Every successful `--json` call returns:
 
 ```json
 {
@@ -13,7 +13,7 @@ Every successful CLI call with `--json` returns a JSON object with this structur
 }
 ```
 
-Errors are returned on `stderr` and also formatted as JSON:
+Errors are returned on stderr, also as JSON:
 
 ```json
 {
@@ -25,9 +25,7 @@ Errors are returned on `stderr` and also formatted as JSON:
 }
 ```
 
-## 2. Integration Patterns
-
-### Python
+## Python
 
 ```python
 import subprocess
@@ -41,25 +39,27 @@ def run_em(args):
         text=True
     )
     stdout, stderr = proc.communicate()
-    
+
     if proc.returncode != 0:
         try:
             err_data = json.loads(stderr)
-            print(f"Error [{err_data['contract_version']}]: {err_data['error']['message']}")
-        except:
-            print(f"CLI Error: {stderr}")
-        return None
+            raise RuntimeError(f"[{err_data['contract_version']}] {err_data['error']['message']}")
+        except json.JSONDecodeError:
+            raise RuntimeError(f"CLI error: {stderr}")
 
     return json.loads(stdout)["data"]
 
-# Example: Deposit and Run
-note = run_em(["deposit", "--class", "source_note", "--body", "Search for AI safety."])
-if note:
-    run = run_em(["workflow", "run", "search", "--system-id", "sys1", "--with", note["object_id"]])
-    print(f"Run ID: {run['run_id']}")
+# Deposit and run
+note = run_em(["deposit", "--class", "source_note", "--body", "AI context should be bounded."])
+run = run_em([
+    "workflow", "run", "research_synthesis",
+    "--system-id", "sys_research_synthesis",
+    "--with", note["object_id"]
+])
+print(f"Run ID: {run['run_id']}")
 ```
 
-### Node.js
+## Node.js
 
 ```javascript
 const { execSync } = require('child_process');
@@ -67,10 +67,9 @@ const { execSync } = require('child_process');
 function runEm(args) {
     try {
         const stdout = execSync(`em --json ${args.join(' ')}`).toString();
-        const response = JSON.parse(stdout);
-        return response.data;
+        return JSON.parse(stdout).data;
     } catch (err) {
-        console.error("CLI Failed:", err.stderr.toString());
+        console.error("CLI failed:", err.stderr?.toString());
         return null;
     }
 }
@@ -79,9 +78,14 @@ const note = runEm(["deposit", "--class", "source_note", "--body", "'Hello world
 console.log("Note ID:", note.object_id);
 ```
 
-## 3. Best Practices
+## Best Practices
 
-1. **Check Contract Version**: If `contract_version` does not match your expected version (e.g., `0.2.0`), emit a warning as breaking changes might have occurred.
-2. **Handle Exit Codes**: A non-zero exit code indicates failure even if `stderr` is not valid JSON.
-3. **Use Absolute Paths**: When using `--root` or referring to declaration files, use absolute paths to avoid ambiguity.
-4. **Environment Variables**: Use environment variables for sensitive data (like `GOOGLE_API_KEY`) rather than passing them as arguments. Earmark adapters read these directly from the environment.
+1. **Check `contract_version`**: if it doesn't match your expected version (`0.2.0`), log a warning. Breaking changes increment the minor version.
+2. **Handle exit codes**: a non-zero exit code means failure even if stderr isn't valid JSON.
+3. **Use absolute paths**: when specifying `--root` or declaration files, use absolute paths.
+4. **Use environment variables for secrets**: Earmark provider adapters read API keys from environment variables (e.g., `GOOGLE_API_KEY`), not from command-line arguments.
+
+## See Also
+
+- [Runtime Contract](runtime-contract.md) — the full six-step flow and JSON artifact shapes
+- [Runtime Integration Guide](runtime-integration-guide.md) — Rust SDK and Python examples
