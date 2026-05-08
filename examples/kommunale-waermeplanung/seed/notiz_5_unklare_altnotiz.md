@@ -1,9 +1,3 @@
 Undatierte Altnotiz, Autor nicht eindeutig dokumentiert.
 
-Für Fernwärmenetze in mittelgroßen Städten wird eine Anschlussquote von bis zu 80%
-innerhalb von fünf Jahren genannt. Es bleibt offen, ob sich dieser Wert auf Neubaugebiete
-oder auf den gesamten Gebäudebestand bezieht. Für Bestandsquartiere werden in derselben
-Notiz eher 40-60% als realistisch beschrieben. Methodik, Datengrundlage und regionaler
-Kontext sind nicht angegeben. Quelle und Datum unklar. Möglicherweise vor der GEG-Novelle
-2024 verfasst. Die Aussage ist deshalb nur eingeschränkt belastbar und sollte gesondert
-geprüft werden, bevor sie in Entscheidungen einfließt.
+Für Fernwärmenetze in mittelgroßen Städten wird eine Anschlussquote von bis zu 80% innerhalb von fünf Jahren genannt. Es bleibt offen, ob sich dieser Wert auf Neubaugebiete oder auf den gesamten Gebäudebestand bezieht. Für Bestandsquartiere werden in derselben Notiz eher 40-60% als realistisch beschrieben. Methodik, Datengrundlage und regionaler Kontext sind nicht angegeben. Quelle und Datum unklar. Möglicherweise vor der GEG-Novelle 2024 verfasst. Die Aussage ist deshalb nur eingeschränkt belastbar und sollte gesondert geprüft werden, bevor sie in Entscheidungen einfließt.

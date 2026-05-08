@@ -16,24 +16,30 @@ flowchart LR
 
 If you've already completed the [Quickstart](quickstart.md), you have a workspace with `sys_research_synthesis` registered and activated.
 
-Otherwise, from the `examples/research-synthesis` directory:
+Otherwise, from the repository root:
 
 ```bash
-em init
-em system register declarations/systems/system.yaml
-em system activate sys_research_synthesis
+cargo build -p earmark-cli
+alias em="$(pwd)/target/debug/earmark-cli"
+export REPO_ROOT="$(pwd)"
+export WORKSPACE=/tmp/earmark-research-synthesis-tutorial
+rm -rf "$WORKSPACE"
+
+em --root "$WORKSPACE" init
+em --root "$WORKSPACE" system register "$REPO_ROOT/examples/research-synthesis/declarations/systems/system.yaml"
+em --root "$WORKSPACE" system activate sys_research_synthesis
 ```
 
 Deposit the seed notes:
 
 ```bash
-em deposit --class source_note \
+em --root "$WORKSPACE" deposit --class source_note \
   --title "Federated Graphs: Agility and Ownership" \
-  --payload-file data/seed_notes/note_1_benefits.md
+  --payload-file "$REPO_ROOT/examples/research-synthesis/data/seed_notes/note_1_benefits.md"
 
-em deposit --class source_note \
+em --root "$WORKSPACE" deposit --class source_note \
   --title "The Cost of Heterogeneity" \
-  --payload-file data/seed_notes/note_2_challenges.md
+  --payload-file "$REPO_ROOT/examples/research-synthesis/data/seed_notes/note_2_challenges.md"
 ```
 
 ## Stage 1: Finding Extraction
@@ -41,8 +47,8 @@ em deposit --class source_note \
 Run the workflow with your deposited source notes:
 
 ```bash
-em query --class source_note
-em workflow run research_synthesis --system-id sys_research_synthesis --with <source_note_id>
+em --root "$WORKSPACE" query --class source_note
+em --root "$WORKSPACE" workflow run research_synthesis --system-id sys_research_synthesis --with <source_note_id>
 ```
 
 What happens:
@@ -56,7 +62,7 @@ The output will include a `handoff_id`. This is the bridge to Stage 2.
 Inspect it:
 
 ```bash
-em handoff explain <handoff_id>
+em --root "$WORKSPACE" handoff explain <handoff_id>
 ```
 
 You'll see which objects the handoff carries forward (findings) and which it excludes (the original source notes).
@@ -66,7 +72,7 @@ You'll see which objects the handoff carries forward (findings) and which it exc
 Continue work using the handoff from Stage 1:
 
 ```bash
-em workflow run research_synthesis --system-id sys_research_synthesis --handoff <handoff_id>
+em --root "$WORKSPACE" workflow run research_synthesis --system-id sys_research_synthesis --handoff <handoff_id>
 ```
 
 > **This is the core idea.** The summarization step receives findings, not source notes. It cannot access the original raw material. If a finding is wrong, the fix is to re-run Stage 1, not to give Stage 2 more context.
@@ -77,16 +83,16 @@ After both stages complete:
 
 ```bash
 # Summary of what happened and suggested next steps
-em run explain <run_id>
+em --root "$WORKSPACE" run explain <run_id>
 
 # Visual timeline of every event
-em run timeline <run_id>
+em --root "$WORKSPACE" run timeline <run_id>
 
 # Relationship graph showing lineage from source to finding to summary
-em run graph <run_id>
+em --root "$WORKSPACE" run graph <run_id>
 
 # HTML report you can share
-em report run <run_id> --output research_report.html
+em --root "$WORKSPACE" report run <run_id> --output research_report.html
 ```
 
 ## What This Demonstrates

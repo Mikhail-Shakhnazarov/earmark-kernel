@@ -14,8 +14,7 @@ register: findings
 
 # Finding Extraction
 
-Extract discrete findings from the provided source notes. Each finding should represent
-a single claim, observation, or data point that could be useful in a briefing.
+Extract discrete findings from the provided source notes. Each finding should represent a single claim, observation, or data point that could be useful in a briefing.
 
 ## Requirements
 
@@ -23,8 +22,7 @@ a single claim, observation, or data point that could be useful in a briefing.
 - Each finding must have a short descriptive title.
 - Findings should be atomic: one claim per finding.
 - Preserve numerical data and specific references where present.
-- If a source note is ambiguous, outdated, or lacks clear provenance, extract the
-  finding but flag it in the body with a note about the uncertainty.
+- If a source note is ambiguous, outdated, or lacks clear provenance, extract the finding but flag it in the body with a note about the uncertainty.
 
 ## What not to do
 

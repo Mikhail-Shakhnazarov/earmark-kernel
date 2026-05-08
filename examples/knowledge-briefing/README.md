@@ -14,36 +14,53 @@ The pipeline runs in two stages: `source_note -> finding -> briefing_card`. Firs
 
 The seed corpus contains five short notes in mixed quality and register: workshop observations, a quantitative report excerpt, an internal pilot note, a stakeholder concern, and one ambiguous/outdated note. This mix is deliberate so the extraction step has to preserve signal while surfacing uncertainty.
 
-## Running the Demo
+## Prerequisites
 
-From the repo root:
+This demo assumes you have built the Earmark CLI and aliased it as `em`. From the repository root:
 
 ```bash
-cd examples/knowledge-briefing
+cargo build -p earmark-cli
+alias em="$(pwd)/target/debug/earmark-cli"
+export REPO_ROOT="$(pwd)"
+```
+
+## Running the Demo
+
+This example is designed to run against an external workspace, not from inside the example directory itself. The workspace below lives outside the repository so Earmark can manage its own store state cleanly.
+
+```bash
+export WORKSPACE=/tmp/earmark-knowledge-briefing-demo
+rm -rf "$WORKSPACE"
+
+# Initialize the workspace
+em --root "$WORKSPACE" init
 
 # Register declarations for this demo
-em system register declarations/systems/system.yaml
+em --root "$WORKSPACE" system register "$REPO_ROOT/examples/knowledge-briefing/declarations/systems/system.yaml"
 
 # Validate declarations
-em declare validate declarations/systems/system.yaml
+em --root "$WORKSPACE" declare validate --kind system "$REPO_ROOT/examples/knowledge-briefing/declarations/systems/system.yaml"
 
 # Activate the system
-em system activate sys_knowledge_briefing
+em --root "$WORKSPACE" system activate sys_knowledge_briefing
 
 # Deposit source notes
-em deposit seed/note_1_workshop.md --class source_note --title "Workshop Notes"
-em deposit seed/note_2_report_excerpt.md --class source_note --title "Federal Progress Excerpt"
-em deposit seed/note_3_project_note.md --class source_note --title "Pilot Integration Note"
-em deposit seed/note_4_stakeholder.md --class source_note --title "Stakeholder Concern"
-em deposit seed/note_5_ambiguous.md --class source_note --title "Ambiguous District Heating Note"
+em --root "$WORKSPACE" deposit --class source_note --title "Workshop Notes" --payload-file "$REPO_ROOT/examples/knowledge-briefing/seed/note_1_workshop.md"
+em --root "$WORKSPACE" deposit --class source_note --title "Federal Progress Excerpt" --payload-file "$REPO_ROOT/examples/knowledge-briefing/seed/note_2_report_excerpt.md"
+em --root "$WORKSPACE" deposit --class source_note --title "Pilot Integration Note" --payload-file "$REPO_ROOT/examples/knowledge-briefing/seed/note_3_project_note.md"
+em --root "$WORKSPACE" deposit --class source_note --title "Stakeholder Concern" --payload-file "$REPO_ROOT/examples/knowledge-briefing/seed/note_4_stakeholder.md"
+em --root "$WORKSPACE" deposit --class source_note --title "Ambiguous District Heating Note" --payload-file "$REPO_ROOT/examples/knowledge-briefing/seed/note_5_ambiguous.md"
 
-# Run the governed pipeline
-em workflow run knowledge_briefing --provider local_mock
+# Review the deposited source notes and choose the IDs you want to process
+em --root "$WORKSPACE" query --class source_note
+
+# Run the governed pipeline with explicit inputs
+em --root "$WORKSPACE" workflow run knowledge_briefing --system-id sys_knowledge_briefing --with <ID_1> --with <ID_2> --with <ID_3> --with <ID_4> --with <ID_5>
 
 # Inspect resulting objects and lineage
-em list --class finding
-em list --class briefing_card
-em show --class briefing_card --latest
+em --root "$WORKSPACE" query --class finding
+em --root "$WORKSPACE" query --class briefing_card
+em --root "$WORKSPACE" run explain latest
 ```
 
 ## Inspecting the Output

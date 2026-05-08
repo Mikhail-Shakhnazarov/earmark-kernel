@@ -617,29 +617,31 @@ fn run(cli: Cli) -> Result<(), CliError> {
             }
             RunAction::Show { run_id } => {
                 let ledger = load_run_record_by_id(&store, &run_id)?;
+                let resolved_id = ledger.run_id.clone();
                 emit(
                     cli.json,
                     json!({
                         "ok": true,
                         "kind": "run",
-                        "id": run_id,
-                        "summary": format!("run {} is {}", run_id, format!("{:?}", ledger.status).to_lowercase()),
+                        "id": resolved_id,
+                        "summary": format!("run {} is {}", resolved_id, format!("{:?}", ledger.status).to_lowercase()),
                         "artifact": ledger,
-                        "related": run_related_artifacts(&store, &run_id)?,
-                        "next_commands": next_commands_for_run(&run_id),
+                        "related": run_related_artifacts(&store, &resolved_id)?,
+                        "next_commands": next_commands_for_run(&resolved_id),
                     }),
                 );
             }
             RunAction::Timeline { run_id } => {
                 let mut ledger = load_run_record_by_id(&store, &run_id)?;
+                let resolved_id = ledger.run_id.clone();
                 ledger.events.sort_by_key(|event| event.timestamp);
                 emit(
                     cli.json,
                     json!({
                         "ok": true,
                         "kind": "run_timeline",
-                        "id": run_id,
-                        "summary": format!("{} events across run {}", ledger.events.len(), run_id),
+                        "id": resolved_id,
+                        "summary": format!("{} events across run {}", ledger.events.len(), resolved_id),
                         "timeline": {
                             "status": format!("{:?}", ledger.status).to_lowercase(),
                             "started_at": ledger.started_at,
@@ -649,49 +651,54 @@ fn run(cli: Cli) -> Result<(), CliError> {
                             "change_sets": ledger.change_sets,
                             "handoffs": ledger.manifests,
                         },
-                        "related": run_related_artifacts(&store, &run_id)?,
-                        "next_commands": next_commands_for_run(&run_id),
+                        "related": run_related_artifacts(&store, &resolved_id)?,
+                        "next_commands": next_commands_for_run(&resolved_id),
                     }),
                 );
             }
             RunAction::Artifacts { run_id } => {
+                let ledger = load_run_record_by_id(&store, &run_id)?;
+                let resolved_id = ledger.run_id.clone();
                 emit(
                     cli.json,
                     json!({
                         "ok": true,
                         "kind": "run_artifacts",
-                        "id": run_id,
-                        "summary": format!("artifacts for run {}", run_id),
-                        "artifact": run_related_artifacts(&store, &run_id)?,
-                        "next_commands": next_commands_for_run(&run_id),
+                        "id": resolved_id,
+                        "summary": format!("artifacts for run {}", resolved_id),
+                        "artifact": run_related_artifacts(&store, &resolved_id)?,
+                        "next_commands": next_commands_for_run(&resolved_id),
                     }),
                 );
             }
             RunAction::Explain { run_id } => {
                 let ledger = load_run_record_by_id(&store, &run_id)?;
+                let resolved_id = ledger.run_id.clone();
                 emit(
                     cli.json,
                     json!({
                         "ok": true,
                         "kind": "run",
-                        "id": run_id,
-                        "summary": format!("run {} is {}", run_id, format!("{:?}", ledger.status).to_lowercase()),
+                        "id": resolved_id,
+                        "summary": format!("run {} is {}", resolved_id, format!("{:?}", ledger.status).to_lowercase()),
                         "artifact": ledger,
-                        "related": run_related_artifacts(&store, &run_id)?,
-                        "next_commands": next_commands_for_run(&run_id),
+                        "related": run_related_artifacts(&store, &resolved_id)?,
+                        "next_commands": next_commands_for_run(&resolved_id),
                     }),
                 );
             }
             RunAction::Graph { run_id } => {
+                let ledger = load_run_record_by_id(&store, &run_id)?;
+                let resolved_id = ledger.run_id.clone();
                 emit(
                     cli.json,
                     json!({
                         "ok": true,
                         "kind": "run_graph",
-                        "id": run_id,
-                        "summary": format!("relationship graph for run {}", run_id),
-                        "graph": build_run_graph(&store, &run_id)?,
-                        "next_commands": next_commands_for_run(&run_id),
+                        "id": resolved_id,
+                        "summary": format!("relationship graph for run {}", resolved_id),
+                        "graph": build_run_graph(&store, &resolved_id)?,
+                        "next_commands": next_commands_for_run(&resolved_id),
                     }),
                 );
             }
@@ -1890,7 +1897,14 @@ fn load_run_record_by_id<S: CanonicalStore>(
     store: &S,
     run_id: &str,
 ) -> Result<earmark_core::RunRecord, CliError> {
-    for ledger in list_run_records(store)? {
+    let ledgers = list_run_records(store)?;
+    if run_id == "latest" {
+        return ledgers
+            .last()
+            .cloned()
+            .ok_or_else(|| CliError::NotFound("no runs found".to_string()));
+    }
+    for ledger in ledgers {
         if ledger.run_id == run_id {
             return Ok(ledger);
         }
@@ -2306,7 +2320,7 @@ fn next_commands_for_run(run_id: &str) -> Vec<String> {
         format!("em run timeline {}", run_id),
         format!("em run artifacts {}", run_id),
         format!("em run graph {}", run_id),
-        format!("em audit failures --run-id {}", run_id),
+        format!("em failure list --run-id {}", run_id),
     ]
 }
 
