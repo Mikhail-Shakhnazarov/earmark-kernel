@@ -10,3 +10,4 @@
 
 # Local workspace state
 /.earmark/
+.direnv/
