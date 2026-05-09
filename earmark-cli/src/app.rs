@@ -2,19 +2,19 @@ use std::{collections::BTreeMap, fs, path::PathBuf};
 
 mod handler;
 
-use clap_complete::{generate, shells};
 use crate::cli::*;
 use crate::config::{load_config, resolve_json, resolve_root, resolve_system_id};
 use crate::output;
+use clap_complete::{generate, shells};
 use earmark_core::{
     EpistemicStanding, HeaderValue, Kind, ObjectRef, Provenance, Standing, VersionRef,
 };
 use earmark_declarations::{
-    load_class_definition, load_workflow_definition,
-    load_provider_profile, load_instruction, load_compiled_context_template, load_standing_policy,
-    load_system_definition, validate_class_definition, validate_workflow_definition,
-    validate_provider_profile, validate_instruction, validate_compiled_context_template,
-    validate_standing_policy, validate_system_definition,
+    load_class_definition, load_compiled_context_template, load_instruction, load_provider_profile,
+    load_standing_policy, load_system_definition, load_workflow_definition,
+    validate_class_definition, validate_compiled_context_template, validate_instruction,
+    validate_provider_profile, validate_standing_policy, validate_system_definition,
+    validate_workflow_definition,
 };
 use earmark_exec::{default_provider_registry, ExecutionEngine, WorkflowRunRequest};
 use earmark_governance::GovernanceService;
@@ -22,6 +22,7 @@ use earmark_index::DerivedIndex;
 use earmark_runtime_tools::RuntimeToolSurface;
 use earmark_store::{
     CanonicalStore, GitCanonicalStore, PayloadEncoding, StoredObject, StoredPayload,
+    WorkspaceLayoutStatus,
 };
 use serde::Deserialize;
 use serde_json::json;
@@ -42,709 +43,835 @@ pub fn run(cli: Cli) -> Result<(), CliError> {
     let root = resolve_root(&cli, &config);
     let as_json = resolve_json(&cli, &config);
     let store = GitCanonicalStore::new(&root);
-    store.init_layout()?;
-    let index = DerivedIndex::open(&root)?;
-    let provider_registry = default_provider_registry();
-    let runtime_surface = RuntimeToolSurface {
-        store: &store,
-        index: &index,
-        provider_service: &provider_registry,
+    let mode = workspace_access_mode(&cli.command);
+    match mode {
+        WorkspaceAccessMode::None => {}
+        WorkspaceAccessMode::Init | WorkspaceAccessMode::Write => store.init_layout()?,
+        WorkspaceAccessMode::ReadOnly => require_initialized_workspace(&store)?,
+    }
+    let index = match mode {
+        WorkspaceAccessMode::None => None,
+        WorkspaceAccessMode::ReadOnly => Some(DerivedIndex::open_existing(&root)?),
+        WorkspaceAccessMode::Init | WorkspaceAccessMode::Write => Some(DerivedIndex::open(&root)?),
     };
+    let provider_registry = default_provider_registry();
     let command_name = command_family_name(&cli.command);
     let started = std::time::Instant::now();
 
     tracing::debug!(root = %root.display(), "starting command");
     let result: Result<(), CliError> = (|| {
         match cli.command {
-        Commands::Init => {
-            let root = store.root();
-            let canonical_dir = root.join(".earmark").join("canonical");
-            let declarations_dir = store.declarations_dir();
-            let work_surfaces_dir = root.join(".earmark").join("work_surfaces");
-            let index_path = root.join(".earmark").join("derived").join("index.sqlite");
-            emit(
-                as_json,
-                json!({
-                    "ok": true,
-                    "summary": "workspace initialized",
-                    "root": root.display().to_string(),
-                    "paths": {
-                        "canonical_dir": canonical_dir.display().to_string(),
-                        "declarations_dir": declarations_dir.display().to_string(),
-                        "work_surfaces_dir": work_surfaces_dir.display().to_string(),
-                        "index_path": index_path.display().to_string(),
-                    },
-                    "next_commands": [
-                        "em doctor",
-                        "em status",
-                        "em declare validate --kind class docs/declarations/examples/classes/finding.yaml"
-                    ],
-                }),
-            );
-        }
-        Commands::Doctor => {
-            let root = store.root();
-            let checks = vec![
-                json!({"name": "root_exists", "ok": root.exists()}),
-                json!({"name": "canonical_dir_exists", "ok": root.join(".earmark").join("canonical").exists()}),
-                json!({"name": "declarations_dir_exists", "ok": store.declarations_dir().exists()}),
-                json!({"name": "work_surfaces_dir_exists", "ok": root.join(".earmark").join("work_surfaces").exists()}),
-                json!({"name": "store_scan", "ok": store.scan_objects().is_ok()}),
-            ];
-            let index_rebuild = index.rebuild_from_store(&store).is_ok();
-            let mut all_ok = index_rebuild;
-            all_ok = all_ok && checks.iter().all(|check| check["ok"] == true);
-            let warnings = if all_ok {
-                vec![]
-            } else {
-                vec!["one or more workspace health checks failed; review check results".to_string()]
-            };
-            emit(
-                as_json,
-                json!({
-                    "ok": all_ok,
-                    "summary": if all_ok { "workspace health checks passed" } else { "workspace health checks reported issues" },
-                    "root": root.display().to_string(),
-                    "checks": checks,
-                    "index_rebuild_ok": index_rebuild,
-                    "warnings": warnings,
-                    "next_commands": if all_ok {
-                        vec!["em status", "em run list"]
-                    } else {
-                        vec!["em init", "em status"]
-                    },
-                }),
-            );
-        }
-        Commands::System(command) => handler::system::handle(
-            &store,
-            &index,
-            &config,
-            as_json,
-            command,
-        )?,
-        Commands::Deposit(args) => handler::deposit::handle(&store, &runtime_surface, as_json, args)?,
-        Commands::Query(args) => handler::query::handle(&index, as_json, args)?,
-        Commands::Review(args) => {
-            let reference =
-                resolve_version_ref(&store, &args.object_id, args.version_id.as_deref())?;
-            let target_object = store.read_version(&reference)?;
-            let review = GovernanceService::create_review_object(
+            Commands::Init => {
+                let root = store.root();
+                let canonical_dir = root.join(".earmark").join("canonical");
+                let declarations_dir = store.declarations_dir();
+                let work_surfaces_dir = root.join(".earmark").join("work_surfaces");
+                let index_path = root.join(".earmark").join("derived").join("index.sqlite");
+                emit(
+                    as_json,
+                    json!({
+                        "ok": true,
+                        "summary": "workspace initialized",
+                        "root": root.display().to_string(),
+                        "paths": {
+                            "canonical_dir": canonical_dir.display().to_string(),
+                            "declarations_dir": declarations_dir.display().to_string(),
+                            "work_surfaces_dir": work_surfaces_dir.display().to_string(),
+                            "index_path": index_path.display().to_string(),
+                        },
+                        "next_commands": [
+                            "em doctor",
+                            "em status",
+                            "em declare validate --kind class docs/declarations/examples/classes/finding.yaml"
+                        ],
+                    }),
+                );
+            }
+            Commands::Doctor => {
+                let layout = store.layout_status();
+                if !layout.is_initialized() {
+                    emit(
+                        as_json,
+                        json!({
+                            "ok": false,
+                            "summary": "workspace is not initialized",
+                            "root": store.root().display().to_string(),
+                            "layout": layout,
+                            "warnings": ["workspace layout is incomplete"],
+                            "next_commands": ["em init"],
+                        }),
+                    );
+                    return Ok(());
+                }
+
+                let store_scan_ok = store.scan_objects().is_ok();
+                let index_exists = store
+                    .root()
+                    .join(".earmark")
+                    .join("derived")
+                    .join("index.sqlite")
+                    .exists();
+                let index_open_ok = if index_exists {
+                    DerivedIndex::open_existing(store.root()).is_ok()
+                } else {
+                    false
+                };
+                let all_ok = store_scan_ok && index_open_ok;
+                let warnings = if all_ok {
+                    vec![]
+                } else {
+                    vec![
+                        "one or more workspace health checks failed; review check results"
+                            .to_string(),
+                    ]
+                };
+                emit(
+                    as_json,
+                    json!({
+                        "ok": all_ok,
+                        "summary": if all_ok { "workspace health checks passed" } else { "workspace health checks reported issues" },
+                        "root": store.root().display().to_string(),
+                        "layout": layout,
+                        "store_scan_ok": store_scan_ok,
+                        "index_exists": index_exists,
+                        "index_open_ok": index_open_ok,
+                        "warnings": warnings,
+                        "next_commands": if all_ok {
+                            vec!["em status", "em run list"]
+                        } else {
+                            vec!["em init", "em status"]
+                        },
+                    }),
+                );
+            }
+            Commands::System(command) => handler::system::handle(
                 &store,
-                target_object.object_ref(),
-                !args.reject,
-                args.reason,
-            )?;
-            mirror_surface(&store, &review)?;
-            index.upsert_head_object_from_store(&store, &review.envelope.id)?;
-            emit(
+                index
+                    .as_ref()
+                    .expect("index available for workspace command"),
+                &config,
                 as_json,
-                json!({
-                    "ok": true,
-                    "review_object_id": review.envelope.id.as_str(),
-                    "review_version_id": review.envelope.version_id.as_str(),
-                    "target_object_id": target_object.envelope.id.as_str(),
-                    "status": if args.reject { "rejected" } else { "accepted" },
-                }),
-            );
-        }
-        Commands::Workflow(command) => match command.action {
-            WorkflowAction::Run(args) => {
-                let system_id = resolve_system_id(args.system_id.as_deref(), &config).ok_or_else(|| {
+                command,
+            )?,
+            Commands::Deposit(args) => {
+                let runtime_surface = RuntimeToolSurface {
+                    store: &store,
+                    index: index
+                        .as_ref()
+                        .expect("index available for workspace command"),
+                    provider_service: &provider_registry,
+                };
+                handler::deposit::handle(&store, &runtime_surface, as_json, args)?
+            }
+            Commands::Query(args) => handler::query::handle(
+                index
+                    .as_ref()
+                    .expect("index available for workspace command"),
+                as_json,
+                args,
+            )?,
+            Commands::Review(args) => {
+                let reference =
+                    resolve_version_ref(&store, &args.object_id, args.version_id.as_deref())?;
+                let target_object = store.read_version(&reference)?;
+                let review = GovernanceService::create_review_object(
+                    &store,
+                    target_object.object_ref(),
+                    !args.reject,
+                    args.reason,
+                )?;
+                mirror_surface(&store, &review)?;
+                index
+                    .as_ref()
+                    .expect("index available for workspace command")
+                    .upsert_head_object_from_store(&store, &review.envelope.id)?;
+                emit(
+                    as_json,
+                    json!({
+                        "ok": true,
+                        "review_object_id": review.envelope.id.as_str(),
+                        "review_version_id": review.envelope.version_id.as_str(),
+                        "target_object_id": target_object.envelope.id.as_str(),
+                        "status": if args.reject { "rejected" } else { "accepted" },
+                    }),
+                );
+            }
+            Commands::Workflow(command) => match command.action {
+                WorkflowAction::Run(args) => {
+                    let system_id = resolve_system_id(args.system_id.as_deref(), &config).ok_or_else(|| {
                     CliError::argument(
                         "system id required: pass --system-id, set EM_SYSTEM_ID, or set default_system_id in config"
                             .to_string(),
                     )
                 })?;
-                tracing::info!(
-                    workflow_id = %args.workflow_id,
-                    system_id = %system_id,
-                    input_count = args.inputs.len(),
-                    "starting workflow run dispatch"
-                );
-                let workflow = resolve_workflow_version_ref(
-                    &store,
-                    &index,
-                    &args.workflow_id,
-                    args.version_id.as_deref(),
-                )?;
-                let system = resolve_system_version_ref(&index, &system_id)?;
-                let inputs = args
-                    .inputs
-                    .iter()
-                    .map(|object_id| resolve_object_ref(&store, object_id))
-                    .collect::<Result<Vec<_>, _>>()?;
-                let engine = ExecutionEngine {
+                    tracing::info!(
+                        workflow_id = %args.workflow_id,
+                        system_id = %system_id,
+                        input_count = args.inputs.len(),
+                        "starting workflow run dispatch"
+                    );
+                    let workflow = resolve_workflow_version_ref(
+                        &store,
+                        index
+                            .as_ref()
+                            .expect("index available for workspace command"),
+                        &args.workflow_id,
+                        args.version_id.as_deref(),
+                    )?;
+                    let system = resolve_system_version_ref(
+                        index
+                            .as_ref()
+                            .expect("index available for workspace command"),
+                        &system_id,
+                    )?;
+                    let inputs = args
+                        .inputs
+                        .iter()
+                        .map(|object_id| resolve_object_ref(&store, object_id))
+                        .collect::<Result<Vec<_>, _>>()?;
+                    let engine = ExecutionEngine {
+                        store: &store,
+                        index: index
+                            .as_ref()
+                            .expect("index available for workspace command"),
+                        provider_service: &provider_registry,
+                    };
+                    let outcome = engine.run_workflow(WorkflowRunRequest {
+                        run_id: format!(
+                            "run_{}",
+                            chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()
+                        ),
+                        system_definition: system,
+                        workflow,
+                        inputs,
+                        handoff_manifest: args
+                            .handoff
+                            .map(earmark_core::HandoffManifestId::parse)
+                            .transpose()?,
+                        transition_assignment: args
+                            .assignment
+                            .map(earmark_core::TransitionAssignmentId::parse)
+                            .transpose()?,
+                        operator_approved: args.approve_review,
+                    })?;
+                    let assignments = list_assignments_by_run(&store, &outcome.record.run_id)?
+                        .into_iter()
+                        .map(|assignment| assignment.id.as_str().to_string())
+                        .collect::<Vec<_>>();
+                    let change_sets = list_change_sets_by_run(&store, &outcome.record.run_id)?
+                        .into_iter()
+                        .map(|change_set| change_set.id.as_str().to_string())
+                        .collect::<Vec<_>>();
+                    let handoffs = list_handoffs_by_run(&store, &outcome.record.run_id)?
+                        .into_iter()
+                        .map(|handoff| handoff.id.as_str().to_string())
+                        .collect::<Vec<_>>();
+                    let failures = list_failures_by_run(&store, &outcome.record.run_id)?
+                        .into_iter()
+                        .collect::<Vec<_>>();
+                    emit(
+                        as_json,
+                        json!({
+                            "ok": true,
+                            "run_id": outcome.record.run_id,
+                            "summary": "workflow run completed",
+                            "status": format!("{:?}", outcome.record.status).to_lowercase(),
+                            "event_count": outcome.record.events.len(),
+                            "packet_count": outcome.emitted_packets.len(),
+                            "output_count": outcome.emitted_objects.len(),
+                            "governance_event_count": outcome.governance_events.len(),
+                            "created_assignments": assignments,
+                            "created_change_sets": change_sets,
+                            "created_handoffs": handoffs,
+                            "created_failures": failures,
+                            "next_commands": next_commands_for_run(&outcome.record.run_id),
+                        }),
+                    );
+                }
+            },
+            Commands::Run(command) => match command.action {
+                RunAction::List => {
+                    let runs = list_run_records(&store)?;
+                    let summaries = runs
+                        .into_iter()
+                        .map(|run| {
+                            json!({
+                                "run_id": run.run_id,
+                                "status": format!("{:?}", run.status).to_lowercase(),
+                                "event_count": run.events.len(),
+                                "started_at": run.started_at,
+                                "ended_at": run.ended_at,
+                            })
+                        })
+                        .collect::<Vec<_>>();
+                    emit(
+                        as_json,
+                        json!({
+                            "ok": true,
+                            "summary": format!("{} runs found", summaries.len()),
+                            "runs": summaries,
+                            "next_commands": ["em run show <run_id>", "em run timeline <run_id>"],
+                        }),
+                    );
+                }
+                RunAction::Show { run_id } => {
+                    let ledger = load_run_record_by_id(&store, &run_id)?;
+                    let resolved_id = ledger.run_id.clone();
+                    emit(
+                        as_json,
+                        json!({
+                            "ok": true,
+                            "kind": "run",
+                            "id": resolved_id,
+                            "summary": format!("run {} is {}", resolved_id, format!("{:?}", ledger.status).to_lowercase()),
+                            "artifact": ledger,
+                            "related": run_related_artifacts(&store, &resolved_id)?,
+                            "next_commands": next_commands_for_run(&resolved_id),
+                        }),
+                    );
+                }
+                RunAction::Timeline { run_id } => {
+                    let mut ledger = load_run_record_by_id(&store, &run_id)?;
+                    let resolved_id = ledger.run_id.clone();
+                    ledger.events.sort_by_key(|event| event.timestamp);
+                    emit(
+                        as_json,
+                        json!({
+                            "ok": true,
+                            "kind": "run_timeline",
+                            "id": resolved_id,
+                            "summary": format!("{} events across run {}", ledger.events.len(), resolved_id),
+                            "timeline": {
+                                "status": format!("{:?}", ledger.status).to_lowercase(),
+                                "started_at": ledger.started_at,
+                                "ended_at": ledger.ended_at,
+                                "events": ledger.events,
+                                "assignments": ledger.assignments,
+                                "change_sets": ledger.change_sets,
+                                "handoffs": ledger.manifests,
+                            },
+                            "related": run_related_artifacts(&store, &resolved_id)?,
+                            "next_commands": next_commands_for_run(&resolved_id),
+                        }),
+                    );
+                }
+                RunAction::Artifacts { run_id } => {
+                    let ledger = load_run_record_by_id(&store, &run_id)?;
+                    let resolved_id = ledger.run_id.clone();
+                    emit(
+                        as_json,
+                        json!({
+                            "ok": true,
+                            "kind": "run_artifacts",
+                            "id": resolved_id,
+                            "summary": format!("artifacts for run {}", resolved_id),
+                            "artifact": run_related_artifacts(&store, &resolved_id)?,
+                            "next_commands": next_commands_for_run(&resolved_id),
+                        }),
+                    );
+                }
+                RunAction::Explain { run_id } => {
+                    let ledger = load_run_record_by_id(&store, &run_id)?;
+                    let resolved_id = ledger.run_id.clone();
+                    emit(
+                        as_json,
+                        json!({
+                            "ok": true,
+                            "kind": "run",
+                            "id": resolved_id,
+                            "summary": format!("run {} is {}", resolved_id, format!("{:?}", ledger.status).to_lowercase()),
+                            "artifact": ledger,
+                            "related": run_related_artifacts(&store, &resolved_id)?,
+                            "next_commands": next_commands_for_run(&resolved_id),
+                        }),
+                    );
+                }
+                RunAction::Graph { run_id } => {
+                    let ledger = load_run_record_by_id(&store, &run_id)?;
+                    let resolved_id = ledger.run_id.clone();
+                    emit(
+                        as_json,
+                        json!({
+                            "ok": true,
+                            "kind": "run_graph",
+                            "id": resolved_id,
+                            "summary": format!("relationship graph for run {}", resolved_id),
+                            "graph": build_run_graph(&store, &resolved_id)?,
+                            "next_commands": next_commands_for_run(&resolved_id),
+                        }),
+                    );
+                }
+            },
+            Commands::Declare(command) => match command.action {
+                DeclareAction::Validate(args) => {
+                    let summary = validate_declaration_file(&store, args.kind, &args.path)?;
+                    emit(
+                        as_json,
+                        json!({
+                            "ok": true,
+                            "action": "validate",
+                            "kind": args.kind.as_str(),
+                            "path": args.path.display().to_string(),
+                            "summary": summary,
+                        }),
+                    );
+                }
+                DeclareAction::Explain(args) => {
+                    let explanation = explain_declaration_file(&store, args.kind, &args.path)?;
+                    emit(
+                        as_json,
+                        json!({
+                            "ok": true,
+                            "action": "explain",
+                            "kind": args.kind.as_str(),
+                            "path": args.path.display().to_string(),
+                            "explanation": explanation,
+                        }),
+                    );
+                }
+                DeclareAction::New(args) => {
+                    let output_path = scaffold_declaration(
+                        store.root(),
+                        args.kind,
+                        &args.name,
+                        args.path.as_ref(),
+                        args.force,
+                    )?;
+                    emit(
+                        as_json,
+                        json!({
+                            "ok": true,
+                            "action": "new",
+                            "kind": args.kind.as_str(),
+                            "name": args.name,
+                            "path": output_path.display().to_string(),
+                            "next_commands": [
+                                format!("em declare validate --kind {} {}", args.kind.as_str(), output_path.display()),
+                                format!("em declare explain --kind {} {}", args.kind.as_str(), output_path.display()),
+                            ],
+                        }),
+                    );
+                }
+                DeclareAction::Register(args) => {
+                    tracing::info!(kind = %args.kind.as_str(), path = %args.path.display(), "registering declaration");
+                    let version_ref = register_declaration_file(&store, args.kind, &args.path)?;
+                    if matches!(args.kind, DeclarationKind::System) {
+                        index
+                            .as_ref()
+                            .expect("index available for workspace command")
+                            .rebuild_from_store(&store)?;
+                    } else {
+                        index
+                            .as_ref()
+                            .expect("index available for workspace command")
+                            .upsert_head_object_from_store(&store, &version_ref.id)?;
+                    }
+                    emit(
+                        as_json,
+                        json!({
+                            "ok": true,
+                            "action": "register",
+                            "kind": args.kind.as_str(),
+                            "path": args.path.display().to_string(),
+                            "object_id": version_ref.id.as_str(),
+                            "version_id": version_ref.version_id.as_str(),
+                        }),
+                    );
+                }
+                DeclareAction::ListExamples => {
+                    let examples_dir = store
+                        .root()
+                        .join("docs")
+                        .join("declarations")
+                        .join("examples");
+                    let mut examples = Vec::new();
+                    if examples_dir.exists() {
+                        collect_paths_with_extensions(
+                            &examples_dir,
+                            &["yaml", "yml", "md"],
+                            &mut examples,
+                        )?;
+                    }
+                    examples.sort();
+                    emit(
+                        as_json,
+                        json!({
+                            "ok": true,
+                            "summary": format!("{} declaration examples found", examples.len()),
+                            "examples_root": examples_dir.display().to_string(),
+                            "examples": examples,
+                            "next_commands": [
+                                "em declare validate --kind class docs/declarations/examples/classes/finding.yaml",
+                                "em declare explain --kind workflow docs/declarations/examples/workflows/source_to_finding.yaml",
+                            ],
+                        }),
+                    );
+                }
+            },
+            Commands::Assignment(command) => match command.action {
+                AssignmentAction::Show { assignment_id } => {
+                    let assignment = load_current_assignment_by_id(&store, &assignment_id)?;
+                    emit(as_json, serde_json::to_value(assignment)?);
+                }
+                AssignmentAction::Explain { assignment_id } => {
+                    let assignment = load_current_assignment_by_id(&store, &assignment_id)?;
+                    emit(
+                        as_json,
+                        json!({
+                            "ok": true,
+                            "kind": "assignment",
+                            "id": assignment_id,
+                            "summary": format!("assignment {} in status {}", assignment.id.as_str(), format!("{:?}", assignment.status).to_lowercase()),
+                            "artifact": assignment.clone(),
+                            "related": {
+                                "run_id": assignment.run_id.clone(),
+                                "transition_id": assignment.transition_id.clone(),
+                                "completion_change_set_id": assignment.completion_change_set_id.as_ref().map(|id| id.as_str().to_string()),
+                                "handoff_manifest_id": assignment.handoff_manifest_id.as_ref().map(|id| id.as_str().to_string()),
+                            },
+                            "next_commands": next_commands_for_assignment(&assignment),
+                        }),
+                    );
+                }
+                AssignmentAction::List { run_id, status } => {
+                    let mut assignments = Vec::new();
+                    for object in store.scan_objects()? {
+                        if object.envelope.kind != Kind::TransitionAssignment {
+                            continue;
+                        }
+                        if let Some(head_ref) = store.read_head_ref(&object.envelope.id)? {
+                            if head_ref.version_id != object.envelope.version_id {
+                                continue;
+                            }
+                        }
+                        let assignment: earmark_core::TransitionAssignment =
+                            serde_json::from_slice(&object.payload.bytes)?;
+                        if let Some(run_id) = &run_id {
+                            if &assignment.run_id != run_id {
+                                continue;
+                            }
+                        }
+                        if let Some(status_str) = &status {
+                            if format!("{:?}", assignment.status).to_lowercase()
+                                != status_str.to_lowercase()
+                            {
+                                continue;
+                            }
+                        }
+                        assignments.push(assignment);
+                    }
+                    emit(as_json, serde_json::to_value(assignments)?);
+                }
+            },
+            Commands::ChangeSet(command) => match command.action {
+                ChangeSetAction::Show { change_set_id } => {
+                    let change_set = load_change_set_by_id(&store, &change_set_id)?;
+                    emit(as_json, serde_json::to_value(change_set)?);
+                }
+                ChangeSetAction::Explain { change_set_id } => {
+                    let change_set = load_change_set_by_id(&store, &change_set_id)?;
+                    emit(
+                        as_json,
+                        json!({
+                            "ok": true,
+                            "kind": "change_set",
+                            "id": change_set_id,
+                            "summary": format!("change set {} for transition {}", change_set.id.as_str(), change_set.transition_id),
+                            "artifact": change_set.clone(),
+                            "related": {
+                                "run_id": change_set.run_id.clone(),
+                                "assignment_id": change_set.assignment_id.as_ref().map(|id| id.as_str().to_string()),
+                                "handoff_manifest_id": change_set.handoff_manifest_id.as_ref().map(|id| id.as_str().to_string()),
+                                "validation_results": change_set.validation_results.clone(),
+                            },
+                            "next_commands": next_commands_for_change_set(&change_set),
+                        }),
+                    );
+                }
+                ChangeSetAction::List { run_id } => {
+                    let mut change_sets = Vec::new();
+                    for object in store.scan_objects()? {
+                        if object.envelope.kind != Kind::ChangeSet {
+                            continue;
+                        }
+                        let change_set: earmark_core::ChangeSet =
+                            serde_json::from_slice(&object.payload.bytes)?;
+                        if let Some(run_id) = &run_id {
+                            if &change_set.run_id != run_id {
+                                continue;
+                            }
+                        }
+                        change_sets.push(change_set);
+                    }
+                    emit(as_json, serde_json::to_value(change_sets)?);
+                }
+            },
+            Commands::Handoff(command) => match command.action {
+                HandoffAction::Show { handoff_id } => {
+                    let handoff = load_handoff_by_id(&store, &handoff_id)?;
+                    emit(as_json, serde_json::to_value(handoff)?);
+                }
+                HandoffAction::Explain { handoff_id } => {
+                    let handoff = load_handoff_by_id(&store, &handoff_id)?;
+                    emit(
+                        as_json,
+                        json!({
+                            "ok": true,
+                            "kind": "handoff",
+                            "id": handoff_id,
+                            "summary": format!("handoff {} from transition {}", handoff.id.as_str(), handoff.from_transition_id),
+                            "artifact": handoff.clone(),
+                            "related": {
+                                "run_id": handoff.run_id,
+                                "source_change_set_id": handoff.source_change_set_id.as_str().to_string(),
+                                "source_assignment_id": handoff.source_assignment_id.clone().map(|id| id.as_str().to_string()),
+                                "to_transition_id": handoff.to_transition_id,
+                                "allowed_input_classes": handoff.allowed_input_classes,
+                                "allowed_output_classes": handoff.allowed_output_classes,
+                                "allowed_relation_types": handoff.allowed_relation_types,
+                                "standing_constraints": handoff.standing_constraints,
+                                "required_checks": handoff.required_checks,
+                            },
+                            "next_commands": next_commands_for_handoff(&handoff),
+                        }),
+                    );
+                }
+                HandoffAction::List { run_id } => {
+                    let mut handoffs = Vec::new();
+                    for object in store.scan_objects()? {
+                        if object.envelope.kind != Kind::HandoffManifest {
+                            continue;
+                        }
+                        let handoff: earmark_core::HandoffManifest =
+                            serde_json::from_slice(&object.payload.bytes)?;
+                        if let Some(run_id) = &run_id {
+                            if &handoff.run_id != run_id {
+                                continue;
+                            }
+                        }
+                        handoffs.push(handoff);
+                    }
+                    emit(as_json, serde_json::to_value(handoffs)?);
+                }
+            },
+            Commands::Failure(command) => match command.action {
+                FailureAction::Show { failure_id } => {
+                    let failure = load_failure_by_id(&store, &failure_id)?;
+                    emit(as_json, serde_json::to_value(failure)?);
+                }
+                FailureAction::Explain { failure_id } => {
+                    let failure = load_failure_by_id(&store, &failure_id)?;
+                    emit(
+                        as_json,
+                        json!({
+                            "ok": true,
+                            "kind": "failure",
+                            "id": failure_id,
+                            "summary": format!("failure on transition {}", failure.transition_id),
+                            "artifact": failure.clone(),
+                            "related": {
+                                "run_id": failure.run_id,
+                                "assignment_id": failure.assignment_id.as_str().to_string(),
+                                "failed_change_set_id": failure.failed_change_set_id.clone().map(|id| id.as_str().to_string()),
+                                "error_type": failure.error_type,
+                            },
+                            "next_commands": next_commands_for_failure(&failure),
+                        }),
+                    );
+                }
+                FailureAction::List {
+                    run_id,
+                    transition_id,
+                } => {
+                    let failures =
+                        list_failures(&store, run_id.as_deref(), transition_id.as_deref())?;
+                    emit(
+                        as_json,
+                        json!({
+                            "ok": true,
+                            "summary": format!("{} failures found", failures.len()),
+                            "failures": failures,
+                            "next_commands": ["em failure show <failure_id>", "em failure explain <failure_id>"],
+                        }),
+                    );
+                }
+            },
+            Commands::Context(command) => {
+                let runtime_surface = RuntimeToolSurface {
                     store: &store,
-                    index: &index,
+                    index: index
+                        .as_ref()
+                        .expect("index available for workspace command"),
                     provider_service: &provider_registry,
                 };
-                let outcome = engine.run_workflow(WorkflowRunRequest {
-                    run_id: format!(
-                        "run_{}",
-                        chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()
-                    ),
-                    system_definition: system,
-                    workflow,
-                    inputs,
-                    handoff_manifest: args
-                        .handoff
-                        .map(earmark_core::HandoffManifestId::parse)
-                        .transpose()?,
-                    transition_assignment: args
-                        .assignment
-                        .map(earmark_core::TransitionAssignmentId::parse)
-                        .transpose()?,
-                    operator_approved: args.approve_review,
-                })?;
-                let assignments = list_assignments_by_run(&store, &outcome.record.run_id)?
-                    .into_iter()
-                    .map(|assignment| assignment.id.as_str().to_string())
-                    .collect::<Vec<_>>();
-                let change_sets = list_change_sets_by_run(&store, &outcome.record.run_id)?
-                    .into_iter()
-                    .map(|change_set| change_set.id.as_str().to_string())
-                    .collect::<Vec<_>>();
-                let handoffs = list_handoffs_by_run(&store, &outcome.record.run_id)?
-                    .into_iter()
-                    .map(|handoff| handoff.id.as_str().to_string())
-                    .collect::<Vec<_>>();
-                let failures = list_failures_by_run(&store, &outcome.record.run_id)?
-                    .into_iter()
-                    .collect::<Vec<_>>();
-                emit(
-                    as_json,
-                    json!({
-                        "ok": true,
-                        "run_id": outcome.record.run_id,
-                        "summary": "workflow run completed",
-                        "status": format!("{:?}", outcome.record.status).to_lowercase(),
-                        "event_count": outcome.record.events.len(),
-                        "packet_count": outcome.emitted_packets.len(),
-                        "output_count": outcome.emitted_objects.len(),
-                        "governance_event_count": outcome.governance_events.len(),
-                        "created_assignments": assignments,
-                        "created_change_sets": change_sets,
-                        "created_handoffs": handoffs,
-                        "created_failures": failures,
-                        "next_commands": next_commands_for_run(&outcome.record.run_id),
-                    }),
-                );
+                handler::context::handle(&runtime_surface, as_json, command)?
             }
-        },
-        Commands::Run(command) => match command.action {
-            RunAction::List => {
-                let runs = list_run_records(&store)?;
-                let summaries = runs
-                    .into_iter()
-                    .map(|run| {
+            Commands::Audit(command) => match command.action {
+                AuditAction::Failures {
+                    run_id,
+                    transition_id,
+                } => {
+                    let mut failures = Vec::new();
+                    failures.extend(list_failures(
+                        &store,
+                        run_id.as_deref(),
+                        transition_id.as_deref(),
+                    )?);
+                    emit(as_json, json!({ "ok": true, "failures": failures }));
+                }
+                AuditAction::Show { failure_id } => {
+                    let failure = load_failure_by_id(&store, &failure_id)?;
+                    emit(as_json, serde_json::to_value(failure)?);
+                }
+            },
+            Commands::Report(command) => match command.action {
+                ReportAction::Run { target_id, output } => {
+                    let report = generate_run_report(&store, &target_id)?;
+                    if let Some(parent) = output.parent() {
+                        fs::create_dir_all(parent)?;
+                    }
+                    fs::write(&output, report)?;
+                    emit(
+                        as_json,
                         json!({
-                            "run_id": run.run_id,
-                            "status": format!("{:?}", run.status).to_lowercase(),
-                            "event_count": run.events.len(),
-                            "started_at": run.started_at,
-                            "ended_at": run.ended_at,
-                        })
-                    })
-                    .collect::<Vec<_>>();
-                emit(
-                    as_json,
-                    json!({
-                        "ok": true,
-                        "summary": format!("{} runs found", summaries.len()),
-                        "runs": summaries,
-                        "next_commands": ["em run show <run_id>", "em run timeline <run_id>"],
-                    }),
-                );
-            }
-            RunAction::Show { run_id } => {
-                let ledger = load_run_record_by_id(&store, &run_id)?;
-                let resolved_id = ledger.run_id.clone();
-                emit(
-                    as_json,
-                    json!({
-                        "ok": true,
-                        "kind": "run",
-                        "id": resolved_id,
-                        "summary": format!("run {} is {}", resolved_id, format!("{:?}", ledger.status).to_lowercase()),
-                        "artifact": ledger,
-                        "related": run_related_artifacts(&store, &resolved_id)?,
-                        "next_commands": next_commands_for_run(&resolved_id),
-                    }),
-                );
-            }
-            RunAction::Timeline { run_id } => {
-                let mut ledger = load_run_record_by_id(&store, &run_id)?;
-                let resolved_id = ledger.run_id.clone();
-                ledger.events.sort_by_key(|event| event.timestamp);
-                emit(
-                    as_json,
-                    json!({
-                        "ok": true,
-                        "kind": "run_timeline",
-                        "id": resolved_id,
-                        "summary": format!("{} events across run {}", ledger.events.len(), resolved_id),
-                        "timeline": {
-                            "status": format!("{:?}", ledger.status).to_lowercase(),
-                            "started_at": ledger.started_at,
-                            "ended_at": ledger.ended_at,
-                            "events": ledger.events,
-                            "assignments": ledger.assignments,
-                            "change_sets": ledger.change_sets,
-                            "handoffs": ledger.manifests,
-                        },
-                        "related": run_related_artifacts(&store, &resolved_id)?,
-                        "next_commands": next_commands_for_run(&resolved_id),
-                    }),
-                );
-            }
-            RunAction::Artifacts { run_id } => {
-                let ledger = load_run_record_by_id(&store, &run_id)?;
-                let resolved_id = ledger.run_id.clone();
-                emit(
-                    as_json,
-                    json!({
-                        "ok": true,
-                        "kind": "run_artifacts",
-                        "id": resolved_id,
-                        "summary": format!("artifacts for run {}", resolved_id),
-                        "artifact": run_related_artifacts(&store, &resolved_id)?,
-                        "next_commands": next_commands_for_run(&resolved_id),
-                    }),
-                );
-            }
-            RunAction::Explain { run_id } => {
-                let ledger = load_run_record_by_id(&store, &run_id)?;
-                let resolved_id = ledger.run_id.clone();
-                emit(
-                    as_json,
-                    json!({
-                        "ok": true,
-                        "kind": "run",
-                        "id": resolved_id,
-                        "summary": format!("run {} is {}", resolved_id, format!("{:?}", ledger.status).to_lowercase()),
-                        "artifact": ledger,
-                        "related": run_related_artifacts(&store, &resolved_id)?,
-                        "next_commands": next_commands_for_run(&resolved_id),
-                    }),
-                );
-            }
-            RunAction::Graph { run_id } => {
-                let ledger = load_run_record_by_id(&store, &run_id)?;
-                let resolved_id = ledger.run_id.clone();
-                emit(
-                    as_json,
-                    json!({
-                        "ok": true,
-                        "kind": "run_graph",
-                        "id": resolved_id,
-                        "summary": format!("relationship graph for run {}", resolved_id),
-                        "graph": build_run_graph(&store, &resolved_id)?,
-                        "next_commands": next_commands_for_run(&resolved_id),
-                    }),
-                );
-            }
-        },
-        Commands::Declare(command) => match command.action {
-            DeclareAction::Validate(args) => {
-                let summary = validate_declaration_file(&store, args.kind, &args.path)?;
-                emit(
-                    as_json,
-                    json!({
-                        "ok": true,
-                        "action": "validate",
-                        "kind": args.kind.as_str(),
-                        "path": args.path.display().to_string(),
-                        "summary": summary,
-                    }),
-                );
-            }
-            DeclareAction::Explain(args) => {
-                let explanation = explain_declaration_file(&store, args.kind, &args.path)?;
-                emit(
-                    as_json,
-                    json!({
-                        "ok": true,
-                        "action": "explain",
-                        "kind": args.kind.as_str(),
-                        "path": args.path.display().to_string(),
-                        "explanation": explanation,
-                    }),
-                );
-            }
-            DeclareAction::New(args) => {
-                let output_path = scaffold_declaration(
-                    store.root(),
-                    args.kind,
-                    &args.name,
-                    args.path.as_ref(),
-                    args.force,
-                )?;
-                emit(
-                    as_json,
-                    json!({
-                        "ok": true,
-                        "action": "new",
-                        "kind": args.kind.as_str(),
-                        "name": args.name,
-                        "path": output_path.display().to_string(),
-                        "next_commands": [
-                            format!("em declare validate --kind {} {}", args.kind.as_str(), output_path.display()),
-                            format!("em declare explain --kind {} {}", args.kind.as_str(), output_path.display()),
-                        ],
-                    }),
-                );
-            }
-            DeclareAction::Register(args) => {
-                tracing::info!(kind = %args.kind.as_str(), path = %args.path.display(), "registering declaration");
-                let version_ref = register_declaration_file(&store, args.kind, &args.path)?;
-                if matches!(args.kind, DeclarationKind::System) {
-                    index.rebuild_from_store(&store)?;
-                } else {
-                    index.upsert_head_object_from_store(&store, &version_ref.id)?;
+                            "ok": true,
+                            "kind": "report_generation",
+                            "target_kind": "run",
+                            "target_id": target_id,
+                            "output": output.display().to_string(),
+                        }),
+                    );
                 }
-                emit(
-                    as_json,
-                    json!({
-                        "ok": true,
-                        "action": "register",
-                        "kind": args.kind.as_str(),
-                        "path": args.path.display().to_string(),
-                        "object_id": version_ref.id.as_str(),
-                        "version_id": version_ref.version_id.as_str(),
-                    }),
-                );
-            }
-            DeclareAction::ListExamples => {
-                let examples_dir = store
-                    .root()
-                    .join("docs")
-                    .join("declarations")
-                    .join("examples");
-                let mut examples = Vec::new();
-                if examples_dir.exists() {
-                    collect_paths_with_extensions(
-                        &examples_dir,
-                        &["yaml", "yml", "md"],
-                        &mut examples,
+                ReportAction::Handoff { target_id, output } => {
+                    let report = generate_handoff_report(&store, &target_id)?;
+                    if let Some(parent) = output.parent() {
+                        fs::create_dir_all(parent)?;
+                    }
+                    fs::write(&output, report)?;
+                    emit(
+                        as_json,
+                        json!({
+                            "ok": true,
+                            "kind": "report_generation",
+                            "target_kind": "handoff",
+                            "target_id": target_id,
+                            "output": output.display().to_string(),
+                        }),
+                    );
+                }
+                ReportAction::System { target_id, output } => {
+                    let report = generate_system_report(
+                        &store,
+                        index
+                            .as_ref()
+                            .expect("index available for workspace command"),
+                        &target_id,
                     )?;
+                    if let Some(parent) = output.parent() {
+                        fs::create_dir_all(parent)?;
+                    }
+                    fs::write(&output, report)?;
+                    emit(
+                        as_json,
+                        json!({
+                            "ok": true,
+                            "kind": "report_generation",
+                            "target_kind": "system",
+                            "target_id": target_id,
+                            "output": output.display().to_string(),
+                        }),
+                    );
                 }
-                examples.sort();
+            },
+            Commands::Completions { .. } => {}
+            Commands::Status => {
+                let (object_count, active_system_count) = index
+                    .as_ref()
+                    .expect("index available for workspace command")
+                    .counts()?;
+                let assignments = list_assignments(&store)?;
+                let change_sets = list_change_sets(&store)?;
+                let handoffs = list_handoffs(&store)?;
+                let failures = list_failure_objects(&store)?;
+                let runs = list_run_records(&store)?;
+                let mut assignments_by_status: BTreeMap<String, usize> = BTreeMap::new();
+                for assignment in assignments {
+                    let key = format!("{:?}", assignment.status).to_lowercase();
+                    *assignments_by_status.entry(key).or_insert(0) += 1;
+                }
                 emit(
                     as_json,
                     json!({
                         "ok": true,
-                        "summary": format!("{} declaration examples found", examples.len()),
-                        "examples_root": examples_dir.display().to_string(),
-                        "examples": examples,
-                        "next_commands": [
-                            "em declare validate --kind class docs/declarations/examples/classes/finding.yaml",
-                            "em declare explain --kind workflow docs/declarations/examples/workflows/source_to_finding.yaml",
-                        ],
-                    }),
-                );
-            }
-        },
-        Commands::Assignment(command) => match command.action {
-            AssignmentAction::Show { assignment_id } => {
-                let assignment = load_current_assignment_by_id(&store, &assignment_id)?;
-                emit(as_json, serde_json::to_value(assignment)?);
-            }
-            AssignmentAction::Explain { assignment_id } => {
-                let assignment = load_current_assignment_by_id(&store, &assignment_id)?;
-                emit(
-                    as_json,
-                    json!({
-                        "ok": true,
-                        "kind": "assignment",
-                        "id": assignment_id,
-                        "summary": format!("assignment {} in status {}", assignment.id.as_str(), format!("{:?}", assignment.status).to_lowercase()),
-                        "artifact": assignment.clone(),
-                        "related": {
-                            "run_id": assignment.run_id.clone(),
-                            "transition_id": assignment.transition_id.clone(),
-                            "completion_change_set_id": assignment.completion_change_set_id.as_ref().map(|id| id.as_str().to_string()),
-                            "handoff_manifest_id": assignment.handoff_manifest_id.as_ref().map(|id| id.as_str().to_string()),
+                        "kind": "status",
+                        "summary": "workspace status",
+                        "object_count": object_count,
+                        "active_system_count": active_system_count,
+                        "assignment_count_by_status": assignments_by_status,
+                        "change_set_count": change_sets.len(),
+                        "handoff_count": handoffs.len(),
+                        "failure_count": failures.len(),
+                        "run_count": runs.len(),
+                        "metrics": crate::metrics::snapshot(),
+                        "root": store.root().display().to_string(),
+                        "paths": {
+                            "declarations_dir": store.declarations_dir().display().to_string(),
+                            "canonical_dir": store.root().join(".earmark").join("canonical").display().to_string(),
+                            "index_path": store.root().join(".earmark").join("derived").join("index.sqlite").display().to_string(),
                         },
-                        "next_commands": next_commands_for_assignment(&assignment),
+                        "next_commands": ["em doctor", "em run list", "em audit failures"],
                     }),
                 );
             }
-            AssignmentAction::List { run_id, status } => {
-                let mut assignments = Vec::new();
-                for object in store.scan_objects()? {
-                    if object.envelope.kind != Kind::TransitionAssignment {
-                        continue;
-                    }
-                    if let Some(head_ref) = store.read_head_ref(&object.envelope.id)? {
-                        if head_ref.version_id != object.envelope.version_id {
-                            continue;
-                        }
-                    }
-                    let assignment: earmark_core::TransitionAssignment =
-                        serde_json::from_slice(&object.payload.bytes)?;
-                    if let Some(run_id) = &run_id {
-                        if &assignment.run_id != run_id {
-                            continue;
-                        }
-                    }
-                    if let Some(status_str) = &status {
-                        if format!("{:?}", assignment.status).to_lowercase() != status_str.to_lowercase()
-                        {
-                            continue;
-                        }
-                    }
-                    assignments.push(assignment);
-                }
-                emit(as_json, serde_json::to_value(assignments)?);
-            }
-        },
-        Commands::ChangeSet(command) => match command.action {
-            ChangeSetAction::Show { change_set_id } => {
-                let change_set = load_change_set_by_id(&store, &change_set_id)?;
-                emit(as_json, serde_json::to_value(change_set)?);
-            }
-            ChangeSetAction::Explain { change_set_id } => {
-                let change_set = load_change_set_by_id(&store, &change_set_id)?;
-                emit(
-                    as_json,
-                    json!({
-                        "ok": true,
-                        "kind": "change_set",
-                        "id": change_set_id,
-                        "summary": format!("change set {} for transition {}", change_set.id.as_str(), change_set.transition_id),
-                        "artifact": change_set.clone(),
-                        "related": {
-                            "run_id": change_set.run_id.clone(),
-                            "assignment_id": change_set.assignment_id.as_ref().map(|id| id.as_str().to_string()),
-                            "handoff_manifest_id": change_set.handoff_manifest_id.as_ref().map(|id| id.as_str().to_string()),
-                            "validation_results": change_set.validation_results.clone(),
-                        },
-                        "next_commands": next_commands_for_change_set(&change_set),
-                    }),
-                );
-            }
-            ChangeSetAction::List { run_id } => {
-                let mut change_sets = Vec::new();
-                for object in store.scan_objects()? {
-                    if object.envelope.kind != Kind::ChangeSet {
-                        continue;
-                    }
-                    let change_set: earmark_core::ChangeSet =
-                        serde_json::from_slice(&object.payload.bytes)?;
-                    if let Some(run_id) = &run_id {
-                        if &change_set.run_id != run_id {
-                            continue;
-                        }
-                    }
-                    change_sets.push(change_set);
-                }
-                emit(as_json, serde_json::to_value(change_sets)?);
-            }
-        },
-        Commands::Handoff(command) => match command.action {
-            HandoffAction::Show { handoff_id } => {
-                let handoff = load_handoff_by_id(&store, &handoff_id)?;
-                emit(as_json, serde_json::to_value(handoff)?);
-            }
-            HandoffAction::Explain { handoff_id } => {
-                let handoff = load_handoff_by_id(&store, &handoff_id)?;
-                emit(
-                    as_json,
-                    json!({
-                        "ok": true,
-                        "kind": "handoff",
-                        "id": handoff_id,
-                        "summary": format!("handoff {} from transition {}", handoff.id.as_str(), handoff.from_transition_id),
-                        "artifact": handoff.clone(),
-                        "related": {
-                            "run_id": handoff.run_id,
-                            "source_change_set_id": handoff.source_change_set_id.as_str().to_string(),
-                            "source_assignment_id": handoff.source_assignment_id.clone().map(|id| id.as_str().to_string()),
-                            "to_transition_id": handoff.to_transition_id,
-                            "allowed_input_classes": handoff.allowed_input_classes,
-                            "allowed_output_classes": handoff.allowed_output_classes,
-                            "allowed_relation_types": handoff.allowed_relation_types,
-                            "standing_constraints": handoff.standing_constraints,
-                            "required_checks": handoff.required_checks,
-                        },
-                        "next_commands": next_commands_for_handoff(&handoff),
-                    }),
-                );
-            }
-            HandoffAction::List { run_id } => {
-                let mut handoffs = Vec::new();
-                for object in store.scan_objects()? {
-                    if object.envelope.kind != Kind::HandoffManifest {
-                        continue;
-                    }
-                    let handoff: earmark_core::HandoffManifest =
-                        serde_json::from_slice(&object.payload.bytes)?;
-                    if let Some(run_id) = &run_id {
-                        if &handoff.run_id != run_id {
-                            continue;
-                        }
-                    }
-                    handoffs.push(handoff);
-                }
-                emit(as_json, serde_json::to_value(handoffs)?);
-            }
-        },
-        Commands::Failure(command) => match command.action {
-            FailureAction::Show { failure_id } => {
-                let failure = load_failure_by_id(&store, &failure_id)?;
-                emit(as_json, serde_json::to_value(failure)?);
-            }
-            FailureAction::Explain { failure_id } => {
-                let failure = load_failure_by_id(&store, &failure_id)?;
-                emit(
-                    as_json,
-                    json!({
-                        "ok": true,
-                        "kind": "failure",
-                        "id": failure_id,
-                        "summary": format!("failure on transition {}", failure.transition_id),
-                        "artifact": failure.clone(),
-                        "related": {
-                            "run_id": failure.run_id,
-                            "assignment_id": failure.assignment_id.as_str().to_string(),
-                            "failed_change_set_id": failure.failed_change_set_id.clone().map(|id| id.as_str().to_string()),
-                            "error_type": failure.error_type,
-                        },
-                        "next_commands": next_commands_for_failure(&failure),
-                    }),
-                );
-            }
-            FailureAction::List {
-                run_id,
-                transition_id,
-            } => {
-                let failures = list_failures(&store, run_id.as_deref(), transition_id.as_deref())?;
-                emit(
-                    as_json,
-                    json!({
-                        "ok": true,
-                        "summary": format!("{} failures found", failures.len()),
-                        "failures": failures,
-                        "next_commands": ["em failure show <failure_id>", "em failure explain <failure_id>"],
-                    }),
-                );
-            }
-        },
-        Commands::Context(command) => handler::context::handle(&runtime_surface, as_json, command)?,
-        Commands::Audit(command) => match command.action {
-            AuditAction::Failures {
-                run_id,
-                transition_id,
-            } => {
-                let mut failures = Vec::new();
-                failures.extend(list_failures(
-                    &store,
-                    run_id.as_deref(),
-                    transition_id.as_deref(),
-                )?);
-                emit(as_json, json!({ "ok": true, "failures": failures }));
-            }
-            AuditAction::Show { failure_id } => {
-                let failure = load_failure_by_id(&store, &failure_id)?;
-                emit(as_json, serde_json::to_value(failure)?);
-            }
-        },
-        Commands::Report(command) => match command.action {
-            ReportAction::Run { target_id, output } => {
-                let report = generate_run_report(&store, &target_id)?;
-                if let Some(parent) = output.parent() {
-                    fs::create_dir_all(parent)?;
-                }
-                fs::write(&output, report)?;
-                emit(
-                    as_json,
-                    json!({
-                        "ok": true,
-                        "kind": "report_generation",
-                        "target_kind": "run",
-                        "target_id": target_id,
-                        "output": output.display().to_string(),
-                    }),
-                );
-            }
-            ReportAction::Handoff { target_id, output } => {
-                let report = generate_handoff_report(&store, &target_id)?;
-                if let Some(parent) = output.parent() {
-                    fs::create_dir_all(parent)?;
-                }
-                fs::write(&output, report)?;
-                emit(
-                    as_json,
-                    json!({
-                        "ok": true,
-                        "kind": "report_generation",
-                        "target_kind": "handoff",
-                        "target_id": target_id,
-                        "output": output.display().to_string(),
-                    }),
-                );
-            }
-            ReportAction::System { target_id, output } => {
-                let report = generate_system_report(&store, &index, &target_id)?;
-                if let Some(parent) = output.parent() {
-                    fs::create_dir_all(parent)?;
-                }
-                fs::write(&output, report)?;
-                emit(
-                    as_json,
-                    json!({
-                        "ok": true,
-                        "kind": "report_generation",
-                        "target_kind": "system",
-                        "target_id": target_id,
-                        "output": output.display().to_string(),
-                    }),
-                );
-            }
-        },
-        Commands::Completions { .. } => {}
-        Commands::Status => {
-            let (object_count, active_system_count) = index.counts()?;
-            let assignments = list_assignments(&store)?;
-            let change_sets = list_change_sets(&store)?;
-            let handoffs = list_handoffs(&store)?;
-            let failures = list_failure_objects(&store)?;
-            let runs = list_run_records(&store)?;
-            let mut assignments_by_status: BTreeMap<String, usize> = BTreeMap::new();
-            for assignment in assignments {
-                let key = format!("{:?}", assignment.status).to_lowercase();
-                *assignments_by_status.entry(key).or_insert(0) += 1;
-            }
-            emit(
-                as_json,
-                json!({
-                    "ok": true,
-                    "kind": "status",
-                    "summary": "workspace status",
-                    "object_count": object_count,
-                    "active_system_count": active_system_count,
-                    "assignment_count_by_status": assignments_by_status,
-                    "change_set_count": change_sets.len(),
-                    "handoff_count": handoffs.len(),
-                    "failure_count": failures.len(),
-                    "run_count": runs.len(),
-                    "metrics": crate::metrics::snapshot(),
-                    "root": store.root().display().to_string(),
-                    "paths": {
-                        "declarations_dir": store.declarations_dir().display().to_string(),
-                        "canonical_dir": store.root().join(".earmark").join("canonical").display().to_string(),
-                        "index_path": store.root().join(".earmark").join("derived").join("index.sqlite").display().to_string(),
-                    },
-                    "next_commands": ["em doctor", "em run list", "em audit failures"],
-                }),
-            );
-        }
         }
         Ok(())
     })();
     crate::metrics::record_command_result(command_name, result.is_ok(), started.elapsed());
     result
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WorkspaceAccessMode {
+    None,
+    ReadOnly,
+    Write,
+    Init,
+}
+
+fn workspace_access_mode(command: &Commands) -> WorkspaceAccessMode {
+    match command {
+        Commands::Completions { .. } => WorkspaceAccessMode::None,
+        Commands::Init => WorkspaceAccessMode::Init,
+        Commands::Doctor => WorkspaceAccessMode::None,
+        Commands::Status => WorkspaceAccessMode::ReadOnly,
+        Commands::Query(_) => WorkspaceAccessMode::ReadOnly,
+        Commands::Run(_) => WorkspaceAccessMode::ReadOnly,
+        Commands::Assignment(_) => WorkspaceAccessMode::ReadOnly,
+        Commands::ChangeSet(_) => WorkspaceAccessMode::ReadOnly,
+        Commands::Handoff(_) => WorkspaceAccessMode::ReadOnly,
+        Commands::Failure(_) => WorkspaceAccessMode::ReadOnly,
+        Commands::Audit(_) => WorkspaceAccessMode::ReadOnly,
+        Commands::Declare(command) => match command.action {
+            DeclareAction::Validate(_)
+            | DeclareAction::Explain(_)
+            | DeclareAction::ListExamples => WorkspaceAccessMode::ReadOnly,
+            DeclareAction::New(_) | DeclareAction::Register(_) => WorkspaceAccessMode::Write,
+        },
+        Commands::System(_) => WorkspaceAccessMode::Write,
+        Commands::Deposit(_) => WorkspaceAccessMode::Write,
+        Commands::Review(_) => WorkspaceAccessMode::Write,
+        Commands::Workflow(_) => WorkspaceAccessMode::Write,
+        Commands::Context(_) => WorkspaceAccessMode::Write,
+        Commands::Report(_) => WorkspaceAccessMode::Write,
+    }
+}
+
+fn require_initialized_workspace(store: &GitCanonicalStore) -> Result<(), CliError> {
+    let status = store.layout_status();
+    if status.is_initialized() {
+        return Ok(());
+    }
+    Err(CliError::workspace_not_initialized(status))
 }
 
 fn command_family_name(command: &Commands) -> &'static str {
@@ -1296,16 +1423,20 @@ struct PathSystemManifest {
     runtime_profile: earmark_core::RuntimeProfile,
 }
 
-fn try_load_path_system_manifest(path: &std::path::Path) -> Result<Option<PathSystemManifest>, CliError> {
+fn try_load_path_system_manifest(
+    path: &std::path::Path,
+) -> Result<Option<PathSystemManifest>, CliError> {
     let text = fs::read_to_string(path)?;
     let value: serde_yaml::Value = serde_yaml::from_str(&text)?;
     let Some(classes) = value.get("classes").and_then(|v| v.as_sequence()) else {
         return Ok(None);
     };
-    if !classes
-        .iter()
-        .all(|entry| entry.as_str().map(|s| s.ends_with(".yaml") || s.ends_with(".md")).unwrap_or(false))
-    {
+    if !classes.iter().all(|entry| {
+        entry
+            .as_str()
+            .map(|s| s.ends_with(".yaml") || s.ends_with(".md"))
+            .unwrap_or(false)
+    }) {
         return Ok(None);
     }
     serde_yaml::from_str(&text).map(Some).map_err(|error| {
@@ -1318,11 +1449,16 @@ fn try_load_path_system_manifest(path: &std::path::Path) -> Result<Option<PathSy
 }
 
 fn resolve_manifest_path(manifest_path: &std::path::Path, rel: &str) -> PathBuf {
-    let base = manifest_path.parent().unwrap_or_else(|| std::path::Path::new("."));
+    let base = manifest_path
+        .parent()
+        .unwrap_or_else(|| std::path::Path::new("."));
     base.join(rel)
 }
 
-fn validate_path_system_manifest(path: &std::path::Path, manifest: &PathSystemManifest) -> Result<(), CliError> {
+fn validate_path_system_manifest(
+    path: &std::path::Path,
+    manifest: &PathSystemManifest,
+) -> Result<(), CliError> {
     for (role, refs) in [
         ("class", &manifest.classes),
         ("instruction", &manifest.instructions),
@@ -1334,12 +1470,24 @@ fn validate_path_system_manifest(path: &std::path::Path, manifest: &PathSystemMa
         for rel in refs {
             let p = resolve_manifest_path(path, rel);
             let result = match role {
-                "class" => load_class_definition(&p).and_then(|d| validate_class_definition(&d).map(|_| d)).map(|_| ()),
-                "instruction" => load_instruction(&p).and_then(|d| validate_instruction(&d).map(|_| d)).map(|_| ()),
-                "standing-policy" => load_standing_policy(&p).and_then(|d| validate_standing_policy(&d).map(|_| d)).map(|_| ()),
-                "compiled-context" => load_compiled_context_template(&p).and_then(|d| validate_compiled_context_template(&d).map(|_| d)).map(|_| ()),
-                "provider-profile" => load_provider_profile(&p).and_then(|d| validate_provider_profile(&d).map(|_| d)).map(|_| ()),
-                "workflow" => load_workflow_definition(&p).and_then(|d| validate_workflow_definition(&d).map(|_| d)).map(|_| ()),
+                "class" => load_class_definition(&p)
+                    .and_then(|d| validate_class_definition(&d).map(|_| d))
+                    .map(|_| ()),
+                "instruction" => load_instruction(&p)
+                    .and_then(|d| validate_instruction(&d).map(|_| d))
+                    .map(|_| ()),
+                "standing-policy" => load_standing_policy(&p)
+                    .and_then(|d| validate_standing_policy(&d).map(|_| d))
+                    .map(|_| ()),
+                "compiled-context" => load_compiled_context_template(&p)
+                    .and_then(|d| validate_compiled_context_template(&d).map(|_| d))
+                    .map(|_| ()),
+                "provider-profile" => load_provider_profile(&p)
+                    .and_then(|d| validate_provider_profile(&d).map(|_| d))
+                    .map(|_| ()),
+                "workflow" => load_workflow_definition(&p)
+                    .and_then(|d| validate_workflow_definition(&d).map(|_| d))
+                    .map(|_| ()),
                 _ => Ok(()),
             };
             if let Err(error) = result {
@@ -1365,43 +1513,91 @@ fn assemble_system_definition_from_manifest<S: CanonicalStore>(
     let classes = manifest
         .classes
         .iter()
-        .map(|rel| register_declaration_file(store, DeclarationKind::Class, &resolve_manifest_path(path, rel)))
+        .map(|rel| {
+            register_declaration_file(
+                store,
+                DeclarationKind::Class,
+                &resolve_manifest_path(path, rel),
+            )
+        })
         .collect::<Result<Vec<_>, _>>()?;
     let instructions = manifest
         .instructions
         .iter()
-        .map(|rel| register_declaration_file(store, DeclarationKind::Instruction, &resolve_manifest_path(path, rel)))
+        .map(|rel| {
+            register_declaration_file(
+                store,
+                DeclarationKind::Instruction,
+                &resolve_manifest_path(path, rel),
+            )
+        })
         .collect::<Result<Vec<_>, _>>()?;
     let policies = manifest
         .standing_policies
         .iter()
-        .map(|rel| register_declaration_file(store, DeclarationKind::StandingPolicy, &resolve_manifest_path(path, rel)))
+        .map(|rel| {
+            register_declaration_file(
+                store,
+                DeclarationKind::StandingPolicy,
+                &resolve_manifest_path(path, rel),
+            )
+        })
         .collect::<Result<Vec<_>, _>>()?;
     let compiled_contexts = manifest
         .compiled_contexts
         .iter()
-        .map(|rel| register_declaration_file(store, DeclarationKind::CompiledContext, &resolve_manifest_path(path, rel)))
+        .map(|rel| {
+            register_declaration_file(
+                store,
+                DeclarationKind::CompiledContext,
+                &resolve_manifest_path(path, rel),
+            )
+        })
         .collect::<Result<Vec<_>, _>>()?;
     let provider_profiles = manifest
         .provider_profiles
         .iter()
-        .map(|rel| register_declaration_file(store, DeclarationKind::ProviderProfile, &resolve_manifest_path(path, rel)))
+        .map(|rel| {
+            register_declaration_file(
+                store,
+                DeclarationKind::ProviderProfile,
+                &resolve_manifest_path(path, rel),
+            )
+        })
         .collect::<Result<Vec<_>, _>>()?;
     let workflows = manifest
         .workflows
         .iter()
-        .map(|rel| register_declaration_file(store, DeclarationKind::Workflow, &resolve_manifest_path(path, rel)))
+        .map(|rel| {
+            register_declaration_file(
+                store,
+                DeclarationKind::Workflow,
+                &resolve_manifest_path(path, rel),
+            )
+        })
         .collect::<Result<Vec<_>, _>>()?;
 
     let default_compiled_context = manifest
         .default_compiled_context
         .as_ref()
-        .map(|rel| register_declaration_file(store, DeclarationKind::CompiledContext, &resolve_manifest_path(path, rel)))
+        .map(|rel| {
+            register_declaration_file(
+                store,
+                DeclarationKind::CompiledContext,
+                &resolve_manifest_path(path, rel),
+            )
+        })
         .transpose()?;
     let default_provider_profile = manifest
         .default_provider_profile
         .as_ref()
-        .map(|rel| register_declaration_file(store, DeclarationKind::ProviderProfile, &resolve_manifest_path(path, rel)))
+        .map(|rel| {
+            register_declaration_file(
+                store,
+                DeclarationKind::ProviderProfile,
+                &resolve_manifest_path(path, rel),
+            )
+        })
         .transpose()?;
 
     Ok(earmark_core::SystemDefinition {
@@ -1496,7 +1692,10 @@ fn collect_paths_with_extensions(
         let Some(ext) = path.extension().and_then(|value| value.to_str()) else {
             continue;
         };
-        if !extensions.iter().any(|candidate| ext.eq_ignore_ascii_case(candidate)) {
+        if !extensions
+            .iter()
+            .any(|candidate| ext.eq_ignore_ascii_case(candidate))
+        {
             continue;
         }
         out.push(path.display().to_string());
@@ -1561,7 +1760,8 @@ fn list_assignments<S: CanonicalStore>(
                 continue;
             }
         }
-        let assignment: earmark_core::TransitionAssignment = serde_json::from_slice(&object.payload.bytes)?;
+        let assignment: earmark_core::TransitionAssignment =
+            serde_json::from_slice(&object.payload.bytes)?;
         assignments.push(assignment);
     }
     Ok(assignments)
@@ -1707,8 +1907,6 @@ fn run_related_artifacts<S: CanonicalStore>(
     }))
 }
 
-
-
 fn load_current_assignment_by_id<S: CanonicalStore>(
     store: &S,
     assignment_id: &str,
@@ -1717,7 +1915,8 @@ fn load_current_assignment_by_id<S: CanonicalStore>(
         if object.envelope.kind != Kind::TransitionAssignment {
             continue;
         }
-        let assignment: earmark_core::TransitionAssignment = serde_json::from_slice(&object.payload.bytes)?;
+        let assignment: earmark_core::TransitionAssignment =
+            serde_json::from_slice(&object.payload.bytes)?;
         if assignment.id.as_str() != assignment_id {
             continue;
         }
@@ -1727,7 +1926,10 @@ fn load_current_assignment_by_id<S: CanonicalStore>(
             }
         }
     }
-    Err(CliError::not_found(format!("assignment not found: {}", assignment_id)))
+    Err(CliError::not_found(format!(
+        "assignment not found: {}",
+        assignment_id
+    )))
 }
 
 fn load_change_set_by_id<S: CanonicalStore>(
@@ -1743,7 +1945,10 @@ fn load_change_set_by_id<S: CanonicalStore>(
             return Ok(change_set);
         }
     }
-    Err(CliError::not_found(format!("change set not found: {}", change_set_id)))
+    Err(CliError::not_found(format!(
+        "change set not found: {}",
+        change_set_id
+    )))
 }
 
 fn load_handoff_by_id<S: CanonicalStore>(
@@ -1803,16 +2008,19 @@ fn resolve_system_version_ref(
     index: &DerivedIndex,
     system_id: &str,
 ) -> Result<VersionRef, CliError> {
-    let found = index
-        .find_system_definition(system_id)?
-        .ok_or_else(|| CliError::not_found(format!("system definition not found: {}", system_id)))?;
+    let found = index.find_system_definition(system_id)?.ok_or_else(|| {
+        CliError::not_found(format!("system definition not found: {}", system_id))
+    })?;
     Ok(VersionRef::new(
         earmark_core::ObjectId::parse(found.0)?,
         earmark_core::VersionId::parse(found.1)?,
     ))
 }
 
-pub(crate) fn mirror_surface(store: &GitCanonicalStore, object: &StoredObject) -> Result<(), CliError> {
+pub(crate) fn mirror_surface(
+    store: &GitCanonicalStore,
+    object: &StoredObject,
+) -> Result<(), CliError> {
     let (dir, ext) = match &object.envelope.kind {
         Kind::Instruction => (
             store.declarations_dir().join("instructions"),
@@ -2006,7 +2214,10 @@ fn next_commands_for_failure(failure: &earmark_core::TransformationFailure) -> V
     if let Some(delta_id) = &failure.failed_change_set_id {
         commands.push(format!("em change-set explain {}", delta_id.as_str()));
     }
-    commands.push(format!("em assignment explain {}", failure.assignment_id.as_str()));
+    commands.push(format!(
+        "em assignment explain {}",
+        failure.assignment_id.as_str()
+    ));
     commands.push(format!("em run timeline {}", failure.run_id));
     commands
 }
@@ -2029,7 +2240,11 @@ fn render_explanation(value: &serde_json::Value) -> Option<String> {
     let next_commands = value.get("next_commands").and_then(|v| v.as_array());
 
     let mut output = String::new();
-    output.push_str(&format!("--- {} Explanation: {} ---\n\n", kind.to_uppercase(), id));
+    output.push_str(&format!(
+        "--- {} Explanation: {} ---\n\n",
+        kind.to_uppercase(),
+        id
+    ));
     output.push_str(&format!("Summary: {}\n\n", summary));
 
     match kind {
@@ -2038,7 +2253,10 @@ fn render_explanation(value: &serde_json::Value) -> Option<String> {
             let related = value.get("related")?;
             output.push_str("Purpose: A run records the execution of a workflow system.\n");
             output.push_str(&format!("Status: {}\n", artifact.get("status")?.as_str()?));
-            output.push_str(&format!("Started At: {}\n", artifact.get("started_at")?.as_str()?));
+            output.push_str(&format!(
+                "Started At: {}\n",
+                artifact.get("started_at")?.as_str()?
+            ));
             if let Some(ended) = artifact.get("ended_at").and_then(|v| v.as_str()) {
                 output.push_str(&format!("Ended At: {}\n", ended));
             }
@@ -2060,7 +2278,10 @@ fn render_explanation(value: &serde_json::Value) -> Option<String> {
             let timeline = value.get("timeline")?;
             output.push_str("Purpose: A run timeline shows the sequence of events and artifacts created during a run.\n");
             output.push_str(&format!("Status: {}\n", timeline.get("status")?.as_str()?));
-            output.push_str(&format!("Started At: {}\n", timeline.get("started_at")?.as_str()?));
+            output.push_str(&format!(
+                "Started At: {}\n",
+                timeline.get("started_at")?.as_str()?
+            ));
             if let Some(ended) = timeline.get("ended_at").and_then(|v| v.as_str()) {
                 output.push_str(&format!("Ended At: {}\n", ended));
             }
@@ -2079,23 +2300,55 @@ fn render_explanation(value: &serde_json::Value) -> Option<String> {
         }
         "run_artifacts" => {
             let artifacts = value.get("artifact")?;
-            output.push_str("Purpose: A run artifact inventory lists all durable records produced by a run.\n");
+            output.push_str(
+                "Purpose: A run artifact inventory lists all durable records produced by a run.\n",
+            );
             if let Some(v) = artifacts.get("assignments").and_then(|v| v.as_array()) {
-                output.push_str(&format!("Assignments ({}): {}\n", v.len(), v.iter().map(|v| v.as_str().unwrap_or("")).collect::<Vec<_>>().join(", ")));
+                output.push_str(&format!(
+                    "Assignments ({}): {}\n",
+                    v.len(),
+                    v.iter()
+                        .map(|v| v.as_str().unwrap_or(""))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ));
             }
             if let Some(v) = artifacts.get("change_sets").and_then(|v| v.as_array()) {
-                output.push_str(&format!("Change Sets ({}): {}\n", v.len(), v.iter().map(|v| v.as_str().unwrap_or("")).collect::<Vec<_>>().join(", ")));
+                output.push_str(&format!(
+                    "Change Sets ({}): {}\n",
+                    v.len(),
+                    v.iter()
+                        .map(|v| v.as_str().unwrap_or(""))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ));
             }
             if let Some(v) = artifacts.get("handoffs").and_then(|v| v.as_array()) {
-                output.push_str(&format!("Handoffs ({}): {}\n", v.len(), v.iter().map(|v| v.as_str().unwrap_or("")).collect::<Vec<_>>().join(", ")));
+                output.push_str(&format!(
+                    "Handoffs ({}): {}\n",
+                    v.len(),
+                    v.iter()
+                        .map(|v| v.as_str().unwrap_or(""))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ));
             }
             if let Some(v) = artifacts.get("failures").and_then(|v| v.as_array()) {
-                output.push_str(&format!("Failures ({}): {}\n", v.len(), v.iter().map(|v| v.as_str().unwrap_or("")).collect::<Vec<_>>().join(", ")));
+                output.push_str(&format!(
+                    "Failures ({}): {}\n",
+                    v.len(),
+                    v.iter()
+                        .map(|v| v.as_str().unwrap_or(""))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ));
             }
         }
         "run_graph" => {
             let graph = value.get("graph")?;
-            output.push_str("Purpose: A relationship graph showing how artifacts in this run connect.\n\n");
+            output.push_str(
+                "Purpose: A relationship graph showing how artifacts in this run connect.\n\n",
+            );
             output.push_str("Mermaid Diagram:\n");
             output.push_str("```mermaid\ngraph TD\n");
             if let Some(edges) = graph.get("edges").and_then(|v| v.as_array()) {
@@ -2112,10 +2365,16 @@ fn render_explanation(value: &serde_json::Value) -> Option<String> {
             let artifact = value.get("artifact")?;
             let related = value.get("related")?;
             output.push_str("Purpose: An assignment represents a specific transition being executed by a runtime.\n");
-            output.push_str(&format!("Transition: {}\n", related.get("transition_id")?.as_str()?));
+            output.push_str(&format!(
+                "Transition: {}\n",
+                related.get("transition_id")?.as_str()?
+            ));
             output.push_str(&format!("Status: {}\n", artifact.get("status")?.as_str()?));
             output.push_str(&format!("Run ID: {}\n", related.get("run_id")?.as_str()?));
-            if let Some(cs) = related.get("completion_change_set_id").and_then(|v| v.as_str()) {
+            if let Some(cs) = related
+                .get("completion_change_set_id")
+                .and_then(|v| v.as_str())
+            {
                 output.push_str(&format!("Completed by Change Set: {}\n", cs));
             }
             if let Some(ho) = related.get("handoff_manifest_id").and_then(|v| v.as_str()) {
@@ -2125,8 +2384,13 @@ fn render_explanation(value: &serde_json::Value) -> Option<String> {
         "change_set" => {
             let artifact = value.get("artifact")?;
             let related = value.get("related")?;
-            output.push_str("Purpose: A change set records the state changes produced by a transition.\n");
-            output.push_str(&format!("Transition: {}\n", artifact.get("transition_id")?.as_str()?));
+            output.push_str(
+                "Purpose: A change set records the state changes produced by a transition.\n",
+            );
+            output.push_str(&format!(
+                "Transition: {}\n",
+                artifact.get("transition_id")?.as_str()?
+            ));
             output.push_str(&format!("Run ID: {}\n", artifact.get("run_id")?.as_str()?));
             if let Some(aid) = related.get("assignment_id").and_then(|v| v.as_str()) {
                 output.push_str(&format!("Produced for Assignment: {}\n", aid));
@@ -2139,31 +2403,60 @@ fn render_explanation(value: &serde_json::Value) -> Option<String> {
             let artifact = value.get("artifact")?;
             let related = value.get("related")?;
             output.push_str("Purpose: A handoff defines the bounded surface for successor work.\n");
-            output.push_str(&format!("From Transition: {}\n", artifact.get("from_transition_id")?.as_str()?));
+            output.push_str(&format!(
+                "From Transition: {}\n",
+                artifact.get("from_transition_id")?.as_str()?
+            ));
             if let Some(to) = related.get("to_transition_id").and_then(|v| v.as_str()) {
                 output.push_str(&format!("Intended Successor: {}\n", to));
             }
             output.push_str(&format!("Run ID: {}\n", related.get("run_id")?.as_str()?));
-            output.push_str(&format!("Source Change Set: {}\n", related.get("source_change_set_id")?.as_str()?));
+            output.push_str(&format!(
+                "Source Change Set: {}\n",
+                related.get("source_change_set_id")?.as_str()?
+            ));
         }
         "failure" => {
             let artifact = value.get("artifact")?;
             let related = value.get("related")?;
             output.push_str("Purpose: A failure record persists a failed transition attempt for audit and repair.\n");
-            output.push_str(&format!("Transition: {}\n", artifact.get("transition_id")?.as_str()?));
-            output.push_str(&format!("Error Type: {}\n", artifact.get("error_type")?.as_str()?));
-            output.push_str(&format!("Message: {}\n", artifact.get("message")?.as_str()?));
+            output.push_str(&format!(
+                "Transition: {}\n",
+                artifact.get("transition_id")?.as_str()?
+            ));
+            output.push_str(&format!(
+                "Error Type: {}\n",
+                artifact.get("error_type")?.as_str()?
+            ));
+            output.push_str(&format!(
+                "Message: {}\n",
+                artifact.get("message")?.as_str()?
+            ));
             output.push_str(&format!("Run ID: {}\n", artifact.get("run_id")?.as_str()?));
-            output.push_str(&format!("Assignment ID: {}\n", related.get("assignment_id")?.as_str()?));
+            output.push_str(&format!(
+                "Assignment ID: {}\n",
+                related.get("assignment_id")?.as_str()?
+            ));
             if let Some(cs) = related.get("failed_change_set_id").and_then(|v| v.as_str()) {
                 output.push_str(&format!("Failed Change Set: {}\n", cs));
             }
         }
         "report_generation" => {
-            output.push_str("Purpose: A command that generates a static HTML report for inspection.\n");
-            output.push_str(&format!("Target Kind: {}\n", value.get("target_kind")?.as_str()?));
-            output.push_str(&format!("Target ID: {}\n", value.get("target_id")?.as_str()?));
-            output.push_str(&format!("Output Path: {}\n", value.get("output")?.as_str()?));
+            output.push_str(
+                "Purpose: A command that generates a static HTML report for inspection.\n",
+            );
+            output.push_str(&format!(
+                "Target Kind: {}\n",
+                value.get("target_kind")?.as_str()?
+            ));
+            output.push_str(&format!(
+                "Target ID: {}\n",
+                value.get("target_id")?.as_str()?
+            ));
+            output.push_str(&format!(
+                "Output Path: {}\n",
+                value.get("output")?.as_str()?
+            ));
         }
         _ => return None,
     }
@@ -2313,9 +2606,16 @@ fn generate_run_report<S: CanonicalStore>(store: &S, run_id: &str) -> Result<Str
         </div>"#,
         run_id = run_id,
         status = format!("{:?}", ledger.status).to_lowercase(),
-        status_class = if matches!(ledger.status, earmark_core::RunStatus::Completed) { "success" } else { "error" },
+        status_class = if matches!(ledger.status, earmark_core::RunStatus::Completed) {
+            "success"
+        } else {
+            "error"
+        },
         started = ledger.started_at,
-        ended = ledger.ended_at.map(|d| d.to_rfc3339()).unwrap_or_else(|| "N/A".to_string()),
+        ended = ledger
+            .ended_at
+            .map(|d| d.to_rfc3339())
+            .unwrap_or_else(|| "N/A".to_string()),
         events = ledger.events.len()
     ));
 
@@ -2345,7 +2645,7 @@ fn generate_run_report<S: CanonicalStore>(store: &S, run_id: &str) -> Result<Str
 
     content.push_str("<h2>Artifact Inventory</h2>");
     content.push_str("<div class=\"artifact-grid\">");
-    
+
     if let Some(assignments) = related.get("assignments").and_then(|v| v.as_array()) {
         for id in assignments {
             content.push_str(&format!(
@@ -2383,7 +2683,10 @@ fn generate_run_report<S: CanonicalStore>(store: &S, run_id: &str) -> Result<Str
     Ok(html_wrap(&format!("Run {}", run_id), &content))
 }
 
-fn generate_handoff_report<S: CanonicalStore>(store: &S, handoff_id: &str) -> Result<String, CliError> {
+fn generate_handoff_report<S: CanonicalStore>(
+    store: &S,
+    handoff_id: &str,
+) -> Result<String, CliError> {
     let handoff = load_handoff_by_id(store, handoff_id)?;
     let mut content = String::new();
     content.push_str(&format!(
@@ -2396,7 +2699,9 @@ fn generate_handoff_report<S: CanonicalStore>(store: &S, handoff_id: &str) -> Re
         </div>"#,
         handoff_id = handoff_id,
         from = handoff.from_transition_id,
-        to = handoff.to_transition_id.unwrap_or_else(|| "N/A".to_string()),
+        to = handoff
+            .to_transition_id
+            .unwrap_or_else(|| "N/A".to_string()),
         run_id = handoff.run_id
     ));
 
@@ -2406,7 +2711,14 @@ fn generate_handoff_report<S: CanonicalStore>(store: &S, handoff_id: &str) -> Re
     content.push_str(&handoff.allowed_input_classes.join(", "));
     content.push_str("</p>");
     content.push_str("<p><strong>Required Checks:</strong> ");
-    content.push_str(&handoff.required_checks.iter().map(|c| c.check_type.as_str()).collect::<Vec<_>>().join(", "));
+    content.push_str(
+        &handoff
+            .required_checks
+            .iter()
+            .map(|c| c.check_type.as_str())
+            .collect::<Vec<_>>()
+            .join(", "),
+    );
     content.push_str("</p>");
     content.push_str("</div>");
 
@@ -2429,7 +2741,11 @@ fn generate_handoff_report<S: CanonicalStore>(store: &S, handoff_id: &str) -> Re
     Ok(html_wrap(&format!("Handoff {}", handoff_id), &content))
 }
 
-fn generate_system_report<S: CanonicalStore>(store: &S, index: &DerivedIndex, system_id: &str) -> Result<String, CliError> {
+fn generate_system_report<S: CanonicalStore>(
+    store: &S,
+    index: &DerivedIndex,
+    system_id: &str,
+) -> Result<String, CliError> {
     let system_ref = resolve_system_version_ref(index, system_id)?;
     let system_obj = store.read_version(&system_ref)?;
     let system: earmark_core::SystemDefinition = serde_json::from_slice(&system_obj.payload.bytes)?;
@@ -2451,10 +2767,22 @@ fn generate_system_report<S: CanonicalStore>(store: &S, index: &DerivedIndex, sy
 
     content.push_str("<h2>Declaration Inventory</h2>");
     content.push_str("<div class=\"artifact-grid\">");
-    content.push_str(&format!("<div class=\"card\"><h3>Classes</h3><p>{}</p></div>", system.classes.len()));
-    content.push_str(&format!("<div class=\"card\"><h3>Instructions</h3><p>{}</p></div>", system.instructions.len()));
-    content.push_str(&format!("<div class=\"card\"><h3>Workflows</h3><p>{}</p></div>", system.workflows.len()));
-    content.push_str(&format!("<div class=\"card\"><h3>Provider Profiles</h3><p>{}</p></div>", system.provider_profiles.len()));
+    content.push_str(&format!(
+        "<div class=\"card\"><h3>Classes</h3><p>{}</p></div>",
+        system.classes.len()
+    ));
+    content.push_str(&format!(
+        "<div class=\"card\"><h3>Instructions</h3><p>{}</p></div>",
+        system.instructions.len()
+    ));
+    content.push_str(&format!(
+        "<div class=\"card\"><h3>Workflows</h3><p>{}</p></div>",
+        system.workflows.len()
+    ));
+    content.push_str(&format!(
+        "<div class=\"card\"><h3>Provider Profiles</h3><p>{}</p></div>",
+        system.provider_profiles.len()
+    ));
     content.push_str("</div>");
 
     Ok(html_wrap(&format!("System {}", system_id), &content))
@@ -2486,6 +2814,8 @@ pub enum CliError {
     NotFound(String),
     #[error("argument error: {0}")]
     Argument(String),
+    #[error("workspace is not initialized; run `em init` before using this command")]
+    WorkspaceNotInitialized { status: WorkspaceLayoutStatus },
     #[error("runtime error: {0}")]
     Runtime(#[from] earmark_runtime_tools::RuntimeToolError),
 }
@@ -2497,5 +2827,9 @@ impl CliError {
 
     pub fn not_found(message: impl Into<String>) -> Self {
         Self::NotFound(message.into())
+    }
+
+    fn workspace_not_initialized(status: WorkspaceLayoutStatus) -> Self {
+        Self::WorkspaceNotInitialized { status }
     }
 }

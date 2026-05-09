@@ -1,9 +1,11 @@
-use std::collections::BTreeMap;
-use serde_json::Value;
-use earmark_core::{Kind, ObjectId, ObjectRef, Provenance, RuntimeProvenance, Standing, RelationFilter};
-use earmark_store::{CanonicalStore, StoredObject, StoredPayload};
 use crate::modules::error::RuntimeToolError;
 use crate::modules::surface::RuntimeToolSurface;
+use earmark_core::{
+    Kind, ObjectId, ObjectRef, Provenance, RelationFilter, RuntimeProvenance, Standing,
+};
+use earmark_store::{CanonicalStore, StoredObject, StoredPayload};
+use serde_json::Value;
+use std::collections::BTreeMap;
 
 impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
     pub fn create_relation(

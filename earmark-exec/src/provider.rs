@@ -1,11 +1,14 @@
-use std::collections::{HashMap, BTreeMap};
-use std::sync::{Arc, Mutex, OnceLock};
-use std::time::Duration;
-use std::env;
-use chrono::Utc;
-use earmark_core::{ProviderProfile, ProviderRequest, ProviderResponse, ProviderRecord, VersionRef, InstructionPayload, ProviderResponseContract};
 use crate::error::{ProviderFailure, ProviderFailureKind};
 use crate::helpers::uuid_like;
+use chrono::Utc;
+use earmark_core::{
+    InstructionPayload, ProviderProfile, ProviderRecord, ProviderRequest, ProviderResponse,
+    ProviderResponseContract, VersionRef,
+};
+use std::collections::{BTreeMap, HashMap};
+use std::env;
+use std::sync::{Arc, Mutex, OnceLock};
+use std::time::Duration;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProviderMode {
@@ -269,19 +272,20 @@ pub fn provide_with_registry_and_sleeper(
     let mut response: Option<ProviderResponse> = None;
     for attempt in 0..3 {
         match adapter.provide(request.clone(), &effective_profile) {
-            Ok(resp) => match validate_provider_response(&resp, &effective_profile.response_contract)
-            {
-                Ok(()) => {
-                    response = Some(resp);
-                    break;
-                }
-                Err(err) => {
-                    last_error = Some(err.clone());
-                    if !is_retryable_failure(&err) || attempt >= 2 {
+            Ok(resp) => {
+                match validate_provider_response(&resp, &effective_profile.response_contract) {
+                    Ok(()) => {
+                        response = Some(resp);
                         break;
                     }
+                    Err(err) => {
+                        last_error = Some(err.clone());
+                        if !is_retryable_failure(&err) || attempt >= 2 {
+                            break;
+                        }
+                    }
                 }
-            },
+            }
             Err(err) => {
                 last_error = Some(err.clone());
                 if !is_retryable_failure(&err) || attempt >= 2 {
@@ -297,7 +301,10 @@ pub fn provide_with_registry_and_sleeper(
         Some(r) => r,
         None => {
             let err = last_error.unwrap_or_else(|| {
-                ProviderFailure::new(ProviderFailureKind::ProviderUnavailable, "unknown provider failure")
+                ProviderFailure::new(
+                    ProviderFailureKind::ProviderUnavailable,
+                    "unknown provider failure",
+                )
             });
             let mut lock = provider_circuit_registry().lock().map_err(|_| {
                 ProviderFailure::new(

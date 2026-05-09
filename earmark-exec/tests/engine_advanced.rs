@@ -1,9 +1,9 @@
 use earmark_core::{
-    to_yaml, ClassDefinition, ClassStandingRules, JsonSchemaRef, Kind, CompiledContextRender,
-    CompiledContextSelect, CompiledContextTemplate, CompiledContextVisibility, Provenance, RuntimeProfile,
-    Standing, SystemDefinition, VersionRef,
+    to_yaml, ClassDefinition, ClassStandingRules, CompiledContextRender, CompiledContextSelect,
+    CompiledContextTemplate, CompiledContextVisibility, JsonSchemaRef, Kind, Provenance,
+    RuntimeProfile, Standing, SystemDefinition, VersionRef,
 };
-use earmark_exec::{ProviderRegistry, ExecutionEngine, WorkflowRunRequest};
+use earmark_exec::{ExecutionEngine, ProviderRegistry, WorkflowRunRequest};
 use earmark_index::DerivedIndex;
 use earmark_store::{CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload};
 use std::collections::BTreeMap;

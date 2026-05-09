@@ -1,4 +1,4 @@
-use earmark_core::{ObjectRef, VersionRef, RunRecord, ObjectId, StandingConstraint, RequiredCheck};
+use earmark_core::{ObjectId, ObjectRef, RequiredCheck, RunRecord, StandingConstraint, VersionRef};
 
 #[derive(Debug, Clone)]
 pub struct ExecutionTransition {

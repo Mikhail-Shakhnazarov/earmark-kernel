@@ -1,15 +1,14 @@
-use std::collections::BTreeMap;
+use crate::error::ExecError;
+use crate::handoff::create_lineage_relations;
+use crate::ir::TransformArtifacts;
 use chrono::Utc;
 use earmark_core::{
-    Kind, ObjectId, ObjectRef, Standing, TransitionAssignment, ChangeSetId,
-    ChangeSetDraft, ChangeSetValidationResult, RunRecord, HandoffManifestId,
-    Provenance, TransformationFailure, RelationPayload,
-    InstructionPayload, ProviderResponse,
+    ChangeSetDraft, ChangeSetId, ChangeSetValidationResult, HandoffManifestId, InstructionPayload,
+    Kind, ObjectId, ObjectRef, Provenance, ProviderResponse, RelationPayload, RunRecord, Standing,
+    TransformationFailure, TransitionAssignment,
 };
 use earmark_store::{CanonicalStore, StoredObject, StoredPayload};
-use crate::error::ExecError;
-use crate::ir::TransformArtifacts;
-use crate::handoff::create_lineage_relations;
+use std::collections::BTreeMap;
 
 pub(crate) struct ChangeSetPersistence<'a> {
     pub(crate) record: &'a mut RunRecord,
@@ -317,7 +316,10 @@ pub(crate) fn create_delegated_transform_output<S: CanonicalStore>(
     })
 }
 
-pub(crate) fn persist_run_record<S: CanonicalStore>(store: &S, record: &RunRecord) -> Result<(), ExecError> {
+pub(crate) fn persist_run_record<S: CanonicalStore>(
+    store: &S,
+    record: &RunRecord,
+) -> Result<(), ExecError> {
     let stored = StoredObject::new(
         Kind::RunRecord,
         Some("run_record".to_string()),

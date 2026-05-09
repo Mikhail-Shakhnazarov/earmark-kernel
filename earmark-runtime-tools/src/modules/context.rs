@@ -1,14 +1,13 @@
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
-use earmark_core::{
-    ClassFilter, ConnectedContextManifest, Kind, ObjectId, StandingFilter,
-    VersionRef,
-};
-use earmark_connected_context::{
-    CompiledContextCompiler, DEFAULT_COMPILED_CONTEXT_COMPILER, WorkSurfaceManifest,
-};
-use earmark_store::{CanonicalStore, StoredObject};
 use crate::modules::error::RuntimeToolError;
 use crate::modules::surface::RuntimeToolSurface;
+use earmark_connected_context::{
+    CompiledContextCompiler, WorkSurfaceManifest, DEFAULT_COMPILED_CONTEXT_COMPILER,
+};
+use earmark_core::{
+    ClassFilter, ConnectedContextManifest, Kind, ObjectId, StandingFilter, VersionRef,
+};
+use earmark_store::{CanonicalStore, StoredObject};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
     pub fn compile_work_surface(
@@ -23,12 +22,7 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
         context_compiler: &C,
         compiled_context_ref: &VersionRef,
     ) -> Result<WorkSurfaceManifest, RuntimeToolError> {
-        Ok(context_compiler.compile(
-            self.store,
-            self.index,
-            compiled_context_ref,
-            None,
-        )?)
+        Ok(context_compiler.compile(self.store, self.index, compiled_context_ref, None)?)
     }
 
     pub fn compile_connected_context(
@@ -67,7 +61,10 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
             {
                 let payload: earmark_core::RelationPayload =
                     serde_json::from_slice(&relation.payload.bytes)?;
-                if !crate::modules::relations::relation_type_allowed(&payload.relation_type, relation_filter.as_ref()) {
+                if !crate::modules::relations::relation_type_allowed(
+                    &payload.relation_type,
+                    relation_filter.as_ref(),
+                ) {
                     continue;
                 }
 

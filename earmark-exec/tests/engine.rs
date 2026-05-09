@@ -2,12 +2,13 @@ use std::collections::BTreeMap;
 
 use chrono::Utc;
 use earmark_core::{
-    to_yaml, ClassDefinition, ClassStandingRules, EpistemicStanding, HandoffManifest, HeaderValue,
-    InstructionPayload, JsonSchemaRef, Kind, MarkdownBody, CompiledContextRender, CompiledContextSelect,
-    CompiledContextTemplate, CompiledContextVisibility, Provenance, RuntimeProfile, Standing,
-    SystemDefinition, ChangeSet, TransformationFailure, TransitionAssignment, VersionRef,
+    to_yaml, ChangeSet, ClassDefinition, ClassStandingRules, CompiledContextRender,
+    CompiledContextSelect, CompiledContextTemplate, CompiledContextVisibility, EpistemicStanding,
+    HandoffManifest, HeaderValue, InstructionPayload, JsonSchemaRef, Kind, MarkdownBody,
+    Provenance, RuntimeProfile, Standing, SystemDefinition, TransformationFailure,
+    TransitionAssignment, VersionRef,
 };
-use earmark_exec::{ProviderRegistry, ExecError, ExecutionEngine, WorkflowRunRequest};
+use earmark_exec::{ExecError, ExecutionEngine, ProviderRegistry, WorkflowRunRequest};
 use earmark_index::DerivedIndex;
 use earmark_store::{CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload};
 use tempfile::tempdir;
@@ -243,9 +244,15 @@ edges:
 guards: []
 "#
     .replace("PLACEHOLDER_PROJ_ID", compiled_context_ref.id.as_str())
-    .replace("PLACEHOLDER_PROJ_VERSION", compiled_context_ref.version_id.as_str())
+    .replace(
+        "PLACEHOLDER_PROJ_VERSION",
+        compiled_context_ref.version_id.as_str(),
+    )
     .replace("PLACEHOLDER_INSTR_ID", instruction_ref.id.as_str())
-    .replace("PLACEHOLDER_INSTR_VERSION", instruction_ref.version_id.as_str());
+    .replace(
+        "PLACEHOLDER_INSTR_VERSION",
+        instruction_ref.version_id.as_str(),
+    );
     let workflow_obj = StoredObject::new(
         Kind::Workflow,
         Some("composition_workflow".to_string()),
@@ -485,9 +492,15 @@ edges:
 guards: []
 "#
     .replace("PLACEHOLDER_PROJ_ID", compiled_context_ref.id.as_str())
-    .replace("PLACEHOLDER_PROJ_VERSION", compiled_context_ref.version_id.as_str())
+    .replace(
+        "PLACEHOLDER_PROJ_VERSION",
+        compiled_context_ref.version_id.as_str(),
+    )
     .replace("PLACEHOLDER_INSTR_ID", instruction_ref.id.as_str())
-    .replace("PLACEHOLDER_INSTR_VERSION", instruction_ref.version_id.as_str());
+    .replace(
+        "PLACEHOLDER_INSTR_VERSION",
+        instruction_ref.version_id.as_str(),
+    );
     let workflow_a_obj = StoredObject::new(
         Kind::Workflow,
         Some("composition_workflow".to_string()),
@@ -1038,9 +1051,15 @@ edges:
 guards: []
 "#
     .replace("PLACEHOLDER_PROJ_ID", compiled_context_ref.id.as_str())
-    .replace("PLACEHOLDER_PROJ_VERSION", compiled_context_ref.version_id.as_str())
+    .replace(
+        "PLACEHOLDER_PROJ_VERSION",
+        compiled_context_ref.version_id.as_str(),
+    )
     .replace("PLACEHOLDER_INSTR_ID", instruction_ref.id.as_str())
-    .replace("PLACEHOLDER_INSTR_VERSION", instruction_ref.version_id.as_str());
+    .replace(
+        "PLACEHOLDER_INSTR_VERSION",
+        instruction_ref.version_id.as_str(),
+    );
     let workflow_obj = StoredObject::new(
         Kind::Workflow,
         Some("composition_workflow".to_string()),
@@ -1282,9 +1301,15 @@ edges:
 guards: []
 "#
     .replace("PLACEHOLDER_PROJ_ID", compiled_context_ref.id.as_str())
-    .replace("PLACEHOLDER_PROJ_VERSION", compiled_context_ref.version_id.as_str())
+    .replace(
+        "PLACEHOLDER_PROJ_VERSION",
+        compiled_context_ref.version_id.as_str(),
+    )
     .replace("PLACEHOLDER_INSTR_ID", instruction_ref.id.as_str())
-    .replace("PLACEHOLDER_INSTR_VERSION", instruction_ref.version_id.as_str());
+    .replace(
+        "PLACEHOLDER_INSTR_VERSION",
+        instruction_ref.version_id.as_str(),
+    );
     let workflow_obj = StoredObject::new(
         Kind::Workflow,
         Some("composition_workflow".to_string()),
@@ -1513,9 +1538,15 @@ edges:
 guards: []
 "#
     .replace("PLACEHOLDER_PROJ_ID", compiled_context_ref.id.as_str())
-    .replace("PLACEHOLDER_PROJ_VERSION", compiled_context_ref.version_id.as_str())
+    .replace(
+        "PLACEHOLDER_PROJ_VERSION",
+        compiled_context_ref.version_id.as_str(),
+    )
     .replace("PLACEHOLDER_INSTR_ID", instruction_ref.id.as_str())
-    .replace("PLACEHOLDER_INSTR_VERSION", instruction_ref.version_id.as_str());
+    .replace(
+        "PLACEHOLDER_INSTR_VERSION",
+        instruction_ref.version_id.as_str(),
+    );
     let workflow_obj = StoredObject::new(
         Kind::Workflow,
         Some("composition_workflow".to_string()),
@@ -1792,7 +1823,9 @@ guards: []
         .expect("ChangeSet not found in store");
     let change_set: ChangeSet = serde_json::from_slice(&delta_obj.payload.bytes).unwrap();
     assert!(!change_set.validation_results[0].is_valid);
-    assert!(change_set.validation_results[0].failures[0].contains("requires an instruction reference"));
+    assert!(
+        change_set.validation_results[0].failures[0].contains("requires an instruction reference")
+    );
 
     // Check assignment status and linkage
     let claim_obj = objects
@@ -1801,12 +1834,19 @@ guards: []
             if obj.envelope.kind != Kind::TransitionAssignment {
                 return false;
             }
-            let assignment: TransitionAssignment = serde_json::from_slice(&obj.payload.bytes).unwrap();
-            assignment.id.as_str() == failure.assignment_id.as_str() && assignment.status == earmark_core::AssignmentStatus::Blocked
+            let assignment: TransitionAssignment =
+                serde_json::from_slice(&obj.payload.bytes).unwrap();
+            assignment.id.as_str() == failure.assignment_id.as_str()
+                && assignment.status == earmark_core::AssignmentStatus::Blocked
         })
         .expect("TransitionAssignment with Blocked status not found");
-    let assignment: TransitionAssignment = serde_json::from_slice(&claim_obj.payload.bytes).unwrap();
-    assert!(assignment.blocked_reason.as_ref().unwrap().contains(delta_id.as_str()));
+    let assignment: TransitionAssignment =
+        serde_json::from_slice(&claim_obj.payload.bytes).unwrap();
+    assert!(assignment
+        .blocked_reason
+        .as_ref()
+        .unwrap()
+        .contains(delta_id.as_str()));
 }
 
 #[test]
@@ -1991,7 +2031,8 @@ edges:
     condition: null
 guards: []
 "#,
-        pt_ref.id.as_str(), instr_ref.id.as_str()
+        pt_ref.id.as_str(),
+        instr_ref.id.as_str()
     );
     let workflow_obj = StoredObject::new(
         Kind::Workflow,

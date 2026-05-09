@@ -1,13 +1,13 @@
-use std::time::Duration;
+use crate::modules::error::RuntimeToolError;
+use crate::modules::surface::RuntimeToolSurface;
 use earmark_core::{
-    AssignmentStatus, ChangeSet, ChangeSetDraft, Kind, ObjectId, Provenance,
-    TransitionAssignment, TransitionAssignmentId, HeaderValue, Standing,
+    AssignmentStatus, ChangeSet, ChangeSetDraft, HeaderValue, Kind, ObjectId, Provenance, Standing,
+    TransitionAssignment, TransitionAssignmentId,
 };
 use earmark_exec::{ExecutionEngine, WorkflowRunOutcome, WorkflowRunRequest};
 use earmark_store::{CanonicalStore, StoredObject, StoredPayload};
-use crate::modules::error::RuntimeToolError;
-use crate::modules::surface::RuntimeToolSurface;
 use std::collections::BTreeMap;
+use std::time::Duration;
 
 impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
     pub fn run_workflow(
@@ -73,9 +73,11 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
             vec![],
         );
         if let Err(err) = self.store.write_object(&stored) {
-            let _ = self
-                .index
-                .release_active_assignment(&assignment.run_id, &assignment.transition_id, assignment_id.as_str());
+            let _ = self.index.release_active_assignment(
+                &assignment.run_id,
+                &assignment.transition_id,
+                assignment_id.as_str(),
+            );
             return Err(err.into());
         }
         self.index
@@ -94,7 +96,8 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
         if assignment.status != earmark_core::AssignmentStatus::Assigned {
             return Err(RuntimeToolError::Conflict(format!(
                 "assignment {} is not in active state (status: {:?})",
-                assignment_id.as_str(), assignment.status
+                assignment_id.as_str(),
+                assignment.status
             )));
         }
 
@@ -222,7 +225,8 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
         if assignment.status != earmark_core::AssignmentStatus::Assigned {
             return Err(RuntimeToolError::Conflict(format!(
                 "assignment {} is not in active state (status: {:?})",
-                assignment_id.as_str(), assignment.status
+                assignment_id.as_str(),
+                assignment.status
             )));
         }
         assignment.status = earmark_core::AssignmentStatus::Released;
@@ -253,7 +257,8 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
         if assignment.status != earmark_core::AssignmentStatus::Assigned {
             return Err(RuntimeToolError::Conflict(format!(
                 "assignment {} is not in active state (status: {:?})",
-                assignment_id.as_str(), assignment.status
+                assignment_id.as_str(),
+                assignment.status
             )));
         }
         assignment.status = earmark_core::AssignmentStatus::Expired;
@@ -287,7 +292,8 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
         {
             return Err(RuntimeToolError::Conflict(format!(
                 "assignment {} is not in a supersedable state (status: {:?})",
-                assignment_id.as_str(), assignment.status
+                assignment_id.as_str(),
+                assignment.status
             )));
         }
         assignment.status = earmark_core::AssignmentStatus::Superseded;
@@ -322,7 +328,8 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
         {
             return Err(RuntimeToolError::Conflict(format!(
                 "assignment {} is not in a resumable state (status: {:?})",
-                assignment_id.as_str(), old_assignment.status
+                assignment_id.as_str(),
+                old_assignment.status
             )));
         }
 
@@ -345,12 +352,13 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
             &old_assignment.transition_id,
             old_assignment.id.as_str(),
         );
-        self.index.claim_active_assignment(
-            &old_assignment.run_id,
-            &old_assignment.transition_id,
-            new_assignment_id.as_str(),
-        )
-        .map_err(|e| RuntimeToolError::Conflict(e.to_string()))?;
+        self.index
+            .claim_active_assignment(
+                &old_assignment.run_id,
+                &old_assignment.transition_id,
+                new_assignment_id.as_str(),
+            )
+            .map_err(|e| RuntimeToolError::Conflict(e.to_string()))?;
         let now = chrono::Utc::now();
         let expires_at = match lease {
             Some(d) => Some(
@@ -386,7 +394,8 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
                 "title".to_string(),
                 HeaderValue::String(format!(
                     "Claim {} (Resumed from {})",
-                    new_assignment_id.as_str(), assignment_id.as_str()
+                    new_assignment_id.as_str(),
+                    assignment_id.as_str()
                 )),
             )]),
             StoredPayload::from_json_bytes(serde_json::to_vec_pretty(&new_assignment)?),
@@ -424,7 +433,9 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
                 }
             }
         }
-        Err(RuntimeToolError::MissingObject(assignment_id.as_str().to_string()))
+        Err(RuntimeToolError::MissingObject(
+            assignment_id.as_str().to_string(),
+        ))
     }
 
     pub fn load_handoff(
@@ -442,6 +453,8 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
                 }
             }
         }
-        Err(RuntimeToolError::MissingObject(handoff_manifest_id.as_str().to_string()))
+        Err(RuntimeToolError::MissingObject(
+            handoff_manifest_id.as_str().to_string(),
+        ))
     }
 }

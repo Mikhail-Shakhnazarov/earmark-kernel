@@ -9,7 +9,7 @@ fn test_path_traversal_hardened() {
 
     // 2. Verify that even with a "legal" looking but still potentially problematic string (if it had dots), it would fail
     // But our regex [a-z0-9]{32} strictly prevents dots.
-    
+
     let bad_prefix = "bad.prefix";
     assert!(ObjectId::parse(bad_prefix).is_err());
 

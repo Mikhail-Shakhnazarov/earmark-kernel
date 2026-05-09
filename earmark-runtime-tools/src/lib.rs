@@ -5,11 +5,11 @@ pub use modules::surface::RuntimeToolSurface;
 
 // Re-export common types for convenience
 pub use earmark_core::{
-    ObjectId, ObjectRef, VersionRef, RuntimeProvenance, ChangeSetDraft,
-    RelationFilter, ClassFilter, StandingFilter,
+    ChangeSetDraft, ClassFilter, ObjectId, ObjectRef, RelationFilter, RuntimeProvenance,
+    StandingFilter, VersionRef,
 };
-pub use earmark_index::QueryFilter;
 pub use earmark_exec::WorkflowRunRequest;
+pub use earmark_index::QueryFilter;
 
 #[cfg(test)]
 mod tests;

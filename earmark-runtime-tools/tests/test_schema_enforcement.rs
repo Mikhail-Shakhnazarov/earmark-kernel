@@ -1,11 +1,13 @@
-use earmark_runtime_tools::{RuntimeToolSurface};
-use earmark_core::{RuntimeProvenance, Kind, ClassDefinition, ClassStandingRules, JsonSchemaRef, HeaderValue};
-use earmark_store::{GitCanonicalStore, CanonicalStore, StoredObject, StoredPayload};
-use earmark_index::DerivedIndex;
+use earmark_core::{
+    ClassDefinition, ClassStandingRules, HeaderValue, JsonSchemaRef, Kind, RuntimeProvenance,
+};
 use earmark_exec::ProviderRegistry;
-use tempfile::tempdir;
+use earmark_index::DerivedIndex;
+use earmark_runtime_tools::RuntimeToolSurface;
+use earmark_store::{CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload};
 use serde_json::json;
 use std::collections::BTreeMap;
+use tempfile::tempdir;
 
 #[test]
 fn test_schema_enforcement() {
@@ -14,7 +16,7 @@ fn test_schema_enforcement() {
     store.init_layout().unwrap();
     let index = DerivedIndex::open(tmp.path()).unwrap();
     let providers = ProviderRegistry::default();
-    
+
     let surface = RuntimeToolSurface {
         store: &store,
         index: &index,
@@ -65,16 +67,34 @@ fn test_schema_enforcement() {
 
     // 2. Deposit valid object
     // Note: the class name is "person", and the index should find the class_definition object with ID "person"
-    let res = surface.deposit_object("person".to_string(), None, None, json!({"name": "Alice", "age": 30}), prov.clone());
+    let res = surface.deposit_object(
+        "person".to_string(),
+        None,
+        None,
+        json!({"name": "Alice", "age": 30}),
+        prov.clone(),
+    );
     assert!(res.is_ok());
 
     // 3. Deposit invalid object (missing required name)
-    let res = surface.deposit_object("person".to_string(), None, None, json!({"age": 30}), prov.clone());
+    let res = surface.deposit_object(
+        "person".to_string(),
+        None,
+        None,
+        json!({"age": 30}),
+        prov.clone(),
+    );
     assert!(res.is_err());
     println!("Schema violation error: {:?}", res.err().unwrap());
 
     // 4. Deposit invalid object (wrong type)
-    let res = surface.deposit_object("person".to_string(), None, None, json!({"name": "Alice", "age": "thirty"}), prov.clone());
+    let res = surface.deposit_object(
+        "person".to_string(),
+        None,
+        None,
+        json!({"name": "Alice", "age": "thirty"}),
+        prov.clone(),
+    );
     assert!(res.is_err());
     println!("Schema violation error (type): {:?}", res.err().unwrap());
 }

@@ -1,16 +1,15 @@
 use super::*;
 use chrono::Utc;
 use earmark_connected_context::{CompiledContextCompiler, WorkSurfaceManifest};
+use earmark_core::{
+    ClassFilter, Kind, Provenance, RelationFilter, Standing, StandingFilter, TransitionAssignmentId,
+};
 use earmark_exec::ProviderRegistry;
 use earmark_index::DerivedIndex;
-use earmark_store::{GitCanonicalStore, CanonicalStore, StoredObject, StoredPayload};
+use earmark_store::{CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload};
 use serde_json::json;
-use tempfile::tempdir;
-use earmark_core::{
-    Kind, Provenance, Standing, TransitionAssignmentId,
-    RelationFilter, ClassFilter, StandingFilter,
-};
 use std::collections::BTreeMap;
+use tempfile::tempdir;
 
 fn setup_surface(dir: &std::path::Path) -> (GitCanonicalStore, DerivedIndex, ProviderRegistry) {
     let store = GitCanonicalStore::new(dir);
@@ -143,7 +142,9 @@ fn test_loading_missing_handoff_manifest() {
     };
 
     let err = surface
-        .load_handoff(earmark_core::HandoffManifestId::parse("obj_00000000000000000000000000000001").unwrap())
+        .load_handoff(
+            earmark_core::HandoffManifestId::parse("obj_00000000000000000000000000000001").unwrap(),
+        )
         .unwrap_err();
     assert!(matches!(err, RuntimeToolError::MissingObject(_)));
 }
@@ -479,7 +480,8 @@ fn test_assignment_lifecycle_supersede() {
             None,
         )
         .unwrap();
-    let successor_id = TransitionAssignmentId::parse("obj_00000000000000000000000000000002").unwrap();
+    let successor_id =
+        TransitionAssignmentId::parse("obj_00000000000000000000000000000002").unwrap();
     surface
         .supersede_assignment(assignment.id.clone(), successor_id)
         .unwrap();

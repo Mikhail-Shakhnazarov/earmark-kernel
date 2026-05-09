@@ -5,8 +5,9 @@ Get a working Earmark run in under 5 minutes using the built-in research synthes
 ## Build the CLI
 
 ```bash
+REPO_ROOT=$(pwd)
 cargo build -p earmark-cli
-alias em="$(pwd)/target/debug/earmark-cli"
+alias em="$REPO_ROOT/target/debug/earmark-cli"
 ```
 
 ## Initialize a workspace
@@ -27,7 +28,7 @@ Workspace initialized at ./my-workspace
 Use the example system manifest from the repository:
 
 ```bash
-em system register ../examples/research-synthesis/declarations/systems/system.yaml
+em system register "$REPO_ROOT/examples/research-synthesis/declarations/systems/system.yaml"
 em system activate sys_research_synthesis
 ```
 

@@ -1,9 +1,9 @@
 use earmark_core::{
-    to_yaml, ClassDefinition, ClassStandingRules, JsonSchemaRef, Kind, CompiledContextRender,
-    CompiledContextSelect, CompiledContextTemplate, CompiledContextVisibility, Provenance, RuntimeProfile,
-    Standing, SystemDefinition,
+    to_yaml, ClassDefinition, ClassStandingRules, CompiledContextRender, CompiledContextSelect,
+    CompiledContextTemplate, CompiledContextVisibility, JsonSchemaRef, Kind, Provenance,
+    RuntimeProfile, Standing, SystemDefinition,
 };
-use earmark_exec::{ProviderRegistry, ExecutionEngine, WorkflowRunRequest};
+use earmark_exec::{ExecutionEngine, ProviderRegistry, WorkflowRunRequest};
 use earmark_index::DerivedIndex;
 use earmark_store::{CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload};
 use std::collections::BTreeMap;
@@ -204,7 +204,8 @@ edges:
     to: op_ext
 guards: []
 "#,
-        pt_ref.id.as_str(), instr1_ref.id.as_str()
+        pt_ref.id.as_str(),
+        instr1_ref.id.as_str()
     );
 
     let workflow_a_ref = store
@@ -243,7 +244,8 @@ edges:
     to: op_sum
 guards: []
 "#,
-        pt_ref.id.as_str(), instr2_ref.id.as_str()
+        pt_ref.id.as_str(),
+        instr2_ref.id.as_str()
     );
 
     let workflow_b_ref = store

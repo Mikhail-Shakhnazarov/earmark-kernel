@@ -1,13 +1,10 @@
-use earmark_core::{
-    WorkflowDefinition, WorkflowOperation, VersionRef, ObjectId, VersionId,
-};
-use earmark_store::*;
-use earmark_index::*;
-use tempfile::tempdir;
-use earmark_store::GitCanonicalStore;
 use crate::error::ProviderFailure;
 use crate::provider::{ProviderExecutionOutcome, ProviderService};
-
+use earmark_core::{ObjectId, VersionId, VersionRef, WorkflowDefinition, WorkflowOperation};
+use earmark_index::*;
+use earmark_store::GitCanonicalStore;
+use earmark_store::*;
+use tempfile::tempdir;
 
 #[test]
 fn test_execution_ir_compilation() {
@@ -15,21 +12,19 @@ fn test_execution_ir_compilation() {
         name: "test_flow".to_string(),
         version: "1".to_string(),
         description: None,
-        operations: vec![
-            WorkflowOperation {
-                id: "op1".to_string(),
-                kind: "transform".to_string(),
-                input_contracts: vec!["note".to_string()],
-                output_contracts: vec!["finding".to_string()],
-                instruction: Some(VersionRef::new(
-                    ObjectId::parse("obj_00000000000000000000000000000001").unwrap(),
-                    VersionId::parse("ver_00000000000000000000000000000001").unwrap(),
-                )),
-                compiled_context: None,
-                policy: None,
-                provider_profile: None,
-            },
-        ],
+        operations: vec![WorkflowOperation {
+            id: "op1".to_string(),
+            kind: "transform".to_string(),
+            input_contracts: vec!["note".to_string()],
+            output_contracts: vec!["finding".to_string()],
+            instruction: Some(VersionRef::new(
+                ObjectId::parse("obj_00000000000000000000000000000001").unwrap(),
+                VersionId::parse("ver_00000000000000000000000000000001").unwrap(),
+            )),
+            compiled_context: None,
+            policy: None,
+            provider_profile: None,
+        }],
         edges: vec![],
         guards: vec![],
     };
@@ -48,11 +43,7 @@ fn test_engine_initialization() {
     let index = DerivedIndex::open(dir.path()).unwrap();
     let registry = crate::provider::ProviderRegistry::default();
 
-    let _engine = crate::engine::ExecutionEngine::new(
-        &store,
-        &index,
-        &registry,
-    );
+    let _engine = crate::engine::ExecutionEngine::new(&store, &index, &registry);
 }
 
 struct NoopProviderService;
@@ -84,8 +75,12 @@ fn test_engine_accepts_provider_service_test_double() {
 #[test]
 fn test_async_prep_boundaries_identify_provider_dispatch() {
     let boundaries = crate::async_prep::blocking_boundaries();
-    assert!(boundaries.iter().any(|b| b.id == "provider_dispatch" && b.future_async_candidate));
-    assert!(boundaries.iter().any(|b| b.id == "provider_http_client" && b.future_async_candidate));
+    assert!(boundaries
+        .iter()
+        .any(|b| b.id == "provider_dispatch" && b.future_async_candidate));
+    assert!(boundaries
+        .iter()
+        .any(|b| b.id == "provider_http_client" && b.future_async_candidate));
 }
 
 #[test]
@@ -98,14 +93,23 @@ fn test_async_prep_sequence_starts_with_provider_boundary() {
 }
 struct BrokenProvider;
 impl ProviderService for BrokenProvider {
-    fn provide(&self, _profile: &earmark_core::ProviderProfile, _request: earmark_core::ProviderRequest) -> Result<ProviderExecutionOutcome, ProviderFailure> {
+    fn provide(
+        &self,
+        _profile: &earmark_core::ProviderProfile,
+        _request: earmark_core::ProviderRequest,
+    ) -> Result<ProviderExecutionOutcome, ProviderFailure> {
         Ok(ProviderExecutionOutcome {
             response: None,
             record: earmark_core::ProviderRecord {
                 record_id: "prec_1".to_string(),
                 request_id: "req_1".to_string(),
                 run_id: "run_1".to_string(),
-                work_packet: earmark_core::ObjectRef::new(ObjectId::new(), VersionId::new(), earmark_core::Kind::WorkPacket, None),
+                work_packet: earmark_core::ObjectRef::new(
+                    ObjectId::new(),
+                    VersionId::new(),
+                    earmark_core::Kind::WorkPacket,
+                    None,
+                ),
                 provider_profile: VersionRef::new(ObjectId::new(), VersionId::new()),
                 provider: "broken".to_string(),
                 model: "broken".to_string(),
@@ -188,7 +192,10 @@ fn test_delegated_outcome_with_none_response_returns_error_instead_of_panicking(
     );
     let note_ref = engine.store.write_object(&note).unwrap();
 
-    let instr_text = format!("---\n{}---\ntest body", earmark_core::to_yaml(&instruction).unwrap());
+    let instr_text = format!(
+        "---\n{}---\ntest body",
+        earmark_core::to_yaml(&instruction).unwrap()
+    );
     let instr_obj = StoredObject::new(
         earmark_core::Kind::Instruction,
         Some("instruction".to_string()),
@@ -217,14 +224,24 @@ fn test_delegated_outcome_with_none_response_returns_error_instead_of_panicking(
         guards: vec![],
     };
 
-    let mut active_objects = vec![earmark_core::ObjectRef::new(note_ref.id.clone(), note_ref.version_id.clone(), earmark_core::Kind::Object, Some("note".to_string()))];
+    let mut active_objects = vec![earmark_core::ObjectRef::new(
+        note_ref.id.clone(),
+        note_ref.version_id.clone(),
+        earmark_core::Kind::Object,
+        Some("note".to_string()),
+    )];
     let mut emitted_packets = vec![];
     let mut emitted_objects = vec![];
     let mut governance_events = vec![];
     let mut compiled_context = Some(earmark_connected_context::WorkSurfaceManifest {
         surface_id: "surf_1".to_string(),
         compiled_context: earmark_core::VersionRef::new(ObjectId::new(), VersionId::new()),
-        work_packet: Some(earmark_core::ObjectRef::new(ObjectId::new(), VersionId::new(), earmark_core::Kind::WorkPacket, None)),
+        work_packet: Some(earmark_core::ObjectRef::new(
+            ObjectId::new(),
+            VersionId::new(),
+            earmark_core::Kind::WorkPacket,
+            None,
+        )),
         generated_at: chrono::Utc::now(),
         objects: vec![],
         constraints: std::collections::BTreeMap::new(),
@@ -237,7 +254,7 @@ fn test_delegated_outcome_with_none_response_returns_error_instead_of_panicking(
         governance_events: &mut governance_events,
         compiled_context: &mut compiled_context,
     };
-    
+
     let sys_ref = VersionRef::new(ObjectId::new(), VersionId::new());
     let mut record = crate::helpers::new_run_record(
         "run_1".to_string(),
@@ -286,5 +303,9 @@ fn test_delegated_outcome_with_none_response_returns_error_instead_of_panicking(
     assert!(result.is_err(), "Expected error but got OK");
     let err = result.unwrap_err();
     let err_msg = err.to_string();
-    assert!(err_msg.contains("delegated outcome did not contain a response"), "Error message was: {}", err_msg);
+    assert!(
+        err_msg.contains("delegated outcome did not contain a response"),
+        "Error message was: {}",
+        err_msg
+    );
 }

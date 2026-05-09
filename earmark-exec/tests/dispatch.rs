@@ -1,15 +1,19 @@
 use std::{
     collections::BTreeMap,
-    sync::{atomic::{AtomicUsize, Ordering}, Arc},
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
 };
 
 use earmark_core::{
-    ProviderBudget, ProviderExposure, ProviderProfile, ProviderRequest, ProviderResponse,
-    ProviderResponseContract, ProviderUsage, Kind, ObjectId, ObjectRef, VersionId, VersionRef,
+    Kind, ObjectId, ObjectRef, ProviderBudget, ProviderExposure, ProviderProfile, ProviderRequest,
+    ProviderResponse, ProviderResponseContract, ProviderUsage, VersionId, VersionRef,
 };
 use earmark_exec::{
-    default_provider_registry, provider_record_from_failure, provide_with_registry, resolve_provider_profile,
-    ProviderAdapter, ProviderFailure, ProviderFailureKind, ProviderMode, ProviderRegistry,
+    default_provider_registry, provide_with_registry, provider_record_from_failure,
+    resolve_provider_profile, ProviderAdapter, ProviderFailure, ProviderFailureKind, ProviderMode,
+    ProviderRegistry,
 };
 
 struct GoodAdapter;

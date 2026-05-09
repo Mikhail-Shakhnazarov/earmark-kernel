@@ -1,11 +1,12 @@
-use std::collections::BTreeMap;
-use serde_json::{json, Value};
-use earmark_core::{
-    HeaderValue, Kind, ObjectId, ObjectRef, Provenance, RuntimeProvenance, Standing, VersionId, VersionRef,
-};
-use earmark_store::{CanonicalStore, StoredObject, StoredPayload, PayloadEncoding};
 use crate::modules::error::RuntimeToolError;
 use crate::modules::surface::RuntimeToolSurface;
+use earmark_core::{
+    HeaderValue, Kind, ObjectId, ObjectRef, Provenance, RuntimeProvenance, Standing, VersionId,
+    VersionRef,
+};
+use earmark_store::{CanonicalStore, PayloadEncoding, StoredObject, StoredPayload};
+use serde_json::{json, Value};
+use std::collections::BTreeMap;
 
 impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
     pub fn deposit_prose(
@@ -18,13 +19,8 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
             actor: "runtime".to_string(),
             source_type: "prose_deposit".to_string(),
         };
-        let object_ref = self.deposit_object(
-            class,
-            Some("object".to_string()),
-            title,
-            json!(body),
-            prov,
-        )?;
+        let object_ref =
+            self.deposit_object(class, Some("object".to_string()), title, json!(body), prov)?;
         Ok(VersionRef::new(object_ref.id, object_ref.version_id))
     }
 
@@ -87,27 +83,24 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
         earmark_core::validate_payload_size(stored_payload.bytes.len())?;
 
         if let Some((obj_id, version_id)) = self.index.find_class_definition(&class)? {
-            let class_ref = VersionRef::new(
-                ObjectId::parse(obj_id)?,
-                VersionId::parse(version_id)?,
-            );
+            let class_ref =
+                VersionRef::new(ObjectId::parse(obj_id)?, VersionId::parse(version_id)?);
             let class_obj = self.store.read_version(&class_ref)?;
             let class_def: earmark_core::ClassDefinition =
                 earmark_core::parse_yaml(&class_obj.payload.as_utf8()?)?;
 
-            if !class_def.payload_schema.0.is_empty() && class_def.payload_schema.0 != "inline:any" {
+            if !class_def.payload_schema.0.is_empty() && class_def.payload_schema.0 != "inline:any"
+            {
                 let schema_str = if class_def.payload_schema.0.starts_with("inline:") {
                     &class_def.payload_schema.0[7..]
                 } else {
                     &class_def.payload_schema.0
                 };
-                
+
                 let schema: Value = serde_json::from_str(schema_str)?;
 
                 let payload_json = match &stored_payload.format {
-                    PayloadEncoding::Json => {
-                        serde_json::from_slice(&stored_payload.bytes)?
-                    }
+                    PayloadEncoding::Json => serde_json::from_slice(&stored_payload.bytes)?,
                     _ => {
                         let text = stored_payload.as_utf8()?;
                         serde_json::from_str(&text).unwrap_or(json!(text))

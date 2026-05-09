@@ -1,19 +1,20 @@
-use earmark_core::{
-    Kind, VersionRef,
-    InstructionPayload, ProviderProfile, StandingPolicy, SystemDefinition, ClassDefinition,
-    WorkflowDefinition, ObjectRef,
-};
-use earmark_store::CanonicalStore;
-use earmark_index::DerivedIndex;
 use crate::error::ExecError;
-use crate::ir::{WorkflowRunRequest};
-use crate::handoff::{reconstruct_successor_inputs_from_handoff, load_handoff};
+use crate::handoff::{load_handoff, reconstruct_successor_inputs_from_handoff};
+use crate::ir::WorkflowRunRequest;
+use earmark_core::{
+    ClassDefinition, InstructionPayload, Kind, ObjectRef, ProviderProfile, StandingPolicy,
+    SystemDefinition, VersionRef, WorkflowDefinition,
+};
+use earmark_index::DerivedIndex;
+use earmark_store::CanonicalStore;
 
 pub(crate) fn resolve_version<S: CanonicalStore>(
     store: &S,
     version: &VersionRef,
 ) -> Result<VersionRef, ExecError> {
-    if version.version_id.as_str() == "ver_00000000000000000000000000000000" || version.version_id.as_str() == "latest" {
+    if version.version_id.as_str() == "ver_00000000000000000000000000000000"
+        || version.version_id.as_str() == "latest"
+    {
         store.read_head_ref(&version.id)?.ok_or_else(|| {
             ExecError::IncompleteExecution(format!(
                 "latest version not found for object {}",
@@ -45,7 +46,9 @@ pub(crate) fn resolve_version_for_kind<S: CanonicalStore>(
         Kind::Workflow => index.resolve_workflow_symbolic_latest(symbolic)?,
         Kind::Instruction => index.resolve_instruction_symbolic_latest(symbolic)?,
         Kind::Object => index.resolve_class_definition_symbolic_latest(symbolic)?,
-        Kind::CompiledContextTemplate => index.resolve_compiled_context_symbolic_latest(symbolic)?,
+        Kind::CompiledContextTemplate => {
+            index.resolve_compiled_context_symbolic_latest(symbolic)?
+        }
         Kind::ProviderProfile => index.resolve_provider_profile_symbolic_latest(symbolic)?,
         Kind::Policy => index.resolve_standing_policy_symbolic_latest(symbolic)?,
         Kind::SystemDefinition => index.resolve_system_definition_symbolic_latest(symbolic)?,
@@ -151,7 +154,8 @@ pub(crate) fn resolve_continuation_inputs<S: CanonicalStore>(
     }
 
     if let Some(assignment_id) = &request.transition_assignment {
-        let (_stored, assignment) = crate::helpers::load_current_transition_assignment(store, assignment_id)?;
+        let (_stored, assignment) =
+            crate::helpers::load_current_transition_assignment(store, assignment_id)?;
         if let Some(handoff_id) = &assignment.handoff_manifest_id {
             let handoff = load_handoff(store, handoff_id)?;
             return reconstruct_successor_inputs_from_handoff(store, index, &handoff);

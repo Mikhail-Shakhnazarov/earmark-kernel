@@ -41,7 +41,8 @@ pub fn load_system_definition(path: impl AsRef<Path>) -> Result<SystemDefinition
 }
 
 pub fn validate_class_definition(value: &ClassDefinition) -> Result<(), DeriveError> {
-    earmark_core::validate_class_name(&value.name).map_err(|e| DeriveError::Validation(e.to_string()))?;
+    earmark_core::validate_class_name(&value.name)
+        .map_err(|e| DeriveError::Validation(e.to_string()))?;
     if value.version.trim().is_empty() || value.kind.trim().is_empty() {
         return Err(DeriveError::Validation(
             "class definition requires version and kind".to_string(),
@@ -55,15 +56,17 @@ pub fn validate_class_definition(value: &ClassDefinition) -> Result<(), DeriveEr
             ));
         }
         for class in &rule.target_classes {
-            earmark_core::validate_class_name(class)
-                .map_err(|e| DeriveError::Validation(format!("invalid relation target class: {}", e)))?;
+            earmark_core::validate_class_name(class).map_err(|e| {
+                DeriveError::Validation(format!("invalid relation target class: {}", e))
+            })?;
         }
     }
     Ok(())
 }
 
 pub fn validate_instruction(value: &InstructionPayload) -> Result<(), DeriveError> {
-    earmark_core::validate_class_name(&value.name).map_err(|e| DeriveError::Validation(e.to_string()))?;
+    earmark_core::validate_class_name(&value.name)
+        .map_err(|e| DeriveError::Validation(e.to_string()))?;
     if value.body.as_str().trim().is_empty() {
         return Err(DeriveError::Validation(
             "instruction requires a body".to_string(),
@@ -73,7 +76,8 @@ pub fn validate_instruction(value: &InstructionPayload) -> Result<(), DeriveErro
 }
 
 pub fn validate_standing_policy(value: &StandingPolicy) -> Result<(), DeriveError> {
-    earmark_core::validate_class_name(&value.name).map_err(|e| DeriveError::Validation(e.to_string()))?;
+    earmark_core::validate_class_name(&value.name)
+        .map_err(|e| DeriveError::Validation(e.to_string()))?;
     for rule in &value.transition_rules {
         let dimension = earmark_core::StandingDimension::parse(&rule.dimension)
             .map_err(|e| DeriveError::Validation(e.to_string()))?;
@@ -102,7 +106,8 @@ pub fn validate_standing_policy(value: &StandingPolicy) -> Result<(), DeriveErro
 }
 
 pub fn validate_workflow_definition(value: &WorkflowDefinition) -> Result<(), DeriveError> {
-    earmark_core::validate_class_name(&value.name).map_err(|e| DeriveError::Validation(e.to_string()))?;
+    earmark_core::validate_class_name(&value.name)
+        .map_err(|e| DeriveError::Validation(e.to_string()))?;
     let mut ids = std::collections::BTreeSet::new();
     for op in &value.operations {
         validate_workflow_token(&op.id, "operation id")?;
@@ -151,7 +156,8 @@ pub fn validate_workflow_definition(value: &WorkflowDefinition) -> Result<(), De
 pub fn validate_compiled_context_template(
     value: &CompiledContextTemplate,
 ) -> Result<(), DeriveError> {
-    earmark_core::validate_class_name(&value.name).map_err(|e| DeriveError::Validation(e.to_string()))?;
+    earmark_core::validate_class_name(&value.name)
+        .map_err(|e| DeriveError::Validation(e.to_string()))?;
     if value.render.mode.trim().is_empty() {
         return Err(DeriveError::Validation(
             "compiled context template requires a render mode".to_string(),
@@ -201,7 +207,10 @@ fn validate_standing_token_for_dimension(
 ) -> Result<(), DeriveError> {
     let valid = match dimension {
         earmark_core::StandingDimension::Epistemic => {
-            matches!(token, "unresolved" | "working" | "supported" | "contested" | "superseded")
+            matches!(
+                token,
+                "unresolved" | "working" | "supported" | "contested" | "superseded"
+            )
         }
         earmark_core::StandingDimension::Review => {
             matches!(token, "unreviewed" | "pending" | "accepted" | "rejected")
@@ -222,17 +231,20 @@ fn validate_standing_token_for_dimension(
 }
 
 pub fn validate_provider_profile(value: &ProviderProfile) -> Result<(), DeriveError> {
-    earmark_core::validate_class_name(&value.name).map_err(|e| DeriveError::Validation(e.to_string()))?;
+    earmark_core::validate_class_name(&value.name)
+        .map_err(|e| DeriveError::Validation(e.to_string()))?;
     if value.provider.trim().is_empty() || value.model.trim().is_empty() {
         return Err(DeriveError::Validation(
             "provider profile requires provider and model".to_string(),
         ));
     }
     if let Some(auth_env) = &value.auth_env {
-        earmark_core::validate_env_var_name(auth_env).map_err(|e| DeriveError::Validation(e.to_string()))?;
+        earmark_core::validate_env_var_name(auth_env)
+            .map_err(|e| DeriveError::Validation(e.to_string()))?;
     }
     if let Some(endpoint_env) = &value.endpoint_env {
-        earmark_core::validate_env_var_name(endpoint_env).map_err(|e| DeriveError::Validation(e.to_string()))?;
+        earmark_core::validate_env_var_name(endpoint_env)
+            .map_err(|e| DeriveError::Validation(e.to_string()))?;
     }
     Ok(())
 }
@@ -254,25 +266,54 @@ pub fn validate_system_definition<S: CanonicalStore>(
         Some("class_definition"),
         |text| parse_yaml::<ClassDefinition>(text).map(|_| ()),
     )?;
-    validate_system_reference_group(store, "instruction", &value.instructions, Kind::Instruction, None, |text| {
-        InstructionPayload::parse_markdown(text).map(|_| ())
-    })?;
-    validate_system_reference_group(store, "policy", &value.policies, Kind::Policy, None, |text| {
-        parse_yaml::<StandingPolicy>(text).map(|_| ())
-    })?;
-    validate_system_reference_group(store, "workflow", &value.workflows, Kind::Workflow, None, |text| {
-        parse_yaml::<WorkflowDefinition>(text).map(|_| ())
-    })?;
-    validate_system_reference_group(store, "compiled_context", &value.compiled_contexts, Kind::CompiledContextTemplate, None, |text| {
-        parse_yaml::<CompiledContextTemplate>(text).map(|_| ())
-    })?;
-    validate_system_reference_group(store, "provider_profile", &value.provider_profiles, Kind::ProviderProfile, None, |text| {
-        parse_yaml::<ProviderProfile>(text).map(|_| ())
-    })?;
+    validate_system_reference_group(
+        store,
+        "instruction",
+        &value.instructions,
+        Kind::Instruction,
+        None,
+        |text| InstructionPayload::parse_markdown(text).map(|_| ()),
+    )?;
+    validate_system_reference_group(
+        store,
+        "policy",
+        &value.policies,
+        Kind::Policy,
+        None,
+        |text| parse_yaml::<StandingPolicy>(text).map(|_| ()),
+    )?;
+    validate_system_reference_group(
+        store,
+        "workflow",
+        &value.workflows,
+        Kind::Workflow,
+        None,
+        |text| parse_yaml::<WorkflowDefinition>(text).map(|_| ()),
+    )?;
+    validate_system_reference_group(
+        store,
+        "compiled_context",
+        &value.compiled_contexts,
+        Kind::CompiledContextTemplate,
+        None,
+        |text| parse_yaml::<CompiledContextTemplate>(text).map(|_| ()),
+    )?;
+    validate_system_reference_group(
+        store,
+        "provider_profile",
+        &value.provider_profiles,
+        Kind::ProviderProfile,
+        None,
+        |text| parse_yaml::<ProviderProfile>(text).map(|_| ()),
+    )?;
     validate_system_reference_group(
         store,
         "default_compiled_context",
-        &value.default_compiled_context.clone().into_iter().collect::<Vec<_>>(),
+        &value
+            .default_compiled_context
+            .clone()
+            .into_iter()
+            .collect::<Vec<_>>(),
         Kind::CompiledContextTemplate,
         None,
         |text| parse_yaml::<CompiledContextTemplate>(text).map(|_| ()),
@@ -280,7 +321,11 @@ pub fn validate_system_definition<S: CanonicalStore>(
     validate_system_reference_group(
         store,
         "default_provider_profile",
-        &value.default_provider_profile.clone().into_iter().collect::<Vec<_>>(),
+        &value
+            .default_provider_profile
+            .clone()
+            .into_iter()
+            .collect::<Vec<_>>(),
         Kind::ProviderProfile,
         None,
         |text| parse_yaml::<ProviderProfile>(text).map(|_| ()),
@@ -370,13 +415,11 @@ fn validate_namespace(namespace: &str) -> Result<(), String> {
         c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_' || c == '.' || c == '/'
     }) {
         return Err(
-            "namespace can only contain lowercase letters, digits, '-', '_', '.', '/'"
-                .to_string(),
+            "namespace can only contain lowercase letters, digits, '-', '_', '.', '/'".to_string(),
         );
     }
     Ok(())
 }
-
 
 pub fn activate_system_definition<S: CanonicalStore>(
     store: &S,

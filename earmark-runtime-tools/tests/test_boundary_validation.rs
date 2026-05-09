@@ -1,10 +1,10 @@
-use earmark_runtime_tools::RuntimeToolSurface;
 use earmark_core::RuntimeProvenance;
-use earmark_store::{GitCanonicalStore, CanonicalStore};
-use earmark_index::DerivedIndex;
 use earmark_exec::ProviderRegistry;
-use tempfile::tempdir;
+use earmark_index::DerivedIndex;
+use earmark_runtime_tools::RuntimeToolSurface;
+use earmark_store::{CanonicalStore, GitCanonicalStore};
 use serde_json::json;
+use tempfile::tempdir;
 
 #[test]
 fn test_boundary_validation() {
@@ -13,7 +13,7 @@ fn test_boundary_validation() {
     store.init_layout().unwrap();
     let index = DerivedIndex::open(tmp.path()).unwrap();
     let providers = ProviderRegistry::default();
-    
+
     let surface = RuntimeToolSurface {
         store: &store,
         index: &index,
@@ -26,23 +26,47 @@ fn test_boundary_validation() {
     };
 
     // 1. Invalid class name
-    let res = surface.deposit_object("InvalidClass".to_string(), None, None, json!("body"), prov.clone());
+    let res = surface.deposit_object(
+        "InvalidClass".to_string(),
+        None,
+        None,
+        json!("body"),
+        prov.clone(),
+    );
     assert!(res.is_err());
     println!("Invalid class error: {:?}", res.err().unwrap());
 
     // 2. Title too long
     let long_title = "a".repeat(1000);
-    let res = surface.deposit_object("valid_class".to_string(), None, Some(long_title), json!("body"), prov.clone());
+    let res = surface.deposit_object(
+        "valid_class".to_string(),
+        None,
+        Some(long_title),
+        json!("body"),
+        prov.clone(),
+    );
     assert!(res.is_err());
     println!("Long title error: {:?}", res.err().unwrap());
 
     // 3. Payload too large
     let huge_payload = "a".repeat(11 * 1024 * 1024); // 11 MiB
-    let res = surface.deposit_object("valid_class".to_string(), None, None, json!(huge_payload), prov.clone());
+    let res = surface.deposit_object(
+        "valid_class".to_string(),
+        None,
+        None,
+        json!(huge_payload),
+        prov.clone(),
+    );
     assert!(res.is_err());
     println!("Huge payload error: {:?}", res.err().unwrap());
 
     // 4. Valid deposit
-    let res = surface.deposit_object("valid_class".to_string(), None, Some("Short Title".to_string()), json!("Short body"), prov.clone());
+    let res = surface.deposit_object(
+        "valid_class".to_string(),
+        None,
+        Some("Short Title".to_string()),
+        json!("Short body"),
+        prov.clone(),
+    );
     assert!(res.is_ok());
 }

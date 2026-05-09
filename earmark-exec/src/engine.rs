@@ -1,30 +1,26 @@
-use std::collections::{BTreeSet, HashMap, VecDeque};
 use chrono::Utc;
-use earmark_core::{
-    Kind, RunStatus, ScalarOrRef, TokenRecord, VersionId, VersionRef,
-};
-use earmark_store::CanonicalStore;
-use earmark_index::DerivedIndex;
 use earmark_connected_context::{
-    CompiledContextCompiler, DEFAULT_COMPILED_CONTEXT_COMPILER, WorkSurfaceManifest,
+    CompiledContextCompiler, WorkSurfaceManifest, DEFAULT_COMPILED_CONTEXT_COMPILER,
 };
+use earmark_core::{Kind, RunStatus, ScalarOrRef, TokenRecord, VersionId, VersionRef};
+use earmark_index::DerivedIndex;
+use earmark_store::CanonicalStore;
+use std::collections::{BTreeSet, HashMap, VecDeque};
 
 use crate::error::ExecError;
+use crate::handoff::load_handoff;
+use crate::helpers::{compile_workflow, new_run_record, record_transition};
 use crate::ir::{WorkflowRunOutcome, WorkflowRunRequest};
-use crate::provider::ProviderService;
-use crate::validation::{
-    deadlock_warnings, reachability_warnings, transition_is_ready,
-    edge_condition_allows, entry_transition_ids, incoming_edges, outgoing_edges,
-};
-use crate::helpers::{
-    compile_workflow, new_run_record, record_transition,
-};
 use crate::persistence::persist_run_record;
+use crate::provider::ProviderService;
 use crate::resolution::{
     load_system_definition, load_workflow, resolve_continuation_inputs, resolve_version_for_kind,
 };
-use crate::handoff::load_handoff;
 use crate::state::ExecutionState;
+use crate::validation::{
+    deadlock_warnings, edge_condition_allows, entry_transition_ids, incoming_edges, outgoing_edges,
+    reachability_warnings, transition_is_ready,
+};
 
 pub struct ExecutionEngine<'a, S: CanonicalStore> {
     pub store: &'a S,
@@ -45,7 +41,10 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
         }
     }
 
-    pub fn run_workflow(&self, request: WorkflowRunRequest) -> Result<WorkflowRunOutcome, ExecError> {
+    pub fn run_workflow(
+        &self,
+        request: WorkflowRunRequest,
+    ) -> Result<WorkflowRunOutcome, ExecError> {
         self.run_workflow_with_context_compiler(request, &DEFAULT_COMPILED_CONTEXT_COMPILER)
     }
 
@@ -183,17 +182,15 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                 compiled_context: &mut compiled_context,
             };
 
-            if let Err(error) =
-                self.execute_transition(
-                    &request,
-                    &system,
-                    &ir,
-                    transition,
-                    &mut state,
-                    &mut record,
-                    context_compiler,
-                )
-            {
+            if let Err(error) = self.execute_transition(
+                &request,
+                &system,
+                &ir,
+                transition,
+                &mut state,
+                &mut record,
+                context_compiler,
+            ) {
                 record.status = RunStatus::Failed;
                 record.final_marking = current_marking
                     .iter()
@@ -305,6 +302,4 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
             governance_events,
         })
     }
-
-
 }

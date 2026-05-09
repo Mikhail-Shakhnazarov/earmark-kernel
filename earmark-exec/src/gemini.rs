@@ -1,11 +1,11 @@
-use earmark_core::{ProviderProfile, ProviderRequest, ProviderResponse};
-#[cfg(feature = "gemini")]
-use earmark_core::ProviderUsage;
 use crate::{ProviderAdapter, ProviderFailure, ProviderFailureKind};
 #[cfg(feature = "gemini")]
-use std::collections::BTreeMap;
-#[cfg(feature = "gemini")]
 use chrono::Utc;
+#[cfg(feature = "gemini")]
+use earmark_core::ProviderUsage;
+use earmark_core::{ProviderProfile, ProviderRequest, ProviderResponse};
+#[cfg(feature = "gemini")]
+use std::collections::BTreeMap;
 
 #[cfg(feature = "gemini")]
 use reqwest::blocking::Client;
@@ -69,7 +69,7 @@ impl ProviderAdapter for GeminiAdapter {
             };
 
             let mut contents = Vec::new();
-            
+
             // System instruction
             let mut system_instruction = None;
             if !request.instruction_text.is_empty() {
@@ -80,9 +80,15 @@ impl ProviderAdapter for GeminiAdapter {
 
             // User content
             let user_text = if let Some(path) = &request.work_surface_manifest {
-                format!("Work surface manifest: {}\n\nPlease process according to instructions.", path)
+                format!(
+                    "Work surface manifest: {}\n\nPlease process according to instructions.",
+                    path
+                )
             } else {
-                format!("Inputs: {:?}\n\nPlease process according to instructions.", request.inputs)
+                format!(
+                    "Inputs: {:?}\n\nPlease process according to instructions.",
+                    request.inputs
+                )
             };
 
             contents.push(serde_json::json!({
@@ -100,7 +106,8 @@ impl ProviderAdapter for GeminiAdapter {
 
             let mut generation_config = serde_json::json!({});
             if request.response_contract.format == "json" {
-                generation_config["responseMimeType"] = serde_json::Value::String("application/json".to_string());
+                generation_config["responseMimeType"] =
+                    serde_json::Value::String("application/json".to_string());
             }
 
             // Budget enforcement
@@ -112,9 +119,10 @@ impl ProviderAdapter for GeminiAdapter {
 
             let mut client_builder = Client::builder();
             if let Some(max_latency) = profile.budget.max_latency_ms {
-                client_builder = client_builder.timeout(std::time::Duration::from_millis(max_latency as u64));
+                client_builder =
+                    client_builder.timeout(std::time::Duration::from_millis(max_latency as u64));
             }
-            
+
             let client = client_builder.build().map_err(|e| {
                 ProviderFailure::new(ProviderFailureKind::ProviderUnavailable, e.to_string())
             })?;
@@ -128,7 +136,10 @@ impl ProviderAdapter for GeminiAdapter {
                     if e.is_timeout() {
                         ProviderFailure::new(ProviderFailureKind::Timeout, e.to_string())
                     } else {
-                        ProviderFailure::new(ProviderFailureKind::ProviderUnavailable, e.to_string())
+                        ProviderFailure::new(
+                            ProviderFailureKind::ProviderUnavailable,
+                            e.to_string(),
+                        )
                     }
                 })?;
 
@@ -136,9 +147,17 @@ impl ProviderAdapter for GeminiAdapter {
             if !status.is_success() {
                 let err_text = response.text().unwrap_or_default();
                 return Err(match status.as_u16() {
-                    401 | 403 => ProviderFailure::new(ProviderFailureKind::AuthenticationFailed, err_text),
-                    429 => ProviderFailure::new(ProviderFailureKind::RateLimited, "Rate limit exceeded"),
-                    _ => ProviderFailure::new(ProviderFailureKind::ProviderUnavailable, format!("HTTP {}: {}", status, err_text)),
+                    401 | 403 => {
+                        ProviderFailure::new(ProviderFailureKind::AuthenticationFailed, err_text)
+                    }
+                    429 => ProviderFailure::new(
+                        ProviderFailureKind::RateLimited,
+                        "Rate limit exceeded",
+                    ),
+                    _ => ProviderFailure::new(
+                        ProviderFailureKind::ProviderUnavailable,
+                        format!("HTTP {}: {}", status, err_text),
+                    ),
                 });
             }
 
@@ -162,7 +181,7 @@ impl ProviderAdapter for GeminiAdapter {
                     input_tokens: meta["promptTokenCount"].as_u64().map(|v| v as u32),
                     output_tokens: meta["candidatesTokenCount"].as_u64().map(|v| v as u32),
                     estimated_cost_usd: None,
-                    latency_ms: None, 
+                    latency_ms: None,
                 });
             }
 

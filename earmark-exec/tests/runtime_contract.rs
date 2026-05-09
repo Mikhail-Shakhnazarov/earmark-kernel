@@ -1,20 +1,16 @@
-use std::sync::Arc;
-use std::collections::BTreeMap;
 use chrono::Utc;
 use earmark_core::{
-    ProviderRequest, ProviderResponse, ProviderUsage, Kind, 
-    ObjectRef, VersionRef, 
-    SystemDefinition, RuntimeProfile, 
-    to_yaml, InstructionPayload, MarkdownBody, CompiledContextTemplate,
-    CompiledContextSelect, CompiledContextRender, CompiledContextVisibility,
-    ClassDefinition, JsonSchemaRef, ClassStandingRules,
+    to_yaml, ClassDefinition, ClassStandingRules, CompiledContextRender, CompiledContextSelect,
+    CompiledContextTemplate, CompiledContextVisibility, InstructionPayload, JsonSchemaRef, Kind,
+    MarkdownBody, ObjectRef, ProviderRequest, ProviderResponse, ProviderUsage, RuntimeProfile,
+    SystemDefinition, VersionRef,
 };
-use earmark_exec::{
-    ProviderAdapter, ProviderFailure, ProviderRegistry, WorkflowRunRequest,
-};
+use earmark_exec::{ProviderAdapter, ProviderFailure, ProviderRegistry, WorkflowRunRequest};
+use earmark_index::DerivedIndex;
 use earmark_runtime_tools::RuntimeToolSurface;
 use earmark_store::{CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload};
-use earmark_index::DerivedIndex;
+use std::collections::BTreeMap;
+use std::sync::Arc;
 use tempfile::tempdir;
 
 struct MockAdapter;
@@ -63,7 +59,7 @@ fn test_six_step_flow_via_runtime_tool_surface() {
     };
 
     // SETUP: Define System, Class, Instruction, Projection, Pattern
-    
+
     let note = StoredObject::new(
         Kind::Object,
         Some("source_note".to_string()),
@@ -182,7 +178,10 @@ edges:
     condition: null
 guards: []
 "#,
-        proj_ref.id.as_str(), proj_ref.version_id.as_str(), instr_ref.id.as_str(), instr_ref.version_id.as_str()
+        proj_ref.id.as_str(),
+        proj_ref.version_id.as_str(),
+        instr_ref.id.as_str(),
+        instr_ref.version_id.as_str()
     );
     let workflow_obj = StoredObject::new(
         Kind::Workflow,
@@ -203,7 +202,10 @@ guards: []
         classes: vec![VersionRef::new(class_ref.id, class_ref.version_id)],
         instructions: vec![VersionRef::new(instr_ref.id, instr_ref.version_id)],
         policies: vec![],
-        workflows: vec![VersionRef::new(workflow_ref.id.clone(), workflow_ref.version_id.clone())],
+        workflows: vec![VersionRef::new(
+            workflow_ref.id.clone(),
+            workflow_ref.version_id.clone(),
+        )],
         compiled_contexts: vec![VersionRef::new(proj_ref.id, proj_ref.version_id)],
         provider_profiles: vec![],
         default_compiled_context: None,
@@ -231,17 +233,27 @@ guards: []
 
     // EXECUTION
 
-    let outcome = surface.run_workflow(WorkflowRunRequest {
-        run_id: "run_1".to_string(),
-        system_definition: system_vref,
-        workflow: VersionRef::new(workflow_ref.id, workflow_ref.version_id),
-        inputs: vec![ObjectRef::new(note_ref.id, note_ref.version_id, Kind::Object, Some("source_note".to_string()))],
-        handoff_manifest: None,
-        transition_assignment: None,
-        operator_approved: true,
-    }).unwrap();
+    let outcome = surface
+        .run_workflow(WorkflowRunRequest {
+            run_id: "run_1".to_string(),
+            system_definition: system_vref,
+            workflow: VersionRef::new(workflow_ref.id, workflow_ref.version_id),
+            inputs: vec![ObjectRef::new(
+                note_ref.id,
+                note_ref.version_id,
+                Kind::Object,
+                Some("source_note".to_string()),
+            )],
+            handoff_manifest: None,
+            transition_assignment: None,
+            operator_approved: true,
+        })
+        .unwrap();
 
     assert_eq!(outcome.record.run_id, "run_1");
     assert_eq!(outcome.emitted_objects.len(), 1);
-    assert_eq!(outcome.emitted_objects[0].class, Some("finding".to_string()));
+    assert_eq!(
+        outcome.emitted_objects[0].class,
+        Some("finding".to_string())
+    );
 }

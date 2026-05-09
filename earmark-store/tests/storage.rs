@@ -279,7 +279,10 @@ fn commit_history_advances_and_records_message() {
     let repo = gix::open(dir.path()).unwrap();
     let head_id = repo.head_id().unwrap().detach();
     let head_commit = repo.find_commit(head_id).unwrap();
-    assert_eq!(head_commit.message_raw_sloppy().to_string(), "second commit");
+    assert_eq!(
+        head_commit.message_raw_sloppy().to_string(),
+        "second commit"
+    );
     assert_eq!(head_commit.parent_ids().count(), 1);
 }
 
@@ -316,7 +319,12 @@ fn signature_precedence_env_over_config_then_fallback() {
         std::env::remove_var("EARMARK_GIT_NAME");
         std::env::remove_var("EARMARK_GIT_EMAIL");
     }
-    store.write_batch(&BatchWrite { message: "cfg".into(), objects: vec![obj()] }).unwrap();
+    store
+        .write_batch(&BatchWrite {
+            message: "cfg".into(),
+            objects: vec![obj()],
+        })
+        .unwrap();
     let repo = gix::open(dir.path()).unwrap();
     let commit = repo.find_commit(repo.head_id().unwrap().detach()).unwrap();
     let sig = commit.author().unwrap();
@@ -327,7 +335,12 @@ fn signature_precedence_env_over_config_then_fallback() {
         std::env::set_var("EARMARK_GIT_NAME", "env-name");
         std::env::set_var("EARMARK_GIT_EMAIL", "env@example.com");
     }
-    store.write_batch(&BatchWrite { message: "env".into(), objects: vec![obj()] }).unwrap();
+    store
+        .write_batch(&BatchWrite {
+            message: "env".into(),
+            objects: vec![obj()],
+        })
+        .unwrap();
     let repo = gix::open(dir.path()).unwrap();
     let commit = repo.find_commit(repo.head_id().unwrap().detach()).unwrap();
     let sig = commit.author().unwrap();
@@ -338,8 +351,17 @@ fn signature_precedence_env_over_config_then_fallback() {
         std::env::remove_var("EARMARK_GIT_NAME");
         std::env::remove_var("EARMARK_GIT_EMAIL");
     }
-    std::fs::write(dir.path().join(".git/config"), "[user]\n\tname = \n\temail = \n").unwrap();
-    store.write_batch(&BatchWrite { message: "fallback".into(), objects: vec![obj()] }).unwrap();
+    std::fs::write(
+        dir.path().join(".git/config"),
+        "[user]\n\tname = \n\temail = \n",
+    )
+    .unwrap();
+    store
+        .write_batch(&BatchWrite {
+            message: "fallback".into(),
+            objects: vec![obj()],
+        })
+        .unwrap();
     let repo = gix::open(dir.path()).unwrap();
     let commit = repo.find_commit(repo.head_id().unwrap().detach()).unwrap();
     let sig = commit.author().unwrap();

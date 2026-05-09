@@ -6,6 +6,7 @@ use std::{
 
 mod backend;
 
+use crate::backend::{GitBackend, GixBackend};
 use chrono::Utc;
 use earmark_core::{
     to_json_pretty, Envelope, HeaderValue, Kind, ObjectId, ObjectRef, PayloadRef, Provenance,
@@ -14,7 +15,6 @@ use earmark_core::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use walkdir::WalkDir;
-use crate::backend::{GixBackend, GitBackend};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -70,6 +70,37 @@ impl StoredPayload {
 pub struct RepositoryManifest {
     pub schema_version: String,
     pub initialized_at: Timestamp,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkspaceLayoutStatus {
+    pub root_exists: bool,
+    pub git_exists: bool,
+    pub manifest_exists: bool,
+    pub canonical_dir_exists: bool,
+    pub objects_dir_exists: bool,
+    pub payloads_dir_exists: bool,
+    pub heads_dir_exists: bool,
+    pub derived_dir_exists: bool,
+    pub work_surfaces_dir_exists: bool,
+    pub declarations_dir_exists: bool,
+    pub corpus_dir_exists: bool,
+}
+
+impl WorkspaceLayoutStatus {
+    pub fn is_initialized(&self) -> bool {
+        self.root_exists
+            && self.git_exists
+            && self.manifest_exists
+            && self.canonical_dir_exists
+            && self.objects_dir_exists
+            && self.payloads_dir_exists
+            && self.heads_dir_exists
+            && self.derived_dir_exists
+            && self.work_surfaces_dir_exists
+            && self.declarations_dir_exists
+            && self.corpus_dir_exists
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -210,11 +241,14 @@ impl GitCanonicalStore {
     }
 
     fn version_dir(&self, object_id: &ObjectId, version_id: &VersionId) -> PathBuf {
-        self.objects_dir().join(object_id.as_str()).join(version_id.as_str())
+        self.objects_dir()
+            .join(object_id.as_str())
+            .join(version_id.as_str())
     }
 
     fn head_path(&self, object_id: &ObjectId) -> PathBuf {
-        self.heads_dir().join(format!("{}.json", object_id.as_str()))
+        self.heads_dir()
+            .join(format!("{}.json", object_id.as_str()))
     }
 
     fn payload_path(&self, payload_ref: &PayloadRef, encoding: PayloadEncoding) -> PathBuf {
@@ -232,6 +266,22 @@ impl GitCanonicalStore {
                 "unsupported extension: {:?}",
                 other
             ))),
+        }
+    }
+
+    pub fn layout_status(&self) -> WorkspaceLayoutStatus {
+        WorkspaceLayoutStatus {
+            root_exists: self.root.exists(),
+            git_exists: self.root.join(".git").exists(),
+            manifest_exists: self.manifest_path().exists(),
+            canonical_dir_exists: self.canonical_dir().exists(),
+            objects_dir_exists: self.objects_dir().exists(),
+            payloads_dir_exists: self.payloads_dir().exists(),
+            heads_dir_exists: self.heads_dir().exists(),
+            derived_dir_exists: self.derived_dir().exists(),
+            work_surfaces_dir_exists: self.work_surfaces_dir().exists(),
+            declarations_dir_exists: self.declarations_dir().exists(),
+            corpus_dir_exists: self.corpus_dir().exists(),
         }
     }
 }
@@ -305,48 +355,52 @@ impl CanonicalStore for GitCanonicalStore {
 
         const MAX_BATCH_SIZE: usize = 32 * 1024 * 1024; // 32 MiB
         if total_size > MAX_BATCH_SIZE {
-            return Err(StoreError::Core(earmark_core::CoreError::PayloadTooLarge(total_size, MAX_BATCH_SIZE)));
+            return Err(StoreError::Core(earmark_core::CoreError::PayloadTooLarge(
+                total_size,
+                MAX_BATCH_SIZE,
+            )));
         }
 
         let write_result: Result<(), StoreError> = (|| {
             for object in &batch.objects {
-            if object.payload.payload_ref() != object.envelope.payload_ref {
-                return Err(StoreError::PayloadRefMismatch);
-            }
+                if object.payload.payload_ref() != object.envelope.payload_ref {
+                    return Err(StoreError::PayloadRefMismatch);
+                }
 
-            let payload_path =
-                self.payload_path(&object.envelope.payload_ref, object.payload.format);
-            if !payload_path.exists() {
-                fs::write(&payload_path, &object.payload.bytes)?;
-                created_files.push(payload_path.clone());
-            }
+                let payload_path =
+                    self.payload_path(&object.envelope.payload_ref, object.payload.format);
+                if !payload_path.exists() {
+                    fs::write(&payload_path, &object.payload.bytes)?;
+                    created_files.push(payload_path.clone());
+                }
 
-            let version_dir = self.version_dir(&object.envelope.id, &object.envelope.version_id);
-            if !version_dir.exists() {
-                created_dirs.push(version_dir.clone());
+                let version_dir =
+                    self.version_dir(&object.envelope.id, &object.envelope.version_id);
+                if !version_dir.exists() {
+                    created_dirs.push(version_dir.clone());
+                }
+                fs::create_dir_all(&version_dir)?;
+                let envelope_path = version_dir.join("envelope.json");
+                fs::write(&envelope_path, to_json_pretty(&object.envelope)?)?;
+                created_files.push(envelope_path);
+                let payload_version_path =
+                    version_dir.join(format!("payload.{}", object.payload.format.extension()));
+                fs::write(&payload_version_path, &object.payload.bytes)?;
+                created_files.push(payload_version_path);
+                let payload_ref_path = version_dir.join("payload_ref.txt");
+                fs::write(&payload_ref_path, object.envelope.payload_ref.0.as_bytes())?;
+                created_files.push(payload_ref_path);
+                let head_path = self.head_path(&object.envelope.id);
+                let head_existed = head_path.exists();
+                if head_existed && !overwritten_heads.contains_key(&head_path) {
+                    overwritten_heads.insert(head_path.clone(), fs::read(&head_path)?);
+                }
+                fs::write(&head_path, to_json_pretty(&object.envelope.version_ref())?)?;
+                if !head_existed {
+                    created_files.push(head_path);
+                }
+                written.push(object.envelope.version_ref());
             }
-            fs::create_dir_all(&version_dir)?;
-            let envelope_path = version_dir.join("envelope.json");
-            fs::write(&envelope_path, to_json_pretty(&object.envelope)?)?;
-            created_files.push(envelope_path);
-            let payload_version_path =
-                version_dir.join(format!("payload.{}", object.payload.format.extension()));
-            fs::write(&payload_version_path, &object.payload.bytes)?;
-            created_files.push(payload_version_path);
-            let payload_ref_path = version_dir.join("payload_ref.txt");
-            fs::write(&payload_ref_path, object.envelope.payload_ref.0.as_bytes())?;
-            created_files.push(payload_ref_path);
-            let head_path = self.head_path(&object.envelope.id);
-            let head_existed = head_path.exists();
-            if head_existed && !overwritten_heads.contains_key(&head_path) {
-                overwritten_heads.insert(head_path.clone(), fs::read(&head_path)?);
-            }
-            fs::write(&head_path, to_json_pretty(&object.envelope.version_ref())?)?;
-            if !head_existed {
-                created_files.push(head_path);
-            }
-            written.push(object.envelope.version_ref());
-        }
             self.backend.commit_paths(&self.root, &batch.message)?;
             Ok(())
         })();
@@ -368,11 +422,7 @@ impl CanonicalStore for GitCanonicalStore {
             }
             for (head_path, previous_contents) in overwritten_heads.iter().rev() {
                 if let Err(e) = fs::write(head_path, previous_contents) {
-                    rollback_failures.push(format!(
-                        "restore head {}: {}",
-                        head_path.display(),
-                        e
-                    ));
+                    rollback_failures.push(format!("restore head {}: {}", head_path.display(), e));
                 }
             }
             if rollback_failures.is_empty() {
@@ -433,7 +483,10 @@ impl CanonicalStore for GitCanonicalStore {
             let entry = entry?;
             if entry.file_type()?.is_dir() {
                 let version_id = entry.file_name().to_string_lossy().to_string();
-                refs.push(VersionRef::new(object_id.clone(), VersionId::parse(version_id)?));
+                refs.push(VersionRef::new(
+                    object_id.clone(),
+                    VersionId::parse(version_id)?,
+                ));
             }
         }
         refs.sort_by(|a, b| a.version_id.as_str().cmp(b.version_id.as_str()));
@@ -474,7 +527,9 @@ impl CanonicalStore for GitCanonicalStore {
                             .map(|s| s.starts_with("payload."))
                             .unwrap_or(false)
                     })
-                    .ok_or_else(|| StoreError::MissingPayload(envelope.version_id.as_str().to_string()))?;
+                    .ok_or_else(|| {
+                        StoreError::MissingPayload(envelope.version_id.as_str().to_string())
+                    })?;
                 let payload = StoredPayload::new(
                     Self::infer_encoding(&payload_path)?,
                     fs::read(payload_path)?,

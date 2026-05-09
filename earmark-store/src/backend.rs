@@ -12,19 +12,32 @@ pub(crate) trait GitBackend {
 pub(crate) struct GixBackend;
 
 impl GixBackend {
-    fn resolve_signature(&self, repo: &gix::Repository) -> Result<gix::actor::Signature, StoreError> {
+    fn resolve_signature(
+        &self,
+        repo: &gix::Repository,
+    ) -> Result<gix::actor::Signature, StoreError> {
         let config = repo.config_snapshot();
 
         let name = std::env::var("EARMARK_GIT_NAME")
             .ok()
             .filter(|v| !v.trim().is_empty())
-            .or_else(|| config.string("user.name").map(|v| v.to_string()).filter(|v| !v.trim().is_empty()))
+            .or_else(|| {
+                config
+                    .string("user.name")
+                    .map(|v| v.to_string())
+                    .filter(|v| !v.trim().is_empty())
+            })
             .unwrap_or_else(|| "earmark".to_string());
 
         let email = std::env::var("EARMARK_GIT_EMAIL")
             .ok()
             .filter(|v| !v.trim().is_empty())
-            .or_else(|| config.string("user.email").map(|v| v.to_string()).filter(|v| !v.trim().is_empty()))
+            .or_else(|| {
+                config
+                    .string("user.email")
+                    .map(|v| v.to_string())
+                    .filter(|v| !v.trim().is_empty())
+            })
             .unwrap_or_else(|| "earmark@local".to_string());
 
         Ok(gix::actor::Signature {
@@ -68,7 +81,10 @@ impl GixBackend {
                 continue;
             }
 
-            for entry in walkdir::WalkDir::new(&scope_path).into_iter().filter_map(Result::ok) {
+            for entry in walkdir::WalkDir::new(&scope_path)
+                .into_iter()
+                .filter_map(Result::ok)
+            {
                 if !entry.file_type().is_file() {
                     continue;
                 }
@@ -124,7 +140,9 @@ impl GixBackend {
                 .map_err(|e| StoreError::GitBackend(e.to_string()))?;
         }
 
-        editor.write().map_err(|e| StoreError::GitBackend(e.to_string()))
+        editor
+            .write()
+            .map_err(|e| StoreError::GitBackend(e.to_string()))
     }
 }
 
@@ -140,13 +158,24 @@ impl GitBackend for GixBackend {
         let repo = gix::open(root).map_err(|e| StoreError::GitBackend(e.to_string()))?;
         let signature = self.resolve_signature(&repo)?;
         let tree_id = self.stage_index_and_write_tree(&repo, root)?;
-        let parent_ids: Vec<_> = repo.head_id().ok().map(|id| vec![id.detach()]).unwrap_or_default();
+        let parent_ids: Vec<_> = repo
+            .head_id()
+            .ok()
+            .map(|id| vec![id.detach()])
+            .unwrap_or_default();
 
         let mut time_buf = gix::date::parse::TimeBuf::default();
         let sig_ref = signature.to_ref(&mut time_buf);
 
-        repo.commit_as(sig_ref, sig_ref, "HEAD", message, tree_id.detach(), parent_ids)
-            .map_err(|e| StoreError::GitBackend(e.to_string()))?;
+        repo.commit_as(
+            sig_ref,
+            sig_ref,
+            "HEAD",
+            message,
+            tree_id.detach(),
+            parent_ids,
+        )
+        .map_err(|e| StoreError::GitBackend(e.to_string()))?;
 
         Ok(())
     }

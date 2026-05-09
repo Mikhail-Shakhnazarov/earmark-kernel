@@ -1,16 +1,14 @@
-use std::collections::{BTreeSet, HashMap, VecDeque};
 use earmark_core::{
     ChangeSetDraft, ChangeSetValidationResult, ClassDefinition, Kind, ObjectId, ObjectRef,
     Standing, SystemDefinition, WorkflowGuard,
 };
-use earmark_store::{CanonicalStore, StoredObject};
 use earmark_index::DerivedIndex;
+use earmark_store::{CanonicalStore, StoredObject};
+use std::collections::{BTreeSet, HashMap, VecDeque};
 
 use crate::error::ExecError;
+use crate::ir::{ExecutionEdge, ExecutionIr, ExecutionTransition, WorkflowRunRequest};
 use crate::resolution::load_class_definition;
-use crate::ir::{
-    ExecutionEdge, ExecutionIr, ExecutionTransition, WorkflowRunRequest,
-};
 
 pub fn reachability_warnings(ir: &ExecutionIr) -> Vec<String> {
     if ir.transitions.is_empty() {
@@ -442,13 +440,15 @@ pub(crate) fn validate_relation_object<S: CanonicalStore>(
     if store.read_head(&relation.source.id)?.is_none() {
         failures.push(format!(
             "created relation {} references missing source {}",
-            object_id.as_str(), relation.source.id.as_str()
+            object_id.as_str(),
+            relation.source.id.as_str()
         ));
     }
     if store.read_head(&relation.target.id)?.is_none() {
         failures.push(format!(
             "created relation {} references missing target {}",
-            object_id.as_str(), relation.target.id.as_str()
+            object_id.as_str(),
+            relation.target.id.as_str()
         ));
     }
     if let Some(source_class) = &relation.source.class {

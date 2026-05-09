@@ -1,5 +1,5 @@
-use earmark_declarations::*;
 use earmark_core::*;
+use earmark_declarations::*;
 use proptest::prelude::*;
 
 proptest! {
@@ -25,9 +25,9 @@ proptest! {
             }
         };
 
-        // There is no public way to call validate_standing_token_for_dimension directly, 
+        // There is no public way to call validate_standing_token_for_dimension directly,
         // but we can test it via validate_standing_policy if we construct one.
-        
+
         let policy = StandingPolicy {
             name: "test_policy".to_string(),
             version: "1.0.0".to_string(),

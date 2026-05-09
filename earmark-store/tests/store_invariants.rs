@@ -1,5 +1,5 @@
-use earmark_store::*;
 use earmark_core::*;
+use earmark_store::*;
 use proptest::prelude::*;
 use tempfile::tempdir;
 

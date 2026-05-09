@@ -22,11 +22,15 @@ impl ObjectId {
     pub fn parse(s: impl Into<String>) -> Result<Self, CoreError> {
         let s = s.into();
         if s.len() > 128 {
-            return Err(CoreError::InvalidIdentifier("length exceeds 128 characters".to_string()));
+            return Err(CoreError::InvalidIdentifier(
+                "length exceeds 128 characters".to_string(),
+            ));
         }
-        
+
         if !s.starts_with("obj_") {
-            return Err(CoreError::InvalidIdentifier("must start with obj_".to_string()));
+            return Err(CoreError::InvalidIdentifier(
+                "must start with obj_".to_string(),
+            ));
         }
 
         let hex_part = &s[4..];
@@ -36,8 +40,7 @@ impl ObjectId {
                 .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
         {
             return Err(CoreError::InvalidIdentifier(
-                "invalid format: expected obj_ followed by 32 lowercase hex characters"
-                    .to_string(),
+                "invalid format: expected obj_ followed by 32 lowercase hex characters".to_string(),
             ));
         }
 
@@ -72,17 +75,27 @@ impl VersionId {
     pub fn parse(s: impl Into<String>) -> Result<Self, CoreError> {
         let s = s.into();
         if s.len() > 128 {
-            return Err(CoreError::InvalidIdentifier("length exceeds 128 characters".to_string()));
+            return Err(CoreError::InvalidIdentifier(
+                "length exceeds 128 characters".to_string(),
+            ));
         }
 
         // Pattern: ver_[a-z0-9]{32}
         if !s.starts_with("ver_") {
-            return Err(CoreError::InvalidIdentifier("must start with ver_".to_string()));
+            return Err(CoreError::InvalidIdentifier(
+                "must start with ver_".to_string(),
+            ));
         }
 
         let hex_part = &s[4..];
-        if hex_part.len() != 32 || !hex_part.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit()) {
-            return Err(CoreError::InvalidIdentifier("invalid format: expected ver_ followed by 32 lowercase hex characters".to_string()));
+        if hex_part.len() != 32
+            || !hex_part
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
+        {
+            return Err(CoreError::InvalidIdentifier(
+                "invalid format: expected ver_ followed by 32 lowercase hex characters".to_string(),
+            ));
         }
 
         Ok(Self(s))
@@ -850,18 +863,27 @@ impl Default for TransitionAssignmentId {
 }
 
 impl TransitionAssignmentId {
-
     pub fn parse(s: impl Into<String>) -> Result<Self, CoreError> {
         let s = s.into();
         if s.len() > 128 {
-            return Err(CoreError::InvalidIdentifier("length exceeds 128 characters".to_string()));
+            return Err(CoreError::InvalidIdentifier(
+                "length exceeds 128 characters".to_string(),
+            ));
         }
         if !s.starts_with("obj_") {
-            return Err(CoreError::InvalidIdentifier("must start with obj_".to_string()));
+            return Err(CoreError::InvalidIdentifier(
+                "must start with obj_".to_string(),
+            ));
         }
         let hex_part = &s[4..];
-        if hex_part.len() != 32 || !hex_part.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit()) {
-            return Err(CoreError::InvalidIdentifier("invalid format: expected obj_ followed by 32 lowercase hex characters".to_string()));
+        if hex_part.len() != 32
+            || !hex_part
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
+        {
+            return Err(CoreError::InvalidIdentifier(
+                "invalid format: expected obj_ followed by 32 lowercase hex characters".to_string(),
+            ));
         }
         Ok(Self(s))
     }
@@ -887,18 +909,27 @@ impl Default for ChangeSetId {
 }
 
 impl ChangeSetId {
-
     pub fn parse(s: impl Into<String>) -> Result<Self, CoreError> {
         let s = s.into();
         if s.len() > 128 {
-            return Err(CoreError::InvalidIdentifier("length exceeds 128 characters".to_string()));
+            return Err(CoreError::InvalidIdentifier(
+                "length exceeds 128 characters".to_string(),
+            ));
         }
         if !s.starts_with("obj_") {
-            return Err(CoreError::InvalidIdentifier("must start with obj_".to_string()));
+            return Err(CoreError::InvalidIdentifier(
+                "must start with obj_".to_string(),
+            ));
         }
         let hex_part = &s[4..];
-        if hex_part.len() != 32 || !hex_part.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit()) {
-            return Err(CoreError::InvalidIdentifier("invalid format: expected obj_ followed by 32 lowercase hex characters".to_string()));
+        if hex_part.len() != 32
+            || !hex_part
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
+        {
+            return Err(CoreError::InvalidIdentifier(
+                "invalid format: expected obj_ followed by 32 lowercase hex characters".to_string(),
+            ));
         }
         Ok(Self(s))
     }
@@ -924,18 +955,27 @@ impl Default for HandoffManifestId {
 }
 
 impl HandoffManifestId {
-
     pub fn parse(s: impl Into<String>) -> Result<Self, CoreError> {
         let s = s.into();
         if s.len() > 128 {
-            return Err(CoreError::InvalidIdentifier("length exceeds 128 characters".to_string()));
+            return Err(CoreError::InvalidIdentifier(
+                "length exceeds 128 characters".to_string(),
+            ));
         }
         if !s.starts_with("obj_") {
-            return Err(CoreError::InvalidIdentifier("must start with obj_".to_string()));
+            return Err(CoreError::InvalidIdentifier(
+                "must start with obj_".to_string(),
+            ));
         }
         let hex_part = &s[4..];
-        if hex_part.len() != 32 || !hex_part.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit()) {
-            return Err(CoreError::InvalidIdentifier("invalid format: expected obj_ followed by 32 lowercase hex characters".to_string()));
+        if hex_part.len() != 32
+            || !hex_part
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
+        {
+            return Err(CoreError::InvalidIdentifier(
+                "invalid format: expected obj_ followed by 32 lowercase hex characters".to_string(),
+            ));
         }
         Ok(Self(s))
     }
@@ -1190,9 +1230,9 @@ pub fn parse_markdown_frontmatter<T: DeserializeOwned>(
     }
 
     let rest = &trimmed["---\n".len()..];
-    let (yaml, body) = rest
-        .split_once("\n---\n")
-        .ok_or_else(|| CoreError::InvalidFrontmatter("missing closing frontmatter delimiter".to_string()))?;
+    let (yaml, body) = rest.split_once("\n---\n").ok_or_else(|| {
+        CoreError::InvalidFrontmatter("missing closing frontmatter delimiter".to_string())
+    })?;
 
     let meta = serde_yaml::from_str::<T>(yaml)?;
     Ok((meta, body.trim_start_matches('\n').to_string()))
@@ -1248,20 +1288,29 @@ pub const MAX_OBJECT_SIZE: usize = 10 * 1024 * 1024; // 10 MiB
 
 pub fn validate_class_name(name: &str) -> Result<(), CoreError> {
     if name.is_empty() {
-        return Err(CoreError::InvalidIdentifier("class name cannot be empty".to_string()));
+        return Err(CoreError::InvalidIdentifier(
+            "class name cannot be empty".to_string(),
+        ));
     }
     if name.len() > 64 {
-        return Err(CoreError::InvalidIdentifier("class name too long (max 64 chars)".to_string()));
+        return Err(CoreError::InvalidIdentifier(
+            "class name too long (max 64 chars)".to_string(),
+        ));
     }
     let mut chars = name.chars();
     if let Some(first) = chars.next() {
         if !first.is_ascii_lowercase() {
-            return Err(CoreError::InvalidIdentifier("class name must start with a lowercase letter".to_string()));
+            return Err(CoreError::InvalidIdentifier(
+                "class name must start with a lowercase letter".to_string(),
+            ));
         }
     }
     for c in chars {
         if !c.is_ascii_lowercase() && !c.is_ascii_digit() && c != '_' {
-            return Err(CoreError::InvalidIdentifier(format!("invalid character in class name: {}", c)));
+            return Err(CoreError::InvalidIdentifier(format!(
+                "invalid character in class name: {}",
+                c
+            )));
         }
     }
     Ok(())
@@ -1269,7 +1318,10 @@ pub fn validate_class_name(name: &str) -> Result<(), CoreError> {
 
 pub fn validate_title(title: &str) -> Result<(), CoreError> {
     if title.len() > 512 {
-        return Err(CoreError::InvalidIdentifier(format!("title too long: {} bytes (max 512)", title.len())));
+        return Err(CoreError::InvalidIdentifier(format!(
+            "title too long: {} bytes (max 512)",
+            title.len()
+        )));
     }
     Ok(())
 }
@@ -1283,15 +1335,21 @@ pub fn validate_payload_size(len: usize) -> Result<(), CoreError> {
 
 pub fn validate_env_var_name(name: &str) -> Result<(), CoreError> {
     if name.is_empty() {
-        return Err(CoreError::InvalidIdentifier("env var name cannot be empty".to_string()));
+        return Err(CoreError::InvalidIdentifier(
+            "env var name cannot be empty".to_string(),
+        ));
     }
     if name.len() > 128 {
-        return Err(CoreError::InvalidIdentifier("env var name exceeds 128 characters".to_string()));
+        return Err(CoreError::InvalidIdentifier(
+            "env var name exceeds 128 characters".to_string(),
+        ));
     }
     let mut chars = name.chars();
     if let Some(first) = chars.next() {
         if !first.is_ascii_uppercase() {
-            return Err(CoreError::InvalidIdentifier("env var name must start with an uppercase letter".to_string()));
+            return Err(CoreError::InvalidIdentifier(
+                "env var name must start with an uppercase letter".to_string(),
+            ));
         }
     }
     for c in chars {
@@ -1304,32 +1362,48 @@ pub fn validate_env_var_name(name: &str) -> Result<(), CoreError> {
 
 pub fn validate_endpoint_url(url: &str) -> Result<(), CoreError> {
     if url.is_empty() {
-        return Err(CoreError::InvalidIdentifier("endpoint URL cannot be empty".to_string()));
+        return Err(CoreError::InvalidIdentifier(
+            "endpoint URL cannot be empty".to_string(),
+        ));
     }
-    
+
     // Check for credentials in URL
     if url.contains('@') {
-        return Err(CoreError::SecurityViolation("endpoints must not contain embedded credentials".to_string()));
+        return Err(CoreError::SecurityViolation(
+            "endpoints must not contain embedded credentials".to_string(),
+        ));
     }
 
     // Check for query string or fragment
     if url.contains('?') || url.contains('#') {
-        return Err(CoreError::SecurityViolation("endpoints must not contain query strings or fragments".to_string()));
+        return Err(CoreError::SecurityViolation(
+            "endpoints must not contain query strings or fragments".to_string(),
+        ));
     }
 
     // Protocol and host validation
     if let Some(rest) = url.strip_prefix("http://") {
-        if !rest.starts_with("localhost") && !rest.starts_with("127.0.0.1") && !rest.starts_with("[::1]") {
-            return Err(CoreError::SecurityViolation("plain http endpoints only allowed for loopback development".to_string()));
+        if !rest.starts_with("localhost")
+            && !rest.starts_with("127.0.0.1")
+            && !rest.starts_with("[::1]")
+        {
+            return Err(CoreError::SecurityViolation(
+                "plain http endpoints only allowed for loopback development".to_string(),
+            ));
         }
     } else if !url.starts_with("https://") {
-        return Err(CoreError::SecurityViolation("endpoints must use https protocol".to_string()));
+        return Err(CoreError::SecurityViolation(
+            "endpoints must use https protocol".to_string(),
+        ));
     }
 
     Ok(())
 }
 
-pub fn validate_schema(payload: &serde_json::Value, schema: &serde_json::Value) -> Result<(), CoreError> {
+pub fn validate_schema(
+    payload: &serde_json::Value,
+    schema: &serde_json::Value,
+) -> Result<(), CoreError> {
     match jsonschema::validator_for(schema) {
         Ok(validator) => {
             let mut errors = validator.iter_errors(payload).peekable();

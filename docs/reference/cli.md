@@ -14,15 +14,16 @@ The Earmark CLI (`em`) is the primary interface for operators and developers. Al
 
 ### `em init`
 
-Initialize a new Earmark workspace. Creates the `.earmark/` directory, the repository-backed canonical store, and the required storage structure.
+Initialize a new Earmark workspace. This is the only command that creates workspace layout (`.earmark/`, `corpus/`, `.git/`, and index storage).
 
 ### `em doctor`
 
-Check workspace health: store integrity, index state, active system status.
+Check workspace health without repairing it. On an uninitialized root, `doctor` reports missing layout and suggests `em init`.
 
 ### `em status`
 
 Show counts of objects, assignments, change sets, and active systems.
+Requires an initialized workspace; it does not create one.
 
 ```bash
 em status
@@ -86,6 +87,7 @@ em deposit --class source_note --title "Field Notes" --body "Municipal capacity 
 ### `em query [--class <class>] [--title <query>]`
 
 Search the corpus through the derived index.
+Requires an initialized workspace; it does not create one.
 
 ```bash
 em query --class source_note

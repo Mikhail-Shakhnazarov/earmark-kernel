@@ -1,11 +1,14 @@
-use std::collections::{BTreeSet, VecDeque, BTreeMap};
-use earmark_core::{ObjectId, ObjectRef, Kind, RelationPayload, StandingConstraint, HandoffManifest, RequiredCheck, HandoffManifestId};
-use earmark_store::{CanonicalStore, StoredObject, StoredPayload};
-use earmark_index::{DerivedIndex, RelationEdge};
 use crate::error::ExecError;
-use crate::ir::{ExecutionIr, ExecutionTransition, SuccessorHandoffSpec};
-use crate::resolution::{load_class_definition};
 use crate::helpers::dedupe_strings;
+use crate::ir::{ExecutionIr, ExecutionTransition, SuccessorHandoffSpec};
+use crate::resolution::load_class_definition;
+use earmark_core::{
+    HandoffManifest, HandoffManifestId, Kind, ObjectId, ObjectRef, RelationPayload, RequiredCheck,
+    StandingConstraint,
+};
+use earmark_index::{DerivedIndex, RelationEdge};
+use earmark_store::{CanonicalStore, StoredObject, StoredPayload};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 pub(crate) fn load_handoff<S: CanonicalStore>(
     store: &S,
@@ -15,8 +18,7 @@ pub(crate) fn load_handoff<S: CanonicalStore>(
         if object.envelope.kind != Kind::HandoffManifest {
             continue;
         }
-        let manifest: HandoffManifest =
-            serde_json::from_slice(&object.payload.bytes)?;
+        let manifest: HandoffManifest = serde_json::from_slice(&object.payload.bytes)?;
         if &manifest.id == handoff_manifest_id {
             return Ok(manifest);
         }

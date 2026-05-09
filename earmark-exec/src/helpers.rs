@@ -1,17 +1,14 @@
-use std::collections::{BTreeMap, BTreeSet};
 use chrono::Utc;
+use earmark_connected_context::WorkSurfaceManifest;
 use earmark_core::{
-    Kind, ObjectRef, RunRecord, RunStatus, TokenRecord,
-    VersionRef, WorkPacket, WorkPacketConstraints, WorkSurfaceRef,
-    WorkflowDefinition, TransitionAssignment,
+    Kind, ObjectRef, RunRecord, RunStatus, TokenRecord, TransitionAssignment, VersionRef,
+    WorkPacket, WorkPacketConstraints, WorkSurfaceRef, WorkflowDefinition,
 };
 use earmark_store::{CanonicalStore, StoredObject, StoredPayload};
-use earmark_connected_context::WorkSurfaceManifest;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::error::ExecError;
-use crate::ir::{
-    ExecutionEdge, ExecutionIr, ExecutionTransition, WorkflowRunRequest,
-};
+use crate::ir::{ExecutionEdge, ExecutionIr, ExecutionTransition, WorkflowRunRequest};
 
 pub(crate) fn compile_workflow(workflow: &WorkflowDefinition) -> Result<ExecutionIr, ExecError> {
     let mut seen_ids = BTreeSet::new();
@@ -120,7 +117,10 @@ pub(crate) fn work_packet_from_compiled_context(
         expected_outputs: transition.output_contracts.clone(),
         work_surface: Some(WorkSurfaceRef {
             surface_id: manifest.surface_id.clone(),
-            manifest_path: format!(".earmark/work_surfaces/{}/manifest.json", manifest.surface_id),
+            manifest_path: format!(
+                ".earmark/work_surfaces/{}/manifest.json",
+                manifest.surface_id
+            ),
             render_mode: "prose".to_string(), // Default
         }),
         created_at: Utc::now(),
@@ -204,14 +204,19 @@ pub(crate) fn load_current_transition_assignment<S: CanonicalStore>(
             }
         }
     }
-    Err(ExecError::MissingTransitionAssignment(assignment_id.as_str().to_string()))
+    Err(ExecError::MissingTransitionAssignment(
+        assignment_id.as_str().to_string(),
+    ))
 }
 
 pub(crate) fn work_surface_manifest_path<S: CanonicalStore>(
     _store: &S,
     manifest: &WorkSurfaceManifest,
 ) -> String {
-    format!(".earmark/work_surfaces/{}/manifest.json", manifest.surface_id)
+    format!(
+        ".earmark/work_surfaces/{}/manifest.json",
+        manifest.surface_id
+    )
 }
 
 pub(crate) fn dedupe_strings(values: Vec<String>) -> Vec<String> {

@@ -239,7 +239,8 @@ fn collect_selected_objects<S: CanonicalStore>(
                 continue;
             }
 
-            let mut edges = index.relation_adjacency(&ObjectId::parse(current_object_id.clone())?)?;
+            let mut edges =
+                index.relation_adjacency(&ObjectId::parse(current_object_id.clone())?)?;
             edges.sort_by(|a, b| a.version_id.cmp(&b.version_id));
             for edge in edges {
                 if !template.select.relations.contains(&edge.relation_type) {
@@ -391,7 +392,10 @@ mod tests {
             objects: vec![WorkSurfaceObject {
                 object: ObjectRef {
                     id: ObjectId::parse("obj_00000000000000000000000000000002").unwrap(),
-                    version_id: earmark_core::VersionId::parse("ver_00000000000000000000000000000002").unwrap(),
+                    version_id: earmark_core::VersionId::parse(
+                        "ver_00000000000000000000000000000002",
+                    )
+                    .unwrap(),
                     kind: Kind::Object,
                     class: None,
                 },
@@ -483,8 +487,13 @@ mod tests {
         store.write_object(&relation(&b, &a, "linked")).unwrap();
         index.rebuild_from_store(&store).unwrap();
 
-        let selected = collect_selected_objects(&store, &index, &template_with_standing(BTreeMap::new())).unwrap();
-        let ids = selected.iter().map(|r| r.object_id.clone()).collect::<BTreeSet<_>>();
+        let selected =
+            collect_selected_objects(&store, &index, &template_with_standing(BTreeMap::new()))
+                .unwrap();
+        let ids = selected
+            .iter()
+            .map(|r| r.object_id.clone())
+            .collect::<BTreeSet<_>>();
         assert_eq!(ids.len(), 2);
         assert!(ids.contains(a.envelope.id.as_str()));
         assert!(ids.contains(b.envelope.id.as_str()));
@@ -507,8 +516,13 @@ mod tests {
         store.write_object(&relation(&c, &a, "linked")).unwrap();
         index.rebuild_from_store(&store).unwrap();
 
-        let selected = collect_selected_objects(&store, &index, &template_with_standing(BTreeMap::new())).unwrap();
-        let ids = selected.iter().map(|r| r.object_id.clone()).collect::<BTreeSet<_>>();
+        let selected =
+            collect_selected_objects(&store, &index, &template_with_standing(BTreeMap::new()))
+                .unwrap();
+        let ids = selected
+            .iter()
+            .map(|r| r.object_id.clone())
+            .collect::<BTreeSet<_>>();
         assert_eq!(ids.len(), 3);
     }
 
@@ -532,7 +546,9 @@ mod tests {
         store.write_object(&relation(&c, &d, "linked")).unwrap();
         index.rebuild_from_store(&store).unwrap();
 
-        let selected = collect_selected_objects(&store, &index, &template_with_standing(BTreeMap::new())).unwrap();
+        let selected =
+            collect_selected_objects(&store, &index, &template_with_standing(BTreeMap::new()))
+                .unwrap();
         let d_count = selected
             .iter()
             .filter(|row| row.object_id == d.envelope.id.as_str())
@@ -564,12 +580,18 @@ mod tests {
         );
         store.write_object(&accepted).unwrap();
         store.write_object(&rejected).unwrap();
-        store.write_object(&relation(&accepted, &rejected, "linked")).unwrap();
+        store
+            .write_object(&relation(&accepted, &rejected, "linked"))
+            .unwrap();
         index.rebuild_from_store(&store).unwrap();
 
         let standing = BTreeMap::from([("review".to_string(), vec!["accepted".to_string()])]);
-        let selected = collect_selected_objects(&store, &index, &template_with_standing(standing)).unwrap();
-        let ids = selected.iter().map(|r| r.object_id.clone()).collect::<BTreeSet<_>>();
+        let selected =
+            collect_selected_objects(&store, &index, &template_with_standing(standing)).unwrap();
+        let ids = selected
+            .iter()
+            .map(|r| r.object_id.clone())
+            .collect::<BTreeSet<_>>();
         assert!(ids.contains(accepted.envelope.id.as_str()));
         assert!(ids.contains(rejected.envelope.id.as_str()));
     }
