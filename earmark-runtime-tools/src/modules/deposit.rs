@@ -8,6 +8,11 @@ use earmark_store::{CanonicalStore, PayloadEncoding, StoredObject, StoredPayload
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 
+#[derive(Debug, Clone, Default)]
+pub struct DepositValidationContext {
+    pub namespace: Option<String>,
+}
+
 impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
     pub fn deposit_prose(
         &self,
@@ -19,8 +24,14 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
             actor: "runtime".to_string(),
             source_type: "prose_deposit".to_string(),
         };
-        let object_ref =
-            self.deposit_object(class, Some("object".to_string()), title, json!(body), prov)?;
+        let object_ref = self.deposit_object(
+            class,
+            Some("object".to_string()),
+            title,
+            json!(body),
+            prov,
+            DepositValidationContext::default(),
+        )?;
         Ok(VersionRef::new(object_ref.id, object_ref.version_id))
     }
 
@@ -31,11 +42,73 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
         title: Option<String>,
         payload: Value,
         provenance: RuntimeProvenance,
+        validation_context: DepositValidationContext,
     ) -> Result<ObjectRef, RuntimeToolError> {
         earmark_core::validate_class_name(&class)?;
         if let Some(title) = &title {
             earmark_core::validate_title(title)?;
         }
+
+        // 1. Resolve admission context
+        let mut admitted_class_definition: Option<earmark_core::ClassDefinition> = None;
+
+        if let Some(namespace) = &validation_context.namespace {
+            if let Some(active) = self.index.get_active_system(namespace)? {
+                // Load active system definition
+                let system_ref = VersionRef::new(
+                    ObjectId::parse(active.object_id)?,
+                    VersionId::parse(active.version_id)?,
+                );
+                let system_obj = self.store.read_version(&system_ref)?;
+                let system_def: earmark_core::SystemDefinition =
+                    earmark_core::parse_yaml(&system_obj.payload.as_utf8()?)?;
+
+                // Resolve admitted classes
+                let mut found_admitted = false;
+                for class_ref in &system_def.classes {
+                    let class_obj = self.store.read_version(class_ref).map_err(|_| {
+                        RuntimeToolError::SystemIntegrity(format!(
+                            "admitted class reference {:?} not found",
+                            class_ref
+                        ))
+                    })?;
+                    let class_def: earmark_core::ClassDefinition =
+                        earmark_core::parse_yaml(&class_obj.payload.as_utf8()?).map_err(|_| {
+                            RuntimeToolError::SystemIntegrity(format!(
+                                "failed to decode admitted class definition {:?}",
+                                class_ref
+                            ))
+                        })?;
+
+                    if class_def.name == class {
+                        admitted_class_definition = Some(class_def);
+                        found_admitted = true;
+                        break;
+                    }
+                }
+
+                if !found_admitted {
+                    return Err(RuntimeToolError::AdmissionError {
+                        requested_class: class,
+                        namespace: namespace.clone(),
+                        system_id: active.system_id,
+                    });
+                }
+            }
+        }
+
+        // If no active system admitted a specific version, look up the latest by name (scratch/registered behavior)
+        if admitted_class_definition.is_none() {
+            if let Some((obj_id, version_id)) = self.index.find_class_definition(&class)? {
+                let class_ref =
+                    VersionRef::new(ObjectId::parse(obj_id)?, VersionId::parse(version_id)?);
+                let class_obj = self.store.read_version(&class_ref)?;
+                let class_def: earmark_core::ClassDefinition =
+                    earmark_core::parse_yaml(&class_obj.payload.as_utf8()?)?;
+                admitted_class_definition = Some(class_def);
+            }
+        }
+
         let mut headers = BTreeMap::new();
         if let Some(title) = title {
             headers.insert("title".to_string(), HeaderValue::String(title));
@@ -45,18 +118,16 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
             .unwrap_or(Kind::Object);
 
         let stored_payload = match k {
-            Kind::Instruction | Kind::Object if payload.is_string() => {
-                StoredPayload::from_markdown(
-                    payload
-                        .as_str()
-                        .ok_or_else(|| {
-                            RuntimeToolError::InvalidPayloadShape(
-                                "Expected string payload for markdown".to_string(),
-                            )
-                        })?
-                        .to_string(),
-                )
-            }
+            Kind::Instruction | Kind::Object if payload.is_string() => StoredPayload::from_markdown(
+                payload
+                    .as_str()
+                    .ok_or_else(|| {
+                        RuntimeToolError::InvalidPayloadShape(
+                            "Expected string payload for markdown".to_string(),
+                        )
+                    })?
+                    .to_string(),
+            ),
             Kind::Workflow
             | Kind::Policy
             | Kind::CompiledContextTemplate
@@ -82,15 +153,9 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
 
         earmark_core::validate_payload_size(stored_payload.bytes.len())?;
 
-        if let Some((obj_id, version_id)) = self.index.find_class_definition(&class)? {
-            let class_ref =
-                VersionRef::new(ObjectId::parse(obj_id)?, VersionId::parse(version_id)?);
-            let class_obj = self.store.read_version(&class_ref)?;
-            let class_def: earmark_core::ClassDefinition =
-                earmark_core::parse_yaml(&class_obj.payload.as_utf8()?)?;
-
-            if !class_def.payload_schema.0.is_empty() && class_def.payload_schema.0 != "inline:any"
-            {
+        // 2. Apply schema validation if a class definition was resolved
+        if let Some(class_def) = admitted_class_definition {
+            if !class_def.payload_schema.0.is_empty() && class_def.payload_schema.0 != "inline:any" {
                 let schema_str = if class_def.payload_schema.0.starts_with("inline:") {
                     &class_def.payload_schema.0[7..]
                 } else {

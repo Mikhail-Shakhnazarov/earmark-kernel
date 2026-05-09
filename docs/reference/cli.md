@@ -71,6 +71,10 @@ Set the active system for the workspace.
 
 Deposit an object into the corpus. Default kind is `object`.
 
+**Governed Behavior**: If a system context is active (via `EM_SYSTEM_ID` or `default_system_id`), the deposit is strictly validated against the system's admitted class list and associated schemas.
+
+**Scratch Behavior**: If no system context is resolved, the deposit is "scratch-permissive" and uses the latest available definition for the requested class.
+
 ### `em query [--class <class>] [--kind <kind>] [--text <query>] [--object-id <id>]`
 
 Search the corpus through the derived index.

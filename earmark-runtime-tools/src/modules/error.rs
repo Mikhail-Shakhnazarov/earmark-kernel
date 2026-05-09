@@ -28,4 +28,12 @@ pub enum RuntimeToolError {
     RelationRuleViolation(String),
     #[error("missing class definition for {0}")]
     MissingClassDefinition(String),
+    #[error("admission error: class {requested_class} not admitted by active system {system_id} in namespace {namespace}")]
+    AdmissionError {
+        requested_class: String,
+        namespace: String,
+        system_id: String,
+    },
+    #[error("system integrity error: {0}")]
+    SystemIntegrity(String),
 }

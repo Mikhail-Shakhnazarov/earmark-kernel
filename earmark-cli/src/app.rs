@@ -162,7 +162,7 @@ pub fn run(cli: Cli) -> Result<(), CliError> {
                         .expect("index available for workspace command"),
                     provider_service: &provider_registry,
                 };
-                handler::deposit::handle(&store, &runtime_surface, as_json, args)?
+                handler::deposit::handle(&store, &runtime_surface, &config, as_json, args)?
             }
             Commands::Query(args) => handler::query::handle(
                 index
