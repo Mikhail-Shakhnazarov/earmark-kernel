@@ -203,6 +203,10 @@ impl ObjectRef {
             class,
         }
     }
+
+    pub fn version_ref(&self) -> VersionRef {
+        VersionRef::new(self.id.clone(), self.version_id.clone())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -525,8 +529,9 @@ pub struct ClassStandingRules {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RelationRule {
     pub relation_type: String,
-    pub target_classes: Vec<String>,
+    pub counterparty_classes: Vec<String>,
     pub direction: Option<String>,
+    pub authorizing_endpoint: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

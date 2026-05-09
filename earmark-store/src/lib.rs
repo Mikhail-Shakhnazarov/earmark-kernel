@@ -103,7 +103,7 @@ impl WorkspaceLayoutStatus {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StoredObject {
     pub envelope: Envelope,
     pub payload: StoredPayload,

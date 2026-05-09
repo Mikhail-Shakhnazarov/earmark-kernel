@@ -173,6 +173,18 @@ Explain what went wrong in a transition.
 
 List failures, optionally filtered.
 
+### `em relation show <id>`
+
+Show raw data for a specific relation.
+
+### `em relation explain <id>`
+
+Explain a relation: type, endpoints, and authorization trace.
+
+### `em relation list [--source-id <id>] [--target-id <id>] [--relation-type <type>]`
+
+List relations, optionally filtered by source, target, or type.
+
 ## Audit and Providers
 
 ### `em audit failures [--run-id <id>] [--transition-id <id>]`

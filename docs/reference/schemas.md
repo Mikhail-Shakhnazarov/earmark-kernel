@@ -23,7 +23,7 @@ standing_rules:
   allowed_process: [active, completed]
 relation_rules:
   - relation_type: derived_from
-    target_classes: [source_note]
+    counterparty_classes: [source_note]
 validators: []
 ```
 

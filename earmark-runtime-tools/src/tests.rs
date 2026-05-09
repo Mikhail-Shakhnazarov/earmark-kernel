@@ -75,8 +75,9 @@ fn register_simple_class(
         name,
         vec![earmark_core::RelationRule {
             relation_type: rel_type.to_string(),
-            target_classes: vec![target_class.to_string()],
+            counterparty_classes: vec![target_class.to_string()],
             direction: None,
+            authorizing_endpoint: None,
         }],
     );
 }
@@ -228,8 +229,9 @@ fn test_relation_qualifier_json_conversion_failure() {
         "test",
         vec![earmark_core::RelationRule {
             relation_type: "rel".to_string(),
-            target_classes: vec!["test".to_string()],
+            counterparty_classes: vec!["test".to_string()],
             direction: None,
+            authorizing_endpoint: None,
         }],
     );
 
@@ -860,8 +862,9 @@ fn test_create_relation_enforces_rules() {
         "finding",
         vec![earmark_core::RelationRule {
             relation_type: "derived_from".to_string(),
-            target_classes: vec!["source_note".to_string()],
+            counterparty_classes: vec!["source_note".to_string()],
             direction: Some("outgoing".to_string()),
+            authorizing_endpoint: None,
         }],
     );
     register_class_definition(&store, &index, "source_note", vec![]);
@@ -930,13 +933,15 @@ fn test_create_relation_direction_enforcement() {
         vec![
             earmark_core::RelationRule {
                 relation_type: "points_to".to_string(),
-                target_classes: vec!["b".to_string()],
+                counterparty_classes: vec!["b".to_string()],
                 direction: Some("incoming".to_string()), // A cannot point to B with this rule
+                authorizing_endpoint: None,
             },
             earmark_core::RelationRule {
                 relation_type: "both".to_string(),
-                target_classes: vec!["b".to_string()],
+                counterparty_classes: vec!["b".to_string()],
                 direction: Some("bidirectional".to_string()),
+                authorizing_endpoint: None,
             },
         ],
     );
@@ -986,8 +991,9 @@ fn test_create_relation_direction_enforcement() {
         standing_rules: earmark_core::ClassStandingRules::default(),
         relation_rules: vec![earmark_core::RelationRule {
             relation_type: "any".to_string(),
-            target_classes: vec!["b".to_string()],
+            counterparty_classes: vec!["b".to_string()],
             direction: Some("invalid".to_string()),
+            authorizing_endpoint: None,
         }],
         validators: vec![],
     };
@@ -1280,4 +1286,308 @@ fn test_deposit_system_integrity_on_broken_class_ref() {
         .unwrap_err();
 
     assert!(matches!(err, RuntimeToolError::SystemIntegrity(_)));
+}
+
+#[test]
+fn test_endpoint_authorized_relations() {
+    let dir = tempdir().unwrap();
+    let (store, index, registry) = setup_surface(dir.path());
+    let surface = RuntimeToolSurface {
+        store: &store,
+        index: &index,
+        provider_service: &registry,
+    };
+
+    let provenance = RuntimeProvenance {
+        actor: "test".to_string(),
+        source_type: "test".to_string(),
+    };
+
+    // 1. Source-only authorization (traditional)
+    // class_a allows outgoing 'linked_to' to class_b
+    register_class_definition(
+        &store,
+        &index,
+        "class_a",
+        vec![earmark_core::RelationRule {
+            relation_type: "linked_to".to_string(),
+            counterparty_classes: vec!["class_b".to_string()],
+            direction: Some("outgoing".to_string()),
+            authorizing_endpoint: Some("source".to_string()),
+        }],
+    );
+    // class_b allows nothing
+    register_class_definition(&store, &index, "class_b", vec![]);
+
+    let obj_a = surface
+        .deposit_object(
+            "class_a".to_string(),
+            None,
+            None,
+            json!({}),
+            provenance.clone(),
+            DepositValidationContext::default(),
+        )
+        .unwrap();
+    let obj_b = surface
+        .deposit_object(
+            "class_b".to_string(),
+            None,
+            None,
+            json!({}),
+            provenance.clone(),
+            DepositValidationContext::default(),
+        )
+        .unwrap();
+
+    // Should succeed (source authorized)
+    surface
+        .create_relation(obj_a.id.clone(), obj_b.id.clone(), "linked_to".to_string(), json!({}), provenance.clone())
+        .expect("source authorized relation should succeed");
+
+    // 2. Target-only authorization
+    // class_c allows nothing
+    register_class_definition(&store, &index, "class_c", vec![]);
+    // class_d allows incoming 'mentions' from class_c
+    register_class_definition(
+        &store,
+        &index,
+        "class_d",
+        vec![earmark_core::RelationRule {
+            relation_type: "mentions".to_string(),
+            counterparty_classes: vec!["class_c".to_string()],
+            direction: Some("incoming".to_string()),
+            authorizing_endpoint: Some("target".to_string()),
+        }],
+    );
+
+    let obj_c = surface
+        .deposit_object(
+            "class_c".to_string(),
+            None,
+            None,
+            json!({}),
+            provenance.clone(),
+            DepositValidationContext::default(),
+        )
+        .unwrap();
+    let obj_d = surface
+        .deposit_object(
+            "class_d".to_string(),
+            None,
+            None,
+            json!({}),
+            provenance.clone(),
+            DepositValidationContext::default(),
+        )
+        .unwrap();
+
+    // Should succeed (target authorized)
+    let rel_mentions = surface
+        .create_relation(obj_c.id.clone(), obj_d.id.clone(), "mentions".to_string(), json!({}), provenance.clone())
+        .expect("target authorized relation should succeed");
+    
+    // Verify headers
+    let rel_obj = store.read_version(&rel_mentions.version_ref()).unwrap();
+    assert_eq!(rel_obj.envelope.headers.get("relation_auth_endpoint").unwrap().as_string().unwrap(), "target");
+    assert_eq!(rel_obj.envelope.headers.get("relation_auth_class").unwrap().as_string().unwrap(), "class_d");
+    assert_eq!(rel_obj.envelope.headers.get("relation_auth_authority").unwrap().as_string().unwrap(), "target");
+
+    // 3. Either-endpoint authorization
+    // class_e allows bidirectional 'partner' with class_f, either can authorize
+    register_class_definition(
+        &store,
+        &index,
+        "class_e",
+        vec![earmark_core::RelationRule {
+            relation_type: "partner".to_string(),
+            counterparty_classes: vec!["class_f".to_string()],
+            direction: Some("bidirectional".to_string()),
+            authorizing_endpoint: Some("either_endpoint".to_string()),
+        }],
+    );
+    // class_f allows nothing
+    register_class_definition(&store, &index, "class_f", vec![]);
+
+    let obj_e = surface
+        .deposit_object(
+            "class_e".to_string(),
+            None,
+            None,
+            json!({}),
+            provenance.clone(),
+            DepositValidationContext::default(),
+        )
+        .unwrap();
+    let obj_f = surface
+        .deposit_object(
+            "class_f".to_string(),
+            None,
+            None,
+            json!({}),
+            provenance.clone(),
+            DepositValidationContext::default(),
+        )
+        .unwrap();
+
+    // Should succeed (source authorized via either_endpoint)
+    surface
+        .create_relation(obj_e.id.clone(), obj_f.id.clone(), "partner".to_string(), json!({}), provenance.clone())
+        .expect("either_endpoint authorized relation (source side) should succeed");
+
+    // Should also succeed if we reverse them (target authorized via either_endpoint)
+    surface
+        .create_relation(obj_f.id.clone(), obj_e.id.clone(), "partner".to_string(), json!({}), provenance.clone())
+        .expect("either_endpoint authorized relation (target side) should succeed");
+
+    // 4. Rejection Case
+    // class_g allows nothing
+    register_class_definition(&store, &index, "class_g", vec![]);
+    // class_h allows nothing
+    register_class_definition(&store, &index, "class_h", vec![]);
+
+    let obj_g = surface
+        .deposit_object(
+            "class_g".to_string(),
+            None,
+            None,
+            json!({}),
+            provenance.clone(),
+            DepositValidationContext::default(),
+        )
+        .unwrap();
+    let obj_h = surface
+        .deposit_object(
+            "class_h".to_string(),
+            None,
+            None,
+            json!({}),
+            provenance.clone(),
+            DepositValidationContext::default(),
+        )
+        .unwrap();
+
+    surface
+        .create_relation(obj_g.id.clone(), obj_h.id.clone(), "unauthorized".to_string(), json!({}), provenance)
+        .unwrap_err();
+}
+
+#[test]
+fn test_relation_rule_ordering_is_non_semantic() {
+    let dir = tempdir().unwrap();
+    let (store, index, registry) = setup_surface(dir.path());
+    let surface = RuntimeToolSurface {
+        store: &store,
+        index: &index,
+        provider_service: &registry,
+    };
+
+    let provenance = RuntimeProvenance {
+        actor: "test".to_string(),
+        source_type: "test".to_string(),
+    };
+
+    // class_a has two rules for 'linked_to':
+    // 1. rule that DOES NOT match counterparty class_b
+    // 2. rule that DOES match counterparty class_b
+    register_class_definition(
+        &store,
+        &index,
+        "class_a",
+        vec![
+            earmark_core::RelationRule {
+                relation_type: "linked_to".to_string(),
+                counterparty_classes: vec!["other_class".to_string()],
+                direction: Some("outgoing".to_string()),
+                authorizing_endpoint: Some("source".to_string()),
+            },
+            earmark_core::RelationRule {
+                relation_type: "linked_to".to_string(),
+                counterparty_classes: vec!["class_b".to_string()],
+                direction: Some("outgoing".to_string()),
+                authorizing_endpoint: Some("source".to_string()),
+            },
+        ],
+    );
+    register_class_definition(&store, &index, "class_b", vec![]);
+
+    let obj_a = create_test_object(&store, &index, "class_a");
+    let obj_b = create_test_object(&store, &index, "class_b");
+
+    // Should succeed because the second rule matches
+    surface
+        .create_relation(obj_a, obj_b, "linked_to".to_string(), json!({}), provenance)
+        .expect("relation should succeed even if earlier rule does not match");
+}
+
+#[test]
+fn test_malformed_relation_rule_fails_hard() {
+    let dir = tempdir().unwrap();
+    let (store, index, registry) = setup_surface(dir.path());
+    let surface = RuntimeToolSurface {
+        store: &store,
+        index: &index,
+        provider_service: &registry,
+    };
+
+    let provenance = RuntimeProvenance {
+        actor: "test".to_string(),
+        source_type: "test".to_string(),
+    };
+
+    // Bypass declaration validation to insert a malformed rule
+    let bad_class_def = earmark_core::ClassDefinition {
+        name: "malformed_rules".to_string(),
+        version: "1.0.0".to_string(),
+        kind: "object".to_string(),
+        required_headers: vec![],
+        payload_schema: earmark_core::JsonSchemaRef("inline:any".to_string()),
+        standing_rules: earmark_core::ClassStandingRules::default(),
+        relation_rules: vec![
+            earmark_core::RelationRule {
+                relation_type: "broken".to_string(),
+                counterparty_classes: vec!["class_b".to_string()],
+                direction: Some("outgoing".to_string()),
+                authorizing_endpoint: Some("INVALID_AUTH_MODE".to_string()),
+            },
+            // Even if we had a valid rule later, the malformed one should fail hard
+            earmark_core::RelationRule {
+                relation_type: "broken".to_string(),
+                counterparty_classes: vec!["class_b".to_string()],
+                direction: Some("outgoing".to_string()),
+                authorizing_endpoint: Some("source".to_string()),
+            },
+        ],
+        validators: vec![],
+    };
+
+    let payload =
+        earmark_store::StoredPayload::from_yaml(earmark_core::to_yaml(&bad_class_def).unwrap());
+    let stored = earmark_store::StoredObject::new(
+        earmark_core::Kind::Object,
+        Some("class_definition".to_string()),
+        earmark_core::Standing::default(),
+        earmark_core::Provenance::direct_input("test"),
+        BTreeMap::new(),
+        payload,
+        vec![],
+    );
+    let class_ref = store.write_object(&stored).unwrap();
+    index
+        .upsert_head_object_from_store(&store, &class_ref.id)
+        .unwrap();
+
+    register_class_definition(&store, &index, "class_b", vec![]);
+
+    let obj_a = create_test_object(&store, &index, "malformed_rules");
+    let obj_b = create_test_object(&store, &index, "class_b");
+
+    let err = surface
+        .create_relation(obj_a, obj_b, "broken".to_string(), json!({}), provenance)
+        .unwrap_err();
+
+    assert!(matches!(
+        err,
+        RuntimeToolError::RelationRuleViolation(ref msg) if msg.contains("unknown authorizing endpoint: INVALID_AUTH_MODE")
+    ));
 }

@@ -25,12 +25,33 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
             .read_head(&target_id)?
             .ok_or_else(|| RuntimeToolError::MissingObject(target_id.as_str().to_string()))?;
 
-        crate::modules::relation_rules::validate_relation_creation(
+        let authorization = crate::modules::relation_rules::authorize_relation_creation(
             self,
             &source_head,
             &target_head,
             &relation_type,
         )?;
+
+        let mut headers = BTreeMap::new();
+        headers.insert(
+            "relation_auth_endpoint".to_string(),
+            earmark_core::HeaderValue::String(match authorization.endpoint {
+                crate::modules::relation_rules::AuthorizingEndpoint::Source => "source".to_string(),
+                crate::modules::relation_rules::AuthorizingEndpoint::Target => "target".to_string(),
+            }),
+        );
+        headers.insert(
+            "relation_auth_class".to_string(),
+            earmark_core::HeaderValue::String(authorization.class_name),
+        );
+        headers.insert(
+            "relation_auth_authority".to_string(),
+            earmark_core::HeaderValue::String(authorization.authorizing_endpoint),
+        );
+        headers.insert(
+            "relation_auth_direction".to_string(),
+            earmark_core::HeaderValue::String(authorization.direction),
+        );
 
         let mut qualifiers = BTreeMap::new();
         if let Value::Object(map) = metadata {
@@ -60,7 +81,7 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
                 import_path: None,
                 captured_at: chrono::Utc::now(),
             },
-            BTreeMap::new(),
+            headers,
             StoredPayload::from_json_bytes(serde_json::to_vec_pretty(&relation)?),
             vec![],
         );

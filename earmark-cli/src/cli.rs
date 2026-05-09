@@ -41,6 +41,7 @@ pub enum Commands {
     Provider(ProviderCommand),
     Completions { shell: CompletionShell },
     Status,
+    Relation(RelationCommand),
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -214,6 +215,30 @@ pub enum FailureAction {
         run_id: Option<String>,
         #[arg(long)]
         transition_id: Option<String>,
+    },
+}
+
+#[derive(Args)]
+pub struct RelationCommand {
+    #[command(subcommand)]
+    pub action: RelationAction,
+}
+
+#[derive(Subcommand)]
+pub enum RelationAction {
+    Show {
+        relation_id: String,
+    },
+    Explain {
+        relation_id: String,
+    },
+    List {
+        #[arg(long)]
+        source_id: Option<String>,
+        #[arg(long)]
+        target_id: Option<String>,
+        #[arg(long)]
+        relation_type: Option<String>,
     },
 }
 

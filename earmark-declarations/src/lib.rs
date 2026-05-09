@@ -50,14 +50,14 @@ pub fn validate_class_definition(value: &ClassDefinition) -> Result<(), DeriveEr
     }
     for rule in &value.relation_rules {
         validate_relation_type_token(&rule.relation_type)?;
-        if rule.target_classes.is_empty() {
+        if rule.counterparty_classes.is_empty() {
             return Err(DeriveError::Validation(
-                "relation rule requires at least one target class".to_string(),
+                "relation rule requires at least one counterparty class".to_string(),
             ));
         }
-        for class in &rule.target_classes {
+        for class in &rule.counterparty_classes {
             earmark_core::validate_class_name(class).map_err(|e| {
-                DeriveError::Validation(format!("invalid relation target class: {}", e))
+                DeriveError::Validation(format!("invalid relation counterparty class: {}", e))
             })?;
         }
         if let Some(direction) = &rule.direction {
@@ -69,6 +69,34 @@ pub fn validate_class_definition(value: &ClassDefinition) -> Result<(), DeriveEr
                     ));
                 }
             }
+        }
+        if let Some(endpoint) = &rule.authorizing_endpoint {
+            match endpoint.as_str() {
+                "source" | "target" | "either_endpoint" => {}
+                _ => {
+                    return Err(DeriveError::Validation(
+                        "relation rule has invalid authorizing_endpoint: expected source, target, or either_endpoint".to_string(),
+                    ));
+                }
+            }
+        }
+
+        // Consistency checks
+        let direction = rule.direction.as_deref().unwrap_or("outgoing");
+        let authorizing_endpoint = rule.authorizing_endpoint.as_deref().unwrap_or("source");
+
+        match (direction, authorizing_endpoint) {
+            ("outgoing", "target") => {
+                return Err(DeriveError::Validation(
+                    "relation rule has dead combination: outgoing direction with target authorization".to_string(),
+                ));
+            }
+            ("incoming", "source") => {
+                return Err(DeriveError::Validation(
+                    "relation rule has dead combination: incoming direction with source authorization".to_string(),
+                ));
+            }
+            _ => {}
         }
     }
     Ok(())

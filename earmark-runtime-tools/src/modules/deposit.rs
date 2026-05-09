@@ -81,6 +81,11 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
                         })?;
 
                     if class_def.name == class {
+                        earmark_declarations::validate_class_definition(&class_def)
+                            .map_err(|e| RuntimeToolError::SystemIntegrity(format!(
+                                "admitted class definition '{}' is inconsistent: {}",
+                                class_def.name, e
+                            )))?;
                         admitted_class_definition = Some(class_def);
                         found_admitted = true;
                         break;
@@ -105,6 +110,11 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
                 let class_obj = self.store.read_version(&class_ref)?;
                 let class_def: earmark_core::ClassDefinition =
                     earmark_core::parse_yaml(&class_obj.payload.as_utf8()?)?;
+                earmark_declarations::validate_class_definition(&class_def)
+                    .map_err(|e| RuntimeToolError::SystemIntegrity(format!(
+                        "class definition '{}' is inconsistent: {}",
+                        class_def.name, e
+                    )))?;
                 admitted_class_definition = Some(class_def);
             }
         }

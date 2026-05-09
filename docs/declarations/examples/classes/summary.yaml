@@ -15,7 +15,7 @@ standing_rules:
     - completed
 relation_rules:
   - relation_type: derived_from
-    target_classes:
+    counterparty_classes:
       - finding
     direction: outgoing
 validators: []
