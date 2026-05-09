@@ -3,7 +3,7 @@ use earmark_core::{
 };
 use earmark_exec::ProviderRegistry;
 use earmark_index::DerivedIndex;
-use earmark_runtime_tools::RuntimeToolSurface;
+use earmark_runtime_tools::{DepositValidationContext, RuntimeToolSurface};
 use earmark_store::{CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload};
 use serde_json::json;
 use std::collections::BTreeMap;
@@ -73,6 +73,7 @@ fn test_schema_enforcement() {
         None,
         json!({"name": "Alice", "age": 30}),
         prov.clone(),
+        DepositValidationContext::default(),
     );
     assert!(res.is_ok());
 
@@ -83,6 +84,7 @@ fn test_schema_enforcement() {
         None,
         json!({"age": 30}),
         prov.clone(),
+        DepositValidationContext::default(),
     );
     assert!(res.is_err());
     println!("Schema violation error: {:?}", res.err().unwrap());
@@ -94,6 +96,7 @@ fn test_schema_enforcement() {
         None,
         json!({"name": "Alice", "age": "thirty"}),
         prov.clone(),
+        DepositValidationContext::default(),
     );
     assert!(res.is_err());
     println!("Schema violation error (type): {:?}", res.err().unwrap());

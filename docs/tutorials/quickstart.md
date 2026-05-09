@@ -69,6 +69,9 @@ em deposit --class source_note --title "Context Boundaries" --body "AI context s
 em deposit --class source_note --title "Lineage" --body "Every derived object should trace back to its source."
 ```
 
+> [!NOTE]
+> Because you activated `sys_research_synthesis`, these deposits are validated against the system's admitted class list. If you tried to deposit a class not in the system definition, the command would fail.
+
 Expected output for each deposit:
 
 ```json

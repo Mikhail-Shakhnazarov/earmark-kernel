@@ -574,6 +574,75 @@ fn workflow_run_uses_config_default_system_id() {
 }
 
 #[test]
+fn test_deposit_rejection_in_active_system() {
+    let dir = tempdir().unwrap();
+    let config_dir = dir.path().join(".earmark");
+    fs::create_dir_all(&config_dir).unwrap();
+    
+    // 1. Setup classes and system (using research-synthesis example)
+    let workspace = workspace_root();
+    let system_manifest = workspace.join("examples/research-synthesis/declarations/systems/system.yaml");
+    
+    // Register and activate system
+    Command::cargo_bin("earmark-cli").unwrap().arg("--root").arg(dir.path()).arg("system").arg("register").arg(&system_manifest).assert().success();
+    Command::cargo_bin("earmark-cli").unwrap().arg("--root").arg(dir.path()).arg("system").arg("activate").arg("sys_research_synthesis").assert().success();
+
+    // 2. Setup env for system context
+    unsafe { std::env::set_var("EM_SYSTEM_ID", "sys_research_synthesis") };
+
+    let canonical_path = dir.path().join(".earmark").join("canonical");
+    let count_before = fs::read_dir(&canonical_path).unwrap().count();
+
+    // 3. Deposit non-admitted class should fail
+    // research-synthesis admits 'source_note', 'finding', etc. but NOT 'unauthorized_class'
+    Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(dir.path())
+        .arg("deposit")
+        .arg("--class")
+        .arg("unauthorized_class")
+        .arg("--body")
+        .arg("some body")
+        .assert()
+        .failure();
+
+    let count_after = fs::read_dir(&canonical_path).unwrap().count();
+    assert_eq!(count_before, count_after, "No new objects should be created on admission rejection");
+
+    unsafe { std::env::remove_var("EM_SYSTEM_ID") };
+}
+
+#[test]
+fn test_deposit_fails_on_bad_system_context() {
+    let dir = tempdir().unwrap();
+    Command::cargo_bin("earmark-cli").unwrap().arg("--root").arg(dir.path()).arg("init").assert().success();
+
+    // Set a system ID that doesn't exist
+    unsafe { std::env::set_var("EM_SYSTEM_ID", "non_existent_system") };
+
+    let canonical_path = dir.path().join(".earmark").join("canonical");
+    let count_before = fs::read_dir(&canonical_path).unwrap().count();
+
+    Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(dir.path())
+        .arg("deposit")
+        .arg("--class")
+        .arg("any")
+        .arg("--body")
+        .arg("body")
+        .assert()
+        .failure();
+
+    let count_after = fs::read_dir(&canonical_path).unwrap().count();
+    assert_eq!(count_before, count_after, "No new objects should be created on bad system context failure");
+
+    unsafe { std::env::remove_var("EM_SYSTEM_ID") };
+}
+
+#[test]
 fn env_root_overrides_config_root() {
     let dir = tempdir().unwrap();
     let cfg_root = dir.path().join("cfg-root");

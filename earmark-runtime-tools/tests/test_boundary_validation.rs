@@ -1,7 +1,7 @@
 use earmark_core::RuntimeProvenance;
 use earmark_exec::ProviderRegistry;
 use earmark_index::DerivedIndex;
-use earmark_runtime_tools::RuntimeToolSurface;
+use earmark_runtime_tools::{DepositValidationContext, RuntimeToolSurface};
 use earmark_store::{CanonicalStore, GitCanonicalStore};
 use serde_json::json;
 use tempfile::tempdir;
@@ -32,6 +32,7 @@ fn test_boundary_validation() {
         None,
         json!("body"),
         prov.clone(),
+        DepositValidationContext::default(),
     );
     assert!(res.is_err());
     println!("Invalid class error: {:?}", res.err().unwrap());
@@ -44,6 +45,7 @@ fn test_boundary_validation() {
         Some(long_title),
         json!("body"),
         prov.clone(),
+        DepositValidationContext::default(),
     );
     assert!(res.is_err());
     println!("Long title error: {:?}", res.err().unwrap());
@@ -56,6 +58,7 @@ fn test_boundary_validation() {
         None,
         json!(huge_payload),
         prov.clone(),
+        DepositValidationContext::default(),
     );
     assert!(res.is_err());
     println!("Huge payload error: {:?}", res.err().unwrap());
@@ -67,6 +70,7 @@ fn test_boundary_validation() {
         Some("Short Title".to_string()),
         json!("Short body"),
         prov.clone(),
+        DepositValidationContext::default(),
     );
     assert!(res.is_ok());
 }

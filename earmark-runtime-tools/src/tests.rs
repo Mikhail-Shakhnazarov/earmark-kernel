@@ -243,6 +243,7 @@ fn test_relation_qualifier_json_conversion_failure() {
                 actor: "test".to_string(),
                 source_type: "test".to_string(),
             },
+            DepositValidationContext::default(),
         )
         .unwrap();
     let obj2 = surface
@@ -255,6 +256,7 @@ fn test_relation_qualifier_json_conversion_failure() {
                 actor: "test".to_string(),
                 source_type: "test".to_string(),
             },
+            DepositValidationContext::default(),
         )
         .unwrap();
 
@@ -301,6 +303,7 @@ fn test_compile_connected_context_honors_depth_and_filters() {
                 actor: "test".to_string(),
                 source_type: "test".to_string(),
             },
+            DepositValidationContext::default(),
         )
         .unwrap();
     let mid = surface
@@ -313,6 +316,7 @@ fn test_compile_connected_context_honors_depth_and_filters() {
                 actor: "test".to_string(),
                 source_type: "test".to_string(),
             },
+            DepositValidationContext::default(),
         )
         .unwrap();
     let far = surface
@@ -325,6 +329,7 @@ fn test_compile_connected_context_honors_depth_and_filters() {
                 actor: "test".to_string(),
                 source_type: "test".to_string(),
             },
+            DepositValidationContext::default(),
         )
         .unwrap();
 
@@ -408,6 +413,7 @@ fn test_compile_connected_context_respects_standing_filters() {
                 actor: "test".to_string(),
                 source_type: "test".to_string(),
             },
+            DepositValidationContext::default(),
         )
         .unwrap();
 
@@ -661,6 +667,7 @@ fn test_compile_connected_context_terminates_on_cycle() {
                 actor: "test".to_string(),
                 source_type: "test".to_string(),
             },
+            DepositValidationContext::default(),
         )
         .unwrap();
     let b = surface
@@ -673,6 +680,7 @@ fn test_compile_connected_context_terminates_on_cycle() {
                 actor: "test".to_string(),
                 source_type: "test".to_string(),
             },
+            DepositValidationContext::default(),
         )
         .unwrap();
     surface
@@ -729,6 +737,7 @@ fn test_compile_connected_context_dedupes_relation_refs() {
                 actor: "test".to_string(),
                 source_type: "test".to_string(),
             },
+            DepositValidationContext::default(),
         )
         .unwrap();
     let b = surface
@@ -741,6 +750,7 @@ fn test_compile_connected_context_dedupes_relation_refs() {
                 actor: "test".to_string(),
                 source_type: "test".to_string(),
             },
+            DepositValidationContext::default(),
         )
         .unwrap();
     let c = surface
@@ -753,6 +763,7 @@ fn test_compile_connected_context_dedupes_relation_refs() {
                 actor: "test".to_string(),
                 source_type: "test".to_string(),
             },
+            DepositValidationContext::default(),
         )
         .unwrap();
 
@@ -1077,4 +1088,196 @@ fn test_create_relation_missing_classes_fails() {
         .unwrap_err();
     assert!(matches!(err, RuntimeToolError::MissingClassDefinition(_)));
     assert_eq!(surface.index.relation_count().unwrap(), count_before);
+}
+
+fn register_system_definition(
+    store: &GitCanonicalStore,
+    index: &DerivedIndex,
+    system_id: &str,
+    namespace: &str,
+    classes: Vec<VersionRef>,
+) -> VersionRef {
+    let system_def = earmark_core::SystemDefinition {
+        system_id: system_id.to_string(),
+        title: system_id.to_string(),
+        description: None,
+        namespace: namespace.to_string(),
+        classes,
+        instructions: vec![],
+        policies: vec![],
+        workflows: vec![],
+        compiled_contexts: vec![],
+        provider_profiles: vec![],
+        default_compiled_context: None,
+        default_provider_profile: None,
+        runtime_profile: earmark_core::RuntimeProfile {
+            execution_surface: "local".to_string(),
+            machine_output_default: "json".to_string(),
+            work_surface_mode: "strict".to_string(),
+        },
+        activated_at: None,
+    };
+
+    let payload =
+        earmark_store::StoredPayload::from_yaml(earmark_core::to_yaml(&system_def).unwrap());
+    let stored = earmark_store::StoredObject::new(
+        earmark_core::Kind::SystemDefinition,
+        None,
+        earmark_core::Standing::default(),
+        earmark_core::Provenance::direct_input("system"),
+        BTreeMap::new(),
+        payload,
+        vec![],
+    );
+
+    let version_ref = store.write_object(&stored).unwrap();
+    index.rebuild_from_store(store).unwrap();
+    version_ref
+}
+
+#[test]
+fn test_deposit_admission_enforcement() {
+    let dir = tempdir().unwrap();
+    let (store, index, registry) = setup_surface(dir.path());
+    let surface = RuntimeToolSurface {
+        store: &store,
+        index: &index,
+        provider_service: &registry,
+    };
+
+    // 1. Register classes
+    let class_a_ref = register_class_definition(&store, &index, "class_a", vec![]);
+    let _class_b_ref = register_class_definition(&store, &index, "class_b", vec![]);
+
+    // 2. Register system that only admits class_a
+    let system_ref = register_system_definition(
+        &store,
+        &index,
+        "governed_system",
+        "governed_ns",
+        vec![class_a_ref],
+    );
+
+    // 3. Activate system
+    index
+        .activate_system("governed_ns", "governed_system", &system_ref)
+        .unwrap();
+
+    let provenance = RuntimeProvenance {
+        actor: "test".to_string(),
+        source_type: "test".to_string(),
+    };
+
+    // Case 1: Deposit admitted class succeeds
+    surface
+        .deposit_object(
+            "class_a".to_string(),
+            None,
+            None,
+            json!({"foo": "bar"}),
+            provenance.clone(),
+            DepositValidationContext {
+                namespace: Some("governed_ns".to_string()),
+            },
+        )
+        .expect("admitted class should be accepted");
+
+    // Case 2: Deposit non-admitted class fails
+    let err = surface
+        .deposit_object(
+            "class_b".to_string(),
+            None,
+            None,
+            json!({"foo": "bar"}),
+            provenance.clone(),
+            DepositValidationContext {
+                namespace: Some("governed_ns".to_string()),
+            },
+        )
+        .unwrap_err();
+
+    assert!(matches!(
+        err,
+        RuntimeToolError::AdmissionError {
+            ref requested_class,
+            ref namespace,
+            ref system_id,
+        } if requested_class == "class_b" && namespace == "governed_ns" && system_id == "governed_system"
+    ));
+
+    // Case 3: Deposit to different (scratch) namespace succeeds even if class not admitted in governed_ns
+    surface
+        .deposit_object(
+            "class_b".to_string(),
+            None,
+            None,
+            json!({"foo": "bar"}),
+            provenance.clone(),
+            DepositValidationContext {
+                namespace: Some("scratch_ns".to_string()),
+            },
+        )
+        .expect("deposit to scratch namespace should be permissive");
+
+    // Case 4: Deposit without namespace succeeds (scratch behavior)
+    surface
+        .deposit_object(
+            "class_b".to_string(),
+            None,
+            None,
+            json!({"foo": "bar"}),
+            provenance,
+            DepositValidationContext::default(),
+        )
+        .expect("deposit without namespace should be permissive");
+}
+
+#[test]
+fn test_deposit_system_integrity_on_broken_class_ref() {
+    let dir = tempdir().unwrap();
+    let (store, index, registry) = setup_surface(dir.path());
+    let surface = RuntimeToolSurface {
+        store: &store,
+        index: &index,
+        provider_service: &registry,
+    };
+
+    // 1. Create a class ref that doesn't exist in store
+    let broken_ref = VersionRef::new(
+        earmark_core::ObjectId::parse("obj_00000000000000000000000000000001").unwrap(),
+        earmark_core::VersionId::parse("ver_00000000000000000000000000000001").unwrap(),
+    );
+
+    // 2. Register system with that broken ref
+    let system_ref = register_system_definition(
+        &store,
+        &index,
+        "broken_system",
+        "broken_ns",
+        vec![broken_ref],
+    );
+
+    // 3. Activate
+    index
+        .activate_system("broken_ns", "broken_system", &system_ref)
+        .unwrap();
+
+    // 4. Deposit should fail with SystemIntegrity error
+    let err = surface
+        .deposit_object(
+            "any".to_string(),
+            None,
+            None,
+            json!({}),
+            RuntimeProvenance {
+                actor: "test".to_string(),
+                source_type: "test".to_string(),
+            },
+            DepositValidationContext {
+                namespace: Some("broken_ns".to_string()),
+            },
+        )
+        .unwrap_err();
+
+    assert!(matches!(err, RuntimeToolError::SystemIntegrity(_)));
 }
