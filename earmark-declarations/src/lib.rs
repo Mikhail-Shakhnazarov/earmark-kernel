@@ -60,6 +60,16 @@ pub fn validate_class_definition(value: &ClassDefinition) -> Result<(), DeriveEr
                 DeriveError::Validation(format!("invalid relation target class: {}", e))
             })?;
         }
+        if let Some(direction) = &rule.direction {
+            match direction.as_str() {
+                "outgoing" | "incoming" | "bidirectional" => {}
+                _ => {
+                    return Err(DeriveError::Validation(
+                        "relation rule has invalid direction: expected outgoing, incoming, or bidirectional".to_string(),
+                    ));
+                }
+            }
+        }
     }
     Ok(())
 }

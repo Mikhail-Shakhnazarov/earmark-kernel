@@ -19,6 +19,65 @@ fn setup_surface(dir: &std::path::Path) -> (GitCanonicalStore, DerivedIndex, Pro
     (store, index, registry)
 }
 
+fn register_class_definition(
+    store: &GitCanonicalStore,
+    index: &DerivedIndex,
+    name: &str,
+    rules: Vec<earmark_core::RelationRule>,
+) -> earmark_core::VersionRef {
+    let class_def = earmark_core::ClassDefinition {
+        name: name.to_string(),
+        version: "1.0.0".to_string(),
+        kind: "object".to_string(),
+        required_headers: vec![],
+        payload_schema: earmark_core::JsonSchemaRef("inline:any".to_string()),
+        standing_rules: earmark_core::ClassStandingRules::default(),
+        relation_rules: rules,
+        validators: vec![],
+    };
+
+    let payload =
+        earmark_store::StoredPayload::from_yaml(earmark_core::to_yaml(&class_def).unwrap());
+    let stored = earmark_store::StoredObject::new(
+        earmark_core::Kind::Object,
+        Some("class_definition".to_string()),
+        earmark_core::Standing::default(),
+        earmark_core::Provenance {
+            actor: "system".to_string(),
+            source_type: "manual".to_string(),
+            source_ref: None,
+            lineage: vec![],
+            import_path: None,
+            captured_at: Utc::now(),
+        },
+        BTreeMap::new(),
+        payload,
+        vec![],
+    );
+
+    let version_ref = store.write_object(&stored).unwrap();
+    index
+        .upsert_head_object_from_store(store, &version_ref.id)
+        .unwrap();
+    version_ref
+}
+
+fn register_simple_class(
+    store: &GitCanonicalStore,
+    index: &DerivedIndex,
+    name: &str,
+    rel_type: &str,
+    target_class: &str,
+) {
+    register_class_definition(store, index, name, vec![
+        earmark_core::RelationRule {
+            relation_type: rel_type.to_string(),
+            target_classes: vec![target_class.to_string()],
+            direction: None,
+        }
+    ]);
+}
+
 struct FakeContextCompiler;
 
 impl<S: CanonicalStore> CompiledContextCompiler<S> for FakeContextCompiler {
@@ -160,6 +219,17 @@ fn test_relation_qualifier_json_conversion_failure() {
         provider_service: &registry,
     };
 
+    register_class_definition(
+        &store,
+        &index,
+        "test",
+        vec![earmark_core::RelationRule {
+            relation_type: "rel".to_string(),
+            target_classes: vec!["test".to_string()],
+            direction: None,
+        }],
+    );
+
     let obj1 = surface
         .deposit_object(
             "test".to_string(),
@@ -213,6 +283,10 @@ fn test_compile_connected_context_honors_depth_and_filters() {
         index: &index,
         provider_service: &registry,
     };
+
+    register_simple_class(&store, &index, "root", "supports", "mid");
+    register_simple_class(&store, &index, "mid", "blocks", "far");
+    register_class_definition(&store, &index, "far", vec![]);
 
     let root = surface
         .deposit_object(
@@ -317,6 +391,9 @@ fn test_compile_connected_context_respects_standing_filters() {
         index: &index,
         provider_service: &registry,
     };
+
+    register_simple_class(&store, &index, "root", "supports", "neighbor");
+    register_class_definition(&store, &index, "neighbor", vec![]);
 
     let root = surface
         .deposit_object(
@@ -569,6 +646,8 @@ fn test_compile_connected_context_terminates_on_cycle() {
         provider_service: &registry,
     };
 
+    register_simple_class(&store, &index, "node", "linked", "node");
+
     let a = surface
         .deposit_object(
             "node".to_string(),
@@ -634,6 +713,8 @@ fn test_compile_connected_context_dedupes_relation_refs() {
         index: &index,
         provider_service: &registry,
     };
+
+    register_simple_class(&store, &index, "node", "linked", "node");
 
     let a = surface
         .deposit_object(
@@ -718,4 +799,278 @@ fn test_compile_connected_context_dedupes_relation_refs() {
         .map(|r| r.id.as_str().to_string())
         .collect::<std::collections::BTreeSet<_>>();
     assert_eq!(unique_relation_ids.len(), manifest.relation_refs.len());
+}
+
+
+fn create_test_object(store: &GitCanonicalStore, index: &DerivedIndex, class: &str) -> earmark_core::ObjectId {
+    let stored = earmark_store::StoredObject::new(
+        earmark_core::Kind::Object,
+        Some(class.to_string()),
+        earmark_core::Standing::default(),
+        earmark_core::Provenance {
+            actor: "system".to_string(),
+            source_type: "manual".to_string(),
+            source_ref: None,
+            lineage: vec![],
+            import_path: None,
+            captured_at: Utc::now(),
+        },
+        BTreeMap::new(),
+        earmark_store::StoredPayload::from_json_bytes(vec![b'{', b'}']),
+        vec![],
+    );
+    let version_ref = store.write_object(&stored).unwrap();
+    index
+        .upsert_head_object_from_store(store, &version_ref.id)
+        .unwrap();
+    version_ref.id
+}
+
+#[test]
+fn test_create_relation_enforces_rules() {
+    let dir = tempdir().unwrap();
+    let (store, index, registry) = setup_surface(dir.path());
+    let surface = RuntimeToolSurface {
+        store: &store,
+        index: &index,
+        provider_service: &registry,
+    };
+
+    // 1. Setup classes
+    register_class_definition(
+        &store,
+        &index,
+        "finding",
+        vec![earmark_core::RelationRule {
+            relation_type: "derived_from".to_string(),
+            target_classes: vec!["source_note".to_string()],
+            direction: Some("outgoing".to_string()),
+        }],
+    );
+    register_class_definition(&store, &index, "source_note", vec![]);
+    register_class_definition(&store, &index, "summary", vec![]);
+
+    // 2. Setup objects
+    let source_id = create_test_object(&store, &index, "finding");
+    let target_note_id = create_test_object(&store, &index, "source_note");
+    let target_summary_id = create_test_object(&store, &index, "summary");
+
+    let provenance = earmark_core::RuntimeProvenance {
+        actor: "test_actor".to_string(),
+        source_type: "test".to_string(),
+    };
+
+    // Case 1: Valid relation succeeds
+    surface
+        .create_relation(
+            source_id.clone(),
+            target_note_id.clone(),
+            "derived_from".to_string(),
+            json!({}),
+            provenance.clone(),
+        )
+        .expect("valid relation should succeed");
+
+    // Case 2: Undeclared relation type fails
+    let err = surface
+        .create_relation(
+            source_id.clone(),
+            target_note_id,
+            "mentions".to_string(),
+            json!({}),
+            provenance.clone(),
+        )
+        .unwrap_err();
+    assert!(matches!(err, RuntimeToolError::RelationRuleViolation(_)));
+
+    // Case 3: Wrong target class fails
+    let err = surface
+        .create_relation(
+            source_id.clone(),
+            target_summary_id,
+            "derived_from".to_string(),
+            json!({}),
+            provenance.clone(),
+        )
+        .unwrap_err();
+    assert!(matches!(err, RuntimeToolError::RelationRuleViolation(_)));
+}
+
+#[test]
+fn test_create_relation_direction_enforcement() {
+    let dir = tempdir().unwrap();
+    let (store, index, registry) = setup_surface(dir.path());
+    let surface = RuntimeToolSurface {
+        store: &store,
+        index: &index,
+        provider_service: &registry,
+    };
+
+    register_class_definition(
+        &store,
+        &index,
+        "a",
+        vec![
+            earmark_core::RelationRule {
+                relation_type: "points_to".to_string(),
+                target_classes: vec!["b".to_string()],
+                direction: Some("incoming".to_string()), // A cannot point to B with this rule
+            },
+            earmark_core::RelationRule {
+                relation_type: "both".to_string(),
+                target_classes: vec!["b".to_string()],
+                direction: Some("bidirectional".to_string()),
+            },
+        ],
+    );
+    register_class_definition(&store, &index, "b", vec![]);
+
+    let source_id = create_test_object(&store, &index, "a");
+    let target_id = create_test_object(&store, &index, "b");
+
+    let provenance = earmark_core::RuntimeProvenance {
+        actor: "test_actor".to_string(),
+        source_type: "test".to_string(),
+    };
+
+    // Incoming rule fails for outgoing creation
+    let count_before = surface.index.relation_count().unwrap();
+    let err = surface
+        .create_relation(
+            source_id.clone(),
+            target_id.clone(),
+            "points_to".to_string(),
+            json!({}),
+            provenance.clone(),
+        )
+        .unwrap_err();
+    assert!(matches!(err, RuntimeToolError::RelationRuleViolation(_)));
+    assert_eq!(surface.index.relation_count().unwrap(), count_before);
+
+    // Bidirectional rule succeeds
+    surface
+        .create_relation(
+            source_id.clone(),
+            target_id.clone(),
+            "both".to_string(),
+            json!({}),
+            provenance.clone(),
+        )
+        .expect("bidirectional should succeed");
+    assert_eq!(surface.index.relation_count().unwrap(), count_before + 1);
+
+    // Test unknown direction (bypassing normal declaration validation by writing directly to store)
+    let bad_class_def = earmark_core::ClassDefinition {
+        name: "bad_direction".to_string(),
+        version: "1.0.0".to_string(),
+        kind: "object".to_string(),
+        required_headers: vec![],
+        payload_schema: earmark_core::JsonSchemaRef("inline:any".to_string()),
+        standing_rules: earmark_core::ClassStandingRules::default(),
+        relation_rules: vec![earmark_core::RelationRule {
+            relation_type: "any".to_string(),
+            target_classes: vec!["b".to_string()],
+            direction: Some("invalid".to_string()),
+        }],
+        validators: vec![],
+    };
+
+    let payload =
+        earmark_store::StoredPayload::from_yaml(earmark_core::to_yaml(&bad_class_def).unwrap());
+    let stored = earmark_store::StoredObject::new(
+        earmark_core::Kind::Object,
+        Some("class_definition".to_string()),
+        earmark_core::Standing::default(),
+        earmark_core::Provenance::direct_input("test"),
+        BTreeMap::new(),
+        payload,
+        vec![],
+    );
+    let class_ref = store.write_object(&stored).unwrap();
+    index
+        .upsert_head_object_from_store(&store, &class_ref.id)
+        .unwrap();
+
+    let source_bad_id = create_test_object(&store, &index, "bad_direction");
+    let count_before = surface.index.relation_count().unwrap();
+    let err = surface
+        .create_relation(
+            source_bad_id,
+            target_id,
+            "any".to_string(),
+            json!({}),
+            provenance,
+        )
+        .unwrap_err();
+
+    assert!(matches!(
+        err,
+        RuntimeToolError::RelationRuleViolation(ref msg) if msg.contains("unknown relation direction: invalid")
+    ));
+    assert_eq!(surface.index.relation_count().unwrap(), count_before);
+}
+
+#[test]
+fn test_create_relation_missing_classes_fails() {
+    let dir = tempdir().unwrap();
+    let (store, index, registry) = setup_surface(dir.path());
+    let surface = RuntimeToolSurface {
+        store: &store,
+        index: &index,
+        provider_service: &registry,
+    };
+
+    let provenance = earmark_core::RuntimeProvenance {
+        actor: "test_actor".to_string(),
+        source_type: "test".to_string(),
+    };
+
+    // Case 1: Source has no class
+    let source_id = {
+        let stored = earmark_store::StoredObject::new(
+            earmark_core::Kind::Object,
+            None,
+            earmark_core::Standing::default(),
+            earmark_core::Provenance::direct_input("test"),
+            BTreeMap::new(),
+            earmark_store::StoredPayload::from_json_bytes(vec![b'{', b'}']),
+            vec![],
+        );
+        let v = store.write_object(&stored).unwrap();
+        index
+            .upsert_head_object_from_store(&store, &v.id)
+            .unwrap();
+        v.id
+    };
+    let target_id = create_test_object(&store, &index, "some_class");
+
+    let count_before = surface.index.relation_count().unwrap();
+    let err = surface
+        .create_relation(
+            source_id,
+            target_id.clone(),
+            "any".to_string(),
+            json!({}),
+            provenance.clone(),
+        )
+        .unwrap_err();
+    assert!(matches!(
+        err,
+        RuntimeToolError::RelationRuleViolation(ref msg) if msg.contains("no class")
+    ));
+    assert_eq!(surface.index.relation_count().unwrap(), count_before);
+
+    // Case 2: Missing class definition
+    let source_id_with_class = create_test_object(&store, &index, "missing_class");
+    let err = surface
+        .create_relation(
+            source_id_with_class,
+            target_id,
+            "any".to_string(),
+            json!({}),
+            provenance,
+        )
+        .unwrap_err();
+    assert!(matches!(err, RuntimeToolError::MissingClassDefinition(_)));
+    assert_eq!(surface.index.relation_count().unwrap(), count_before);
 }

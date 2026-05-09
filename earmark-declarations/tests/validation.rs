@@ -283,3 +283,34 @@ fn system_validation_rejects_wrong_class_marker_for_class_reference() {
     let msg = format!("{}", err);
     assert!(msg.contains("wrong class marker"));
 }
+
+#[test]
+fn class_rejects_invalid_relation_direction() {
+    let mut class = ClassDefinition {
+        name: "finding".to_string(),
+        version: "1.0.0".to_string(),
+        kind: "object".to_string(),
+        required_headers: vec![],
+        payload_schema: JsonSchemaRef("inline:any".to_string()),
+        standing_rules: ClassStandingRules::default(),
+        relation_rules: vec![earmark_core::RelationRule {
+            relation_type: "derived_from".to_string(),
+            target_classes: vec!["source_note".to_string()],
+            direction: Some("invalid".to_string()),
+        }],
+        validators: vec![],
+    };
+
+    // Invalid fails
+    assert!(validate_class_definition(&class).is_err());
+
+    // Valid succeeds
+    class.relation_rules[0].direction = Some("incoming".to_string());
+    assert!(validate_class_definition(&class).is_ok());
+
+    class.relation_rules[0].direction = Some("bidirectional".to_string());
+    assert!(validate_class_definition(&class).is_ok());
+
+    class.relation_rules[0].direction = None;
+    assert!(validate_class_definition(&class).is_ok());
+}
