@@ -1,6 +1,7 @@
 use crate::error::ExecError;
 use crate::handoff::create_lineage_relations;
 use crate::ir::TransformArtifacts;
+use crate::provider::{provider_metadata_synthetic_source, provider_response_is_synthetic};
 use chrono::Utc;
 use earmark_core::{
     ChangeSetDraft, ChangeSetId, ChangeSetValidationResult, HandoffManifestId, InstructionPayload,
@@ -270,6 +271,38 @@ pub(crate) fn create_delegated_transform_output<S: CanonicalStore>(
     instruction_ref: &earmark_core::VersionRef,
     response: ProviderResponse,
 ) -> Result<TransformArtifacts, ExecError> {
+    let is_synthetic = provider_response_is_synthetic(&response);
+    let synthetic_source = provider_metadata_synthetic_source(&response.metadata)
+        .unwrap_or_else(|| "mock_provider".to_string());
+    let mut headers = BTreeMap::from([
+        (
+            "title".to_string(),
+            earmark_core::HeaderValue::String(format!("{} candidate", instruction.name)),
+        ),
+        (
+            "provider".to_string(),
+            earmark_core::HeaderValue::String(response.provider.clone()),
+        ),
+        (
+            "model".to_string(),
+            earmark_core::HeaderValue::String(response.model.clone()),
+        ),
+    ]);
+    if is_synthetic {
+        headers.insert(
+            "synthetic".to_string(),
+            earmark_core::HeaderValue::Bool(true),
+        );
+        headers.insert(
+            "synthetic_source".to_string(),
+            earmark_core::HeaderValue::String(synthetic_source),
+        );
+        headers.insert(
+            "production_eligible".to_string(),
+            earmark_core::HeaderValue::Bool(false),
+        );
+    }
+
     let stored = StoredObject::new(
         Kind::Object,
         Some(output_class.to_string()),
@@ -290,20 +323,7 @@ pub(crate) fn create_delegated_transform_output<S: CanonicalStore>(
             import_path: None,
             captured_at: Utc::now(),
         },
-        BTreeMap::from([
-            (
-                "title".to_string(),
-                earmark_core::HeaderValue::String(format!("{} candidate", instruction.name)),
-            ),
-            (
-                "provider".to_string(),
-                earmark_core::HeaderValue::String(response.provider.clone()),
-            ),
-            (
-                "model".to_string(),
-                earmark_core::HeaderValue::String(response.model.clone()),
-            ),
-        ]),
+        headers,
         StoredPayload::from_json_bytes(response.candidate_payload.into_bytes()),
         vec![],
     );

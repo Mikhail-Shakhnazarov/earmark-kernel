@@ -1,7 +1,7 @@
 use earmark_core::{
-    to_yaml, ClassDefinition, ClassStandingRules, CompiledContextExpansion, CompiledContextRender, CompiledContextSelect,
-    CompiledContextTemplate, CompiledContextVisibility, JsonSchemaRef, Kind, Provenance,
-    RuntimeProfile, Standing, SystemDefinition, VersionRef,
+    to_yaml, ClassDefinition, ClassStandingRules, CompiledContextExpansion, CompiledContextRender,
+    CompiledContextSelect, CompiledContextTemplate, CompiledContextVisibility, JsonSchemaRef, Kind,
+    Provenance, RuntimeProfile, Standing, SystemDefinition, VersionRef,
 };
 use earmark_exec::{ExecutionEngine, ProviderRegistry, WorkflowRunRequest};
 use earmark_index::DerivedIndex;
@@ -309,7 +309,7 @@ fn parallel_transform_leak_bug() {
             standing: BTreeMap::new(),
             relations: vec![],
             time_range: None,
-        expansion: CompiledContextExpansion::default(),
+            expansion: CompiledContextExpansion::default(),
         },
         group_by: vec![],
         render: CompiledContextRender {

@@ -1,9 +1,9 @@
 use chrono::Utc;
 use earmark_core::{
-    to_yaml, ClassDefinition, ClassStandingRules, CompiledContextExpansion, CompiledContextRender, CompiledContextSelect,
-    CompiledContextTemplate, CompiledContextVisibility, InstructionPayload, JsonSchemaRef, Kind,
-    MarkdownBody, ObjectRef, ProviderRequest, ProviderResponse, ProviderUsage, RuntimeProfile,
-    SystemDefinition, VersionRef,
+    to_yaml, ClassDefinition, ClassStandingRules, CompiledContextExpansion, CompiledContextRender,
+    CompiledContextSelect, CompiledContextTemplate, CompiledContextVisibility, InstructionPayload,
+    JsonSchemaRef, Kind, MarkdownBody, ObjectRef, ProviderRequest, ProviderResponse, ProviderUsage,
+    RuntimeProfile, SystemDefinition, VersionRef,
 };
 use earmark_exec::{ProviderAdapter, ProviderFailure, ProviderRegistry, WorkflowRunRequest};
 use earmark_index::DerivedIndex;
@@ -101,7 +101,7 @@ fn test_six_step_flow_via_runtime_tool_surface() {
             standing: BTreeMap::new(),
             relations: vec![],
             time_range: None,
-        expansion: CompiledContextExpansion::default(),
+            expansion: CompiledContextExpansion::default(),
         },
         group_by: vec![],
         render: CompiledContextRender {

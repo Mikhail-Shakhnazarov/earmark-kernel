@@ -571,19 +571,23 @@ pub fn run(cli: Cli) -> Result<(), CliError> {
                 }
                 ChangeSetAction::Explain { change_set_id } => {
                     let change_set = load_change_set_by_id(&store, &change_set_id)?;
+                    let (synthetic, synthetic_source) =
+                        change_set_synthetic_marker(&store, &change_set)?;
                     emit(
                         as_json,
                         json!({
-                            "ok": true,
-                            "kind": "change_set",
-                            "id": change_set_id,
-                            "summary": format!("change set {} for transition {}", change_set.id.as_str(), change_set.transition_id),
-                            "artifact": change_set.clone(),
+                                "ok": true,
+                                "kind": "change_set",
+                                "id": change_set_id,
+                                "summary": format!("change set {} for transition {}", change_set.id.as_str(), change_set.transition_id),
+                                "artifact": change_set.clone(),
                             "related": {
                                 "run_id": change_set.run_id.clone(),
                                 "assignment_id": change_set.assignment_id.as_ref().map(|id| id.as_str().to_string()),
                                 "handoff_manifest_id": change_set.handoff_manifest_id.as_ref().map(|id| id.as_str().to_string()),
                                 "validation_results": change_set.validation_results.clone(),
+                                "synthetic": synthetic,
+                                "synthetic_source": synthetic_source,
                             },
                             "next_commands": next_commands_for_change_set(&change_set),
                         }),
@@ -1905,10 +1909,21 @@ fn run_related_artifacts<S: CanonicalStore>(
         .into_iter()
         .map(|assignment| assignment.id.as_str().to_string())
         .collect::<Vec<_>>();
-    let change_sets = list_change_sets_by_run(store, run_id)?
-        .into_iter()
+    let change_sets_full = list_change_sets_by_run(store, run_id)?;
+    let change_sets = change_sets_full
+        .iter()
         .map(|change_set| change_set.id.as_str().to_string())
         .collect::<Vec<_>>();
+    let mut synthetic_change_sets = Vec::new();
+    for change_set in &change_sets_full {
+        let (synthetic, synthetic_source) = change_set_synthetic_marker(store, change_set)?;
+        if synthetic {
+            synthetic_change_sets.push(json!({
+                "change_set_id": change_set.id.as_str(),
+                "synthetic_source": synthetic_source,
+            }));
+        }
+    }
     let handoffs = list_handoffs_by_run(store, run_id)?
         .into_iter()
         .map(|handoff| handoff.id.as_str().to_string())
@@ -1919,6 +1934,7 @@ fn run_related_artifacts<S: CanonicalStore>(
     Ok(json!({
         "assignments": assignments,
         "change_sets": change_sets,
+        "synthetic_change_sets": synthetic_change_sets,
         "handoffs": handoffs,
         "failures": failures,
     }))
@@ -1966,6 +1982,30 @@ fn load_change_set_by_id<S: CanonicalStore>(
         "change set not found: {}",
         change_set_id
     )))
+}
+
+fn change_set_synthetic_marker<S: CanonicalStore>(
+    store: &S,
+    change_set: &earmark_core::ChangeSet,
+) -> Result<(bool, Option<String>), CliError> {
+    for object_id in &change_set.created_object_ids {
+        let Some(stored) = store.read_head(object_id)? else {
+            continue;
+        };
+        let synthetic = matches!(
+            stored.envelope.headers.get("synthetic"),
+            Some(HeaderValue::Bool(true))
+        );
+        if !synthetic {
+            continue;
+        }
+        let source = match stored.envelope.headers.get("synthetic_source") {
+            Some(HeaderValue::String(value)) => Some(value.clone()),
+            _ => None,
+        };
+        return Ok((true, source));
+    }
+    Ok((false, None))
 }
 
 fn load_handoff_by_id<S: CanonicalStore>(
@@ -2513,6 +2553,7 @@ fn html_wrap(title: &str, content: &str) -> String {
             --accent: #818cf8;
             --success: #10b981;
             --error: #ef4444;
+            --warning: #f59e0b;
             --border: #334155;
         }}
         body {{
@@ -2612,6 +2653,19 @@ fn generate_run_report<S: CanonicalStore>(store: &S, run_id: &str) -> Result<Str
     let graph = build_run_graph(store, run_id)?;
 
     let mut content = String::new();
+    if let Some(synthetic_change_sets) = related
+        .get("synthetic_change_sets")
+        .and_then(|v| v.as_array())
+    {
+        if !synthetic_change_sets.is_empty() {
+            content.push_str(
+                r#"<div class="summary-card" style="border-left: 4px solid var(--warning);">
+            <h2>Synthetic Output Warning</h2>
+            <p>This run includes change sets produced from synthetic mock provider output. Do not treat these artifacts as model-derived production evidence.</p>
+        </div>"#,
+            );
+        }
+    }
     content.push_str(&format!(
         r#"<div class="summary-card">
             <h2>Run Summary</h2>
