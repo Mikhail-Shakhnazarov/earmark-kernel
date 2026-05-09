@@ -69,13 +69,16 @@ fn register_simple_class(
     rel_type: &str,
     target_class: &str,
 ) {
-    register_class_definition(store, index, name, vec![
-        earmark_core::RelationRule {
+    register_class_definition(
+        store,
+        index,
+        name,
+        vec![earmark_core::RelationRule {
             relation_type: rel_type.to_string(),
             target_classes: vec![target_class.to_string()],
             direction: None,
-        }
-    ]);
+        }],
+    );
 }
 
 struct FakeContextCompiler;
@@ -801,8 +804,11 @@ fn test_compile_connected_context_dedupes_relation_refs() {
     assert_eq!(unique_relation_ids.len(), manifest.relation_refs.len());
 }
 
-
-fn create_test_object(store: &GitCanonicalStore, index: &DerivedIndex, class: &str) -> earmark_core::ObjectId {
+fn create_test_object(
+    store: &GitCanonicalStore,
+    index: &DerivedIndex,
+    class: &str,
+) -> earmark_core::ObjectId {
     let stored = earmark_store::StoredObject::new(
         earmark_core::Kind::Object,
         Some(class.to_string()),
@@ -1037,9 +1043,7 @@ fn test_create_relation_missing_classes_fails() {
             vec![],
         );
         let v = store.write_object(&stored).unwrap();
-        index
-            .upsert_head_object_from_store(&store, &v.id)
-            .unwrap();
+        index.upsert_head_object_from_store(&store, &v.id).unwrap();
         v.id
     };
     let target_id = create_test_object(&store, &index, "some_class");

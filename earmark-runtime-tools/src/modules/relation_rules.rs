@@ -19,11 +19,9 @@ fn load_class_definition_for_object<S: CanonicalStore>(
     surface: &RuntimeToolSurface<'_, S>,
     object: &StoredObject,
 ) -> Result<ClassDefinition, RuntimeToolError> {
-    let class_name = object
-        .envelope
-        .class
-        .as_deref()
-        .ok_or_else(|| RuntimeToolError::RelationRuleViolation("object has no class".to_string()))?;
+    let class_name = object.envelope.class.as_deref().ok_or_else(|| {
+        RuntimeToolError::RelationRuleViolation("object has no class".to_string())
+    })?;
 
     let (class_id, version_id) = surface
         .index
@@ -37,7 +35,7 @@ fn load_class_definition_for_object<S: CanonicalStore>(
 
     let stored = surface.store.read_version(&class_ref)?;
     let text = stored.payload.as_utf8()?;
-    
+
     Ok(earmark_core::parse_yaml(&text)?)
 }
 

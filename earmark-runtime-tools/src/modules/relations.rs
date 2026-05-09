@@ -24,7 +24,7 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
             .store
             .read_head(&target_id)?
             .ok_or_else(|| RuntimeToolError::MissingObject(target_id.as_str().to_string()))?;
-        
+
         crate::modules::relation_rules::validate_relation_creation(
             self,
             &source_head,

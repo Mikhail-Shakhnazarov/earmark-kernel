@@ -643,10 +643,22 @@ fn workspace_root() -> PathBuf {
         .to_path_buf()
 }
 
-fn assert_paths_eq<P1: AsRef<std::path::Path>, P2: AsRef<std::path::Path>>(actual: P1, expected: P2) {
-    let a = actual.as_ref().canonicalize().unwrap_or_else(|_| actual.as_ref().to_path_buf());
-    let e = expected.as_ref().canonicalize().unwrap_or_else(|_| expected.as_ref().to_path_buf());
-    assert_eq!(a.to_string_lossy().to_lowercase(), e.to_string_lossy().to_lowercase());
+fn assert_paths_eq<P1: AsRef<std::path::Path>, P2: AsRef<std::path::Path>>(
+    actual: P1,
+    expected: P2,
+) {
+    let a = actual
+        .as_ref()
+        .canonicalize()
+        .unwrap_or_else(|_| actual.as_ref().to_path_buf());
+    let e = expected
+        .as_ref()
+        .canonicalize()
+        .unwrap_or_else(|_| expected.as_ref().to_path_buf());
+    assert_eq!(
+        a.to_string_lossy().to_lowercase(),
+        e.to_string_lossy().to_lowercase()
+    );
 }
 
 #[test]
