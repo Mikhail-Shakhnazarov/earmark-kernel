@@ -3,7 +3,7 @@ use crate::helpers::uuid_like;
 use chrono::Utc;
 use earmark_core::{
     InstructionPayload, ProviderProfile, ProviderRecord, ProviderRequest, ProviderResponse,
-    ProviderResponseContract, VersionRef,
+    ProviderResponseContract, ScalarValue, VersionRef,
 };
 use std::collections::{BTreeMap, HashMap};
 use std::env;
@@ -201,6 +201,22 @@ pub fn compiled_provider_capabilities() -> Vec<ProviderCapability> {
 
 pub struct MockAdapter;
 
+pub fn provider_response_is_synthetic(response: &ProviderResponse) -> bool {
+    match response.metadata.get("synthetic") {
+        Some(ScalarValue::Bool(v)) => *v,
+        _ => response.provider == "mock",
+    }
+}
+
+pub fn provider_metadata_synthetic_source(
+    metadata: &BTreeMap<String, ScalarValue>,
+) -> Option<String> {
+    match metadata.get("synthetic_source") {
+        Some(ScalarValue::String(v)) => Some(v.clone()),
+        _ => None,
+    }
+}
+
 impl ProviderAdapter for MockAdapter {
     fn provider_key(&self) -> &'static str {
         "mock"
@@ -217,13 +233,31 @@ impl ProviderAdapter for MockAdapter {
                 "Intentional failure for demo purposes.",
             ));
         }
+        let mut metadata = BTreeMap::new();
+        metadata.insert("synthetic".to_string(), ScalarValue::Bool(true));
+        metadata.insert(
+            "synthetic_source".to_string(),
+            ScalarValue::String("mock_provider".to_string()),
+        );
+        metadata.insert(
+            "synthetic_kind".to_string(),
+            ScalarValue::String("fixture_response".to_string()),
+        );
+        metadata.insert("production_eligible".to_string(), ScalarValue::Bool(false));
+        metadata.insert(
+            "warning".to_string(),
+            ScalarValue::String(
+                "Synthetic mock provider output; do not treat as model-derived evidence."
+                    .to_string(),
+            ),
+        );
         Ok(ProviderResponse {
             request_id: request.request_id,
             provider: "mock".to_string(),
             model: "echo".to_string(),
             status: "completed".to_string(),
-            candidate_payload: "Mock response for extraction/synthesis. Federated graphs provide agile ownership but introduce heterogeneity costs.".to_string(),
-            metadata: BTreeMap::new(),
+            candidate_payload: "[SYNTHETIC MOCK OUTPUT] Fixture response for extraction/synthesis tests. Federated graphs provide agile ownership but introduce heterogeneity costs.".to_string(),
+            metadata,
             usage: None,
             received_at: Utc::now(),
         })
@@ -435,6 +469,7 @@ pub fn provider_record_from_response(
         provider: profile.provider.clone(),
         model: profile.model.clone(),
         status: response.status.clone(),
+        metadata: response.metadata.clone(),
         usage: response.usage.clone(),
         message,
         recorded_at: Utc::now(),
@@ -446,6 +481,15 @@ pub fn provider_record_from_failure(
     profile: &ProviderProfile,
     failure: &ProviderFailure,
 ) -> ProviderRecord {
+    let mut metadata = BTreeMap::new();
+    if profile.provider == "mock" {
+        metadata.insert("synthetic".to_string(), ScalarValue::Bool(true));
+        metadata.insert(
+            "synthetic_source".to_string(),
+            ScalarValue::String("mock_provider".to_string()),
+        );
+        metadata.insert("production_eligible".to_string(), ScalarValue::Bool(false));
+    }
     ProviderRecord {
         record_id: format!("prec_{}", uuid_like()),
         request_id: request.request_id.clone(),
@@ -455,6 +499,7 @@ pub fn provider_record_from_failure(
         provider: profile.provider.clone(),
         model: profile.model.clone(),
         status: format!("{:?}", failure.kind).to_lowercase(),
+        metadata,
         usage: None,
         message: Some(failure.message.clone()),
         recorded_at: Utc::now(),

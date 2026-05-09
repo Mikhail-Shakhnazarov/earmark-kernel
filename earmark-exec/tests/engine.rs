@@ -4,9 +4,9 @@ use chrono::Utc;
 use earmark_core::{
     to_yaml, ChangeSet, ClassDefinition, ClassStandingRules, CompiledContextExpansion,
     CompiledContextRender, CompiledContextSelect, CompiledContextTemplate,
-    CompiledContextVisibility, EpistemicStanding, HandoffManifest, HeaderValue,
-    InstructionPayload, JsonSchemaRef, Kind, MarkdownBody, Provenance, RuntimeProfile, Standing,
-    SystemDefinition, TransformationFailure, TransitionAssignment, VersionRef,
+    CompiledContextVisibility, EpistemicStanding, HandoffManifest, HeaderValue, InstructionPayload,
+    JsonSchemaRef, Kind, MarkdownBody, Provenance, RuntimeProfile, Standing, SystemDefinition,
+    TransformationFailure, TransitionAssignment, VersionRef,
 };
 use earmark_exec::{ExecError, ExecutionEngine, ProviderRegistry, WorkflowRunRequest};
 use earmark_index::DerivedIndex;
@@ -136,7 +136,7 @@ fn workflow_run_materializes_packet_and_run_ledger() {
             standing: BTreeMap::new(),
             relations: vec![],
             time_range: None,
-        expansion: CompiledContextExpansion::default(),
+            expansion: CompiledContextExpansion::default(),
         },
         group_by: vec![],
         render: CompiledContextRender {
@@ -394,7 +394,7 @@ fn successor_run_can_reconstruct_inputs_from_handoff_manifest() {
             standing: BTreeMap::new(),
             relations: vec![],
             time_range: None,
-        expansion: CompiledContextExpansion::default(),
+            expansion: CompiledContextExpansion::default(),
         },
         group_by: vec![],
         render: CompiledContextRender {
@@ -975,7 +975,7 @@ fn workflow_run_fails_when_transform_output_class_is_undeclared() {
             standing: BTreeMap::new(),
             relations: vec![],
             time_range: None,
-        expansion: CompiledContextExpansion::default(),
+            expansion: CompiledContextExpansion::default(),
         },
         group_by: vec![],
         render: CompiledContextRender {
@@ -1202,7 +1202,7 @@ fn workflow_run_fails_when_output_standing_violates_class_rules() {
             standing: BTreeMap::new(),
             relations: vec![],
             time_range: None,
-        expansion: CompiledContextExpansion::default(),
+            expansion: CompiledContextExpansion::default(),
         },
         group_by: vec![],
         render: CompiledContextRender {
@@ -1429,7 +1429,7 @@ fn workflow_run_fails_when_declared_transition_is_unreachable() {
             standing: BTreeMap::new(),
             relations: vec![],
             time_range: None,
-        expansion: CompiledContextExpansion::default(),
+            expansion: CompiledContextExpansion::default(),
         },
         group_by: vec![],
         render: CompiledContextRender {
@@ -1980,7 +1980,7 @@ fn test_transform_emits_standing_request() {
             standing: BTreeMap::new(),
             relations: vec![],
             time_range: None,
-        expansion: CompiledContextExpansion::default(),
+            expansion: CompiledContextExpansion::default(),
         },
         group_by: vec![],
         render: CompiledContextRender {

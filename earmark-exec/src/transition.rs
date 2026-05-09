@@ -23,7 +23,8 @@ use crate::persistence::{
     ChangeSetPersistence,
 };
 use crate::provider::{
-    provider_record_from_failure, provider_record_from_response, resolve_provider_profile,
+    provider_metadata_synthetic_source, provider_record_from_failure,
+    provider_record_from_response, provider_response_is_synthetic, resolve_provider_profile,
     ProviderMode,
 };
 use crate::resolution::{
@@ -94,6 +95,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
             unresolved_ambiguities: vec![],
             rejected_candidates: vec![],
         };
+        let mut synthetic_output_warning: Option<String> = None;
 
         let filtered_inputs: Vec<ObjectRef> = if transition.input_contracts.is_empty() {
             state.active_objects.clone()
@@ -253,6 +255,15 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                                     &response,
                                     None,
                                 );
+                                if provider_response_is_synthetic(&response) {
+                                    let source =
+                                        provider_metadata_synthetic_source(&response.metadata)
+                                            .unwrap_or_else(|| "mock_provider".to_string());
+                                    synthetic_output_warning = Some(format!(
+                                        "synthetic provider output detected (source: {}); artifact is not production evidence",
+                                        source
+                                    ));
+                                }
                                 let event = StoredObject::new(
                                     Kind::Event,
                                     Some("provider_record".to_string()),
@@ -493,6 +504,10 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                 &assignment,
                 &change_set_draft,
             )?;
+            let mut validation_result = validation_result;
+            if let Some(warning) = synthetic_output_warning.clone() {
+                validation_result.warnings.push(warning);
+            }
             change_set_draft.standing_requests.extend(standing_requests);
             if !validation_result.is_valid {
                 change_set_draft
