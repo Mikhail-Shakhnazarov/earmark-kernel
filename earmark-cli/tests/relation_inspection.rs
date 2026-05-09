@@ -72,44 +72,44 @@ fn relation_inspection_and_explanation() {
         .unwrap()
         .to_string();
 
-    // 4. Create relation using deposit kind=relation (this is a bit of a hack but it works if implemented)
-    // Actually, I don't have a direct "create relation" CLI command yet, 
-    // but the task was to update inspection/explanation.
-    // I'll use a trick: register a system and run a workflow that creates a relation.
-    // Or I can use `em deposit` with `--kind relation`.
-    
-    // Let's see if `em deposit` handles relations.
-    // In `deposit.rs`:
-    // let payload_value = if args.json_payload.is_some() || kind == Kind::Relation { ... }
-    
-    let rel_payload = serde_json::json!({
-        "source": { "id": id1, "version_id": "ver_00000000000000000000000000000000", "kind": "object", "class": "finding" },
-        "target": { "id": id2, "version_id": "ver_00000000000000000000000000000000", "kind": "object", "class": "source_note" },
-        "relation_type": "derived_from",
-        "qualifiers": {},
-    });
-
-    let dep_rel = Command::cargo_bin("earmark-cli")
-        .unwrap()
-        .arg("--root")
-        .arg(dir.path())
-        .arg("--json")
-        .arg("deposit")
-        .arg("--class")
-        .arg("finding")
-        .arg("--kind")
-        .arg("relation")
-        .arg("--json-payload")
-        .arg(serde_json::to_string(&rel_payload).unwrap())
-        .assert()
-        .success()
-        .get_output()
-        .stdout
-        .clone();
-    let rel_id = serde_json::from_slice::<Value>(&dep_rel).unwrap()["data"]["object_id"]
-        .as_str()
-        .unwrap()
-        .to_string();
+    // 4. Create a privileged relation using the real canonical path
+    let rel_id = {
+        use earmark_core::*;
+        use earmark_store::*;
+        use earmark_index::*;
+        
+        let store = GitCanonicalStore::new(dir.path());
+        let index = DerivedIndex::open(dir.path()).unwrap();
+        
+        let payload = RelationPayload {
+            source: ObjectRef::new(
+                ObjectId::parse(&id1).unwrap(),
+                VersionId::new(),
+                Kind::Object,
+                Some("finding".to_string()),
+            ),
+            target: ObjectRef::new(
+                ObjectId::parse(&id2).unwrap(),
+                VersionId::new(),
+                Kind::Object,
+                Some("source_note".to_string()),
+            ),
+            relation_type: REL_TYPE_USED_INSTRUCTION.to_string(),
+            qualifiers: std::collections::BTreeMap::new(),
+            scope: None,
+        };
+        
+        let rel_ref = earmark_exec::persist_relation_canonical(
+            &store,
+            &index,
+            payload,
+            Provenance::direct_input("test"),
+            RelationCreationMode::PrivilegedSystem,
+            None,
+        ).unwrap();
+        
+        rel_ref.id.to_string()
+    };
 
     // 5. Test em relation show
     Command::cargo_bin("earmark-cli")
@@ -122,7 +122,7 @@ fn relation_inspection_and_explanation() {
         .assert()
         .success();
 
-    // 6. Test em relation explain
+    // 6. Test em relation explain surfaces creation mode
     let explain_output = Command::cargo_bin("earmark-cli")
         .unwrap()
         .arg("--root")
@@ -137,7 +137,8 @@ fn relation_inspection_and_explanation() {
         .clone();
     let explain_text = String::from_utf8(explain_output).unwrap();
     assert!(explain_text.contains("RELATION Explanation"));
-    assert!(explain_text.contains("derived_from"));
+    assert!(explain_text.contains("used_instruction"));
+    assert!(explain_text.contains("Creation Mode: privileged_system"));
 
     // 7. Test em relation list
     Command::cargo_bin("earmark-cli")

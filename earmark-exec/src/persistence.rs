@@ -2,12 +2,15 @@ use crate::error::ExecError;
 use crate::handoff::create_lineage_relations;
 use crate::ir::TransformArtifacts;
 use crate::provider::{provider_metadata_synthetic_source, provider_response_is_synthetic};
+use crate::relation::persist_relation_canonical;
 use chrono::Utc;
 use earmark_core::{
     ChangeSetDraft, ChangeSetId, ChangeSetValidationResult, HandoffManifestId, InstructionPayload,
-    Kind, ObjectId, ObjectRef, Provenance, ProviderResponse, RelationPayload, RunRecord, Standing,
-    TransformationFailure, TransitionAssignment,
+    Kind, ObjectId, ObjectRef, Provenance, ProviderResponse, RelationCreationMode, RelationPayload,
+    RunRecord, Standing, TransformationFailure, TransitionAssignment, REL_TYPE_REQUESTS_STANDING,
+    REL_TYPE_RESULTED_IN_FAILURE,
 };
+use earmark_index::DerivedIndex;
 use earmark_store::{CanonicalStore, StoredObject, StoredPayload};
 use std::collections::BTreeMap;
 
@@ -19,6 +22,7 @@ pub(crate) struct ChangeSetPersistence<'a> {
     pub(crate) draft: &'a ChangeSetDraft,
     pub(crate) validation_results: Vec<ChangeSetValidationResult>,
     pub(crate) handoff_manifest_id: Option<HandoffManifestId>,
+    pub(crate) index: &'a DerivedIndex,
 }
 
 pub(crate) fn persist_change_set<S: CanonicalStore>(
@@ -33,6 +37,7 @@ pub(crate) fn persist_change_set<S: CanonicalStore>(
         draft,
         validation_results,
         handoff_manifest_id,
+        index,
     } = persistence;
 
     let change_set = earmark_core::ChangeSet {
@@ -107,20 +112,18 @@ pub(crate) fn persist_change_set<S: CanonicalStore>(
                 Kind::Object,
                 Some("standing_transition_request".to_string()),
             ),
-            relation_type: "requests_standing".to_string(),
+            relation_type: REL_TYPE_REQUESTS_STANDING.to_string(),
             qualifiers: BTreeMap::new(),
             scope: None,
         };
-        let stored_rel = StoredObject::new(
-            Kind::Relation,
-            None,
-            Standing::default(),
+        persist_relation_canonical(
+            store,
+            index,
+            rel_payload,
             Provenance::direct_input("execution_engine"),
-            BTreeMap::new(),
-            StoredPayload::from_json_bytes(serde_json::to_vec_pretty(&rel_payload)?),
-            vec![],
-        );
-        store.write_object(&stored_rel)?;
+            RelationCreationMode::PrivilegedSystem,
+            None,
+        )?;
     }
     record.change_sets.push(change_set_id.clone());
     Ok(change_set_id)
@@ -143,6 +146,7 @@ pub(crate) fn persist_assignment_update<S: CanonicalStore>(
 
 pub(crate) fn persist_transformation_failure<S: CanonicalStore>(
     store: &S,
+    index: &DerivedIndex,
     assignment_head: &StoredObject,
     assignment: &TransitionAssignment,
     failed_change_set_id: Option<ChangeSetId>,
@@ -183,26 +187,25 @@ pub(crate) fn persist_transformation_failure<S: CanonicalStore>(
     let rel_payload = RelationPayload {
         source: assignment_head.object_ref(),
         target: failure_ref.clone(),
-        relation_type: "resulted_in_failure".to_string(),
+        relation_type: REL_TYPE_RESULTED_IN_FAILURE.to_string(),
         qualifiers: BTreeMap::new(),
         scope: None,
     };
-    let stored_rel = StoredObject::new(
-        Kind::Relation,
-        None,
-        Standing::default(),
+    persist_relation_canonical(
+        store,
+        index,
+        rel_payload,
         Provenance::direct_input("execution_engine"),
-        BTreeMap::new(),
-        StoredPayload::from_json_bytes(serde_json::to_vec_pretty(&rel_payload)?),
-        vec![],
-    );
-    store.write_object(&stored_rel)?;
+        RelationCreationMode::PrivilegedSystem,
+        None,
+    )?;
 
     Ok(failure_ref)
 }
 
 pub(crate) fn create_local_transform_output<S: CanonicalStore>(
     store: &S,
+    index: &DerivedIndex,
     instruction: &InstructionPayload,
     output_class: &str,
     inputs: &[ObjectRef],
@@ -256,7 +259,7 @@ pub(crate) fn create_local_transform_output<S: CanonicalStore>(
     );
     store.write_object(&stored)?;
     let relation_ids =
-        create_lineage_relations(store, &stored.object_ref(), inputs, instruction_ref)?;
+        create_lineage_relations(store, index, &stored.object_ref(), inputs, instruction_ref)?;
     Ok(TransformArtifacts {
         output: stored.object_ref(),
         relation_ids,
@@ -265,6 +268,7 @@ pub(crate) fn create_local_transform_output<S: CanonicalStore>(
 
 pub(crate) fn create_delegated_transform_output<S: CanonicalStore>(
     store: &S,
+    index: &DerivedIndex,
     instruction: &InstructionPayload,
     output_class: &str,
     inputs: &[ObjectRef],
@@ -329,7 +333,7 @@ pub(crate) fn create_delegated_transform_output<S: CanonicalStore>(
     );
     store.write_object(&stored)?;
     let relation_ids =
-        create_lineage_relations(store, &stored.object_ref(), inputs, instruction_ref)?;
+        create_lineage_relations(store, index, &stored.object_ref(), inputs, instruction_ref)?;
     Ok(TransformArtifacts {
         output: stored.object_ref(),
         relation_ids,

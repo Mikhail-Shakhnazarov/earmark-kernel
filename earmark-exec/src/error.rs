@@ -35,6 +35,8 @@ impl ProviderFailure {
 pub enum ExecError {
     #[error("invalid workflow: {0}")]
     InvalidWorkflow(String),
+    #[error("invalid relation mode: {0}")]
+    InvalidRelationMode(String),
     #[error("conflicting continuation sources: {0}")]
     ConflictingContinuationSources(String),
     #[error("missing transition assignment: {0}")]

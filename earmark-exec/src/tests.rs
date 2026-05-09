@@ -4,12 +4,13 @@ use crate::provider::{
     ProviderExecutionOutcome, ProviderService,
 };
 use earmark_core::{
-    ObjectId, ObjectRef, ProviderProfile, ProviderRequest, ProviderResponseContract, ScalarValue,
-    VersionId, VersionRef, WorkflowDefinition, WorkflowOperation,
+    Kind, ObjectId, ObjectRef, ProviderProfile, ProviderRequest, ProviderResponseContract,
+    ScalarValue, VersionId, VersionRef, WorkflowDefinition, WorkflowOperation,
 };
 use earmark_index::*;
 use earmark_store::GitCanonicalStore;
 use earmark_store::*;
+use std::collections::BTreeMap;
 use tempfile::tempdir;
 
 #[test]
@@ -312,8 +313,10 @@ fn delegated_transform_output_sets_synthetic_headers() {
         received_at: chrono::Utc::now(),
     };
 
+    let index = DerivedIndex::open(dir.path()).unwrap();
     let artifacts = crate::persistence::create_delegated_transform_output(
         &store,
+        &index,
         &instruction,
         "finding",
         &[input_obj_ref],
@@ -578,4 +581,161 @@ fn test_gemini_capability_reports_missing_api_key() {
     if let Ok(val) = old_key {
         std::env::set_var("GOOGLE_API_KEY", val);
     }
+}
+#[test]
+fn test_privileged_relation_creation_and_validation() {
+    let dir = tempdir().unwrap();
+    let store = GitCanonicalStore::new(dir.path());
+    store.init_layout().unwrap();
+    let index = DerivedIndex::open(dir.path()).unwrap();
+
+    let source = StoredObject::new(
+        earmark_core::Kind::Object,
+        Some("note".to_string()),
+        earmark_core::Standing::default(),
+        earmark_core::Provenance::direct_input("test"),
+        std::collections::BTreeMap::new(),
+        StoredPayload::from_markdown("source"),
+        vec![],
+    );
+    let source_ref = store.write_object(&source).unwrap();
+    index
+        .upsert_head_object_from_store(&store, &source_ref.id)
+        .unwrap();
+
+    let target = StoredObject::new(
+        earmark_core::Kind::Object,
+        Some("finding".to_string()),
+        earmark_core::Standing::default(),
+        earmark_core::Provenance::direct_input("test"),
+        std::collections::BTreeMap::new(),
+        StoredPayload::from_markdown("target"),
+        vec![],
+    );
+    let target_ref = store.write_object(&target).unwrap();
+    index
+        .upsert_head_object_from_store(&store, &target_ref.id)
+        .unwrap();
+
+    let rel_payload = earmark_core::RelationPayload {
+        source: source.object_ref(),
+        target: target.object_ref(),
+        relation_type: earmark_core::REL_TYPE_USED_INSTRUCTION.to_string(),
+        qualifiers: std::collections::BTreeMap::new(),
+        scope: None,
+    };
+
+    let rel_ref = crate::persist_relation_canonical(
+        &store,
+        &index,
+        rel_payload,
+        earmark_core::Provenance::direct_input("test"),
+        earmark_core::RelationCreationMode::PrivilegedSystem,
+        None,
+    )
+    .unwrap();
+
+    let stored_rel = store.read_version(&rel_ref.version_ref()).unwrap();
+    assert_eq!(
+        stored_rel.envelope.headers.get("relation_creation_mode"),
+        Some(&earmark_core::HeaderValue::String(
+            "privileged_system".to_string()
+        ))
+    );
+
+    // Validation should pass even if class rules don't exist for this relation type
+    let system = earmark_core::SystemDefinition {
+        system_id: "test".to_string(),
+        namespace: "test".to_string(),
+        title: "test".to_string(),
+        description: None,
+        runtime_profile: earmark_core::RuntimeProfile {
+            execution_surface: "local".to_string(),
+            machine_output_default: "json".to_string(),
+            work_surface_mode: "manifest".to_string(),
+        },
+        classes: vec![], // No classes defined, so no rules
+        instructions: vec![],
+        policies: vec![],
+        workflows: vec![],
+        compiled_contexts: vec![],
+        provider_profiles: vec![],
+        default_compiled_context: None,
+        default_provider_profile: None,
+        activated_at: None,
+    };
+
+    let (result, _) = crate::validation::validate_transition_change_set(
+        &store,
+        &index,
+        &system,
+        &crate::ir::ExecutionTransition {
+            id: "test".to_string(),
+            operation: "transform".to_string(),
+            input_contracts: vec![],
+            output_contracts: vec![],
+            instruction: None,
+            compiled_context: None,
+            policy: None,
+            provider_profile: None,
+        },
+        &earmark_core::TransitionAssignment {
+            id: earmark_core::TransitionAssignmentId::new(),
+            run_id: "run".to_string(),
+            transition_id: "test".to_string(),
+            assigned_to: "test".to_string(),
+            status: earmark_core::AssignmentStatus::Assigned,
+            input_object_ids: vec![],
+            handoff_manifest_id: None,
+            event_ids: vec![],
+            blocked_reason: None,
+            completion_change_set_id: None,
+            assigned_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+            expires_at: None,
+            completed_at: None,
+        },
+        &earmark_core::ChangeSetDraft {
+            created_objects: vec![],
+            created_relations: vec![rel_ref.id],
+            updated_objects: vec![],
+            governance_events: vec![],
+            standing_requests: vec![],
+            blocked_operations: vec![],
+            unresolved_ambiguities: vec![],
+            rejected_candidates: vec![],
+        },
+    )
+    .unwrap();
+
+    assert!(result.is_valid, "Privileged relation should pass validation");
+}
+
+#[test]
+fn test_privileged_relation_enforcement_failure() {
+    let dir = tempdir().unwrap();
+    let store = GitCanonicalStore::new(dir.path());
+    store.init_layout().unwrap();
+    let index = DerivedIndex::open(dir.path()).unwrap();
+
+    let payload = earmark_core::RelationPayload {
+        source: ObjectRef::new(ObjectId::new(), VersionId::new(), Kind::Object, None),
+        target: ObjectRef::new(ObjectId::new(), VersionId::new(), Kind::Object, None),
+        relation_type: "some_ordinary_type".to_string(),
+        qualifiers: BTreeMap::new(),
+        scope: None,
+    };
+
+    let result = crate::persist_relation_canonical(
+        &store,
+        &index,
+        payload,
+        earmark_core::Provenance::direct_input("test"),
+        earmark_core::RelationCreationMode::PrivilegedSystem,
+        None,
+    );
+
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert!(err.to_string().contains("is not a privileged system relation"));
 }

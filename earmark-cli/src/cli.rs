@@ -82,12 +82,27 @@ pub struct RunCommand {
 
 #[derive(Subcommand)]
 pub enum RunAction {
-    Show { run_id: String },
+    Show {
+        #[arg(help = "Run ID or 'latest'")]
+        run_id: String,
+    },
     List,
-    Timeline { run_id: String },
-    Artifacts { run_id: String },
-    Explain { run_id: String },
-    Graph { run_id: String },
+    Timeline {
+        #[arg(help = "Run ID or 'latest'")]
+        run_id: String,
+    },
+    Artifacts {
+        #[arg(help = "Run ID or 'latest'")]
+        run_id: String,
+    },
+    Explain {
+        #[arg(help = "Run ID or 'latest'")]
+        run_id: String,
+    },
+    Graph {
+        #[arg(help = "Run ID or 'latest'")]
+        run_id: String,
+    },
 }
 
 #[derive(Args)]
@@ -149,7 +164,7 @@ pub enum AssignmentAction {
         assignment_id: String,
     },
     List {
-        #[arg(long)]
+        #[arg(long, help = "Run ID or 'latest'")]
         run_id: Option<String>,
         #[arg(long)]
         status: Option<String>,
@@ -171,7 +186,7 @@ pub enum ChangeSetAction {
         change_set_id: String,
     },
     List {
-        #[arg(long)]
+        #[arg(long, help = "Run ID or 'latest'")]
         run_id: Option<String>,
     },
 }
@@ -191,7 +206,7 @@ pub enum HandoffAction {
         handoff_id: String,
     },
     List {
-        #[arg(long)]
+        #[arg(long, help = "Run ID or 'latest'")]
         run_id: Option<String>,
     },
 }
@@ -211,7 +226,7 @@ pub enum FailureAction {
         failure_id: String,
     },
     List {
-        #[arg(long)]
+        #[arg(long, help = "Run ID or 'latest'")]
         run_id: Option<String>,
         #[arg(long)]
         transition_id: Option<String>,
@@ -262,7 +277,7 @@ pub struct AuditCommand {
 #[derive(Subcommand)]
 pub enum AuditAction {
     Failures {
-        #[arg(long)]
+        #[arg(long, help = "Run ID or 'latest'")]
         run_id: Option<String>,
         #[arg(long)]
         transition_id: Option<String>,
@@ -281,6 +296,7 @@ pub struct ReportCommand {
 #[derive(Subcommand)]
 pub enum ReportAction {
     Run {
+        #[arg(help = "Run ID or 'latest'")]
         target_id: String,
         #[arg(short, long)]
         output: PathBuf,

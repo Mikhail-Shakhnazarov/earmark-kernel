@@ -1,9 +1,9 @@
 use crate::modules::error::RuntimeToolError;
 use crate::modules::surface::RuntimeToolSurface;
 use earmark_core::{
-    Kind, ObjectId, ObjectRef, Provenance, RelationFilter, RuntimeProvenance, Standing,
+    ObjectId, ObjectRef, Provenance, RelationCreationMode, RelationFilter, RuntimeProvenance,
 };
-use earmark_store::{CanonicalStore, StoredObject, StoredPayload};
+use earmark_store::CanonicalStore;
 use serde_json::Value;
 use std::collections::BTreeMap;
 
@@ -69,31 +69,23 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
             scope: None,
         };
 
-        let stored = StoredObject::new(
-            Kind::Relation,
-            None,
-            Standing::default(),
-            Provenance {
-                actor: provenance.actor,
-                source_type: provenance.source_type,
-                source_ref: None,
-                lineage: vec![],
-                import_path: None,
-                captured_at: chrono::Utc::now(),
-            },
-            headers,
-            StoredPayload::from_json_bytes(serde_json::to_vec_pretty(&relation)?),
-            vec![],
-        );
-        let version_ref = self.store.write_object(&stored)?;
-        self.index
-            .upsert_head_object_from_store(self.store, &version_ref.id)?;
-        Ok(ObjectRef::new(
-            version_ref.id,
-            version_ref.version_id,
-            Kind::Relation,
-            None,
-        ))
+        let provenance = Provenance {
+            actor: provenance.actor,
+            source_type: provenance.source_type,
+            source_ref: None,
+            lineage: vec![],
+            import_path: None,
+            captured_at: chrono::Utc::now(),
+        };
+
+        Ok(earmark_exec::persist_relation_canonical(
+            self.store,
+            self.index,
+            relation,
+            provenance,
+            RelationCreationMode::Declared,
+            Some(headers),
+        )?)
     }
 }
 

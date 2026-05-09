@@ -510,6 +510,30 @@ impl Envelope {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RelationCreationMode {
+    Declared,
+    PrivilegedSystem,
+}
+
+pub const REL_TYPE_USED_INSTRUCTION: &str = "used_instruction";
+pub const REL_TYPE_USED_COMPILED_CONTEXT: &str = "used_compiled_context";
+pub const REL_TYPE_REQUESTS_STANDING: &str = "requests_standing";
+pub const REL_TYPE_RESULTED_IN_FAILURE: &str = "resulted_in_failure";
+pub const REL_TYPE_DERIVED_FROM: &str = "derived_from";
+
+pub const PRIVILEGED_RELATION_TYPES: &[&str] = &[
+    REL_TYPE_USED_INSTRUCTION,
+    REL_TYPE_USED_COMPILED_CONTEXT,
+    REL_TYPE_REQUESTS_STANDING,
+    REL_TYPE_RESULTED_IN_FAILURE,
+];
+
+pub fn is_privileged_relation(rel_type: &str) -> bool {
+    PRIVILEGED_RELATION_TYPES.contains(&rel_type)
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RelationPayload {
     pub source: ObjectRef,

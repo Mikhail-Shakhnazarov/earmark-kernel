@@ -451,20 +451,22 @@ pub(crate) fn validate_relation_object<S: CanonicalStore>(
             relation.target.id.as_str()
         ));
     }
+    if earmark_core::is_privileged_relation(&relation.relation_type) {
+        return Ok(());
+    }
+
     if let Some(source_class) = &relation.source.class {
         if let Some(definition) = declared_classes.get(source_class) {
-            let relation_allowed = relation.relation_type == "used_instruction"
-                || relation.relation_type == "used_compiled_context"
-                || definition.relation_rules.iter().any(|rule| {
-                    rule.relation_type == relation.relation_type
-                        && (rule.counterparty_classes.is_empty()
-                            || relation
-                                .target
-                                .class
-                                .as_ref()
-                                .map(|target_class| rule.counterparty_classes.contains(target_class))
-                                .unwrap_or(false))
-                });
+            let relation_allowed = definition.relation_rules.iter().any(|rule| {
+                rule.relation_type == relation.relation_type
+                    && (rule.counterparty_classes.is_empty()
+                        || relation
+                            .target
+                            .class
+                            .as_ref()
+                            .map(|target_class| rule.counterparty_classes.contains(target_class))
+                            .unwrap_or(false))
+            });
             if !relation_allowed && !definition.relation_rules.is_empty() {
                 failures.push(format!(
                     "relation {} is not allowed from class {}",
