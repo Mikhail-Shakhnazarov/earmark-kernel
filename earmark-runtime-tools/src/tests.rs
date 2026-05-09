@@ -35,6 +35,7 @@ impl<S: CanonicalStore> CompiledContextCompiler<S> for FakeContextCompiler {
             work_packet: None,
             generated_at: Utc::now(),
             objects: vec![],
+            boundary_relations: vec![],
             constraints: BTreeMap::new(),
         })
     }

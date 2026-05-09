@@ -662,17 +662,12 @@ impl Default for CompiledContextExpansion {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ExpansionObjectFilter {
+    #[default]
     Inherit,
     None,
-}
-
-impl Default for ExpansionObjectFilter {
-    fn default() -> Self {
-        Self::Inherit
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1256,7 +1251,8 @@ struct InstructionFrontmatter {
 pub fn parse_markdown_frontmatter<T: DeserializeOwned>(
     input: &str,
 ) -> Result<(T, String), CoreError> {
-    let trimmed = input.trim_start();
+    let normalized = input.replace("\r\n", "\n");
+    let trimmed = normalized.trim_start();
     if !trimmed.starts_with("---\n") {
         return Err(CoreError::InvalidFrontmatter(
             "missing opening frontmatter delimiter".to_string(),
