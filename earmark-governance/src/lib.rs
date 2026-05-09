@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use chrono::Utc;
 use earmark_core::{
     HeaderValue, Kind, ObjectRef, ProcessStanding, Provenance, ReviewStanding, Standing,
-    StandingPolicy, Timestamp,
+    StandingDimension, StandingPolicy, Timestamp,
 };
 use earmark_store::{CanonicalStore, StoredObject, StoredPayload};
 use serde::{Deserialize, Serialize};
@@ -50,7 +50,7 @@ impl GovernanceService {
             BTreeMap::from([
                 (
                     "title".to_string(),
-                    HeaderValue::String(format!("Review for {}", target.id.0)),
+                    HeaderValue::String(format!("Review for {}", target.id.as_str())),
                 ),
                 ("review_status".to_string(), HeaderValue::String(status)),
             ]),
@@ -104,41 +104,48 @@ pub fn validate_standing_transition(
     requested: &Standing,
 ) -> Result<(), GovernanceError> {
     for rule in &policy.transition_rules {
-        match rule.dimension.as_str() {
-            "review" => {
-                let from = format!("{:?}", current.review).to_lowercase();
-                let to = format!("{:?}", requested.review).to_lowercase();
-                if rule.from.contains(&from) && rule.to.contains(&to) {
+        match StandingDimension::parse(&rule.dimension) {
+            Ok(StandingDimension::Review) => {
+                let from = current.review.as_str();
+                let to = requested.review.as_str();
+                if rule.from.iter().any(|v| v == from) && rule.to.iter().any(|v| v == to) {
                     return Ok(());
                 }
             }
-            "process" => {
-                let from = format!("{:?}", current.process).to_lowercase();
-                let to = format!("{:?}", requested.process).to_lowercase();
-                if rule.from.contains(&from) && rule.to.contains(&to) {
+            Ok(StandingDimension::Process) => {
+                let from = current.process.as_str();
+                let to = requested.process.as_str();
+                if rule.from.iter().any(|v| v == from) && rule.to.iter().any(|v| v == to) {
                     return Ok(());
                 }
             }
-            "epistemic" => {
-                let from = format!("{:?}", current.epistemic).to_lowercase();
-                let to = format!("{:?}", requested.epistemic).to_lowercase();
-                if rule.from.contains(&from) && rule.to.contains(&to) {
+            Ok(StandingDimension::Epistemic) => {
+                let from = current.epistemic.as_str();
+                let to = requested.epistemic.as_str();
+                if rule.from.iter().any(|v| v == from) && rule.to.iter().any(|v| v == to) {
                     return Ok(());
                 }
             }
-            _ => {}
+            Err(_) => {
+                return Err(GovernanceError::IllegalTransition(format!(
+                    "invalid standing dimension '{}'",
+                    rule.dimension
+                )))
+            }
         }
     }
 
-    Err(GovernanceError::IllegalTransition)
+    Err(GovernanceError::IllegalTransition(
+        "requested standing does not match any transition rule".to_string(),
+    ))
 }
 
 pub fn export_allowed(policy: &StandingPolicy, standing: &Standing) -> Result<(), GovernanceError> {
     for requirement in &policy.operation_requirements {
         if requirement.operation == "export" {
             if let Some(review_required) = requirement.minimums.get("review") {
-                let current = format!("{:?}", standing.review).to_lowercase();
-                if &current != review_required {
+                let current = standing.review.as_str();
+                if current != review_required {
                     return Err(GovernanceError::ExportBlocked(
                         "review standing below export minimum".to_string(),
                     ));
@@ -148,8 +155,8 @@ pub fn export_allowed(policy: &StandingPolicy, standing: &Standing) -> Result<()
                 .forbidden
                 .get("process")
                 .map(|forbidden| {
-                    let current = format!("{:?}", standing.process).to_lowercase();
-                    forbidden.contains(&current)
+                    let current = standing.process.as_str();
+                    forbidden.iter().any(|v| v == current)
                 })
                 .unwrap_or(false)
             {
@@ -191,8 +198,8 @@ pub fn status_class_for_standing(standing: &Standing) -> &'static str {
 
 #[derive(Debug, Error)]
 pub enum GovernanceError {
-    #[error("illegal standing transition")]
-    IllegalTransition,
+    #[error("illegal standing transition: {0}")]
+    IllegalTransition(String),
     #[error("export blocked: {0}")]
     ExportBlocked(String),
     #[error("store error: {0}")]

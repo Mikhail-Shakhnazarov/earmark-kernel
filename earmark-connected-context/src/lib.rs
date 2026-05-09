@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, VecDeque},
     fs,
 };
 
@@ -41,6 +41,34 @@ pub struct CompiledContextPlan {
 
 pub struct CompiledContextService;
 
+pub trait CompiledContextCompiler<S: CanonicalStore> {
+    fn compile(
+        &self,
+        store: &S,
+        index: &DerivedIndex,
+        template_ref: &VersionRef,
+        work_packet: Option<ObjectRef>,
+    ) -> Result<WorkSurfaceManifest, ProjectError>;
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+pub struct CanonicalCompiledContextCompiler;
+
+impl<S: CanonicalStore> CompiledContextCompiler<S> for CanonicalCompiledContextCompiler {
+    fn compile(
+        &self,
+        store: &S,
+        index: &DerivedIndex,
+        template_ref: &VersionRef,
+        work_packet: Option<ObjectRef>,
+    ) -> Result<WorkSurfaceManifest, ProjectError> {
+        CompiledContextService::compile(store, index, template_ref, work_packet)
+    }
+}
+
+pub const DEFAULT_COMPILED_CONTEXT_COMPILER: CanonicalCompiledContextCompiler =
+    CanonicalCompiledContextCompiler;
+
 impl CompiledContextService {
     pub fn plan<S: CanonicalStore>(
         store: &S,
@@ -76,8 +104,8 @@ impl CompiledContextService {
             .into_iter()
             .map(|summary| {
                 let version = VersionRef::new(
-                    earmark_core::ObjectId(summary.object_id.clone()),
-                    earmark_core::VersionId(summary.version_id.clone()),
+                    earmark_core::ObjectId::parse(summary.object_id.clone())?,
+                    earmark_core::VersionId::parse(summary.version_id.clone())?,
                 );
                 let loaded = store.read_version(&version)?;
                 Ok(WorkSurfaceObject {
@@ -175,6 +203,8 @@ fn collect_selected_objects<S: CanonicalStore>(
     index: &DerivedIndex,
     template: &CompiledContextTemplate,
 ) -> Result<Vec<ObjectSummary>, ProjectError> {
+    const MAX_RELATION_EXPANSION_DEPTH: usize = 64;
+
     let mut selected = Vec::new();
     let mut seen = BTreeSet::new();
 
@@ -193,32 +223,54 @@ fn collect_selected_objects<S: CanonicalStore>(
     }
 
     if !template.select.relations.is_empty() {
+        let mut queue = VecDeque::new();
+        let mut visited_objects = BTreeSet::new();
+        let mut visited_relations = BTreeSet::new();
         let mut additions = Vec::new();
-        let mut added_ids = BTreeSet::new();
+
         for row in &selected {
-            let edges = index.relation_adjacency(&ObjectId(row.object_id.clone()))?;
-            for edge in edges
-                .into_iter()
-                .filter(|edge| template.select.relations.contains(&edge.relation_type))
-            {
-                let related_id = if edge.source_object_id == row.object_id {
+            if visited_objects.insert(row.object_id.clone()) {
+                queue.push_back((row.object_id.clone(), 0usize));
+            }
+        }
+
+        while let Some((current_object_id, depth)) = queue.pop_front() {
+            if depth >= MAX_RELATION_EXPANSION_DEPTH {
+                continue;
+            }
+
+            let mut edges = index.relation_adjacency(&ObjectId::parse(current_object_id.clone())?)?;
+            edges.sort_by(|a, b| a.version_id.cmp(&b.version_id));
+            for edge in edges {
+                if !template.select.relations.contains(&edge.relation_type) {
+                    continue;
+                }
+                if !visited_relations.insert(edge.version_id.clone()) {
+                    continue;
+                }
+                let related_id = if edge.source_object_id == current_object_id {
                     edge.target_object_id
                 } else {
                     edge.source_object_id
                 };
-                if added_ids.insert(related_id.clone()) {
-                    let related_rows = index.query_objects(&QueryFilter {
-                        object_id: Some(related_id),
-                        ..Default::default()
-                    })?;
-                    for related in related_rows {
-                        if seen.insert((related.object_id.clone(), related.version_id.clone())) {
-                            additions.push(related);
-                        }
+                if !visited_objects.insert(related_id.clone()) {
+                    continue;
+                }
+
+                let mut related_rows = index.query_objects(&QueryFilter {
+                    object_id: Some(related_id.clone()),
+                    ..Default::default()
+                })?;
+                related_rows.sort_by(|a, b| a.version_id.cmp(&b.version_id));
+                for related in related_rows {
+                    if seen.insert((related.object_id.clone(), related.version_id.clone())) {
+                        additions.push(related);
                     }
                 }
+                queue.push_back((related_id, depth + 1));
             }
         }
+
         selected.extend(additions);
     }
 
@@ -253,7 +305,7 @@ fn render_readme(manifest: &WorkSurfaceManifest) -> String {
         text.push_str(&format!(
             "- {} ({})\n",
             item.title.clone().unwrap_or_else(|| "untitled".to_string()),
-            item.object.id.0
+            item.object.id.as_str()
         ));
     }
     text
@@ -265,9 +317,9 @@ fn render_evidence_pack(manifest: &WorkSurfaceManifest) -> String {
         text.push_str(&format!(
             "## {}\n\n- Object: {}\n- Path: {}\n- Version: {}\n\n",
             item.title.clone().unwrap_or_else(|| "untitled".to_string()),
-            item.object.id.0,
+            item.object.id.as_str(),
             item.path,
-            item.object.version_id.0,
+            item.object.version_id.as_str(),
         ));
     }
     text
@@ -292,8 +344,12 @@ use earmark_index::IndexError;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use earmark_core::Kind;
+    use earmark_core::{
+        EpistemicStanding, Kind, ProcessStanding, Provenance, ReviewStanding, Standing,
+    };
     use earmark_index::ObjectSummary;
+    use earmark_store::{CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload};
+    use tempfile::tempdir;
 
     #[test]
     fn test_matches_standing() {
@@ -327,15 +383,15 @@ mod tests {
         let manifest = WorkSurfaceManifest {
             surface_id: "test".to_string(),
             compiled_context: VersionRef::new(
-                ObjectId("o".to_string()),
-                earmark_core::VersionId("v".to_string()),
+                ObjectId::parse("obj_00000000000000000000000000000001").unwrap(),
+                earmark_core::VersionId::parse("ver_00000000000000000000000000000001").unwrap(),
             ),
             work_packet: None,
             generated_at: Utc::now(),
             objects: vec![WorkSurfaceObject {
                 object: ObjectRef {
-                    id: ObjectId("o1".to_string()),
-                    version_id: earmark_core::VersionId("v1".to_string()),
+                    id: ObjectId::parse("obj_00000000000000000000000000000002").unwrap(),
+                    version_id: earmark_core::VersionId::parse("ver_00000000000000000000000000000002").unwrap(),
                     kind: Kind::Object,
                     class: None,
                 },
@@ -350,5 +406,171 @@ mod tests {
             CompiledContextService::cli_summary(&manifest),
             "surface test with 1 object(s)"
         );
+    }
+
+    fn object(title: &str, standing: Standing) -> StoredObject {
+        StoredObject::new(
+            Kind::Object,
+            Some("note".to_string()),
+            standing,
+            Provenance::direct_input("operator"),
+            BTreeMap::from([(
+                "title".to_string(),
+                earmark_core::HeaderValue::String(title.to_string()),
+            )]),
+            StoredPayload::from_markdown(title),
+            vec![],
+        )
+    }
+
+    fn relation(source: &StoredObject, target: &StoredObject, relation_type: &str) -> StoredObject {
+        StoredObject::new(
+            Kind::Relation,
+            None,
+            Standing::default(),
+            Provenance::direct_input("operator"),
+            BTreeMap::new(),
+            StoredPayload::from_json_bytes(
+                serde_json::to_vec(&serde_json::json!({
+                    "source": source.object_ref(),
+                    "target": target.object_ref(),
+                    "relation_type": relation_type,
+                    "qualifiers": {},
+                    "scope": "test"
+                }))
+                .unwrap(),
+            ),
+            vec![],
+        )
+    }
+
+    fn template_with_standing(standing: BTreeMap<String, Vec<String>>) -> CompiledContextTemplate {
+        CompiledContextTemplate {
+            name: "ctx".to_string(),
+            version: "1.0.0".to_string(),
+            description: None,
+            select: earmark_core::CompiledContextSelect {
+                classes: vec!["note".to_string()],
+                standing,
+                relations: vec!["linked".to_string()],
+                time_range: None,
+            },
+            group_by: vec![],
+            render: earmark_core::CompiledContextRender {
+                mode: "manifest".to_string(),
+                manifest_format: None,
+                prose_template: None,
+            },
+            visibility: earmark_core::CompiledContextVisibility {
+                include_lineage: false,
+                include_constraints: false,
+                include_provenance: false,
+            },
+        }
+    }
+
+    #[test]
+    fn collect_selected_objects_terminates_on_two_node_cycle() {
+        let dir = tempdir().unwrap();
+        let store = GitCanonicalStore::new(dir.path());
+        let index = DerivedIndex::open(dir.path()).unwrap();
+
+        let a = object("a", Standing::default());
+        let b = object("b", Standing::default());
+        store.write_object(&a).unwrap();
+        store.write_object(&b).unwrap();
+        store.write_object(&relation(&a, &b, "linked")).unwrap();
+        store.write_object(&relation(&b, &a, "linked")).unwrap();
+        index.rebuild_from_store(&store).unwrap();
+
+        let selected = collect_selected_objects(&store, &index, &template_with_standing(BTreeMap::new())).unwrap();
+        let ids = selected.iter().map(|r| r.object_id.clone()).collect::<BTreeSet<_>>();
+        assert_eq!(ids.len(), 2);
+        assert!(ids.contains(a.envelope.id.as_str()));
+        assert!(ids.contains(b.envelope.id.as_str()));
+    }
+
+    #[test]
+    fn collect_selected_objects_handles_larger_cycle() {
+        let dir = tempdir().unwrap();
+        let store = GitCanonicalStore::new(dir.path());
+        let index = DerivedIndex::open(dir.path()).unwrap();
+
+        let a = object("a", Standing::default());
+        let b = object("b", Standing::default());
+        let c = object("c", Standing::default());
+        store.write_object(&a).unwrap();
+        store.write_object(&b).unwrap();
+        store.write_object(&c).unwrap();
+        store.write_object(&relation(&a, &b, "linked")).unwrap();
+        store.write_object(&relation(&b, &c, "linked")).unwrap();
+        store.write_object(&relation(&c, &a, "linked")).unwrap();
+        index.rebuild_from_store(&store).unwrap();
+
+        let selected = collect_selected_objects(&store, &index, &template_with_standing(BTreeMap::new())).unwrap();
+        let ids = selected.iter().map(|r| r.object_id.clone()).collect::<BTreeSet<_>>();
+        assert_eq!(ids.len(), 3);
+    }
+
+    #[test]
+    fn collect_selected_objects_dedupes_when_multiple_paths_reach_same_node() {
+        let dir = tempdir().unwrap();
+        let store = GitCanonicalStore::new(dir.path());
+        let index = DerivedIndex::open(dir.path()).unwrap();
+
+        let a = object("a", Standing::default());
+        let b = object("b", Standing::default());
+        let c = object("c", Standing::default());
+        let d = object("d", Standing::default());
+        store.write_object(&a).unwrap();
+        store.write_object(&b).unwrap();
+        store.write_object(&c).unwrap();
+        store.write_object(&d).unwrap();
+        store.write_object(&relation(&a, &b, "linked")).unwrap();
+        store.write_object(&relation(&a, &c, "linked")).unwrap();
+        store.write_object(&relation(&b, &d, "linked")).unwrap();
+        store.write_object(&relation(&c, &d, "linked")).unwrap();
+        index.rebuild_from_store(&store).unwrap();
+
+        let selected = collect_selected_objects(&store, &index, &template_with_standing(BTreeMap::new())).unwrap();
+        let d_count = selected
+            .iter()
+            .filter(|row| row.object_id == d.envelope.id.as_str())
+            .count();
+        assert_eq!(d_count, 1);
+    }
+
+    #[test]
+    fn collect_selected_objects_preserves_standing_filter_on_seed_selection() {
+        let dir = tempdir().unwrap();
+        let store = GitCanonicalStore::new(dir.path());
+        let index = DerivedIndex::open(dir.path()).unwrap();
+
+        let accepted = object(
+            "accepted",
+            Standing {
+                epistemic: EpistemicStanding::Working,
+                review: ReviewStanding::Accepted,
+                process: ProcessStanding::Active,
+            },
+        );
+        let rejected = object(
+            "rejected",
+            Standing {
+                epistemic: EpistemicStanding::Working,
+                review: ReviewStanding::Rejected,
+                process: ProcessStanding::Active,
+            },
+        );
+        store.write_object(&accepted).unwrap();
+        store.write_object(&rejected).unwrap();
+        store.write_object(&relation(&accepted, &rejected, "linked")).unwrap();
+        index.rebuild_from_store(&store).unwrap();
+
+        let standing = BTreeMap::from([("review".to_string(), vec!["accepted".to_string()])]);
+        let selected = collect_selected_objects(&store, &index, &template_with_standing(standing)).unwrap();
+        let ids = selected.iter().map(|r| r.object_id.clone()).collect::<BTreeSet<_>>();
+        assert!(ids.contains(accepted.envelope.id.as_str()));
+        assert!(ids.contains(rejected.envelope.id.as_str()));
     }
 }

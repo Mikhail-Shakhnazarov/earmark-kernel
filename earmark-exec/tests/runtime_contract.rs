@@ -59,7 +59,7 @@ fn test_six_step_flow_via_runtime_tool_surface() {
     let surface = RuntimeToolSurface {
         store: &store,
         index: &index,
-        provider_registry: &registry,
+        provider_service: &registry,
     };
 
     // SETUP: Define System, Class, Instruction, Projection, Pattern
@@ -139,7 +139,7 @@ fn test_six_step_flow_via_runtime_tool_surface() {
         provider_profile: None,
         trace_policy: "summary".to_string(),
         register: "machined".to_string(),
-        body: MarkdownBody("Extract findings.".to_string()),
+        body: MarkdownBody::new("Extract findings.".to_string()),
     };
     let instr_obj = StoredObject::new(
         Kind::Instruction,
@@ -182,7 +182,7 @@ edges:
     condition: null
 guards: []
 "#,
-        proj_ref.id.0, proj_ref.version_id.0, instr_ref.id.0, instr_ref.version_id.0
+        proj_ref.id.as_str(), proj_ref.version_id.as_str(), instr_ref.id.as_str(), instr_ref.version_id.as_str()
     );
     let workflow_obj = StoredObject::new(
         Kind::Workflow,

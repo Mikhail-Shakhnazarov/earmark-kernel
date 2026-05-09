@@ -14,7 +14,7 @@ The Earmark CLI (`em`) is the primary interface for operators and developers. Al
 
 ### `em init`
 
-Initialize a new Earmark workspace. Creates the `.earmark/` directory and required storage structure.
+Initialize a new Earmark workspace. Creates the `.earmark/` directory, the repository-backed canonical store, and the required storage structure.
 
 ### `em doctor`
 

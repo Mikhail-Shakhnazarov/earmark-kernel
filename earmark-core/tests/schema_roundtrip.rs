@@ -86,7 +86,7 @@ Compose a status summary from the supplied objects.
 
     let parsed = InstructionPayload::parse_markdown(input).unwrap();
     assert_eq!(parsed.name, "compose_status_summary");
-    assert!(parsed.body.0.contains("Compose a status summary"));
+    assert!(parsed.body.as_str().contains("Compose a status summary"));
 
     let rendered = parsed.to_markdown().unwrap();
     let reparsed = InstructionPayload::parse_markdown(&rendered).unwrap();

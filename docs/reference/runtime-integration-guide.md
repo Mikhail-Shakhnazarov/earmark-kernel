@@ -1,10 +1,10 @@
 # Runtime Integration Guide
 
-This guide explains how to use Earmark as a governed execution substrate from your application, either through the Rust SDK or by driving the CLI as a subprocess.
+This guide explains how to use Earmark as a governed execution substrate from your application, either through the Rust SDK or by driving the CLI as a subprocess. Workspace state is stored in a Git-backed canonical store implemented through `gix`, with a derived index for query and inspection.
 
 ## Architecture
 
-Earmark doesn't run agents directly. It provides bounded context through work packets, manages assignments over transitions, and validates the resulting change sets. Your application follows this loop:
+Earmark doesn't run agents directly. It provides bounded context through work packets, manages assignments over transitions, validates the resulting change sets, and persists durable state in the workspace repository. Your application follows this loop:
 
 1. Compile context from the kernel.
 2. Receive a work packet for a transition.
@@ -27,6 +27,8 @@ earmark-runtime-tools = { path = "..." }
 
 ### Initializing the Surface
 
+`GitCanonicalStore` manages the canonical workspace repository. It writes objects, relations, assignments, change sets, and handoffs into the repository-backed store and records commit-backed history through `gix`.
+
 ```rust
 use earmark_store::GitCanonicalStore;
 use earmark_index::DerivedIndex;
@@ -36,7 +38,7 @@ use std::sync::Arc;
 
 let store = GitCanonicalStore::new("./workspace");
 let index = DerivedIndex::open("./workspace")?;
-let mut registry = ProviderRegistry::default();
+let mut registry = ProviderRegistry::new();
 
 // Register the Gemini adapter (requires GOOGLE_API_KEY env var)
 registry.register(Arc::new(GeminiAdapter::new(
@@ -50,6 +52,8 @@ let surface = RuntimeToolSurface {
     provider_registry: &registry,
 };
 ```
+
+The provider registry is the current extension seam for custom provider integration. You can register additional adapters in-process and hand the registry to the runtime surface without modifying the core execution engine. If you want the bundled adapters pre-registered, use `default_provider_registry()` or `ProviderRegistry::with_defaults()`.
 
 ### Running a Workflow
 
@@ -132,6 +136,8 @@ response_contract:
 ```
 
 The mock provider (`local_mock`) is the default and requires no API keys. Use it for development and testing.
+
+For direct provider extension patterns, see the [Provider Extension](provider-extension.md) reference.
 
 ## Error Handling
 

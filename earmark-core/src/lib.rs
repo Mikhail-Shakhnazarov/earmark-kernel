@@ -8,12 +8,44 @@ use uuid::Uuid;
 
 pub type Timestamp = DateTime<Utc>;
 
+/// A canonical durable identifier for a kernel object.
+///
+/// Pattern: `obj_[a-z0-9]{32}`
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub struct ObjectId(pub String);
+pub struct ObjectId(String);
 
 impl ObjectId {
     pub fn new() -> Self {
         Self(format!("obj_{}", Uuid::new_v4().simple()))
+    }
+
+    pub fn parse(s: impl Into<String>) -> Result<Self, CoreError> {
+        let s = s.into();
+        if s.len() > 128 {
+            return Err(CoreError::InvalidIdentifier("length exceeds 128 characters".to_string()));
+        }
+        
+        if !s.starts_with("obj_") {
+            return Err(CoreError::InvalidIdentifier("must start with obj_".to_string()));
+        }
+
+        let hex_part = &s[4..];
+        if hex_part.len() != 32
+            || !hex_part
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
+        {
+            return Err(CoreError::InvalidIdentifier(
+                "invalid format: expected obj_ followed by 32 lowercase hex characters"
+                    .to_string(),
+            ));
+        }
+
+        Ok(Self(s))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
     }
 }
 
@@ -30,11 +62,34 @@ impl std::fmt::Display for ObjectId {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub struct VersionId(pub String);
+pub struct VersionId(String);
 
 impl VersionId {
     pub fn new() -> Self {
         Self(format!("ver_{}", Uuid::new_v4().simple()))
+    }
+
+    pub fn parse(s: impl Into<String>) -> Result<Self, CoreError> {
+        let s = s.into();
+        if s.len() > 128 {
+            return Err(CoreError::InvalidIdentifier("length exceeds 128 characters".to_string()));
+        }
+
+        // Pattern: ver_[a-z0-9]{32}
+        if !s.starts_with("ver_") {
+            return Err(CoreError::InvalidIdentifier("must start with ver_".to_string()));
+        }
+
+        let hex_part = &s[4..];
+        if hex_part.len() != 32 || !hex_part.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit()) {
+            return Err(CoreError::InvalidIdentifier("invalid format: expected ver_ followed by 32 lowercase hex characters".to_string()));
+        }
+
+        Ok(Self(s))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
     }
 }
 
@@ -45,6 +100,44 @@ impl Default for VersionId {
 }
 
 impl std::fmt::Display for VersionId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct SymbolicName(String);
+
+impl SymbolicName {
+    pub fn parse(s: impl Into<String>) -> Result<Self, CoreError> {
+        let s = s.into();
+        if s.is_empty() || s.len() > 64 {
+            return Err(CoreError::InvalidIdentifier(
+                "invalid symbolic name length: expected 1..=64 characters".to_string(),
+            ));
+        }
+        let mut chars = s.chars();
+        let first = chars.next().expect("checked non-empty");
+        if !first.is_ascii_lowercase() {
+            return Err(CoreError::InvalidIdentifier(
+                "symbolic name must start with a lowercase letter".to_string(),
+            ));
+        }
+        if !chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '-') {
+            return Err(CoreError::InvalidIdentifier(
+                "symbolic name can only contain lowercase letters, digits, underscores, and hyphens"
+                    .to_string(),
+            ));
+        }
+        Ok(Self(s))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for SymbolicName {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
@@ -138,7 +231,23 @@ pub enum ScalarOrRef {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct MarkdownBody(pub String);
+pub struct MarkdownBody(String);
+
+impl MarkdownBody {
+    pub fn new(s: impl Into<String>) -> Self {
+        Self(s.into())
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for MarkdownBody {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct JsonSchemaRef(pub String);
@@ -223,6 +332,18 @@ pub enum EpistemicStanding {
     Superseded,
 }
 
+impl EpistemicStanding {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Unresolved => "unresolved",
+            Self::Working => "working",
+            Self::Supported => "supported",
+            Self::Contested => "contested",
+            Self::Superseded => "superseded",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ReviewStanding {
@@ -232,6 +353,17 @@ pub enum ReviewStanding {
     Rejected,
 }
 
+impl ReviewStanding {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Unreviewed => "unreviewed",
+            Self::Pending => "pending",
+            Self::Accepted => "accepted",
+            Self::Rejected => "rejected",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ProcessStanding {
@@ -239,6 +371,46 @@ pub enum ProcessStanding {
     Blocked,
     Completed,
     Archived,
+}
+
+impl ProcessStanding {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Active => "active",
+            Self::Blocked => "blocked",
+            Self::Completed => "completed",
+            Self::Archived => "archived",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StandingDimension {
+    Epistemic,
+    Review,
+    Process,
+}
+
+impl StandingDimension {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Epistemic => "epistemic",
+            Self::Review => "review",
+            Self::Process => "process",
+        }
+    }
+
+    pub fn parse(value: &str) -> Result<Self, CoreError> {
+        match value {
+            "epistemic" => Ok(Self::Epistemic),
+            "review" => Ok(Self::Review),
+            "process" => Ok(Self::Process),
+            _ => Err(CoreError::InvalidIdentifier(format!(
+                "invalid standing dimension '{}': expected epistemic, review, or process",
+                value
+            ))),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -663,13 +835,115 @@ pub struct ProviderRecord {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub struct TransitionAssignmentId(pub String);
+pub struct TransitionAssignmentId(String);
+
+impl TransitionAssignmentId {
+    pub fn new() -> Self {
+        Self(format!("obj_{}", Uuid::new_v4().simple()))
+    }
+}
+
+impl Default for TransitionAssignmentId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl TransitionAssignmentId {
+
+    pub fn parse(s: impl Into<String>) -> Result<Self, CoreError> {
+        let s = s.into();
+        if s.len() > 128 {
+            return Err(CoreError::InvalidIdentifier("length exceeds 128 characters".to_string()));
+        }
+        if !s.starts_with("obj_") {
+            return Err(CoreError::InvalidIdentifier("must start with obj_".to_string()));
+        }
+        let hex_part = &s[4..];
+        if hex_part.len() != 32 || !hex_part.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit()) {
+            return Err(CoreError::InvalidIdentifier("invalid format: expected obj_ followed by 32 lowercase hex characters".to_string()));
+        }
+        Ok(Self(s))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub struct ChangeSetId(pub String);
+pub struct ChangeSetId(String);
+
+impl ChangeSetId {
+    pub fn new() -> Self {
+        Self(format!("obj_{}", Uuid::new_v4().simple()))
+    }
+}
+
+impl Default for ChangeSetId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ChangeSetId {
+
+    pub fn parse(s: impl Into<String>) -> Result<Self, CoreError> {
+        let s = s.into();
+        if s.len() > 128 {
+            return Err(CoreError::InvalidIdentifier("length exceeds 128 characters".to_string()));
+        }
+        if !s.starts_with("obj_") {
+            return Err(CoreError::InvalidIdentifier("must start with obj_".to_string()));
+        }
+        let hex_part = &s[4..];
+        if hex_part.len() != 32 || !hex_part.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit()) {
+            return Err(CoreError::InvalidIdentifier("invalid format: expected obj_ followed by 32 lowercase hex characters".to_string()));
+        }
+        Ok(Self(s))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub struct HandoffManifestId(pub String);
+pub struct HandoffManifestId(String);
+
+impl HandoffManifestId {
+    pub fn new() -> Self {
+        Self(format!("obj_{}", Uuid::new_v4().simple()))
+    }
+}
+
+impl Default for HandoffManifestId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl HandoffManifestId {
+
+    pub fn parse(s: impl Into<String>) -> Result<Self, CoreError> {
+        let s = s.into();
+        if s.len() > 128 {
+            return Err(CoreError::InvalidIdentifier("length exceeds 128 characters".to_string()));
+        }
+        if !s.starts_with("obj_") {
+            return Err(CoreError::InvalidIdentifier("must start with obj_".to_string()));
+        }
+        let hex_part = &s[4..];
+        if hex_part.len() != 32 || !hex_part.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit()) {
+            return Err(CoreError::InvalidIdentifier("invalid format: expected obj_ followed by 32 lowercase hex characters".to_string()));
+        }
+        Ok(Self(s))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -878,6 +1152,18 @@ pub enum CoreError {
     InvalidFrontmatter(String),
     #[error("invalid kind: {0}")]
     InvalidKind(String),
+    #[error("invalid identifier: {0}")]
+    InvalidIdentifier(String),
+    #[error("payload too large: {0} bytes (max {1} bytes)")]
+    PayloadTooLarge(usize, usize),
+    #[error("unknown class: {0}")]
+    UnknownClass(String),
+    #[error("schema violation: {0}")]
+    SchemaViolation(String),
+    #[error("schema unavailable: {0}")]
+    SchemaUnavailable(String),
+    #[error("security violation: {0}")]
+    SecurityViolation(String),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -897,22 +1183,18 @@ pub fn parse_markdown_frontmatter<T: DeserializeOwned>(
     input: &str,
 ) -> Result<(T, String), CoreError> {
     let trimmed = input.trim_start();
-    if !trimmed.starts_with("---") {
+    if !trimmed.starts_with("---\n") {
         return Err(CoreError::InvalidFrontmatter(
             "missing opening frontmatter delimiter".to_string(),
         ));
     }
 
-    let mut parts = trimmed.splitn(3, "---");
-    let _ = parts.next();
-    let yaml = parts
-        .next()
-        .ok_or_else(|| CoreError::InvalidFrontmatter("missing YAML frontmatter".to_string()))?;
-    let body = parts
-        .next()
-        .ok_or_else(|| CoreError::InvalidFrontmatter("missing body segment".to_string()))?;
+    let rest = &trimmed["---\n".len()..];
+    let (yaml, body) = rest
+        .split_once("\n---\n")
+        .ok_or_else(|| CoreError::InvalidFrontmatter("missing closing frontmatter delimiter".to_string()))?;
 
-    let meta = serde_yaml::from_str::<T>(yaml.trim())?;
+    let meta = serde_yaml::from_str::<T>(yaml)?;
     Ok((meta, body.trim_start_matches('\n').to_string()))
 }
 
@@ -934,7 +1216,7 @@ impl InstructionPayload {
             provider_profile: frontmatter.provider_profile,
             trace_policy: frontmatter.trace_policy,
             register: frontmatter.register,
-            body: MarkdownBody(body),
+            body: MarkdownBody::new(body),
         })
     }
 
@@ -950,7 +1232,7 @@ impl InstructionPayload {
             trace_policy: self.trace_policy.clone(),
             register: self.register.clone(),
         };
-        to_markdown_frontmatter(&frontmatter, &self.body.0)
+        to_markdown_frontmatter(&frontmatter, self.body.as_str())
     }
 }
 
@@ -962,10 +1244,160 @@ pub fn to_yaml<T: Serialize>(value: &T) -> Result<String, CoreError> {
     Ok(serde_yaml::to_string(value)?)
 }
 
+pub const MAX_OBJECT_SIZE: usize = 10 * 1024 * 1024; // 10 MiB
+
+pub fn validate_class_name(name: &str) -> Result<(), CoreError> {
+    if name.is_empty() {
+        return Err(CoreError::InvalidIdentifier("class name cannot be empty".to_string()));
+    }
+    if name.len() > 64 {
+        return Err(CoreError::InvalidIdentifier("class name too long (max 64 chars)".to_string()));
+    }
+    let mut chars = name.chars();
+    if let Some(first) = chars.next() {
+        if !first.is_ascii_lowercase() {
+            return Err(CoreError::InvalidIdentifier("class name must start with a lowercase letter".to_string()));
+        }
+    }
+    for c in chars {
+        if !c.is_ascii_lowercase() && !c.is_ascii_digit() && c != '_' {
+            return Err(CoreError::InvalidIdentifier(format!("invalid character in class name: {}", c)));
+        }
+    }
+    Ok(())
+}
+
+pub fn validate_title(title: &str) -> Result<(), CoreError> {
+    if title.len() > 512 {
+        return Err(CoreError::InvalidIdentifier(format!("title too long: {} bytes (max 512)", title.len())));
+    }
+    Ok(())
+}
+
+pub fn validate_payload_size(len: usize) -> Result<(), CoreError> {
+    if len > MAX_OBJECT_SIZE {
+        return Err(CoreError::PayloadTooLarge(len, MAX_OBJECT_SIZE));
+    }
+    Ok(())
+}
+
+pub fn validate_env_var_name(name: &str) -> Result<(), CoreError> {
+    if name.is_empty() {
+        return Err(CoreError::InvalidIdentifier("env var name cannot be empty".to_string()));
+    }
+    if name.len() > 128 {
+        return Err(CoreError::InvalidIdentifier("env var name exceeds 128 characters".to_string()));
+    }
+    let mut chars = name.chars();
+    if let Some(first) = chars.next() {
+        if !first.is_ascii_uppercase() {
+            return Err(CoreError::InvalidIdentifier("env var name must start with an uppercase letter".to_string()));
+        }
+    }
+    for c in chars {
+        if !c.is_ascii_uppercase() && !c.is_ascii_digit() && c != '_' {
+            return Err(CoreError::InvalidIdentifier(format!("invalid character in env var name '{}': must be uppercase alphanumeric with underscores", name)));
+        }
+    }
+    Ok(())
+}
+
+pub fn validate_endpoint_url(url: &str) -> Result<(), CoreError> {
+    if url.is_empty() {
+        return Err(CoreError::InvalidIdentifier("endpoint URL cannot be empty".to_string()));
+    }
+    
+    // Check for credentials in URL
+    if url.contains('@') {
+        return Err(CoreError::SecurityViolation("endpoints must not contain embedded credentials".to_string()));
+    }
+
+    // Check for query string or fragment
+    if url.contains('?') || url.contains('#') {
+        return Err(CoreError::SecurityViolation("endpoints must not contain query strings or fragments".to_string()));
+    }
+
+    // Protocol and host validation
+    if let Some(rest) = url.strip_prefix("http://") {
+        if !rest.starts_with("localhost") && !rest.starts_with("127.0.0.1") && !rest.starts_with("[::1]") {
+            return Err(CoreError::SecurityViolation("plain http endpoints only allowed for loopback development".to_string()));
+        }
+    } else if !url.starts_with("https://") {
+        return Err(CoreError::SecurityViolation("endpoints must use https protocol".to_string()));
+    }
+
+    Ok(())
+}
+
+pub fn validate_schema(payload: &serde_json::Value, schema: &serde_json::Value) -> Result<(), CoreError> {
+    match jsonschema::validator_for(schema) {
+        Ok(validator) => {
+            let mut errors = validator.iter_errors(payload).peekable();
+            if errors.peek().is_some() {
+                let msgs: Vec<String> = errors.map(|e| e.to_string()).collect();
+                return Err(CoreError::SchemaViolation(msgs.join("; ")));
+            }
+            Ok(())
+        }
+        Err(e) => Err(CoreError::SchemaUnavailable(e.to_string())),
+    }
+}
+
 pub fn parse_json<T: DeserializeOwned>(input: &str) -> Result<T, CoreError> {
     Ok(serde_json::from_str(input)?)
 }
 
 pub fn to_json_pretty<T: Serialize>(value: &T) -> Result<String, CoreError> {
     Ok(serde_json::to_string_pretty(value)?)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_validate_env_var_name() {
+        assert!(validate_env_var_name("API_KEY").is_ok());
+        assert!(validate_env_var_name("MY_ENV_123").is_ok());
+        assert!(validate_env_var_name("api_key").is_err());
+        assert!(validate_env_var_name("API-KEY").is_err());
+        assert!(validate_env_var_name("_START_WITH_UNDERSCORE").is_err());
+        assert!(validate_env_var_name("1_START_WITH_DIGIT").is_err());
+        assert!(validate_env_var_name("").is_err());
+        assert!(validate_env_var_name(&"A".repeat(128)).is_ok());
+        assert!(validate_env_var_name(&"A".repeat(129)).is_err());
+    }
+
+    #[test]
+    fn test_validate_endpoint_url() {
+        assert!(validate_endpoint_url("https://api.example.com").is_ok());
+        assert!(validate_endpoint_url("http://localhost:8080").is_ok());
+        assert!(validate_endpoint_url("http://127.0.0.1:8000").is_ok());
+        assert!(validate_endpoint_url("http://[::1]:8000").is_ok());
+        assert!(validate_endpoint_url("http://evil.com").is_err());
+        assert!(validate_endpoint_url("ftp://api.com").is_err());
+        assert!(validate_endpoint_url("https://user:pass@api.com").is_err());
+        assert!(validate_endpoint_url("https://api.com?secret=true").is_err());
+        assert!(validate_endpoint_url("https://api.com#section").is_err());
+    }
+
+    #[test]
+    fn test_object_id_parse_strict_durable_ids() {
+        assert!(ObjectId::parse("obj_00000000000000000000000000000001").is_ok());
+        assert!(ObjectId::parse("obj_abc").is_err());
+        assert!(ObjectId::parse("finding").is_err());
+        assert!(ObjectId::parse("source_note_v2").is_err());
+        assert!(ObjectId::parse("Invalid Name").is_err());
+    }
+
+    #[test]
+    fn test_symbolic_name_parse() {
+        assert!(SymbolicName::parse("pkm-core").is_ok());
+        assert!(SymbolicName::parse("source_note_v2").is_ok());
+        assert!(SymbolicName::parse("a").is_ok());
+        assert!(SymbolicName::parse("1not-valid").is_err());
+        assert!(SymbolicName::parse("Uppercase").is_err());
+        assert!(SymbolicName::parse("contains space").is_err());
+        assert!(SymbolicName::parse("").is_err());
+    }
 }

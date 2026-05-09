@@ -27,10 +27,11 @@ uuid = { version = "1.8", features = ["v4", "serde"] }
 thiserror = "1.0"
 sha2 = "0.10"
 hex = "0.4"
-git2 = "0.19"
+gix = "0.81"
 rusqlite = { version = "0.31", features = ["bundled"] }
 clap = { version = "4.5", features = ["derive"] }
 walkdir = "2.5"
 tempfile = "3.10"
 assert_cmd = "2.0"
 predicates = "3.1"
+proptest = "1.4"

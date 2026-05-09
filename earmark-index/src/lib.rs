@@ -2,8 +2,9 @@ use std::path::{Path, PathBuf};
 
 use chrono::Utc;
 use earmark_core::{
-    parse_json, parse_yaml, CompiledContextTemplate, InstructionPayload, Kind, ObjectId,
-    RelationPayload, SystemDefinition, VersionRef,
+    parse_json, parse_yaml, ClassDefinition, CompiledContextTemplate, InstructionPayload, Kind,
+    ObjectId, ProviderProfile, RelationPayload, StandingPolicy, SystemDefinition, VersionRef,
+    WorkflowDefinition,
 };
 use earmark_store::CanonicalStore;
 use rusqlite::{params, Connection, OptionalExtension};
@@ -94,6 +95,7 @@ impl DerivedIndex {
                 updated_at TEXT NOT NULL,
                 system_id TEXT,
                 namespace TEXT,
+                declaration_identity TEXT,
                 searchable_text TEXT
             );
 
@@ -117,7 +119,65 @@ impl DerivedIndex {
                 version_id TEXT NOT NULL,
                 activated_at TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS active_assignment_claims (
+                run_id TEXT NOT NULL,
+                transition_id TEXT NOT NULL,
+                assignment_id TEXT NOT NULL,
+                claimed_at TEXT NOT NULL,
+                PRIMARY KEY (run_id, transition_id)
+            );
             "#,
+        )?;
+        // Backfill for existing indexes created before declaration_identity existed.
+        if let Err(err) = self
+            .conn
+            .execute("ALTER TABLE objects ADD COLUMN declaration_identity TEXT", [])
+        {
+            match err {
+                rusqlite::Error::SqliteFailure(_, Some(msg))
+                    if msg.contains("duplicate column name") => {}
+                _ => return Err(err.into()),
+            }
+        }
+        self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_objects_kind_declaration_identity ON objects(kind, declaration_identity, updated_at)",
+            [],
+        )?;
+        Ok(())
+    }
+
+    pub fn claim_active_assignment(
+        &self,
+        run_id: &str,
+        transition_id: &str,
+        assignment_id: &str,
+    ) -> Result<(), IndexError> {
+        let claimed_at = Utc::now().to_rfc3339();
+        let updated = self.conn.execute(
+            "INSERT INTO active_assignment_claims (run_id, transition_id, assignment_id, claimed_at)
+             VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT(run_id, transition_id) DO NOTHING",
+            params![run_id, transition_id, assignment_id, claimed_at],
+        )?;
+        if updated == 0 {
+            return Err(IndexError::Conflict(format!(
+                "active assignment already claimed for run {} transition {}",
+                run_id, transition_id
+            )));
+        }
+        Ok(())
+    }
+
+    pub fn release_active_assignment(
+        &self,
+        run_id: &str,
+        transition_id: &str,
+        assignment_id: &str,
+    ) -> Result<(), IndexError> {
+        self.conn.execute(
+            "DELETE FROM active_assignment_claims WHERE run_id = ?1 AND transition_id = ?2 AND assignment_id = ?3",
+            params![run_id, transition_id, assignment_id],
         )?;
         Ok(())
     }
@@ -133,20 +193,23 @@ impl DerivedIndex {
         for stored in objects {
             let envelope = stored.envelope;
             let payload = stored.payload;
-            seen.insert(envelope.id.0.clone());
+            seen.insert(envelope.id.as_str().to_string());
 
             let title = envelope.title();
-            let (summary, system_id, namespace, searchable_text) = match &envelope.kind {
+            let (summary, system_id, namespace, declaration_identity, searchable_text) =
+                match &envelope.kind {
                 Kind::Instruction => {
                     let text = payload.as_utf8()?;
                     let parsed = InstructionPayload::parse_markdown(&text)?;
+                    let declaration_name = parsed.name.clone();
                     (
-                        Some(snippet(&parsed.body.0)),
+                        Some(snippet(parsed.body.as_str())),
                         None,
                         None,
+                        Some(declaration_name),
                         Some(format!(
                             "{} {} {}",
-                            parsed.name, parsed.purpose, parsed.body.0
+                            parsed.name, parsed.purpose, parsed.body.as_str()
                         )),
                     )
                 }
@@ -158,8 +221,9 @@ impl DerivedIndex {
                             .description
                             .clone()
                             .or_else(|| Some(parsed.title.clone())),
-                        Some(parsed.system_id),
+                        Some(parsed.system_id.clone()),
                         Some(parsed.namespace),
+                        Some(parsed.system_id),
                         Some(text),
                     )
                 }
@@ -169,28 +233,72 @@ impl DerivedIndex {
                     self.conn.execute(
                         "INSERT OR REPLACE INTO relations (version_id, source_object_id, target_object_id, relation_type, scope) VALUES (?1, ?2, ?3, ?4, ?5)",
                         params![
-                            envelope.version_id.0.clone(),
-                            parsed.source.id.0,
-                            parsed.target.id.0,
+                            envelope.version_id.as_str().to_string(),
+                            parsed.source.id.as_str().to_string(),
+                            parsed.target.id.as_str().to_string(),
                             parsed.relation_type,
                             parsed.scope,
                         ],
                     )?;
-                    (Some("relation".to_string()), None, None, Some(text))
+                    (Some("relation".to_string()), None, None, None, Some(text))
                 }
                 Kind::CompiledContextTemplate => {
                     let text = payload.as_utf8()?;
                     let parsed: CompiledContextTemplate = parse_yaml(&text)?;
-                    (parsed.description.clone(), None, None, Some(text))
+                    (
+                        parsed.description.clone(),
+                        None,
+                        None,
+                        Some(parsed.name),
+                        Some(text),
+                    )
+                }
+                Kind::Workflow => {
+                    let text = payload.as_utf8()?;
+                    let parsed: WorkflowDefinition = parse_yaml(&text)?;
+                    (
+                        parsed.description.clone(),
+                        None,
+                        None,
+                        Some(parsed.name),
+                        Some(text),
+                    )
+                }
+                Kind::Policy => {
+                    let text = payload.as_utf8()?;
+                    let parsed: StandingPolicy = parse_yaml(&text)?;
+                    (
+                        parsed.description.clone(),
+                        None,
+                        None,
+                        Some(parsed.name),
+                        Some(text),
+                    )
+                }
+                Kind::ProviderProfile => {
+                    let text = payload.as_utf8()?;
+                    let parsed: ProviderProfile = parse_yaml(&text)?;
+                    (
+                        parsed.description.clone(),
+                        None,
+                        None,
+                        Some(parsed.name),
+                        Some(text),
+                    )
+                }
+                Kind::Object if envelope.class.as_deref() == Some("class_definition") => {
+                    let text = payload.as_utf8()?;
+                    let parsed: ClassDefinition = parse_yaml(&text)?;
+                    (Some(snippet(&text)), None, None, Some(parsed.name), Some(text))
                 }
                 _ => {
                     let text = payload.as_utf8().unwrap_or_default();
-                    (Some(snippet(&text)), None, None, Some(text))
+                    (Some(snippet(&text)), None, None, None, Some(text))
                 }
             };
 
-            let version_id = envelope.version_id.0.clone();
-            let object_id = envelope.id.0.clone();
+            let version_id = envelope.version_id.as_str().to_string();
+            let object_id = envelope.id.as_str().to_string();
             let kind = envelope.kind.as_str().to_string();
             let class = envelope.class.clone();
             let standing_epistemic = format!("{:?}", envelope.standing.epistemic).to_lowercase();
@@ -204,8 +312,8 @@ impl DerivedIndex {
                 "INSERT OR REPLACE INTO objects (
                     version_id, object_id, kind, class, title, summary,
                     standing_epistemic, standing_review, standing_process,
-                    payload_ref, created_at, updated_at, system_id, namespace, searchable_text
-                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
+                    payload_ref, created_at, updated_at, system_id, namespace, declaration_identity, searchable_text
+                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
                 params![
                     version_id,
                     object_id,
@@ -221,20 +329,168 @@ impl DerivedIndex {
                     updated_at,
                     system_id,
                     namespace,
+                    declaration_identity,
                     searchable_text,
                 ],
             )?;
         }
 
         for object_id in seen {
-            let object_id = ObjectId(object_id);
+            let object_id = ObjectId::parse(object_id)?;
             if let Some(head) = store.read_head_ref(&object_id)? {
                 self.conn.execute(
                     "INSERT OR REPLACE INTO heads (object_id, version_id) VALUES (?1, ?2)",
-                    params![head.id.0.clone(), head.version_id.0.clone()],
+                    params![head.id.as_str(), head.version_id.as_str()],
                 )?;
             }
         }
+        Ok(())
+    }
+
+    pub fn upsert_head_object_from_store<S: CanonicalStore>(
+        &self,
+        store: &S,
+        object_id: &ObjectId,
+    ) -> Result<(), IndexError> {
+        let Some(head) = store.read_head(object_id)? else {
+            self.conn
+                .execute("DELETE FROM heads WHERE object_id = ?1", params![object_id.as_str()])?;
+            return Ok(());
+        };
+
+        let envelope = head.envelope.clone();
+        let payload = head.payload.clone();
+        let title = envelope.title();
+        let (summary, system_id, namespace, declaration_identity, searchable_text) =
+            match &envelope.kind {
+                Kind::Instruction => {
+                    let text = payload.as_utf8()?;
+                    let parsed = InstructionPayload::parse_markdown(&text)?;
+                    let declaration_name = parsed.name.clone();
+                    (
+                        Some(snippet(parsed.body.as_str())),
+                        None,
+                        None,
+                        Some(declaration_name),
+                        Some(format!(
+                            "{} {} {}",
+                            parsed.name, parsed.purpose, parsed.body.as_str()
+                        )),
+                    )
+                }
+                Kind::SystemDefinition => {
+                    let text = payload.as_utf8()?;
+                    let parsed: SystemDefinition = parse_yaml(&text)?;
+                    (
+                        parsed
+                            .description
+                            .clone()
+                            .or_else(|| Some(parsed.title.clone())),
+                        Some(parsed.system_id.clone()),
+                        Some(parsed.namespace),
+                        Some(parsed.system_id),
+                        Some(text),
+                    )
+                }
+                Kind::Relation => {
+                    let text = payload.as_utf8()?;
+                    let parsed: RelationPayload = parse_json(&text)?;
+                    self.conn.execute(
+                        "INSERT OR REPLACE INTO relations (version_id, source_object_id, target_object_id, relation_type, scope) VALUES (?1, ?2, ?3, ?4, ?5)",
+                        params![
+                            envelope.version_id.as_str().to_string(),
+                            parsed.source.id.as_str().to_string(),
+                            parsed.target.id.as_str().to_string(),
+                            parsed.relation_type,
+                            parsed.scope,
+                        ],
+                    )?;
+                    (Some("relation".to_string()), None, None, None, Some(text))
+                }
+                Kind::CompiledContextTemplate => {
+                    let text = payload.as_utf8()?;
+                    let parsed: CompiledContextTemplate = parse_yaml(&text)?;
+                    (
+                        parsed.description.clone(),
+                        None,
+                        None,
+                        Some(parsed.name),
+                        Some(text),
+                    )
+                }
+                Kind::Workflow => {
+                    let text = payload.as_utf8()?;
+                    let parsed: WorkflowDefinition = parse_yaml(&text)?;
+                    (
+                        parsed.description.clone(),
+                        None,
+                        None,
+                        Some(parsed.name),
+                        Some(text),
+                    )
+                }
+                Kind::Policy => {
+                    let text = payload.as_utf8()?;
+                    let parsed: StandingPolicy = parse_yaml(&text)?;
+                    (
+                        parsed.description.clone(),
+                        None,
+                        None,
+                        Some(parsed.name),
+                        Some(text),
+                    )
+                }
+                Kind::ProviderProfile => {
+                    let text = payload.as_utf8()?;
+                    let parsed: ProviderProfile = parse_yaml(&text)?;
+                    (
+                        parsed.description.clone(),
+                        None,
+                        None,
+                        Some(parsed.name),
+                        Some(text),
+                    )
+                }
+                Kind::Object if envelope.class.as_deref() == Some("class_definition") => {
+                    let text = payload.as_utf8()?;
+                    let parsed: ClassDefinition = parse_yaml(&text)?;
+                    (Some(snippet(&text)), None, None, Some(parsed.name), Some(text))
+                }
+                _ => {
+                    let text = payload.as_utf8().unwrap_or_default();
+                    (Some(snippet(&text)), None, None, None, Some(text))
+                }
+            };
+
+        self.conn.execute(
+            "INSERT OR REPLACE INTO objects (
+                version_id, object_id, kind, class, title, summary,
+                standing_epistemic, standing_review, standing_process,
+                payload_ref, created_at, updated_at, system_id, namespace, declaration_identity, searchable_text
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
+            params![
+                envelope.version_id.as_str().to_string(),
+                envelope.id.as_str().to_string(),
+                envelope.kind.as_str().to_string(),
+                envelope.class.clone(),
+                title,
+                summary,
+                envelope.standing.epistemic.as_str(),
+                envelope.standing.review.as_str(),
+                envelope.standing.process.as_str(),
+                envelope.payload_ref.0.clone(),
+                envelope.created_at.to_rfc3339(),
+                envelope.updated_at.to_rfc3339(),
+                system_id,
+                namespace,
+                declaration_identity,
+                searchable_text,
+            ],
+        )?;
+        self.conn.execute(
+            "INSERT OR REPLACE INTO heads (object_id, version_id) VALUES (?1, ?2)",
+            params![envelope.id.as_str(), envelope.version_id.as_str()],
+        )?;
         Ok(())
     }
 
@@ -289,7 +545,7 @@ impl DerivedIndex {
         let mut stmt = self.conn.prepare(
             "SELECT version_id, source_object_id, target_object_id, relation_type, scope FROM relations WHERE source_object_id = ?1 OR target_object_id = ?1 ORDER BY version_id ASC",
         )?;
-        let rows = stmt.query_map(params![object_id.0.clone()], |row| {
+        let rows = stmt.query_map(params![object_id.as_str()], |row| {
             Ok(RelationEdge {
                 version_id: row.get(0)?,
                 source_object_id: row.get(1)?,
@@ -310,13 +566,13 @@ impl DerivedIndex {
         let activated_at = Utc::now().to_rfc3339();
         self.conn.execute(
             "INSERT OR REPLACE INTO active_systems (namespace, system_id, object_id, version_id, activated_at) VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![namespace, system_id, version_ref.id.0.clone(), version_ref.version_id.0.clone(), activated_at.clone()],
+            params![namespace, system_id, version_ref.id.as_str(), version_ref.version_id.as_str(), activated_at.clone()],
         )?;
         Ok(ActiveSystemRecord {
             namespace: namespace.to_string(),
             system_id: system_id.to_string(),
-            object_id: version_ref.id.0.clone(),
-            version_id: version_ref.version_id.0.clone(),
+            object_id: version_ref.id.as_str().to_string(),
+            version_id: version_ref.version_id.as_str().to_string(),
             activated_at,
         })
     }
@@ -343,6 +599,20 @@ impl DerivedIndex {
             .map_err(IndexError::from)
     }
 
+    pub fn find_class_definition(
+        &self,
+        name: &str,
+    ) -> Result<Option<(String, String)>, IndexError> {
+        self.conn
+            .query_row(
+                "SELECT object_id, version_id FROM objects WHERE kind = 'object' AND class = 'class_definition' AND declaration_identity = ?1 ORDER BY updated_at DESC LIMIT 1",
+                params![name],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()
+            .map_err(IndexError::from)
+    }
+
     pub fn find_system_definition(
         &self,
         system_id: &str,
@@ -355,6 +625,96 @@ impl DerivedIndex {
             )
             .optional()
             .map_err(IndexError::from)
+    }
+
+    pub fn find_latest_by_symbolic_name(
+        &self,
+        kind: &str,
+        name: &str,
+    ) -> Result<Option<(String, String)>, IndexError> {
+        self.conn
+            .query_row(
+                "SELECT object_id, version_id FROM objects WHERE kind = ?1 AND declaration_identity = ?2 ORDER BY updated_at DESC LIMIT 1",
+                params![kind, name],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()
+            .map_err(IndexError::from)
+    }
+
+    fn resolve_symbolic_latest_ref(
+        &self,
+        kind: &str,
+        name: &str,
+    ) -> Result<Option<VersionRef>, IndexError> {
+        let Some((object_id, version_id)) = self.find_latest_by_symbolic_name(kind, name)? else {
+            return Ok(None);
+        };
+        Ok(Some(VersionRef::new(
+            ObjectId::parse(object_id)?,
+            earmark_core::VersionId::parse(version_id)?,
+        )))
+    }
+
+    pub fn resolve_workflow_symbolic_latest(
+        &self,
+        name: &str,
+    ) -> Result<Option<VersionRef>, IndexError> {
+        self.resolve_symbolic_latest_ref(Kind::Workflow.as_str(), name)
+    }
+
+    pub fn resolve_instruction_symbolic_latest(
+        &self,
+        name: &str,
+    ) -> Result<Option<VersionRef>, IndexError> {
+        self.resolve_symbolic_latest_ref(Kind::Instruction.as_str(), name)
+    }
+
+    pub fn resolve_class_definition_symbolic_latest(
+        &self,
+        name: &str,
+    ) -> Result<Option<VersionRef>, IndexError> {
+        let Some((object_id, version_id)) = self.find_class_definition(name)? else {
+            return Ok(None);
+        };
+        Ok(Some(VersionRef::new(
+            ObjectId::parse(object_id)?,
+            earmark_core::VersionId::parse(version_id)?,
+        )))
+    }
+
+    pub fn resolve_compiled_context_symbolic_latest(
+        &self,
+        name: &str,
+    ) -> Result<Option<VersionRef>, IndexError> {
+        self.resolve_symbolic_latest_ref(Kind::CompiledContextTemplate.as_str(), name)
+    }
+
+    pub fn resolve_provider_profile_symbolic_latest(
+        &self,
+        name: &str,
+    ) -> Result<Option<VersionRef>, IndexError> {
+        self.resolve_symbolic_latest_ref(Kind::ProviderProfile.as_str(), name)
+    }
+
+    pub fn resolve_standing_policy_symbolic_latest(
+        &self,
+        name: &str,
+    ) -> Result<Option<VersionRef>, IndexError> {
+        self.resolve_symbolic_latest_ref(Kind::Policy.as_str(), name)
+    }
+
+    pub fn resolve_system_definition_symbolic_latest(
+        &self,
+        name: &str,
+    ) -> Result<Option<VersionRef>, IndexError> {
+        let Some((object_id, version_id, _namespace)) = self.find_system_definition(name)? else {
+            return Ok(None);
+        };
+        Ok(Some(VersionRef::new(
+            ObjectId::parse(object_id)?,
+            earmark_core::VersionId::parse(version_id)?,
+        )))
     }
 
     pub fn counts(&self) -> Result<(u64, u64), IndexError> {
@@ -387,4 +747,6 @@ pub enum IndexError {
     Store(#[from] earmark_store::StoreError),
     #[error("core error: {0}")]
     Core(#[from] earmark_core::CoreError),
+    #[error("conflict: {0}")]
+    Conflict(String),
 }

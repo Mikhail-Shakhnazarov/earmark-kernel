@@ -172,7 +172,7 @@ fn workflow_run_materializes_packet_and_run_ledger() {
         provider_profile: None,
         trace_policy: "summary".to_string(),
         register: "machined".to_string(),
-        body: MarkdownBody("Produce a bounded status summary.".to_string()),
+        body: MarkdownBody::new("Produce a bounded status summary.".to_string()),
     };
     let instruction_obj = StoredObject::new(
         Kind::Instruction,
@@ -242,10 +242,10 @@ edges:
     condition: null
 guards: []
 "#
-    .replace("PLACEHOLDER_PROJ_ID", &compiled_context_ref.id.0)
-    .replace("PLACEHOLDER_PROJ_VERSION", &compiled_context_ref.version_id.0)
-    .replace("PLACEHOLDER_INSTR_ID", &instruction_ref.id.0)
-    .replace("PLACEHOLDER_INSTR_VERSION", &instruction_ref.version_id.0);
+    .replace("PLACEHOLDER_PROJ_ID", compiled_context_ref.id.as_str())
+    .replace("PLACEHOLDER_PROJ_VERSION", compiled_context_ref.version_id.as_str())
+    .replace("PLACEHOLDER_INSTR_ID", instruction_ref.id.as_str())
+    .replace("PLACEHOLDER_INSTR_VERSION", instruction_ref.version_id.as_str());
     let workflow_obj = StoredObject::new(
         Kind::Workflow,
         Some("composition_workflow".to_string()),
@@ -311,7 +311,7 @@ guards: []
     let engine = ExecutionEngine {
         store: &store,
         index: &index,
-        provider_registry: &registry,
+        provider_service: &registry,
     };
 
     let outcome = engine
@@ -420,7 +420,7 @@ fn successor_run_can_reconstruct_inputs_from_handoff_manifest() {
         provider_profile: None,
         trace_policy: "summary".to_string(),
         register: "machined".to_string(),
-        body: MarkdownBody("Produce a bounded status summary.".to_string()),
+        body: MarkdownBody::new("Produce a bounded status summary.".to_string()),
     };
     let instruction_obj = StoredObject::new(
         Kind::Instruction,
@@ -484,10 +484,10 @@ edges:
     condition: null
 guards: []
 "#
-    .replace("PLACEHOLDER_PROJ_ID", &compiled_context_ref.id.0)
-    .replace("PLACEHOLDER_PROJ_VERSION", &compiled_context_ref.version_id.0)
-    .replace("PLACEHOLDER_INSTR_ID", &instruction_ref.id.0)
-    .replace("PLACEHOLDER_INSTR_VERSION", &instruction_ref.version_id.0);
+    .replace("PLACEHOLDER_PROJ_ID", compiled_context_ref.id.as_str())
+    .replace("PLACEHOLDER_PROJ_VERSION", compiled_context_ref.version_id.as_str())
+    .replace("PLACEHOLDER_INSTR_ID", instruction_ref.id.as_str())
+    .replace("PLACEHOLDER_INSTR_VERSION", instruction_ref.version_id.as_str());
     let workflow_a_obj = StoredObject::new(
         Kind::Workflow,
         Some("composition_workflow".to_string()),
@@ -573,7 +573,7 @@ guards: []
     let engine = ExecutionEngine {
         store: &store,
         index: &index,
-        provider_registry: &registry,
+        provider_service: &registry,
     };
 
     let first_outcome = engine
@@ -594,7 +594,7 @@ guards: []
         .record
         .manifests
         .iter()
-        .any(|manifest_id| !manifest_id.0.is_empty()));
+        .any(|manifest_id| !manifest_id.as_str().is_empty()));
 
     let handoff_id = store
         .scan_objects()
@@ -650,7 +650,7 @@ fn claim_reference_continuation_uses_bounded_inputs() {
     let (system_ref, workflow_ref) = review_only_fixture(&store, "note");
 
     let assignment = TransitionAssignment {
-        id: earmark_core::TransitionAssignmentId("claim_resume_note".to_string()),
+        id: earmark_core::TransitionAssignmentId::new(),
         run_id: "claim_run".to_string(),
         transition_id: "op_review".to_string(),
         assigned_to: "operator".to_string(),
@@ -672,7 +672,7 @@ fn claim_reference_continuation_uses_bounded_inputs() {
     let engine = ExecutionEngine {
         store: &store,
         index: &index,
-        provider_registry: &registry,
+        provider_service: &registry,
     };
 
     let outcome = engine
@@ -714,11 +714,11 @@ fn claim_reference_continuation_uses_handoff_manifest() {
     let (system_ref, workflow_ref) = review_only_fixture(&store, "status_summary");
 
     let handoff = HandoffManifest {
-        id: earmark_core::HandoffManifestId("handoff_claim_resume".to_string()),
+        id: earmark_core::HandoffManifestId::new(),
         run_id: "stage_a".to_string(),
         from_transition_id: "op_transform".to_string(),
         to_transition_id: Some("op_review".to_string()),
-        source_change_set_id: earmark_core::ChangeSetId("delta_stage_a".to_string()),
+        source_change_set_id: earmark_core::ChangeSetId::new(),
         source_assignment_id: None,
         root_object_ids: vec![summary.envelope.id.clone()],
         inherited_input_object_ids: vec![],
@@ -737,7 +737,7 @@ fn claim_reference_continuation_uses_handoff_manifest() {
     persist_handoff_manifest(&store, &handoff);
 
     let assignment = TransitionAssignment {
-        id: earmark_core::TransitionAssignmentId("claim_resume_handoff".to_string()),
+        id: earmark_core::TransitionAssignmentId::new(),
         run_id: "claim_run".to_string(),
         transition_id: "op_review".to_string(),
         assigned_to: "operator".to_string(),
@@ -759,7 +759,7 @@ fn claim_reference_continuation_uses_handoff_manifest() {
     let engine = ExecutionEngine {
         store: &store,
         index: &index,
-        provider_registry: &registry,
+        provider_service: &registry,
     };
 
     let outcome = engine
@@ -799,11 +799,11 @@ fn request_with_inputs_and_handoff_manifest_fails() {
     store.write_object(&note).unwrap();
     let (system_ref, workflow_ref) = review_only_fixture(&store, "note");
     let handoff = HandoffManifest {
-        id: earmark_core::HandoffManifestId("handoff_conflict".to_string()),
+        id: earmark_core::HandoffManifestId::new(),
         run_id: "stage_a".to_string(),
         from_transition_id: "op_transform".to_string(),
         to_transition_id: Some("op_review".to_string()),
-        source_change_set_id: earmark_core::ChangeSetId("delta_conflict".to_string()),
+        source_change_set_id: earmark_core::ChangeSetId::new(),
         source_assignment_id: None,
         root_object_ids: vec![note.envelope.id.clone()],
         inherited_input_object_ids: vec![],
@@ -826,7 +826,7 @@ fn request_with_inputs_and_handoff_manifest_fails() {
     let engine = ExecutionEngine {
         store: &store,
         index: &index,
-        provider_registry: &registry,
+        provider_service: &registry,
     };
 
     let error = engine
@@ -865,11 +865,11 @@ fn request_with_handoff_manifest_and_transition_assignment_fails() {
     store.write_object(&note).unwrap();
     let (system_ref, workflow_ref) = review_only_fixture(&store, "note");
     let handoff = HandoffManifest {
-        id: earmark_core::HandoffManifestId("handoff_conflict_claim".to_string()),
+        id: earmark_core::HandoffManifestId::new(),
         run_id: "stage_a".to_string(),
         from_transition_id: "op_transform".to_string(),
         to_transition_id: Some("op_review".to_string()),
-        source_change_set_id: earmark_core::ChangeSetId("delta_conflict_claim".to_string()),
+        source_change_set_id: earmark_core::ChangeSetId::new(),
         source_assignment_id: None,
         root_object_ids: vec![note.envelope.id.clone()],
         inherited_input_object_ids: vec![],
@@ -887,7 +887,7 @@ fn request_with_handoff_manifest_and_transition_assignment_fails() {
     };
     persist_handoff_manifest(&store, &handoff);
     let assignment = TransitionAssignment {
-        id: earmark_core::TransitionAssignmentId("claim_conflict".to_string()),
+        id: earmark_core::TransitionAssignmentId::new(),
         run_id: "claim_run".to_string(),
         transition_id: "op_review".to_string(),
         assigned_to: "operator".to_string(),
@@ -909,7 +909,7 @@ fn request_with_handoff_manifest_and_transition_assignment_fails() {
     let engine = ExecutionEngine {
         store: &store,
         index: &index,
-        provider_registry: &registry,
+        provider_service: &registry,
     };
 
     let error = engine
@@ -994,7 +994,7 @@ fn workflow_run_fails_when_transform_output_class_is_undeclared() {
         provider_profile: None,
         trace_policy: "summary".to_string(),
         register: "machined".to_string(),
-        body: MarkdownBody("Produce a bounded status summary.".to_string()),
+        body: MarkdownBody::new("Produce a bounded status summary.".to_string()),
     };
     let instruction_obj = StoredObject::new(
         Kind::Instruction,
@@ -1037,10 +1037,10 @@ edges:
     condition: null
 guards: []
 "#
-    .replace("PLACEHOLDER_PROJ_ID", &compiled_context_ref.id.0)
-    .replace("PLACEHOLDER_PROJ_VERSION", &compiled_context_ref.version_id.0)
-    .replace("PLACEHOLDER_INSTR_ID", &instruction_ref.id.0)
-    .replace("PLACEHOLDER_INSTR_VERSION", &instruction_ref.version_id.0);
+    .replace("PLACEHOLDER_PROJ_ID", compiled_context_ref.id.as_str())
+    .replace("PLACEHOLDER_PROJ_VERSION", compiled_context_ref.version_id.as_str())
+    .replace("PLACEHOLDER_INSTR_ID", instruction_ref.id.as_str())
+    .replace("PLACEHOLDER_INSTR_VERSION", instruction_ref.version_id.as_str());
     let workflow_obj = StoredObject::new(
         Kind::Workflow,
         Some("composition_workflow".to_string()),
@@ -1097,7 +1097,7 @@ guards: []
     let engine = ExecutionEngine {
         store: &store,
         index: &index,
-        provider_registry: &registry,
+        provider_service: &registry,
     };
 
     let error = engine
@@ -1214,7 +1214,7 @@ fn workflow_run_fails_when_output_standing_violates_class_rules() {
         provider_profile: None,
         trace_policy: "summary".to_string(),
         register: "machined".to_string(),
-        body: MarkdownBody("Produce a bounded status summary.".to_string()),
+        body: MarkdownBody::new("Produce a bounded status summary.".to_string()),
     };
     let instruction_obj = StoredObject::new(
         Kind::Instruction,
@@ -1281,10 +1281,10 @@ edges:
     condition: null
 guards: []
 "#
-    .replace("PLACEHOLDER_PROJ_ID", &compiled_context_ref.id.0)
-    .replace("PLACEHOLDER_PROJ_VERSION", &compiled_context_ref.version_id.0)
-    .replace("PLACEHOLDER_INSTR_ID", &instruction_ref.id.0)
-    .replace("PLACEHOLDER_INSTR_VERSION", &instruction_ref.version_id.0);
+    .replace("PLACEHOLDER_PROJ_ID", compiled_context_ref.id.as_str())
+    .replace("PLACEHOLDER_PROJ_VERSION", compiled_context_ref.version_id.as_str())
+    .replace("PLACEHOLDER_INSTR_ID", instruction_ref.id.as_str())
+    .replace("PLACEHOLDER_INSTR_VERSION", instruction_ref.version_id.as_str());
     let workflow_obj = StoredObject::new(
         Kind::Workflow,
         Some("composition_workflow".to_string()),
@@ -1344,7 +1344,7 @@ guards: []
     let engine = ExecutionEngine {
         store: &store,
         index: &index,
-        provider_registry: &registry,
+        provider_service: &registry,
     };
 
     let error = engine
@@ -1437,7 +1437,7 @@ fn workflow_run_fails_when_declared_transition_is_unreachable() {
         provider_profile: None,
         trace_policy: "summary".to_string(),
         register: "machined".to_string(),
-        body: MarkdownBody("Produce a bounded status summary.".to_string()),
+        body: MarkdownBody::new("Produce a bounded status summary.".to_string()),
     };
     let instruction_obj = StoredObject::new(
         Kind::Instruction,
@@ -1512,10 +1512,10 @@ edges:
     condition: null
 guards: []
 "#
-    .replace("PLACEHOLDER_PROJ_ID", &compiled_context_ref.id.0)
-    .replace("PLACEHOLDER_PROJ_VERSION", &compiled_context_ref.version_id.0)
-    .replace("PLACEHOLDER_INSTR_ID", &instruction_ref.id.0)
-    .replace("PLACEHOLDER_INSTR_VERSION", &instruction_ref.version_id.0);
+    .replace("PLACEHOLDER_PROJ_ID", compiled_context_ref.id.as_str())
+    .replace("PLACEHOLDER_PROJ_VERSION", compiled_context_ref.version_id.as_str())
+    .replace("PLACEHOLDER_INSTR_ID", instruction_ref.id.as_str())
+    .replace("PLACEHOLDER_INSTR_VERSION", instruction_ref.version_id.as_str());
     let workflow_obj = StoredObject::new(
         Kind::Workflow,
         Some("composition_workflow".to_string()),
@@ -1581,7 +1581,7 @@ guards: []
     let engine = ExecutionEngine {
         store: &store,
         index: &index,
-        provider_registry: &registry,
+        provider_service: &registry,
     };
 
     let outcome = engine
@@ -1643,7 +1643,7 @@ fn test_mixed_source_rejection_no_side_effects() {
     let (system_ref, workflow_ref) = review_only_fixture(&store, "note");
 
     let assignment = TransitionAssignment {
-        id: earmark_core::TransitionAssignmentId("claim_mixed".to_string()),
+        id: earmark_core::TransitionAssignmentId::new(),
         run_id: "mixed_run".to_string(),
         transition_id: "op_review".to_string(),
         assigned_to: "operator".to_string(),
@@ -1665,7 +1665,7 @@ fn test_mixed_source_rejection_no_side_effects() {
     let engine = ExecutionEngine {
         store: &store,
         index: &index,
-        provider_registry: &registry,
+        provider_service: &registry,
     };
 
     // Both inputs and transition_assignment set
@@ -1749,7 +1749,7 @@ guards: []
     let engine = ExecutionEngine {
         store: &store,
         index: &index,
-        provider_registry: &registry,
+        provider_service: &registry,
     };
 
     let result = engine.run_workflow(WorkflowRunRequest {
@@ -1787,7 +1787,7 @@ guards: []
                 return false;
             }
             let change_set: ChangeSet = serde_json::from_slice(&obj.payload.bytes).unwrap();
-            change_set.id.0 == delta_id.0
+            change_set.id.as_str() == delta_id.as_str()
         })
         .expect("ChangeSet not found in store");
     let change_set: ChangeSet = serde_json::from_slice(&delta_obj.payload.bytes).unwrap();
@@ -1802,11 +1802,11 @@ guards: []
                 return false;
             }
             let assignment: TransitionAssignment = serde_json::from_slice(&obj.payload.bytes).unwrap();
-            assignment.id.0 == failure.assignment_id.0 && assignment.status == earmark_core::AssignmentStatus::Blocked
+            assignment.id.as_str() == failure.assignment_id.as_str() && assignment.status == earmark_core::AssignmentStatus::Blocked
         })
         .expect("TransitionAssignment with Blocked status not found");
     let assignment: TransitionAssignment = serde_json::from_slice(&claim_obj.payload.bytes).unwrap();
-    assert!(assignment.blocked_reason.as_ref().unwrap().contains(&delta_id.0));
+    assert!(assignment.blocked_reason.as_ref().unwrap().contains(delta_id.as_str()));
 }
 
 #[test]
@@ -1881,7 +1881,7 @@ fn test_transform_emits_standing_request() {
         provider_profile: None,
         trace_policy: "detailed".to_string(),
         register: "test".to_string(),
-        body: MarkdownBody("test".to_string()),
+        body: MarkdownBody::new("test".to_string()),
     };
     let stored_instr = StoredObject::new(
         Kind::Instruction,
@@ -1991,7 +1991,7 @@ edges:
     condition: null
 guards: []
 "#,
-        pt_ref.id.0, instr_ref.id.0
+        pt_ref.id.as_str(), instr_ref.id.as_str()
     );
     let workflow_obj = StoredObject::new(
         Kind::Workflow,
@@ -2021,7 +2021,7 @@ guards: []
     let engine = ExecutionEngine {
         store: &store,
         index: &index,
-        provider_registry: &registry,
+        provider_service: &registry,
     };
 
     // 6. Run workflow

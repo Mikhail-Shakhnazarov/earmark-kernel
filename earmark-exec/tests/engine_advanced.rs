@@ -111,7 +111,7 @@ fn guarded_edge_blocking() {
     let engine = ExecutionEngine {
         store: &store,
         index: &index,
-        provider_registry: &registry,
+        provider_service: &registry,
     };
     let request = WorkflowRunRequest {
         run_id: "test-run".to_string(),
@@ -267,7 +267,7 @@ fn branching_execution() {
     let engine = ExecutionEngine {
         store: &store,
         index: &index,
-        provider_registry: &registry,
+        provider_service: &registry,
     };
     let request = WorkflowRunRequest {
         run_id: "branch-run".to_string(),
@@ -344,7 +344,7 @@ fn parallel_transform_leak_bug() {
         provider_profile: None,
         trace_policy: "t".to_string(),
         register: "r".to_string(),
-        body: earmark_core::MarkdownBody("b1".to_string()),
+        body: earmark_core::MarkdownBody::new("b1".to_string()),
     };
     let instr1_ref = store
         .write_object(&StoredObject::new(
@@ -368,7 +368,7 @@ fn parallel_transform_leak_bug() {
         provider_profile: None,
         trace_policy: "t".to_string(),
         register: "r".to_string(),
-        body: earmark_core::MarkdownBody("b2".to_string()),
+        body: earmark_core::MarkdownBody::new("b2".to_string()),
     };
     let instr2_ref = store
         .write_object(&StoredObject::new(
@@ -537,7 +537,7 @@ fn parallel_transform_leak_bug() {
     let engine = ExecutionEngine {
         store: &store,
         index: &index,
-        provider_registry: &registry,
+        provider_service: &registry,
     };
     let request = WorkflowRunRequest {
         run_id: "leak-run".to_string(),
@@ -675,7 +675,7 @@ fn execution_error_persists_failed_delta() {
     let engine = ExecutionEngine {
         store: &store,
         index: &index,
-        provider_registry: &registry,
+        provider_service: &registry,
     };
     let request = WorkflowRunRequest {
         run_id: "run-fail".to_string(),
@@ -720,5 +720,5 @@ fn execution_error_persists_failed_delta() {
         .blocked_reason
         .as_ref()
         .unwrap()
-        .contains(&change_set.envelope.id.0));
+        .contains(change_set.envelope.id.as_str()));
 }

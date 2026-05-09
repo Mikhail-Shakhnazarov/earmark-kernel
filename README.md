@@ -1,6 +1,6 @@
 # Earmark
 
-A declarative kernel for governed AI work. Earmark compiles bounded context from a corpus, executes declared transitions over that context, and records what happened as durable, inspectable artifacts.
+A declarative kernel for governed AI work. Earmark compiles bounded context from a corpus, executes declared transitions over that context, and records what happened as durable, inspectable artifacts. Workspace state lives in a Git-backed canonical store implemented through `gix`, with a rebuildable derived index for fast query and inspection.
 
 ## The Problem
 
@@ -102,24 +102,36 @@ See the [Quickstart Tutorial](docs/tutorials/quickstart.md) for a complete walkt
 | **[Build a Domain](docs/tutorials/build-a-domain-definition.md)** | Define your own classes, workflows, and system |
 | **[CLI Reference](docs/reference/cli.md)** | Command lookup |
 | **[Runtime Integration](docs/reference/runtime-integration-guide.md)** | Using Earmark from Rust or any language |
+| **[Provider Extension](docs/reference/provider-extension.md)** | Register custom providers through the current extension surface |
 | **[Declaration Authoring](docs/declarations/README.md)** | Examples and validation rules |
 
 ## Current Status
 
-Earmark is an operational kernel with 71 passing tests. It is not yet a packaged application.
+Earmark is an operational kernel with a green workspace verification baseline. It is not yet a packaged application.
 
 What works:
 - Declaration, validation, and scaffolding of domain definitions
 - Bounded context compilation from declared objects and relations
 - Staged workflow execution with assignment lifecycle management
 - Durable change sets, handoffs, and failure records
+- Git-backed canonical storage through `gix`, with commit-backed workspace history
 - CLI inspection, explanation, and HTML report generation
+- Registry-based custom provider extension through `ProviderRegistry` and `ProviderService`
+- Additive async provider traits through `AsyncProviderService` and `AsyncProviderAdapter`
 - Google Gemini provider adapter (mock provider is the default)
 - Versioned JSON CLI contracts at 0.2.0
 
 What doesn't exist yet:
 - Package distribution (you build from source)
 - GUI or web dashboard
+
+## Features In Development
+
+The current provider extension surface supports in-process custom provider registration through `ProviderRegistry`, `ProviderService`, and provider adapters. That is the active extension mechanism in the repository today.
+
+Planned next-step extension work is focused on fuller plugin functionality around provider loading and discovery. The repository does not present dynamic plugin loading, plugin directories, or marketplace-style plugins as current features.
+
+The repository also exposes additive async provider traits through `AsyncProviderService` and `AsyncProviderAdapter`. The current workflow entrypoints remain synchronous, so async support exists as a preparation seam for future runtime expansion rather than as end-to-end async execution today.
 
 ## Build and Test
 

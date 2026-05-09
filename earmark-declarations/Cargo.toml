@@ -11,3 +11,7 @@ earmark-index = { path = "../earmark-index" }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+proptest.workspace = true

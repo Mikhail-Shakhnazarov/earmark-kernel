@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 use earmark_core::{HeaderValue, Kind, Provenance, Standing};
 use earmark_store::{BatchWrite, CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload};
+use gix::bstr::ByteSlice;
 use tempfile::tempdir;
 
 #[test]
@@ -144,4 +145,210 @@ fn relation_object_storage_and_retrieval() {
     let relation_ref = store.write_object(&relation).unwrap();
     let loaded = store.read_version(&relation_ref).unwrap();
     assert_eq!(loaded.envelope.kind, Kind::Relation);
+}
+
+#[test]
+fn write_batch_rolls_back_on_mid_batch_failure() {
+    let dir = tempdir().unwrap();
+    let store = GitCanonicalStore::new(dir.path());
+
+    let first = StoredObject::new(
+        Kind::Object,
+        Some("note".to_string()),
+        Standing::default(),
+        Provenance::direct_input("operator"),
+        BTreeMap::new(),
+        StoredPayload::from_markdown("ok"),
+        vec![],
+    );
+    let first_ref = first.envelope.version_ref();
+
+    let mut second = StoredObject::new(
+        Kind::Object,
+        Some("note".to_string()),
+        Standing::default(),
+        Provenance::direct_input("operator"),
+        BTreeMap::new(),
+        StoredPayload::from_markdown("bad"),
+        vec![],
+    );
+    // Force deterministic write failure after first object writes.
+    second.envelope.payload_ref = earmark_core::PayloadRef("sha256:deadbeef".to_string());
+
+    let result = store.write_batch(&BatchWrite {
+        message: "should fail".to_string(),
+        objects: vec![first.clone(), second],
+    });
+    assert!(result.is_err());
+
+    let first_version_dir = store.version_path(&first_ref);
+    assert!(
+        !first_version_dir.exists(),
+        "first object artifacts should be rolled back on batch failure"
+    );
+    let head = store.read_head(&first.envelope.id).unwrap();
+    assert!(head.is_none());
+}
+
+#[test]
+fn write_batch_restores_overwritten_head_on_failure() {
+    let dir = tempdir().unwrap();
+    let store = GitCanonicalStore::new(dir.path());
+
+    let first = StoredObject::new(
+        Kind::Object,
+        Some("note".to_string()),
+        Standing::default(),
+        Provenance::direct_input("operator"),
+        BTreeMap::new(),
+        StoredPayload::from_markdown("v1"),
+        vec![],
+    );
+    let first_ref = store.write_object(&first).unwrap();
+
+    let second = StoredObject::with_parent(
+        &first,
+        Standing::default(),
+        BTreeMap::new(),
+        StoredPayload::from_markdown("v2"),
+    );
+    let second_ref = second.envelope.version_ref();
+
+    let mut failing = StoredObject::new(
+        Kind::Object,
+        Some("note".to_string()),
+        Standing::default(),
+        Provenance::direct_input("operator"),
+        BTreeMap::new(),
+        StoredPayload::from_markdown("bad"),
+        vec![],
+    );
+    failing.envelope.payload_ref = earmark_core::PayloadRef("sha256:deadbeef".to_string());
+
+    let result = store.write_batch(&BatchWrite {
+        message: "overwrite then fail".to_string(),
+        objects: vec![second, failing],
+    });
+    assert!(result.is_err());
+
+    let head = store.read_head_ref(&first.envelope.id).unwrap().unwrap();
+    assert_eq!(head.version_id, first_ref.version_id);
+    assert_ne!(head.version_id, second_ref.version_id);
+
+    let second_version_dir = store.version_path(&second_ref);
+    assert!(
+        !second_version_dir.exists(),
+        "failed batch should remove second version artifacts"
+    );
+}
+
+#[test]
+fn commit_history_advances_and_records_message() {
+    let dir = tempdir().unwrap();
+    let store = GitCanonicalStore::new(dir.path());
+
+    let first = StoredObject::new(
+        Kind::Object,
+        Some("note".to_string()),
+        Standing::default(),
+        Provenance::direct_input("operator"),
+        BTreeMap::new(),
+        StoredPayload::from_markdown("v1"),
+        vec![],
+    );
+    store
+        .write_batch(&BatchWrite {
+            message: "first commit".to_string(),
+            objects: vec![first.clone()],
+        })
+        .unwrap();
+
+    let second = StoredObject::with_parent(
+        &first,
+        Standing::default(),
+        BTreeMap::new(),
+        StoredPayload::from_markdown("v2"),
+    );
+    store
+        .write_batch(&BatchWrite {
+            message: "second commit".to_string(),
+            objects: vec![second],
+        })
+        .unwrap();
+
+    let repo = gix::open(dir.path()).unwrap();
+    let head_id = repo.head_id().unwrap().detach();
+    let head_commit = repo.find_commit(head_id).unwrap();
+    assert_eq!(head_commit.message_raw_sloppy().to_string(), "second commit");
+    assert_eq!(head_commit.parent_ids().count(), 1);
+}
+
+#[test]
+fn signature_precedence_env_over_config_then_fallback() {
+    use std::sync::{Mutex, OnceLock};
+
+    static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
+
+    let dir = tempdir().unwrap();
+    let store = GitCanonicalStore::new(dir.path());
+
+    let obj = || {
+        StoredObject::new(
+            Kind::Object,
+            Some("note".to_string()),
+            Standing::default(),
+            Provenance::direct_input("operator"),
+            BTreeMap::new(),
+            StoredPayload::from_markdown("body"),
+            vec![],
+        )
+    };
+
+    store.init_layout().unwrap();
+    std::fs::write(
+        dir.path().join(".git/config"),
+        "[user]\n\tname = cfg-name\n\temail = cfg@example.com\n",
+    )
+    .unwrap();
+
+    unsafe {
+        std::env::remove_var("EARMARK_GIT_NAME");
+        std::env::remove_var("EARMARK_GIT_EMAIL");
+    }
+    store.write_batch(&BatchWrite { message: "cfg".into(), objects: vec![obj()] }).unwrap();
+    let repo = gix::open(dir.path()).unwrap();
+    let commit = repo.find_commit(repo.head_id().unwrap().detach()).unwrap();
+    let sig = commit.author().unwrap();
+    assert_eq!(sig.name.to_str_lossy().to_string(), "cfg-name");
+    assert_eq!(sig.email.to_str_lossy().to_string(), "cfg@example.com");
+
+    unsafe {
+        std::env::set_var("EARMARK_GIT_NAME", "env-name");
+        std::env::set_var("EARMARK_GIT_EMAIL", "env@example.com");
+    }
+    store.write_batch(&BatchWrite { message: "env".into(), objects: vec![obj()] }).unwrap();
+    let repo = gix::open(dir.path()).unwrap();
+    let commit = repo.find_commit(repo.head_id().unwrap().detach()).unwrap();
+    let sig = commit.author().unwrap();
+    assert_eq!(sig.name.to_str_lossy().to_string(), "env-name");
+    assert_eq!(sig.email.to_str_lossy().to_string(), "env@example.com");
+
+    unsafe {
+        std::env::remove_var("EARMARK_GIT_NAME");
+        std::env::remove_var("EARMARK_GIT_EMAIL");
+    }
+    std::fs::write(dir.path().join(".git/config"), "[user]\n\tname = \n\temail = \n").unwrap();
+    store.write_batch(&BatchWrite { message: "fallback".into(), objects: vec![obj()] }).unwrap();
+    let repo = gix::open(dir.path()).unwrap();
+    let commit = repo.find_commit(repo.head_id().unwrap().detach()).unwrap();
+    let sig = commit.author().unwrap();
+    assert_eq!(sig.name.to_str_lossy().to_string(), "earmark");
+    assert_eq!(sig.email.to_str_lossy().to_string(), "earmark@local");
+}
+
+#[test]
+fn backend_contains_no_process_command_usage() {
+    let src = include_str!("../src/backend.rs");
+    assert!(!src.contains("std::process::Command"));
 }

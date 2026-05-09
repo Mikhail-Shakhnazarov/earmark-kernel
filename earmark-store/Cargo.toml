@@ -11,8 +11,9 @@ serde_json.workspace = true
 serde_yaml.workspace = true
 chrono.workspace = true
 thiserror.workspace = true
-git2.workspace = true
+gix = { workspace = true, features = ["tree-editor"] }
 walkdir.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+proptest.workspace = true

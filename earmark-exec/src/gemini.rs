@@ -50,10 +50,23 @@ impl ProviderAdapter for GeminiAdapter {
                 )
             })?;
 
-            let url = format!(
-                "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
-                self.model, api_key
-            );
+            let url = if let Some(endpoint_env) = &profile.endpoint_env {
+                let val = std::env::var(endpoint_env).map_err(|_| {
+                    ProviderFailure::new(
+                        ProviderFailureKind::AuthenticationFailed,
+                        format!("Endpoint environment variable {} not set", endpoint_env),
+                    )
+                })?;
+                earmark_core::validate_endpoint_url(&val).map_err(|e| {
+                    ProviderFailure::new(ProviderFailureKind::AuthenticationFailed, e.to_string())
+                })?;
+                val
+            } else {
+                format!(
+                    "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent",
+                    self.model
+                )
+            };
 
             let mut contents = Vec::new();
             
@@ -108,6 +121,7 @@ impl ProviderAdapter for GeminiAdapter {
 
             let response = client
                 .post(&url)
+                .header("x-goog-api-key", &api_key)
                 .json(&body)
                 .send()
                 .map_err(|e| {
@@ -123,7 +137,7 @@ impl ProviderAdapter for GeminiAdapter {
                 let err_text = response.text().unwrap_or_default();
                 return Err(match status.as_u16() {
                     401 | 403 => ProviderFailure::new(ProviderFailureKind::AuthenticationFailed, err_text),
-                    429 => ProviderFailure::new(ProviderFailureKind::BudgetExceeded, "Rate limit exceeded"),
+                    429 => ProviderFailure::new(ProviderFailureKind::RateLimited, "Rate limit exceeded"),
                     _ => ProviderFailure::new(ProviderFailureKind::ProviderUnavailable, format!("HTTP {}: {}", status, err_text)),
                 });
             }

@@ -106,7 +106,7 @@ fn test_neutral_staged_fixture_source_note_to_summary() {
         provider_profile: None,
         trace_policy: "staged".to_string(),
         register: "findings".to_string(),
-        body: earmark_core::MarkdownBody("extract finding".to_string()),
+        body: earmark_core::MarkdownBody::new("extract finding".to_string()),
     };
     let instr1_ref = store
         .write_object(&StoredObject::new(
@@ -130,7 +130,7 @@ fn test_neutral_staged_fixture_source_note_to_summary() {
         provider_profile: None,
         trace_policy: "staged".to_string(),
         register: "summaries".to_string(),
-        body: earmark_core::MarkdownBody("summarize findings".to_string()),
+        body: earmark_core::MarkdownBody::new("summarize findings".to_string()),
     };
     let instr2_ref = store
         .write_object(&StoredObject::new(
@@ -204,7 +204,7 @@ edges:
     to: op_ext
 guards: []
 "#,
-        pt_ref.id.0, instr1_ref.id.0
+        pt_ref.id.as_str(), instr1_ref.id.as_str()
     );
 
     let workflow_a_ref = store
@@ -243,7 +243,7 @@ edges:
     to: op_sum
 guards: []
 "#,
-        pt_ref.id.0, instr2_ref.id.0
+        pt_ref.id.as_str(), instr2_ref.id.as_str()
     );
 
     let workflow_b_ref = store
@@ -310,7 +310,7 @@ guards: []
     let engine = ExecutionEngine {
         store: &store,
         index: &index,
-        provider_registry: &registry,
+        provider_service: &registry,
     };
 
     // 7. Run Pattern A (Stage 1)

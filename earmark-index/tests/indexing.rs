@@ -1,6 +1,8 @@
 use std::collections::BTreeMap;
 
-use earmark_core::{to_yaml, Kind, Provenance, RuntimeProfile, Standing, SystemDefinition};
+use earmark_core::{
+    to_yaml, Kind, Provenance, RuntimeProfile, Standing, SystemDefinition, WorkflowDefinition,
+};
 use earmark_index::{DerivedIndex, QueryFilter};
 use earmark_store::{CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload};
 use tempfile::tempdir;
@@ -138,4 +140,65 @@ fn active_system_definition_activation() {
         .get_active_system(&system.namespace)
         .unwrap()
         .is_some());
+}
+
+#[test]
+fn symbolic_resolution_uses_explicit_declaration_identity_not_title_or_class() {
+    let dir = tempdir().unwrap();
+    let store = GitCanonicalStore::new(dir.path());
+
+    let target = WorkflowDefinition {
+        name: "research_synthesis".to_string(),
+        version: "1.0.0".to_string(),
+        description: Some("actual identity".to_string()),
+        operations: vec![],
+        edges: vec![],
+        guards: vec![],
+    };
+    let target_obj = StoredObject::new(
+        Kind::Workflow,
+        Some("wrong_class".to_string()),
+        Standing::default(),
+        Provenance::direct_input("operator"),
+        BTreeMap::from([(
+            "title".to_string(),
+            earmark_core::HeaderValue::String("Not matching title".to_string()),
+        )]),
+        StoredPayload::from_yaml(to_yaml(&target).unwrap()),
+        vec![],
+    );
+    let target_ref = store.write_object(&target_obj).unwrap();
+
+    let title_collision = WorkflowDefinition {
+        name: "different_identity".to_string(),
+        version: "1.0.0".to_string(),
+        description: Some("collision".to_string()),
+        operations: vec![],
+        edges: vec![],
+        guards: vec![],
+    };
+    let collision_obj = StoredObject::new(
+        Kind::Workflow,
+        Some("research_synthesis".to_string()),
+        Standing::default(),
+        Provenance::direct_input("operator"),
+        BTreeMap::from([(
+            "title".to_string(),
+            earmark_core::HeaderValue::String("research_synthesis".to_string()),
+        )]),
+        StoredPayload::from_yaml(to_yaml(&title_collision).unwrap()),
+        vec![],
+    );
+    let collision_ref = store.write_object(&collision_obj).unwrap();
+
+    let index = DerivedIndex::open(dir.path()).unwrap();
+    index.rebuild_from_store(&store).unwrap();
+
+    let resolved = index
+        .resolve_workflow_symbolic_latest("research_synthesis")
+        .unwrap()
+        .unwrap();
+    assert_eq!(resolved.id, target_ref.id);
+    assert_eq!(resolved.version_id, target_ref.version_id);
+    assert_ne!(resolved.id, collision_ref.id);
 }
