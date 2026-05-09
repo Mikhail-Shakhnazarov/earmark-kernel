@@ -1,6 +1,6 @@
 # Earmark
 
-[![CI](https://github.com/Mikhail-Shakhnazarov/earmark-workspace/actions/workflows/ci.yml/badge.svg)](https://github.com/Mikhail-Shakhnazarov/earmark-workspace/actions/workflows/ci.yml)
+[![CI](https://github.com/Mikhail-Shakhnazarov/earmark-workspace/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Mikhail-Shakhnazarov/earmark-workspace/actions/workflows/ci.yml)
 
 A declarative kernel for governed AI work. Earmark compiles bounded context from a corpus, executes declared transitions over that context, and records what happened as durable, inspectable artifacts. Workspace state lives in a Git-backed canonical store implemented through `gix`, with a rebuildable derived index for fast query and inspection.
 
