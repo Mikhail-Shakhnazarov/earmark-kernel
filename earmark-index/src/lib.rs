@@ -762,6 +762,12 @@ impl DerivedIndex {
                 .query_row("SELECT COUNT(*) FROM active_systems", [], |row| row.get(0))?;
         Ok((objects, active_systems))
     }
+
+    pub fn relation_count(&self) -> Result<u64, IndexError> {
+        Ok(self
+            .conn
+            .query_row("SELECT COUNT(*) FROM relations", [], |row| row.get(0))?)
+    }
 }
 
 fn snippet(input: &str) -> String {

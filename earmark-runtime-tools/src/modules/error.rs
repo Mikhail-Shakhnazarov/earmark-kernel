@@ -24,4 +24,8 @@ pub enum RuntimeToolError {
     Conflict(String),
     #[error("invalid payload shape: {0}")]
     InvalidPayloadShape(String),
+    #[error("relation rule violation: {0}")]
+    RelationRuleViolation(String),
+    #[error("missing class definition for {0}")]
+    MissingClassDefinition(String),
 }
