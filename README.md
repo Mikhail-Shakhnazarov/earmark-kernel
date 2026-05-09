@@ -143,6 +143,8 @@ cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 
+For local development and pull-request expectations, see [CONTRIBUTING.md](./CONTRIBUTING.md). For vulnerability reporting, see [SECURITY.md](./SECURITY.md).
+
 ## Acknowledgments
 
 Earmark owes an architectural debt to [Engram](https://github.com/vincents-ai/engram) and its creator, Vincent Palmer. Engram's treatment of durable project state, explicit context, and structured agent-operable knowledge helped open the direction that Earmark develops here.
