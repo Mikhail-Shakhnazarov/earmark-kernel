@@ -95,7 +95,7 @@ See the [Quickstart Tutorial](docs/tutorials/quickstart.md) for a complete walkt
 | | |
 |---|---|
 | **[Quickstart](docs/tutorials/quickstart.md)** | Get moving in 5 minutes |
-| **[Practical Guide](docs/internal/planning/PRACTICAL_GUIDE.md)** | Plain-language explanation and use cases |
+| **[Practical Guide](docs/tutorials/practical-guide.md)** | Plain-language explanation and use cases |
 | **[Staged Execution](docs/concepts/staged-execution.md)** | How transitions, assignments, and handoffs work |
 | **[Context Compilation](docs/concepts/context-compilation.md)** | How Earmark bounds what a runtime sees |
 | **[Research Synthesis Demo](docs/tutorials/research-synthesis-demo.md)** | Walk through a complete two-stage workflow |
