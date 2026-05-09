@@ -1,6 +1,12 @@
 use crate::error::ProviderFailure;
-use crate::provider::{ProviderExecutionOutcome, ProviderService};
-use earmark_core::{ObjectId, VersionId, VersionRef, WorkflowDefinition, WorkflowOperation};
+use crate::provider::{
+    provider_record_from_response, provider_response_is_synthetic, MockAdapter, ProviderAdapter,
+    ProviderExecutionOutcome, ProviderService,
+};
+use earmark_core::{
+    ObjectId, ObjectRef, ProviderProfile, ProviderRequest, ProviderResponseContract, ScalarValue,
+    VersionId, VersionRef, WorkflowDefinition, WorkflowOperation,
+};
 use earmark_index::*;
 use earmark_store::GitCanonicalStore;
 use earmark_store::*;
@@ -114,12 +120,221 @@ impl ProviderService for BrokenProvider {
                 provider: "broken".to_string(),
                 model: "broken".to_string(),
                 status: "ok".to_string(),
+                metadata: std::collections::BTreeMap::new(),
                 usage: None,
                 message: None,
                 recorded_at: chrono::Utc::now(),
             },
         })
     }
+}
+
+#[test]
+fn mock_adapter_provide_sets_synthetic_metadata() {
+    let adapter = MockAdapter;
+    let request = ProviderRequest {
+        request_id: "req_test".to_string(),
+        run_id: "run_test".to_string(),
+        work_packet: ObjectRef::new(
+            ObjectId::new(),
+            VersionId::new(),
+            earmark_core::Kind::WorkPacket,
+            None,
+        ),
+        provider_profile: VersionRef::new(ObjectId::new(), VersionId::new()),
+        instruction_text: "do work".to_string(),
+        work_surface_manifest: None,
+        inputs: vec![],
+        response_contract: ProviderResponseContract {
+            format: "json".to_string(),
+            must_return_candidate_only: true,
+            must_include_lineage: false,
+        },
+        issued_at: chrono::Utc::now(),
+    };
+    let profile = ProviderProfile {
+        name: "local_mock".to_string(),
+        version: "1".to_string(),
+        description: None,
+        provider: "mock".to_string(),
+        model: "echo".to_string(),
+        endpoint_env: None,
+        auth_env: None,
+        budget: earmark_core::ProviderBudget {
+            max_input_tokens: None,
+            max_output_tokens: None,
+            max_cost_usd: None,
+            max_latency_ms: None,
+        },
+        allowed_operations: vec!["transform".to_string()],
+        exposure: earmark_core::ProviderExposure {
+            allow_prose_objects: true,
+            allow_structured_declarations: true,
+            allow_work_surface_only: false,
+            allow_export_requests: false,
+        },
+        response_contract: request.response_contract.clone(),
+    };
+
+    let response = adapter.provide(request, &profile).expect("mock response");
+    assert!(provider_response_is_synthetic(&response));
+    assert_eq!(
+        response.metadata.get("synthetic"),
+        Some(&ScalarValue::Bool(true))
+    );
+    assert_eq!(
+        response.metadata.get("synthetic_source"),
+        Some(&ScalarValue::String("mock_provider".to_string()))
+    );
+    assert_eq!(
+        response.metadata.get("production_eligible"),
+        Some(&ScalarValue::Bool(false))
+    );
+}
+
+#[test]
+fn provider_record_from_response_preserves_synthetic_metadata() {
+    let request = ProviderRequest {
+        request_id: "req_test".to_string(),
+        run_id: "run_test".to_string(),
+        work_packet: ObjectRef::new(
+            ObjectId::new(),
+            VersionId::new(),
+            earmark_core::Kind::WorkPacket,
+            None,
+        ),
+        provider_profile: VersionRef::new(ObjectId::new(), VersionId::new()),
+        instruction_text: "do work".to_string(),
+        work_surface_manifest: None,
+        inputs: vec![],
+        response_contract: ProviderResponseContract {
+            format: "json".to_string(),
+            must_return_candidate_only: true,
+            must_include_lineage: false,
+        },
+        issued_at: chrono::Utc::now(),
+    };
+    let profile = ProviderProfile {
+        name: "local_mock".to_string(),
+        version: "1".to_string(),
+        description: None,
+        provider: "mock".to_string(),
+        model: "echo".to_string(),
+        endpoint_env: None,
+        auth_env: None,
+        budget: earmark_core::ProviderBudget {
+            max_input_tokens: None,
+            max_output_tokens: None,
+            max_cost_usd: None,
+            max_latency_ms: None,
+        },
+        allowed_operations: vec!["transform".to_string()],
+        exposure: earmark_core::ProviderExposure {
+            allow_prose_objects: true,
+            allow_structured_declarations: true,
+            allow_work_surface_only: false,
+            allow_export_requests: false,
+        },
+        response_contract: request.response_contract.clone(),
+    };
+    let response = earmark_core::ProviderResponse {
+        request_id: request.request_id.clone(),
+        provider: "mock".to_string(),
+        model: "echo".to_string(),
+        status: "completed".to_string(),
+        candidate_payload: "fixture".to_string(),
+        metadata: std::collections::BTreeMap::from([
+            ("synthetic".to_string(), ScalarValue::Bool(true)),
+            (
+                "synthetic_source".to_string(),
+                ScalarValue::String("mock_provider".to_string()),
+            ),
+        ]),
+        usage: None,
+        received_at: chrono::Utc::now(),
+    };
+    let record = provider_record_from_response(&request, &profile, &response, None);
+    assert_eq!(
+        record.metadata.get("synthetic"),
+        Some(&ScalarValue::Bool(true))
+    );
+}
+
+#[test]
+fn delegated_transform_output_sets_synthetic_headers() {
+    let dir = tempdir().unwrap();
+    let store = GitCanonicalStore::new(dir.path());
+    store.init_layout().unwrap();
+
+    let input = StoredObject::new(
+        earmark_core::Kind::Object,
+        Some("note".to_string()),
+        earmark_core::Standing::default(),
+        earmark_core::Provenance::direct_input("test"),
+        std::collections::BTreeMap::new(),
+        StoredPayload::from_markdown("input"),
+        vec![],
+    );
+    let input_ref = store.write_object(&input).unwrap();
+    let input_obj_ref = earmark_core::ObjectRef::new(
+        input_ref.id.clone(),
+        input_ref.version_id.clone(),
+        earmark_core::Kind::Object,
+        Some("note".to_string()),
+    );
+    let instruction = earmark_core::InstructionPayload {
+        name: "extract".to_string(),
+        version: "1".to_string(),
+        purpose: "extract".to_string(),
+        input_classes: vec!["note".to_string()],
+        output_classes: vec!["finding".to_string()],
+        execution_policy: "delegated".to_string(),
+        provider_profile: None,
+        trace_policy: "summary".to_string(),
+        register: "machined".to_string(),
+        body: earmark_core::MarkdownBody::new("extract"),
+    };
+    let response = earmark_core::ProviderResponse {
+        request_id: "req".to_string(),
+        provider: "mock".to_string(),
+        model: "echo".to_string(),
+        status: "completed".to_string(),
+        candidate_payload: "fixture".to_string(),
+        metadata: std::collections::BTreeMap::from([
+            ("synthetic".to_string(), ScalarValue::Bool(true)),
+            (
+                "synthetic_source".to_string(),
+                ScalarValue::String("mock_provider".to_string()),
+            ),
+            ("production_eligible".to_string(), ScalarValue::Bool(false)),
+        ]),
+        usage: None,
+        received_at: chrono::Utc::now(),
+    };
+
+    let artifacts = crate::persistence::create_delegated_transform_output(
+        &store,
+        &instruction,
+        "finding",
+        &[input_obj_ref],
+        &VersionRef::new(ObjectId::new(), VersionId::new()),
+        response,
+    )
+    .unwrap();
+    let stored = store
+        .read_version(&VersionRef::new(
+            artifacts.output.id.clone(),
+            artifacts.output.version_id.clone(),
+        ))
+        .unwrap();
+    assert_eq!(
+        stored.envelope.headers.get("synthetic"),
+        Some(&earmark_core::HeaderValue::Bool(true))
+    );
+    assert_eq!(
+        stored.envelope.headers.get("production_eligible"),
+        Some(&earmark_core::HeaderValue::Bool(false))
+    );
 }
 
 #[test]

@@ -136,6 +136,7 @@ response_contract:
 ```
 
 The mock provider (`local_mock`) is the default and requires no API keys. Use it for development and testing.
+Outputs produced through the mock provider are marked as synthetic in provider metadata and propagated into durable execution artifacts so they are not mistaken for model-derived production evidence.
 
 For direct provider extension patterns, see the [Provider Extension](provider-extension.md) reference.
 

@@ -874,6 +874,8 @@ pub struct ProviderRecord {
     pub provider: String,
     pub model: String,
     pub status: String,
+    #[serde(default)]
+    pub metadata: BTreeMap<String, ScalarValue>,
     pub usage: Option<ProviderUsage>,
     pub message: Option<String>,
     pub recorded_at: Timestamp,
