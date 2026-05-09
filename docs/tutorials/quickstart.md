@@ -19,17 +19,22 @@ em init
 
 You should see:
 
-```
+```json
 {
   "ok": true,
   "summary": "workspace initialized",
-  "root": "...",
+  "root": ".",
   "paths": {
-    "canonical_dir": ".../.earmark/canonical",
-    "declarations_dir": ".../.earmark/declarations",
-    "work_surfaces_dir": ".../.earmark/work_surfaces",
-    "index_path": ".../.earmark/derived/index.sqlite"
-  }
+    "canonical_dir": ".\\.earmark\\canonical",
+    "declarations_dir": ".\\.earmark\\declarations",
+    "work_surfaces_dir": ".\\.earmark\\work_surfaces",
+    "index_path": ".\\.earmark\\derived\\index.sqlite"
+  },
+  "next_commands": [
+    "em doctor",
+    "em status",
+    "em declare validate --kind class docs/declarations/examples/classes/finding.yaml"
+  ]
 }
 ```
 
@@ -40,6 +45,17 @@ Use the example system manifest from the repository:
 ```bash
 em system register "$REPO_ROOT/examples/research-synthesis/declarations/systems/system.yaml"
 em system activate sys_research_synthesis
+```
+
+Expected output for registration:
+
+```json
+{
+  "ok": true,
+  "kind": "system_registration",
+  "object_id": "obj_c5ef57bdcbcf4be5a67ec0b467b75012",
+  "version_id": "ver_c7ba974ad96047ecb39b914207600ac4"
+}
 ```
 
 This registers the research synthesis domain — three object classes (`source_note`, `finding`, `summary`), two instructions, and one two-stage workflow.
@@ -53,6 +69,18 @@ em deposit --class source_note --title "Context Boundaries" --body "AI context s
 em deposit --class source_note --title "Lineage" --body "Every derived object should trace back to its source."
 ```
 
+Expected output for each deposit:
+
+```json
+{
+  "ok": true,
+  "class": "source_note",
+  "object_id": "obj_92aef3ed1ade41fea3a47019cc734181",
+  "version_id": "ver_a04062dba5394bb38ea533469ec7df8b",
+  "title": "Context Boundaries"
+}
+```
+
 ## Run the workflow
 
 Find your deposited objects:
@@ -61,13 +89,39 @@ Find your deposited objects:
 em query --class source_note
 ```
 
+Expected output (snippet):
+
+```json
+[
+  {
+    "object_id": "obj_92aef3ed1ade41fea3a47019cc734181",
+    "class": "source_note",
+    "title": "Context Boundaries",
+    "standing_process": "active",
+    "standing_review": "unreviewed"
+  }
+]
+```
+
 Pick an object ID from the output and run the workflow:
 
 ```bash
 em workflow run research_synthesis --system-id sys_research_synthesis --with <object_id>
 ```
 
-The output will show the run ID, created artifacts, and suggested next commands.
+Expected output:
+
+```json
+{
+  "ok": true,
+  "run_id": "run_1778353534174187900",
+  "summary": "workflow run completed",
+  "status": "completed",
+  "created_assignments": ["obj_...", "obj_..."],
+  "created_change_sets": ["obj_...", "obj_..."],
+  "created_handoffs": ["obj_...", "obj_..."]
+}
+```
 
 ## Inspect the results
 
@@ -82,11 +136,22 @@ em run timeline latest
 em report run latest --output report.html
 ```
 
-`em run explain` will show you:
-- Which assignments were created
-- What objects were produced
-- Whether validation passed or failed
-- Which handoffs were emitted for successor work
+`em run explain latest` will show:
+
+```text
+--- RUN Explanation: run_1778353534174187900 ---
+
+Summary: run run_1778353534174187900 is completed
+Status: completed
+Started At: 2026-05-09T19:05:34.178213100Z
+Ended At: 2026-05-09T19:05:40.728925100Z
+
+Related Artifacts:
+  Assignments: 4
+  Change Sets: 4
+  Handoffs: 4
+  Failures: 0
+```
 
 ## What just happened?
 

@@ -8,13 +8,16 @@ The Earmark CLI (`em`) is the primary interface for operators and developers. Al
 |---|---|
 | `--root <path>` | Workspace root directory (default: current directory) |
 | `--json` | Output results as JSON wrapped in a versioned envelope |
+| `--config <path>` | Path to an explicit configuration file |
+| `--log-level <level>` | Set log level (error, warn, info, debug, trace) |
+| `--verbose` | Increase verbosity (repeatable: -v, -vv) |
 | `--help` | Help for any command or subcommand |
 
 ## Workspace
 
 ### `em init`
 
-Initialize a new Earmark workspace. This is the only command that creates workspace layout (`.earmark/`, `corpus/`, `.git/`, and index storage).
+Initialize a new Earmark workspace. This creates the workspace layout (`.earmark/`, `corpus/`, `.git/`, and index storage).
 
 ### `em doctor`
 
@@ -23,37 +26,30 @@ Check workspace health without repairing it. On an uninitialized root, `doctor` 
 ### `em status`
 
 Show counts of objects, assignments, change sets, and active systems.
-Requires an initialized workspace; it does not create one.
 
-```bash
-em status
-# Objects: 12  Assignments: 4  Change Sets: 3  Active System: sys_research_synthesis
-```
+### `em completions <shell>`
+
+Generate shell completion scripts (bash, zsh, fish). Emits shell code to stdout.
 
 ## Declarations
 
 ### `em declare validate --kind <kind> <path>`
 
-Validate a declaration file against its schema. Returns specific errors if validation fails.
+Validate a declaration file against its schema.
 
-Kinds: `class`, `instruction`, `workflow`, `compiled-context`, `provider-profile`, `system`.
-
-```bash
-em declare validate --kind system declarations/system.yaml
-# OK: System 'sys_research_synthesis' is valid.
-```
+Kinds: `class`, `instruction`, `standing-policy`, `workflow`, `compiled-context`, `provider-profile`, `system`.
 
 ### `em declare explain --kind <kind> <path>`
 
 Explain what a declaration does in plain language.
 
-### `em declare new <kind> <name>`
+### `em declare new --kind <kind> <name>`
 
 Generate a new declaration from a built-in template.
 
-```bash
-em declare new class my_finding > declarations/classes/my_finding.yaml
-```
+### `em declare register --kind <kind> <path>`
+
+Register a declaration in the workspace index.
 
 ### `em declare list-examples`
 
@@ -67,50 +63,35 @@ Register a path-based system manifest and resolve its referenced declarations.
 
 ### `em system activate <system_id>`
 
-Set the active system for the workspace. Subsequent commands use this system by default.
-
-### `em system list`
-
-List all registered systems and show which is active.
+Set the active system for the workspace.
 
 ## Data
 
-### `em deposit --class <class> [--title <title>] [--body <body>] [--payload-file <path>]`
+### `em deposit --class <class> [--kind <kind>] [--title <title>] [--body <body>] [--payload-file <path>] [--json-payload <json>]`
 
-Deposit an object into the corpus.
+Deposit an object into the corpus. Default kind is `object`.
 
-```bash
-em deposit --class source_note --title "Field Notes" --body "Municipal capacity is limited."
-# Created: obj_a1b2c3d4...  Class: source_note
-```
-
-### `em query [--class <class>] [--title <query>]`
+### `em query [--class <class>] [--kind <kind>] [--text <query>] [--object-id <id>]`
 
 Search the corpus through the derived index.
-Requires an initialized workspace; it does not create one.
 
-```bash
-em query --class source_note
-# obj_a1b2c3d4  source_note  "Field Notes"
-# obj_e5f6g7h8  source_note  "Report Excerpt"
-```
+### `em review <object_id> [--version-id <id>] [--reason <text>] [--reject]`
 
-### `em context compile --root <object_id> [--depth <n>]`
+Submit a review for an object. Accepts by default; use `--reject` to deny.
 
-Compile and preview a work surface from a root object.
+### `em context compile --root <object_id> [--depth <n>] [--relation-type <type>] [--class <class>] [--epistemic <standing>]`
+
+Compile a work surface from one or more root objects. Flags like `--root`, `--relation-type`, and `--class` are repeatable.
 
 ## Workflow Execution
 
-### `em workflow run <workflow_id> --system-id <system_id> [--with <object_id>] [--handoff <handoff_id>]`
+### `em workflow run <workflow_id> [--version-id <id>] [--system-id <id>] [--with <object_id>] [--handoff <handoff_id>] [--assignment <id>] [--approve-review]`
 
 Execute a declared workflow.
 
 - `--with <id>` — start from specific input objects (repeatable)
-- `--handoff <id>` — continue from a previous stage's handoff manifest
-
-```bash
-em workflow run research_synthesis --system-id sys_research_synthesis --with obj_a1b2c3d4
-```
+- `--handoff <id>` — continue from a previous stage's handoff
+- `--approve-review` — automatically approve the result if required by policy
 
 ## Inspection
 
@@ -118,51 +99,101 @@ em workflow run research_synthesis --system-id sys_research_synthesis --with obj
 
 List recent workflow runs.
 
+### `em run show <run_id>`
+
+Show detailed data for a specific run.
+
 ### `em run explain <run_id>`
 
-Summary of a run: status, transitions, created artifacts, and suggested next commands. Use `latest` as shorthand for the most recent run.
+Summary of a run: status, transitions, created artifacts. Use `latest` for the most recent run.
 
 ### `em run timeline <run_id>`
 
 Visual timeline of events in a run.
 
+### `em run artifacts <run_id>`
+
+List all durable artifacts created during a run.
+
 ### `em run graph <run_id>`
 
 Mermaid relationship graph of artifacts produced during a run.
 
-### `em run artifacts <run_id>`
+### `em assignment show <id>`
 
-List all durable artifacts (assignments, change sets, handoffs, failures) created during a run.
+Show raw data for a transition assignment.
 
-### `em assignment explain <assignment_id>`
+### `em assignment explain <id>`
 
-Explain a transition assignment: what work was claimed, over which inputs, current status.
+Explain a transition assignment's status and inputs.
 
-### `em change-set explain <change_set_id>`
+### `em assignment list [--run-id <id>] [--status <status>]`
 
-Explain what a transition produced: created objects, validation result, linked handoff.
+List assignments, optionally filtered by run or status.
 
-### `em handoff explain <handoff_id>`
+### `em change-set show <id>`
 
-Explain a handoff: which objects it carries, which classes and relations are allowed for successor work.
+Show raw data for a change set.
 
-### `em failure explain <failure_id>`
+### `em change-set explain <id>`
 
-Explain a failure: what went wrong, which assignment and change set are linked, suggested recovery.
+Explain what a transition produced.
 
-### `em failure list`
+### `em change-set list [--run-id <id>]`
 
-List transformation failures, optionally filtered by run.
+List change sets, optionally filtered by run.
+
+### `em handoff show <id>`
+
+Show raw data for a handoff.
+
+### `em handoff explain <id>`
+
+Explain a handoff's constraints and carried objects.
+
+### `em handoff list [--run-id <id>]`
+
+List handoffs, optionally filtered by run.
+
+### `em failure show <id>`
+
+Show raw data for a failure.
+
+### `em failure explain <id>`
+
+Explain what went wrong in a transition.
+
+### `em failure list [--run-id <id>] [--transition-id <id>]`
+
+List failures, optionally filtered.
+
+## Audit and Providers
+
+### `em audit failures [--run-id <id>] [--transition-id <id>]`
+
+Audit workflow failures.
+
+### `em audit show <failure_id>`
+
+Show detailed failure analysis.
+
+### `em provider capabilities`
+
+List capabilities of compiled-in providers.
 
 ## Reports
 
-### `em report <run|handoff|system> <id> --output <path>`
+### `em report run <id> --output <path>`
 
-Generate a static HTML report for a specific artifact. Reports include timelines, artifact summaries, Mermaid diagrams, and are self-contained for sharing.
+Generate a static HTML report for a specific run.
 
-```bash
-em report run latest --output reports/synthesis_run.html
-```
+### `em report handoff <id> --output <path>`
+
+Generate a static HTML report for a specific handoff.
+
+### `em report system <id> --output <path>`
+
+Generate a static HTML report for a specific system.
 
 ## License
 
