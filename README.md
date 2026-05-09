@@ -1,5 +1,7 @@
 # Earmark
 
+[![CI](https://github.com/Mikhail-Shakhnazarov/earmark-workspace/actions/workflows/ci.yml/badge.svg)](https://github.com/Mikhail-Shakhnazarov/earmark-workspace/actions/workflows/ci.yml)
+
 A declarative kernel for governed AI work. Earmark compiles bounded context from a corpus, executes declared transitions over that context, and records what happened as durable, inspectable artifacts. Workspace state lives in a Git-backed canonical store implemented through `gix`, with a rebuildable derived index for fast query and inspection.
 
 ## The Problem
@@ -107,7 +109,7 @@ See the [Quickstart Tutorial](docs/tutorials/quickstart.md) for a complete walkt
 
 ## Current Status
 
-Earmark is an operational kernel with a green workspace verification baseline. It is not yet a packaged application.
+Workspace verification is exposed through the CI workflow, which runs formatting, workspace checks, tests, and Clippy. It is not yet a packaged application.
 
 What works:
 - Declaration, validation, and scaffolding of domain definitions
