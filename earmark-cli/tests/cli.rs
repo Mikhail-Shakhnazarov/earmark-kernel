@@ -633,3 +633,25 @@ fn workspace_root() -> PathBuf {
         .unwrap()
         .to_path_buf()
 }
+
+#[test]
+fn provider_capabilities_outputs_json() {
+    let dir = tempdir().unwrap();
+    let output = Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(dir.path())
+        .arg("--json")
+        .arg("provider")
+        .arg("capabilities")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["data"]["kind"], "provider_capabilities");
+    assert!(parsed["data"]["providers"].is_array());
+}

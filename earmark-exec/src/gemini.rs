@@ -1,4 +1,7 @@
-use crate::{ProviderAdapter, ProviderFailure, ProviderFailureKind};
+use crate::{
+    ProviderAdapter, ProviderCapability, ProviderCapabilityStatus, ProviderFailure,
+    ProviderFailureKind,
+};
 #[cfg(feature = "gemini")]
 use chrono::Utc;
 #[cfg(feature = "gemini")]
@@ -195,6 +198,27 @@ impl ProviderAdapter for GeminiAdapter {
                 usage,
                 received_at: Utc::now(),
             })
+        }
+    }
+
+    fn capability(&self) -> ProviderCapability {
+        let missing_env = std::env::var(&self.api_key_env)
+            .ok()
+            .filter(|value| !value.trim().is_empty())
+            .map(|_| vec![])
+            .unwrap_or_else(|| vec![self.api_key_env.clone()]);
+
+        ProviderCapability {
+            provider: self.provider_key().to_string(),
+            status: if missing_env.is_empty() {
+                ProviderCapabilityStatus::Available
+            } else {
+                ProviderCapabilityStatus::MissingConfiguration
+            },
+            feature: Some("gemini".to_string()),
+            required_env: vec![self.api_key_env.clone()],
+            missing_env,
+            message: None,
         }
     }
 }

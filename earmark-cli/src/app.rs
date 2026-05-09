@@ -135,6 +135,7 @@ pub fn run(cli: Cli) -> Result<(), CliError> {
                         "store_scan_ok": store_scan_ok,
                         "index_exists": index_exists,
                         "index_open_ok": index_open_ok,
+                        "provider_capabilities": earmark_exec::compiled_provider_capabilities(),
                         "warnings": warnings,
                         "next_commands": if all_ok {
                             vec!["em status", "em run list"]
@@ -783,6 +784,18 @@ pub fn run(cli: Cli) -> Result<(), CliError> {
                     );
                 }
             },
+            Commands::Provider(command) => match command.action {
+                ProviderAction::Capabilities => {
+                    emit(
+                        as_json,
+                        json!({
+                            "ok": true,
+                            "kind": "provider_capabilities",
+                            "providers": earmark_exec::compiled_provider_capabilities(),
+                        }),
+                    );
+                }
+            },
             Commands::Completions { .. } => {}
             Commands::Status => {
                 let (object_count, active_system_count) = index
@@ -813,6 +826,7 @@ pub fn run(cli: Cli) -> Result<(), CliError> {
                         "failure_count": failures.len(),
                         "run_count": runs.len(),
                         "metrics": crate::metrics::snapshot(),
+                        "provider_capabilities": earmark_exec::compiled_provider_capabilities(),
                         "root": store.root().display().to_string(),
                         "paths": {
                             "declarations_dir": store.declarations_dir().display().to_string(),
@@ -863,6 +877,7 @@ fn workspace_access_mode(command: &Commands) -> WorkspaceAccessMode {
         Commands::Workflow(_) => WorkspaceAccessMode::Write,
         Commands::Context(_) => WorkspaceAccessMode::Write,
         Commands::Report(_) => WorkspaceAccessMode::Write,
+        Commands::Provider(_) => WorkspaceAccessMode::None,
     }
 }
 
@@ -892,6 +907,7 @@ fn command_family_name(command: &Commands) -> &'static str {
         Commands::Context(_) => "context",
         Commands::Audit(_) => "audit",
         Commands::Report(_) => "report",
+        Commands::Provider(_) => "provider",
         Commands::Completions { .. } => "completions",
         Commands::Status => "status",
     }

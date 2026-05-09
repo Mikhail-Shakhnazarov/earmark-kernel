@@ -20,7 +20,17 @@ em init
 You should see:
 
 ```
-Workspace initialized at ./my-workspace
+{
+  "ok": true,
+  "summary": "workspace initialized",
+  "root": "...",
+  "paths": {
+    "canonical_dir": ".../.earmark/canonical",
+    "declarations_dir": ".../.earmark/declarations",
+    "work_surfaces_dir": ".../.earmark/work_surfaces",
+    "index_path": ".../.earmark/derived/index.sqlite"
+  }
+}
 ```
 
 ## Register a system

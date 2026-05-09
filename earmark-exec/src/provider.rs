@@ -10,6 +10,25 @@ use std::env;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProviderCapabilityStatus {
+    Available,
+    CompileDisabled,
+    MissingConfiguration,
+    RuntimeUnavailable,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct ProviderCapability {
+    pub provider: String,
+    pub status: ProviderCapabilityStatus,
+    pub feature: Option<String>,
+    pub required_env: Vec<String>,
+    pub missing_env: Vec<String>,
+    pub message: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProviderMode {
     LocalExecution,
@@ -40,6 +59,17 @@ pub trait ProviderAdapter: Send + Sync {
         request: ProviderRequest,
         profile: &ProviderProfile,
     ) -> Result<ProviderResponse, ProviderFailure>;
+
+    fn capability(&self) -> ProviderCapability {
+        ProviderCapability {
+            provider: self.provider_key().to_string(),
+            status: ProviderCapabilityStatus::Available,
+            feature: None,
+            required_env: vec![],
+            missing_env: vec![],
+            message: None,
+        }
+    }
 }
 
 pub trait ProviderService: Send + Sync {
@@ -120,10 +150,22 @@ impl ProviderRegistry {
 
     pub fn register_default_adapters(&mut self) {
         self.register(Arc::new(MockAdapter));
+
+        #[cfg(feature = "gemini")]
         self.register(Arc::new(crate::GeminiAdapter::new(
             "gemini-1.5-pro".to_string(),
             "GOOGLE_API_KEY".to_string(),
         )));
+    }
+
+    pub fn capabilities(&self) -> Vec<ProviderCapability> {
+        let mut capabilities = self
+            .adapters
+            .values()
+            .map(|adapter| adapter.capability())
+            .collect::<Vec<_>>();
+        capabilities.sort_by(|a, b| a.provider.cmp(&b.provider));
+        capabilities
     }
 
     pub fn register(&mut self, adapter: Arc<dyn ProviderAdapter>) {
@@ -138,6 +180,23 @@ impl ProviderRegistry {
 
 pub fn default_provider_registry() -> ProviderRegistry {
     ProviderRegistry::with_defaults()
+}
+
+pub fn compiled_provider_capabilities() -> Vec<ProviderCapability> {
+    let mut capabilities = ProviderRegistry::with_defaults().capabilities();
+
+    #[cfg(not(feature = "gemini"))]
+    capabilities.push(ProviderCapability {
+        provider: "google_gemini".to_string(),
+        status: ProviderCapabilityStatus::CompileDisabled,
+        feature: Some("gemini".to_string()),
+        required_env: vec!["GOOGLE_API_KEY".to_string()],
+        missing_env: vec![],
+        message: Some("provider requires the gemini cargo feature".to_string()),
+    });
+
+    capabilities.sort_by(|a, b| a.provider.cmp(&b.provider));
+    capabilities
 }
 
 pub struct MockAdapter;

@@ -281,6 +281,8 @@ fn adapter_not_registered_failure() {
 fn default_registry_can_be_extended_with_custom_provider() {
     let mut registry = default_provider_registry();
     assert!(registry.get("mock").is_some());
+
+    #[cfg(feature = "gemini")]
     assert!(registry.get("google_gemini").is_some());
 
     registry.register(Arc::new(CustomEchoAdapter));

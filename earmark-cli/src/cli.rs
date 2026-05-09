@@ -38,6 +38,7 @@ pub enum Commands {
     Context(ContextCommand),
     Audit(AuditCommand),
     Report(ReportCommand),
+    Provider(ProviderCommand),
     Completions { shell: CompletionShell },
     Status,
 }
@@ -339,6 +340,17 @@ pub struct CompileContextArgs {
     pub classes: Vec<String>,
     #[arg(long = "epistemic")]
     pub epistemic: Vec<String>,
+}
+
+#[derive(Args)]
+pub struct ProviderCommand {
+    #[command(subcommand)]
+    pub action: ProviderAction,
+}
+
+#[derive(Subcommand)]
+pub enum ProviderAction {
+    Capabilities,
 }
 
 pub fn command_for_completions() -> clap::Command {

@@ -16,10 +16,11 @@ pub use engine::ExecutionEngine;
 pub use error::{ExecError, ProviderFailure, ProviderFailureKind};
 pub use ir::{WorkflowRunOutcome, WorkflowRunRequest};
 pub use provider::{
-    default_provider_registry, provide_with_registry, provider_record_from_failure,
-    provider_record_from_response, resolve_provider_profile, AsyncProviderAdapter,
-    AsyncProviderService, MockAdapter, ProviderAdapter, ProviderExecutionOutcome, ProviderMode,
-    ProviderRegistry, ProviderService, RetrySleeper, ThreadSleepSleeper,
+    compiled_provider_capabilities, default_provider_registry, provide_with_registry,
+    provider_record_from_failure, provider_record_from_response, resolve_provider_profile,
+    AsyncProviderAdapter, AsyncProviderService, MockAdapter, ProviderAdapter, ProviderCapability,
+    ProviderCapabilityStatus, ProviderExecutionOutcome, ProviderMode, ProviderRegistry,
+    ProviderService, RetrySleeper, ThreadSleepSleeper,
 };
 
 // Specialized adapters

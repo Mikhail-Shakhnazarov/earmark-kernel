@@ -14,6 +14,8 @@ use earmark_exec::default_provider_registry;
 let registry = default_provider_registry();
 ```
 
+Use `em provider capabilities` to see which providers are compiled and available in your current binary.
+
 ## Custom Registration
 
 Build a registry explicitly, then add custom adapters.
