@@ -230,13 +230,3 @@ pub(crate) fn dedupe_strings(values: Vec<String>) -> Vec<String> {
 pub(crate) fn uuid_like() -> String {
     format!("{}", Utc::now().timestamp_nanos_opt().unwrap_or_default())
 }
-
-pub(crate) trait ObjectRefExt {
-    fn version_ref(&self) -> earmark_core::VersionRef;
-}
-
-impl ObjectRefExt for ObjectRef {
-    fn version_ref(&self) -> earmark_core::VersionRef {
-        earmark_core::VersionRef::new(self.id.clone(), self.version_id.clone())
-    }
-}

@@ -548,6 +548,7 @@ pub fn run(cli: Cli) -> Result<(), CliError> {
                     );
                 }
                 AssignmentAction::List { run_id, status } => {
+                    let run_id = resolve_optional_run_id(&store, run_id)?;
                     let mut assignments = Vec::new();
                     for object in store.scan_objects()? {
                         if object.envelope.kind != Kind::TransitionAssignment {
@@ -607,6 +608,7 @@ pub fn run(cli: Cli) -> Result<(), CliError> {
                     );
                 }
                 ChangeSetAction::List { run_id } => {
+                    let run_id = resolve_optional_run_id(&store, run_id)?;
                     let mut change_sets = Vec::new();
                     for object in store.scan_objects()? {
                         if object.envelope.kind != Kind::ChangeSet {
@@ -655,6 +657,7 @@ pub fn run(cli: Cli) -> Result<(), CliError> {
                     );
                 }
                 HandoffAction::List { run_id } => {
+                    let run_id = resolve_optional_run_id(&store, run_id)?;
                     let mut handoffs = Vec::new();
                     for object in store.scan_objects()? {
                         if object.envelope.kind != Kind::HandoffManifest {
@@ -701,6 +704,7 @@ pub fn run(cli: Cli) -> Result<(), CliError> {
                     run_id,
                     transition_id,
                 } => {
+                    let run_id = resolve_optional_run_id(&store, run_id)?;
                     let failures =
                         list_failures(&store, run_id.as_deref(), transition_id.as_deref())?;
                     emit(
@@ -729,6 +733,7 @@ pub fn run(cli: Cli) -> Result<(), CliError> {
                     run_id,
                     transition_id,
                 } => {
+                    let run_id = resolve_optional_run_id(&store, run_id)?;
                     let mut failures = Vec::new();
                     failures.extend(list_failures(
                         &store,
@@ -744,7 +749,8 @@ pub fn run(cli: Cli) -> Result<(), CliError> {
             },
             Commands::Report(command) => match command.action {
                 ReportAction::Run { target_id, output } => {
-                    let report = generate_run_report(&store, &target_id)?;
+                    let resolved_id = resolve_run_id(&store, &target_id)?;
+                    let report = generate_run_report(&store, &resolved_id)?;
                     if let Some(parent) = output.parent() {
                         fs::create_dir_all(parent)?;
                     }
@@ -755,7 +761,7 @@ pub fn run(cli: Cli) -> Result<(), CliError> {
                             "ok": true,
                             "kind": "report_generation",
                             "target_kind": "run",
-                            "target_id": target_id,
+                            "target_id": resolved_id,
                             "output": output.display().to_string(),
                         }),
                     );
@@ -869,6 +875,10 @@ pub fn run(cli: Cli) -> Result<(), CliError> {
                         "target": payload.target,
                         "relation_type": payload.relation_type,
                     });
+
+                    if let Some(mode) = relation.envelope.headers.get("relation_creation_mode") {
+                        related["creation_mode"] = json!(mode);
+                    }
 
                     let mut auth = BTreeMap::new();
                     for key in [
@@ -1835,6 +1845,27 @@ fn resolve_object_ref<S: CanonicalStore>(
     Ok(head.object_ref())
 }
 
+fn resolve_run_id<S: CanonicalStore>(store: &S, run_id: &str) -> Result<String, CliError> {
+    if run_id == "latest" {
+        let ledgers = list_run_records(store)?;
+        return ledgers
+            .last()
+            .map(|l| l.run_id.clone())
+            .ok_or_else(|| CliError::not_found("no runs found".to_string()));
+    }
+    Ok(run_id.to_string())
+}
+
+fn resolve_optional_run_id<S: CanonicalStore>(
+    store: &S,
+    run_id: Option<String>,
+) -> Result<Option<String>, CliError> {
+    match run_id {
+        Some(id) => Ok(Some(resolve_run_id(store, &id)?)),
+        None => Ok(None),
+    }
+}
+
 fn list_run_records<S: CanonicalStore>(
     store: &S,
 ) -> Result<Vec<earmark_core::RunRecord>, CliError> {
@@ -2649,6 +2680,9 @@ fn render_explanation(value: &serde_json::Value) -> Option<String> {
                 "Target: {}\n",
                 related.get("target")?.get("id")?.as_str()?
             ));
+            if let Some(mode) = related.get("creation_mode").and_then(|v| v.as_str()) {
+                output.push_str(&format!("Creation Mode: {}\n", mode));
+            }
 
             if let Some(auth) = related.get("authorization") {
                 output.push_str("\nAuthorization Trace:\n");
@@ -2799,6 +2833,7 @@ fn html_wrap(title: &str, content: &str) -> String {
 }
 
 fn generate_run_report<S: CanonicalStore>(store: &S, run_id: &str) -> Result<String, CliError> {
+    // Note: run_id must be already resolved here (not "latest")
     let ledger = load_run_record_by_id(store, run_id)?;
     let related = run_related_artifacts(store, run_id)?;
     let graph = build_run_graph(store, run_id)?;

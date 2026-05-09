@@ -1,8 +1,9 @@
 use crate::modules::error::RuntimeToolError;
 use crate::modules::surface::RuntimeToolSurface;
 use earmark_core::{
-    AssignmentStatus, ChangeSet, ChangeSetDraft, HeaderValue, Kind, ObjectId, Provenance, Standing,
-    TransitionAssignment, TransitionAssignmentId,
+    AssignmentStatus, ChangeSet, ChangeSetDraft, HeaderValue, Kind, ObjectId, Provenance,
+    RelationCreationMode, Standing, TransitionAssignment, TransitionAssignmentId,
+    REL_TYPE_REQUESTS_STANDING,
 };
 use earmark_exec::{ExecutionEngine, WorkflowRunOutcome, WorkflowRunRequest};
 use earmark_store::{CanonicalStore, StoredObject, StoredPayload};
@@ -177,22 +178,18 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
                     Kind::Object,
                     Some("standing_transition_request".to_string()),
                 ),
-                relation_type: "requests_standing".to_string(),
+                relation_type: REL_TYPE_REQUESTS_STANDING.to_string(),
                 qualifiers: BTreeMap::new(),
                 scope: None,
             };
-            let stored_rel = StoredObject::new(
-                Kind::Relation,
-                None,
-                Standing::default(),
+            earmark_exec::persist_relation_canonical(
+                self.store,
+                self.index,
+                rel_payload,
                 Provenance::direct_input(agent_id.clone()),
-                BTreeMap::new(),
-                StoredPayload::from_json_bytes(serde_json::to_vec_pretty(&rel_payload)?),
-                vec![],
-            );
-            self.store.write_object(&stored_rel)?;
-            self.index
-                .upsert_head_object_from_store(self.store, &stored_rel.envelope.id)?;
+                RelationCreationMode::PrivilegedSystem,
+                None,
+            )?;
         }
         assignment.status = earmark_core::AssignmentStatus::Completed;
         assignment.completion_change_set_id = Some(change_set_id);

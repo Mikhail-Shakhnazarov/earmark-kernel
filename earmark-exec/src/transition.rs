@@ -15,7 +15,7 @@ use crate::error::{ExecError, ProviderFailure, ProviderFailureKind};
 use crate::handoff::derive_successor_handoff;
 use crate::helpers::{
     record_transition, reject_duplicate_active_assignment, store_work_packet, uuid_like,
-    work_packet_from_compiled_context, work_surface_manifest_path, ObjectRefExt,
+    work_packet_from_compiled_context, work_surface_manifest_path,
 };
 use crate::ir::{ExecutionIr, ExecutionTransition, WorkflowRunRequest};
 use crate::persistence::{
@@ -215,6 +215,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                     ProviderMode::LocalExecution => {
                         crate::persistence::create_local_transform_output(
                             store,
+                            index,
                             &instruction,
                             &output_class,
                             &filtered_inputs,
@@ -296,6 +297,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
 
                                 crate::persistence::create_delegated_transform_output(
                                     store,
+                                    index,
                                     &instruction,
                                     &output_class,
                                     &filtered_inputs,
@@ -461,11 +463,13 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                         info: vec![],
                     }],
                     handoff_manifest_id: None,
+                    index,
                 },
             )?;
 
             let failure_ref = persist_transformation_failure(
                 store,
+                index,
                 &stored_assignment_head,
                 &assignment,
                 Some(blocked_change_set_id.clone()),
@@ -526,6 +530,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                         draft: &change_set_draft,
                         validation_results: vec![validation_result.clone()],
                         handoff_manifest_id: None,
+                        index,
                     },
                 )?;
 
@@ -536,6 +541,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                 ));
                 let failure_ref = persist_transformation_failure(
                     store,
+                    index,
                     &stored_assignment_head,
                     &assignment,
                     Some(blocked_change_set_id.clone()),
@@ -636,6 +642,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                     draft: &change_set_draft,
                     validation_results: vec![validation_result],
                     handoff_manifest_id: None,
+                    index,
                 },
             )?;
             record.manifests.extend(handoff_manifest_ids);

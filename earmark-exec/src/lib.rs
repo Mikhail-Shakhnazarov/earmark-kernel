@@ -6,6 +6,7 @@ pub(crate) mod helpers;
 pub(crate) mod ir;
 pub(crate) mod persistence;
 pub(crate) mod provider;
+pub mod relation;
 pub(crate) mod resolution;
 pub(crate) mod state;
 pub(crate) mod transition;
@@ -23,6 +24,7 @@ pub use provider::{
     ProviderCapabilityStatus, ProviderExecutionOutcome, ProviderMode, ProviderRegistry,
     ProviderService, RetrySleeper, ThreadSleepSleeper,
 };
+pub use relation::persist_relation_canonical;
 
 // Specialized adapters
 pub mod gemini;

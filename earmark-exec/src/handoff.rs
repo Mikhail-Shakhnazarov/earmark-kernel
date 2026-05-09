@@ -2,13 +2,23 @@ use crate::error::ExecError;
 use crate::helpers::dedupe_strings;
 use crate::ir::{ExecutionIr, ExecutionTransition, SuccessorHandoffSpec};
 use crate::resolution::load_class_definition;
+use crate::relation::persist_relation_canonical;
 use earmark_core::{
-    HandoffManifest, HandoffManifestId, Kind, ObjectId, ObjectRef, RelationPayload, RequiredCheck,
-    StandingConstraint,
+    HandoffManifest, HandoffManifestId, Kind, ObjectId, ObjectRef, RelationCreationMode,
+    RelationPayload, RequiredCheck, StandingConstraint, REL_TYPE_DERIVED_FROM,
+    REL_TYPE_REQUESTS_STANDING, REL_TYPE_USED_COMPILED_CONTEXT, REL_TYPE_USED_INSTRUCTION,
 };
 use earmark_index::{DerivedIndex, RelationEdge};
-use earmark_store::{CanonicalStore, StoredObject, StoredPayload};
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use earmark_store::CanonicalStore;
+use std::collections::{BTreeSet, VecDeque};
+
+/// Base set of relation types that are always carried across handoffs.
+pub const HANDOFF_BASE_RELATION_TYPES: &[&str] = &[
+    REL_TYPE_DERIVED_FROM,
+    REL_TYPE_USED_INSTRUCTION,
+    REL_TYPE_USED_COMPILED_CONTEXT,
+    REL_TYPE_REQUESTS_STANDING,
+];
 
 pub(crate) fn load_handoff<S: CanonicalStore>(
     store: &S,
@@ -47,11 +57,10 @@ pub(crate) fn derive_successor_handoff<S: CanonicalStore>(
 
         let mut allowed_input_classes = Vec::new();
         let allowed_output_classes = successor.output_contracts.clone();
-        let mut allowed_relation_types = vec![
-            "derived_from".to_string(),
-            "used_instruction".to_string(),
-            "used_compiled_context".to_string(),
-        ];
+        let mut allowed_relation_types: Vec<String> = HANDOFF_BASE_RELATION_TYPES
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
         let mut standing_constraints = Vec::new();
         let mut required_checks = Vec::new();
 
@@ -100,10 +109,7 @@ pub(crate) fn derive_successor_handoff<S: CanonicalStore>(
                 description: "Verify all input objects meet the class standing rules of the target transition".to_string(),
             });
         }
-        let mut allowed_relation_types_deduped = dedupe_strings(allowed_relation_types);
-        if !standing_constraints.is_empty() {
-            allowed_relation_types_deduped.push("requests_standing".to_string());
-        }
+        let allowed_relation_types_deduped = dedupe_strings(allowed_relation_types);
 
         specs.push(SuccessorHandoffSpec {
             to_transition_id: Some(successor.id.clone()),
@@ -125,12 +131,10 @@ pub(crate) fn derive_successor_handoff<S: CanonicalStore>(
             to_transition_id: None,
             allowed_input_classes: transition.output_contracts.clone(),
             allowed_output_classes: Vec::new(),
-            allowed_relation_types: vec![
-                "derived_from".to_string(),
-                "used_instruction".to_string(),
-                "used_compiled_context".to_string(),
-                "requests_standing".to_string(),
-            ],
+            allowed_relation_types: HANDOFF_BASE_RELATION_TYPES
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
             standing_constraints: Vec::new(),
             required_checks: Vec::new(),
             compiled_context_template_id: None,
@@ -186,6 +190,7 @@ pub(crate) fn reconstruct_successor_inputs_from_handoff<S: CanonicalStore>(
 
 pub(crate) fn create_lineage_relations<S: CanonicalStore>(
     store: &S,
+    index: &DerivedIndex,
     output: &ObjectRef,
     inputs: &[ObjectRef],
     instruction_ref: &earmark_core::VersionRef,
@@ -198,20 +203,18 @@ pub(crate) fn create_lineage_relations<S: CanonicalStore>(
         let relation = RelationPayload {
             source: output.clone(),
             target: input.clone(),
-            relation_type: "derived_from".to_string(),
+            relation_type: REL_TYPE_DERIVED_FROM.to_string(),
             qualifiers: std::collections::BTreeMap::new(),
-            scope: Some("execution".to_string()),
+            scope: None,
         };
-        let stored = StoredObject::new(
-            Kind::Relation,
-            None,
-            earmark_core::Standing::default(),
+        let relation_ref = persist_relation_canonical(
+            store,
+            index,
+            relation,
             earmark_core::Provenance::direct_input("runtime"),
-            std::collections::BTreeMap::new(),
-            StoredPayload::from_json_bytes(serde_json::to_vec_pretty(&relation)?),
-            vec![],
-        );
-        let relation_ref = store.write_object(&stored)?;
+            RelationCreationMode::Declared,
+            None,
+        )?;
         relation_ids.push(relation_ref.id);
     }
 
@@ -223,20 +226,18 @@ pub(crate) fn create_lineage_relations<S: CanonicalStore>(
             Kind::Instruction,
             None,
         ),
-        relation_type: "used_instruction".to_string(),
+        relation_type: REL_TYPE_USED_INSTRUCTION.to_string(),
         qualifiers: std::collections::BTreeMap::new(),
-        scope: Some("execution".to_string()),
+        scope: None,
     };
-    let stored = StoredObject::new(
-        Kind::Relation,
-        None,
-        earmark_core::Standing::default(),
+    let relation_ref = persist_relation_canonical(
+        store,
+        index,
+        instruction_relation,
         earmark_core::Provenance::direct_input("runtime"),
-        BTreeMap::new(),
-        StoredPayload::from_json_bytes(serde_json::to_vec_pretty(&instruction_relation)?),
-        vec![],
-    );
-    let relation_ref = store.write_object(&stored)?;
+        RelationCreationMode::PrivilegedSystem,
+        None,
+    )?;
     relation_ids.push(relation_ref.id);
 
     Ok(relation_ids)
