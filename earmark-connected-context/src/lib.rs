@@ -23,6 +23,8 @@ pub struct WorkSurfaceManifest {
     pub work_packet: Option<ObjectRef>,
     pub generated_at: earmark_core::Timestamp,
     pub objects: Vec<WorkSurfaceObject>,
+    #[serde(default)]
+    pub boundary_relations: Vec<WorkSurfaceBoundaryRelation>,
     pub constraints: BTreeMap<String, ScalarValue>,
 }
 
@@ -36,11 +38,36 @@ pub struct WorkSurfaceObject {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkSurfaceBoundaryRelation {
+    pub relation: ObjectRef,
+    pub relation_type: String,
+    pub source: ObjectRef,
+    pub target: ObjectRef,
+    pub included_endpoint: ObjectRef,
+    pub excluded_endpoint: ObjectRef,
+    pub path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompiledContextPlan {
     pub template: VersionRef,
     pub selected_object_ids: Vec<String>,
     pub relation_expansion_count: usize,
+    pub boundary_relation_count: usize,
     pub grouped_by: Vec<String>,
+}
+
+struct CompiledContextSelection {
+    objects: Vec<ObjectSummary>,
+    boundary_relations: Vec<BoundaryRelationCandidate>,
+}
+
+struct BoundaryRelationCandidate {
+    relation_object_id: String,
+    relation_version_id: String,
+    relation_type: String,
+    included_object_id: String,
+    excluded_object_id: String,
 }
 
 pub struct CompiledContextService;
@@ -80,8 +107,9 @@ impl CompiledContextService {
         template_ref: &VersionRef,
     ) -> Result<CompiledContextPlan, ProjectError> {
         let template = load_compiled_context_template(store, template_ref)?;
-        let selected = collect_selected_objects(store, index, &template)?;
-        let mut ids = selected
+        let selection = collect_selection(store, index, &template)?;
+        let mut ids = selection
+            .objects
             .iter()
             .map(|s| s.object_id.clone())
             .collect::<Vec<_>>();
@@ -91,6 +119,7 @@ impl CompiledContextService {
             template: template_ref.clone(),
             selected_object_ids: ids,
             relation_expansion_count: template.select.relations.len(),
+            boundary_relation_count: selection.boundary_relations.len(),
             grouped_by: template.group_by,
         })
     }
@@ -102,9 +131,10 @@ impl CompiledContextService {
         work_packet: Option<ObjectRef>,
     ) -> Result<WorkSurfaceManifest, ProjectError> {
         let template = load_compiled_context_template(store, template_ref)?;
-        let selected = collect_selected_objects(store, index, &template)?;
+        let selection = collect_selection(store, index, &template)?;
 
-        let objects = selected
+        let objects = selection
+            .objects
             .into_iter()
             .map(|summary| {
                 let version = VersionRef::new(
@@ -124,6 +154,46 @@ impl CompiledContextService {
                         .iter()
                         .map(|link| link.object.clone())
                         .collect(),
+                })
+            })
+            .collect::<Result<Vec<_>, ProjectError>>()?;
+
+        let boundary_relations = selection
+            .boundary_relations
+            .into_iter()
+            .map(|candidate| {
+                let relation_ref = VersionRef::new(
+                    earmark_core::ObjectId::parse(candidate.relation_object_id.clone())?,
+                    earmark_core::VersionId::parse(candidate.relation_version_id)?,
+                );
+                let loaded = store.read_version(&relation_ref)?;
+                let payload: earmark_core::RelationPayload =
+                    serde_json::from_slice(&loaded.payload.bytes)?;
+
+                let (included_endpoint, excluded_endpoint) =
+                    if payload.source.id.as_str() == candidate.included_object_id {
+                        (payload.source.clone(), payload.target.clone())
+                    } else {
+                        (payload.target.clone(), payload.source.clone())
+                    };
+
+                if excluded_endpoint.id.as_str() != candidate.excluded_object_id {
+                    return Err(ProjectError::Invariant(format!(
+                        "Boundary relation {} has unexpected excluded endpoint: {} (expected {})",
+                        candidate.relation_object_id,
+                        excluded_endpoint.id.as_str(),
+                        candidate.excluded_object_id
+                    )));
+                }
+
+                Ok(WorkSurfaceBoundaryRelation {
+                    relation: loaded.envelope.object_ref(),
+                    relation_type: candidate.relation_type,
+                    source: payload.source,
+                    target: payload.target,
+                    included_endpoint,
+                    excluded_endpoint,
+                    path: store.version_path(&relation_ref).display().to_string(),
                 })
             })
             .collect::<Result<Vec<_>, ProjectError>>()?;
@@ -182,6 +252,7 @@ impl CompiledContextService {
             work_packet,
             generated_at: Utc::now(),
             objects,
+            boundary_relations,
             constraints,
         };
 
@@ -216,11 +287,20 @@ fn load_compiled_context_template<S: CanonicalStore>(
     Ok(parse_yaml(&template_text)?)
 }
 
+#[cfg(test)]
 fn collect_selected_objects<S: CanonicalStore>(
-    _store: &S,
+    store: &S,
     index: &DerivedIndex,
     template: &CompiledContextTemplate,
 ) -> Result<Vec<ObjectSummary>, ProjectError> {
+    Ok(collect_selection(store, index, template)?.objects)
+}
+
+fn collect_selection<S: CanonicalStore>(
+    _store: &S,
+    index: &DerivedIndex,
+    template: &CompiledContextTemplate,
+) -> Result<CompiledContextSelection, ProjectError> {
     const MAX_RELATION_EXPANSION_DEPTH: usize = 64;
     let enforce_expansion_object_filter = matches!(
         template.select.expansion.object_filter,
@@ -229,6 +309,7 @@ fn collect_selected_objects<S: CanonicalStore>(
 
     let mut selected = Vec::new();
     let mut seen = BTreeSet::new();
+    let mut boundary_relations = Vec::new();
 
     let seed_queries: Vec<Option<String>> = if template.select.classes.is_empty() {
         vec![None]
@@ -282,20 +363,23 @@ fn collect_selected_objects<S: CanonicalStore>(
                 } else {
                     edge.source_object_id
                 };
-                if !visited_objects.insert(related_id.clone()) {
-                    continue;
-                }
 
                 let mut related_rows = index.query_objects(&QueryFilter {
                     object_id: Some(related_id.clone()),
                     ..Default::default()
                 })?;
+
+                if related_rows.is_empty() {
+                    continue;
+                }
+
                 related_rows.sort_by(|a, b| a.version_id.cmp(&b.version_id));
+
                 let mut admitted_any = false;
-                for related in related_rows {
+                for related in &related_rows {
                     if enforce_expansion_object_filter
                         && !object_summary_admissible(
-                            &related,
+                            related,
                             &template.select.classes,
                             &template.select.standing,
                         )
@@ -304,11 +388,22 @@ fn collect_selected_objects<S: CanonicalStore>(
                     }
                     admitted_any = true;
                     if seen.insert((related.object_id.clone(), related.version_id.clone())) {
-                        additions.push(related);
+                        additions.push(related.clone());
                     }
                 }
+
                 if admitted_any {
-                    queue.push_back((related_id, depth + 1));
+                    if visited_objects.insert(related_id.clone()) {
+                        queue.push_back((related_id, depth + 1));
+                    }
+                } else if template.select.expansion.include_boundary_relations {
+                    boundary_relations.push(BoundaryRelationCandidate {
+                        relation_object_id: edge.relation_object_id,
+                        relation_version_id: edge.version_id,
+                        relation_type: edge.relation_type,
+                        included_object_id: current_object_id.clone(),
+                        excluded_object_id: related_id,
+                    });
                 }
             }
         }
@@ -323,7 +418,11 @@ fn collect_selected_objects<S: CanonicalStore>(
             .cmp(&b.title.clone().unwrap_or_default())
             .then(a.object_id.cmp(&b.object_id))
     });
-    Ok(selected)
+
+    Ok(CompiledContextSelection {
+        objects: selected,
+        boundary_relations,
+    })
 }
 
 fn render_readme(manifest: &WorkSurfaceManifest) -> String {
@@ -335,6 +434,19 @@ fn render_readme(manifest: &WorkSurfaceManifest) -> String {
             item.object.id.as_str()
         ));
     }
+
+    if !manifest.boundary_relations.is_empty() {
+        text.push_str("\n## Boundary relations\n\n");
+        for item in &manifest.boundary_relations {
+            text.push_str(&format!(
+                "- {}: included {} -> excluded {}\n",
+                item.relation_type,
+                item.included_endpoint.id.as_str(),
+                item.excluded_endpoint.id.as_str()
+            ));
+        }
+    }
+
     text
 }
 
@@ -349,6 +461,21 @@ fn render_evidence_pack(manifest: &WorkSurfaceManifest) -> String {
             item.object.version_id.as_str(),
         ));
     }
+
+    if !manifest.boundary_relations.is_empty() {
+        text.push_str("# Boundary Relations\n\n");
+        for item in &manifest.boundary_relations {
+            text.push_str(&format!(
+                "## {}\n\n- Relation: {}\n- Included endpoint: {}\n- Excluded endpoint: {}\n- Path: {}\n\n",
+                item.relation_type,
+                item.relation.id.as_str(),
+                item.included_endpoint.id.as_str(),
+                item.excluded_endpoint.id.as_str(),
+                item.path
+            ));
+        }
+    }
+
     text
 }
 
@@ -364,6 +491,8 @@ pub enum ProjectError {
     Io(#[from] std::io::Error),
     #[error("json error: {0}")]
     Json(#[from] serde_json::Error),
+    #[error("invariant violation: {0}")]
+    Invariant(String),
 }
 
 use earmark_index::IndexError;
@@ -431,6 +560,7 @@ mod tests {
                 excerpt_range: None,
                 lineage: vec![],
             }],
+            boundary_relations: vec![],
             constraints: BTreeMap::new(),
         };
         assert_eq!(
@@ -672,7 +802,7 @@ mod tests {
             .unwrap();
         index.rebuild_from_store(&store).unwrap();
 
-        let selected = collect_selected_objects(
+        let selection = collect_selection(
             &store,
             &index,
             &template_with_select(
@@ -683,6 +813,7 @@ mod tests {
             ),
         )
         .unwrap();
+        let selected = selection.objects;
         let ids = selected
             .iter()
             .map(|r| r.object_id.clone())
@@ -721,7 +852,7 @@ mod tests {
         index.rebuild_from_store(&store).unwrap();
 
         let standing = BTreeMap::from([("review".to_string(), vec!["accepted".to_string()])]);
-        let selected = collect_selected_objects(
+        let selection = collect_selection(
             &store,
             &index,
             &template_with_select(
@@ -732,6 +863,7 @@ mod tests {
             ),
         )
         .unwrap();
+        let selected = selection.objects;
 
         let ids = selected
             .iter()
@@ -771,7 +903,7 @@ mod tests {
         index.rebuild_from_store(&store).unwrap();
 
         let standing = BTreeMap::from([("review".to_string(), vec!["accepted".to_string()])]);
-        let selected = collect_selected_objects(
+        let selection = collect_selection(
             &store,
             &index,
             &template_with_select(
@@ -782,6 +914,7 @@ mod tests {
             ),
         )
         .unwrap();
+        let selected = selection.objects;
         let ids = selected
             .iter()
             .map(|r| r.object_id.clone())
@@ -850,35 +983,299 @@ mod tests {
     }
 
     #[test]
-    fn compiled_context_existing_yaml_without_expansion_defaults_to_inherit() {
-        let parsed: CompiledContextTemplate = parse_yaml(
-            r#"
-name: findings_for_summary
-version: 0.2.0
-description: Compile findings for summarization.
-select:
-  classes:
-    - finding
-  standing: {}
-  relations:
-    - derived_from
-  time_range: null
-group_by: []
-render:
-  mode: work_surface_compilation
-  manifest_format: json
-  prose_template: null
-visibility:
-  include_lineage: true
-  include_constraints: true
-  include_provenance: true
-"#,
+    fn test_boundary_relations_omitted_by_default() {
+        let dir = tempdir().unwrap();
+        let store = GitCanonicalStore::new(dir.path());
+        let index = DerivedIndex::open(dir.path()).unwrap();
+
+        let finding = StoredObject::new(
+            Kind::Object,
+            Some("finding".to_string()),
+            Standing::default(),
+            Provenance::direct_input("operator"),
+            BTreeMap::new(),
+            StoredPayload::from_markdown("finding"),
+            vec![],
+        );
+        let source_note = StoredObject::new(
+            Kind::Object,
+            Some("source_note".to_string()),
+            Standing::default(),
+            Provenance::direct_input("operator"),
+            BTreeMap::new(),
+            StoredPayload::from_markdown("source"),
+            vec![],
+        );
+        store.write_object(&finding).unwrap();
+        store.write_object(&source_note).unwrap();
+        store
+            .write_object(&relation(&finding, &source_note, "linked"))
+            .unwrap();
+        index.rebuild_from_store(&store).unwrap();
+
+        let selection = collect_selection(
+            &store,
+            &index,
+            &template_with_select(
+                vec!["finding".to_string()],
+                BTreeMap::new(),
+                vec!["linked".to_string()],
+                None,
+            ),
         )
         .unwrap();
-        assert_eq!(
-            parsed.select.expansion.object_filter,
-            ExpansionObjectFilter::Inherit
+
+        assert_eq!(selection.objects.len(), 1);
+        assert_eq!(selection.boundary_relations.len(), 0);
+    }
+
+    #[test]
+    fn test_compile_includes_boundary_relations() {
+        let dir = tempdir().unwrap();
+        let store = GitCanonicalStore::new(dir.path());
+        let index = DerivedIndex::open(dir.path()).unwrap();
+
+        let finding = StoredObject::new(
+            Kind::Object,
+            Some("finding".to_string()),
+            Standing::default(),
+            Provenance::direct_input("operator"),
+            BTreeMap::new(),
+            StoredPayload::from_markdown("finding"),
+            vec![],
         );
-        assert!(!parsed.select.expansion.include_boundary_relations);
+        let source_note = StoredObject::new(
+            Kind::Object,
+            Some("source_note".to_string()),
+            Standing::default(),
+            Provenance::direct_input("operator"),
+            BTreeMap::new(),
+            StoredPayload::from_markdown("source"),
+            vec![],
+        );
+        store.write_object(&finding).unwrap();
+        store.write_object(&source_note).unwrap();
+        let rel_ref = store
+            .write_object(&relation(&finding, &source_note, "linked"))
+            .unwrap();
+
+        let mut template = template_with_select(
+            vec!["finding".to_string()],
+            BTreeMap::new(),
+            vec!["linked".to_string()],
+            None,
+        );
+        template.select.expansion.include_boundary_relations = true;
+
+        let template_obj = StoredObject::new(
+            Kind::CompiledContextTemplate,
+            None,
+            Standing::default(),
+            Provenance::direct_input("operator"),
+            BTreeMap::new(),
+            StoredPayload::from_json_bytes(serde_json::to_vec(&template).unwrap()),
+            vec![],
+        );
+        let template_ref = store.write_object(&template_obj).unwrap();
+
+        index.rebuild_from_store(&store).unwrap();
+
+        let manifest =
+            CompiledContextService::compile(&store, &index, &template_ref, None).unwrap();
+
+        assert_eq!(manifest.objects.len(), 1);
+        assert_eq!(manifest.boundary_relations.len(), 1);
+        assert_eq!(manifest.boundary_relations[0].relation.id, rel_ref.id);
+        assert_eq!(
+            manifest.boundary_relations[0].included_endpoint.id,
+            finding.envelope.id
+        );
+        assert_eq!(
+            manifest.boundary_relations[0].excluded_endpoint.id,
+            source_note.envelope.id
+        );
+
+        let evidence = render_evidence_pack(&manifest);
+        assert!(evidence.contains("# Boundary Relations"));
+        assert!(evidence.contains("## linked"));
+    }
+
+    #[test]
+    fn test_inbound_relation_is_not_boundary() {
+        let dir = tempdir().unwrap();
+        let store = GitCanonicalStore::new(dir.path());
+        let index = DerivedIndex::open(dir.path()).unwrap();
+
+        let a = object("a", Standing::default());
+        let b = object("b", Standing::default());
+        store.write_object(&a).unwrap();
+        store.write_object(&b).unwrap();
+        store.write_object(&relation(&a, &b, "linked")).unwrap();
+        index.rebuild_from_store(&store).unwrap();
+
+        let mut template = template_with_standing(BTreeMap::new());
+        template.select.expansion.include_boundary_relations = true;
+
+        let selection = collect_selection(&store, &index, &template).unwrap();
+
+        assert_eq!(selection.objects.len(), 2);
+        assert_eq!(selection.boundary_relations.len(), 0);
+    }
+
+    #[test]
+    fn test_wrong_relation_type_no_boundary() {
+        let dir = tempdir().unwrap();
+        let store = GitCanonicalStore::new(dir.path());
+        let index = DerivedIndex::open(dir.path()).unwrap();
+
+        let finding = StoredObject::new(
+            Kind::Object,
+            Some("finding".to_string()),
+            Standing::default(),
+            Provenance::direct_input("operator"),
+            BTreeMap::new(),
+            StoredPayload::from_markdown("finding"),
+            vec![],
+        );
+        let source_note = StoredObject::new(
+            Kind::Object,
+            Some("source_note".to_string()),
+            Standing::default(),
+            Provenance::direct_input("operator"),
+            BTreeMap::new(),
+            StoredPayload::from_markdown("source"),
+            vec![],
+        );
+        store.write_object(&finding).unwrap();
+        store.write_object(&source_note).unwrap();
+        // Relation type "mentions" which is NOT in the default template's relations ("linked")
+        store
+            .write_object(&relation(&finding, &source_note, "mentions"))
+            .unwrap();
+        index.rebuild_from_store(&store).unwrap();
+
+        let mut template = template_with_select(
+            vec!["finding".to_string()],
+            BTreeMap::new(),
+            vec!["linked".to_string()],
+            None,
+        );
+        template.select.expansion.include_boundary_relations = true;
+
+        let selection = collect_selection(&store, &index, &template).unwrap();
+
+        assert_eq!(selection.objects.len(), 1);
+        assert_eq!(selection.boundary_relations.len(), 0);
+    }
+
+    #[test]
+    fn test_filtered_neighbor_not_traversed() {
+        let dir = tempdir().unwrap();
+        let store = GitCanonicalStore::new(dir.path());
+        let index = DerivedIndex::open(dir.path()).unwrap();
+
+        let accepted = object(
+            "accepted",
+            Standing {
+                epistemic: EpistemicStanding::Working,
+                review: ReviewStanding::Accepted,
+                process: ProcessStanding::Active,
+            },
+        );
+        let rejected = object(
+            "rejected",
+            Standing {
+                epistemic: EpistemicStanding::Working,
+                review: ReviewStanding::Rejected,
+                process: ProcessStanding::Active,
+            },
+        );
+        let second_hop = object("second_hop", Standing::default());
+
+        store.write_object(&accepted).unwrap();
+        store.write_object(&rejected).unwrap();
+        store.write_object(&second_hop).unwrap();
+
+        store
+            .write_object(&relation(&accepted, &rejected, "linked"))
+            .unwrap();
+        store
+            .write_object(&relation(&rejected, &second_hop, "linked"))
+            .unwrap();
+        index.rebuild_from_store(&store).unwrap();
+
+        let standing = BTreeMap::from([("review".to_string(), vec!["accepted".to_string()])]);
+        let mut template = template_with_standing(standing);
+        template.select.expansion.include_boundary_relations = true;
+
+        let selection = collect_selection(&store, &index, &template).unwrap();
+
+        assert_eq!(selection.objects.len(), 1);
+        assert_eq!(selection.boundary_relations.len(), 1);
+        // Ensure second_hop is not admitted even though it matches the filter,
+        // because we stopped at the filtered neighbor (rejected).
+        assert!(!selection
+            .objects
+            .iter()
+            .any(|o| o.title == Some("second_hop".to_string())));
+    }
+
+    #[test]
+    fn test_no_payload_leakage() {
+        let dir = tempdir().unwrap();
+        let store = GitCanonicalStore::new(dir.path());
+        let index = DerivedIndex::open(dir.path()).unwrap();
+
+        let finding = StoredObject::new(
+            Kind::Object,
+            Some("finding".to_string()),
+            Standing::default(),
+            Provenance::direct_input("operator"),
+            BTreeMap::new(),
+            StoredPayload::from_markdown("finding"),
+            vec![],
+        );
+        let secret_payload = "SECRET_UNADMITTED_TEXT_XYZ";
+        let excluded = StoredObject::new(
+            Kind::Object,
+            Some("excluded".to_string()),
+            Standing::default(),
+            Provenance::direct_input("operator"),
+            BTreeMap::new(),
+            StoredPayload::from_markdown(secret_payload),
+            vec![],
+        );
+        store.write_object(&finding).unwrap();
+        store.write_object(&excluded).unwrap();
+        store
+            .write_object(&relation(&finding, &excluded, "linked"))
+            .unwrap();
+
+        let mut template = template_with_select(
+            vec!["finding".to_string()],
+            BTreeMap::new(),
+            vec!["linked".to_string()],
+            None,
+        );
+        template.select.expansion.include_boundary_relations = true;
+
+        let template_obj = StoredObject::new(
+            Kind::CompiledContextTemplate,
+            None,
+            Standing::default(),
+            Provenance::direct_input("operator"),
+            BTreeMap::new(),
+            StoredPayload::from_json_bytes(serde_json::to_vec(&template).unwrap()),
+            vec![],
+        );
+        let template_ref = store.write_object(&template_obj).unwrap();
+        index.rebuild_from_store(&store).unwrap();
+
+        let manifest =
+            CompiledContextService::compile(&store, &index, &template_ref, None).unwrap();
+        let evidence = render_evidence_pack(&manifest);
+
+        assert!(evidence.contains("# Boundary Relations"));
+        assert!(!evidence.contains(secret_payload));
     }
 }

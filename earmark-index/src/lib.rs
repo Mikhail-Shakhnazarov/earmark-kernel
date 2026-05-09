@@ -29,6 +29,7 @@ pub struct ObjectSummary {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RelationEdge {
     pub version_id: String,
+    pub relation_object_id: String,
     pub source_object_id: String,
     pub target_object_id: String,
     pub relation_type: String,
@@ -118,6 +119,7 @@ impl DerivedIndex {
 
             CREATE TABLE IF NOT EXISTS relations (
                 version_id TEXT PRIMARY KEY,
+                relation_object_id TEXT NOT NULL,
                 source_object_id TEXT NOT NULL,
                 target_object_id TEXT NOT NULL,
                 relation_type TEXT NOT NULL,
@@ -245,9 +247,10 @@ impl DerivedIndex {
                         let text = payload.as_utf8()?;
                         let parsed: RelationPayload = parse_json(&text)?;
                         self.conn.execute(
-                        "INSERT OR REPLACE INTO relations (version_id, source_object_id, target_object_id, relation_type, scope) VALUES (?1, ?2, ?3, ?4, ?5)",
+                        "INSERT OR REPLACE INTO relations (version_id, relation_object_id, source_object_id, target_object_id, relation_type, scope) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                         params![
                             envelope.version_id.as_str().to_string(),
+                            envelope.id.as_str().to_string(),
                             parsed.source.id.as_str().to_string(),
                             parsed.target.id.as_str().to_string(),
                             parsed.relation_type,
@@ -421,9 +424,10 @@ impl DerivedIndex {
                 let text = payload.as_utf8()?;
                 let parsed: RelationPayload = parse_json(&text)?;
                 self.conn.execute(
-                        "INSERT OR REPLACE INTO relations (version_id, source_object_id, target_object_id, relation_type, scope) VALUES (?1, ?2, ?3, ?4, ?5)",
+                        "INSERT OR REPLACE INTO relations (version_id, relation_object_id, source_object_id, target_object_id, relation_type, scope) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                         params![
                             envelope.version_id.as_str().to_string(),
+                            envelope.id.as_str().to_string(),
                             parsed.source.id.as_str().to_string(),
                             parsed.target.id.as_str().to_string(),
                             parsed.relation_type,
@@ -574,15 +578,16 @@ impl DerivedIndex {
         object_id: &ObjectId,
     ) -> Result<Vec<RelationEdge>, IndexError> {
         let mut stmt = self.conn.prepare(
-            "SELECT version_id, source_object_id, target_object_id, relation_type, scope FROM relations WHERE source_object_id = ?1 OR target_object_id = ?1 ORDER BY version_id ASC",
+            "SELECT version_id, relation_object_id, source_object_id, target_object_id, relation_type, scope FROM relations WHERE source_object_id = ?1 OR target_object_id = ?1 ORDER BY version_id ASC",
         )?;
         let rows = stmt.query_map(params![object_id.as_str()], |row| {
             Ok(RelationEdge {
                 version_id: row.get(0)?,
-                source_object_id: row.get(1)?,
-                target_object_id: row.get(2)?,
-                relation_type: row.get(3)?,
-                scope: row.get(4)?,
+                relation_object_id: row.get(1)?,
+                source_object_id: row.get(2)?,
+                target_object_id: row.get(3)?,
+                relation_type: row.get(4)?,
+                scope: row.get(5)?,
             })
         })?;
         Ok(rows.collect::<Result<Vec<_>, _>>()?)

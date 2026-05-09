@@ -581,7 +581,14 @@ fn env_root_overrides_config_root() {
     fs::create_dir_all(&cfg_root).unwrap();
     fs::create_dir_all(&env_root).unwrap();
     let cfg_path = dir.path().join("em.toml");
-    fs::write(&cfg_path, format!("root = \"{}\"\n", cfg_root.display())).unwrap();
+    fs::write(
+        &cfg_path,
+        format!(
+            "root = \"{}\"\n",
+            cfg_root.to_string_lossy().replace("\\", "\\\\")
+        ),
+    )
+    .unwrap();
 
     unsafe { std::env::set_var("EM_ROOT", env_root.as_os_str()) };
     let output = Command::cargo_bin("earmark-cli")
@@ -598,7 +605,8 @@ fn env_root_overrides_config_root() {
     unsafe { std::env::remove_var("EM_ROOT") };
 
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    assert_eq!(parsed["data"]["root"], env_root.display().to_string());
+    let actual_root = parsed["data"]["root"].as_str().unwrap();
+    assert_paths_eq(actual_root, &env_root);
 }
 
 #[test]
@@ -624,7 +632,8 @@ fn cli_root_overrides_env_root() {
     unsafe { std::env::remove_var("EM_ROOT") };
 
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    assert_eq!(parsed["data"]["root"], cli_root.display().to_string());
+    let actual_root = parsed["data"]["root"].as_str().unwrap();
+    assert_paths_eq(actual_root, &cli_root);
 }
 
 fn workspace_root() -> PathBuf {
@@ -632,6 +641,12 @@ fn workspace_root() -> PathBuf {
         .parent()
         .unwrap()
         .to_path_buf()
+}
+
+fn assert_paths_eq<P1: AsRef<std::path::Path>, P2: AsRef<std::path::Path>>(actual: P1, expected: P2) {
+    let a = actual.as_ref().canonicalize().unwrap_or_else(|_| actual.as_ref().to_path_buf());
+    let e = expected.as_ref().canonicalize().unwrap_or_else(|_| expected.as_ref().to_path_buf());
+    assert_eq!(a.to_string_lossy().to_lowercase(), e.to_string_lossy().to_lowercase());
 }
 
 #[test]

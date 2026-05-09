@@ -459,6 +459,7 @@ fn test_delegated_outcome_with_none_response_returns_error_instead_of_panicking(
         )),
         generated_at: chrono::Utc::now(),
         objects: vec![],
+        boundary_relations: vec![],
         constraints: std::collections::BTreeMap::new(),
     });
 
