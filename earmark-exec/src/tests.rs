@@ -708,7 +708,10 @@ fn test_privileged_relation_creation_and_validation() {
     )
     .unwrap();
 
-    assert!(result.is_valid, "Privileged relation should pass validation");
+    assert!(
+        result.is_valid,
+        "Privileged relation should pass validation"
+    );
 }
 
 #[test]
@@ -737,5 +740,7 @@ fn test_privileged_relation_enforcement_failure() {
 
     assert!(result.is_err());
     let err = result.unwrap_err();
-    assert!(err.to_string().contains("is not a privileged system relation"));
+    assert!(err
+        .to_string()
+        .contains("is not a privileged system relation"));
 }

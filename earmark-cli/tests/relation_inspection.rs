@@ -75,12 +75,12 @@ fn relation_inspection_and_explanation() {
     // 4. Create a privileged relation using the real canonical path
     let rel_id = {
         use earmark_core::*;
-        use earmark_store::*;
         use earmark_index::*;
-        
+        use earmark_store::*;
+
         let store = GitCanonicalStore::new(dir.path());
         let index = DerivedIndex::open(dir.path()).unwrap();
-        
+
         let payload = RelationPayload {
             source: ObjectRef::new(
                 ObjectId::parse(&id1).unwrap(),
@@ -98,7 +98,7 @@ fn relation_inspection_and_explanation() {
             qualifiers: std::collections::BTreeMap::new(),
             scope: None,
         };
-        
+
         let rel_ref = earmark_exec::persist_relation_canonical(
             &store,
             &index,
@@ -106,8 +106,9 @@ fn relation_inspection_and_explanation() {
             Provenance::direct_input("test"),
             RelationCreationMode::PrivilegedSystem,
             None,
-        ).unwrap();
-        
+        )
+        .unwrap();
+
         rel_ref.id.to_string()
     };
 
