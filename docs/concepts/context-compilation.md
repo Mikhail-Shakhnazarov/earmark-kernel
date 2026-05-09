@@ -87,6 +87,18 @@ visibility:
 
 The `select` block says: include `finding` objects and traverse `derived_from` relations. Nothing else gets in.
 
+Filter semantics are global by default: class and standing filters apply both to seed selection and to objects reached through relation expansion. Relation filters control which edges can be traversed.
+
+To deliberately widen across object-filter boundaries, set:
+
+```yaml
+select:
+  expansion:
+    object_filter: none
+```
+
+Example failure mode: a context selecting `review = accepted` findings will not pull in a `review = rejected` neighbor through traversal unless expansion is explicitly widened.
+
 ## See Also
 
 - [Staged Execution](staged-execution.md) — how transitions use compiled context

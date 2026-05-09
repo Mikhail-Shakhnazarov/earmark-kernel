@@ -1,10 +1,10 @@
 use std::collections::BTreeMap;
 
 use earmark_core::{
-    ClassDefinition, ClassStandingRules, CompiledContextRender, CompiledContextSelect,
-    CompiledContextTemplate, CompiledContextVisibility, JsonSchemaRef, OperationRequirement,
-    StandingPolicy, StandingTransitionRule, WorkflowDefinition, WorkflowEdge, WorkflowGuard,
-    WorkflowOperation,
+    ClassDefinition, ClassStandingRules, CompiledContextExpansion, CompiledContextRender,
+    CompiledContextSelect, CompiledContextTemplate, CompiledContextVisibility, JsonSchemaRef,
+    OperationRequirement, StandingPolicy, StandingTransitionRule, WorkflowDefinition,
+    WorkflowEdge, WorkflowGuard, WorkflowOperation,
 };
 use earmark_declarations::{
     validate_class_definition, validate_compiled_context_template, validate_system_definition,
@@ -96,6 +96,7 @@ fn compiled_context_rejects_unknown_standing_dimension() {
             standing: BTreeMap::from([("quality".to_string(), vec!["accepted".to_string()])]),
             relations: vec!["derived_from".to_string()],
             time_range: None,
+        expansion: CompiledContextExpansion::default(),
         },
         group_by: vec![],
         render: CompiledContextRender {

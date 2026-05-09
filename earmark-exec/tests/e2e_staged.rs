@@ -1,5 +1,5 @@
 use earmark_core::{
-    to_yaml, ClassDefinition, ClassStandingRules, CompiledContextRender, CompiledContextSelect,
+    to_yaml, ClassDefinition, ClassStandingRules, CompiledContextExpansion, CompiledContextRender, CompiledContextSelect,
     CompiledContextTemplate, CompiledContextVisibility, JsonSchemaRef, Kind, Provenance,
     RuntimeProfile, Standing, SystemDefinition,
 };
@@ -154,6 +154,7 @@ fn test_neutral_staged_fixture_source_note_to_summary() {
             standing: BTreeMap::new(),
             relations: vec!["derived_from".to_string()],
             time_range: None,
+        expansion: CompiledContextExpansion::default(),
         },
         group_by: vec![],
         render: CompiledContextRender {

@@ -1173,8 +1173,9 @@ fn explain_declaration_file<S: CanonicalStore>(
                 "selects_classes": declaration.select.classes,
                 "selects_relations": declaration.select.relations,
                 "standing_filters": declaration.select.standing,
+                "expansion": declaration.select.expansion,
                 "bounded_depth_behavior": declaration.select.time_range,
-                "inclusion_rationale": "Selected classes seed the context; selected relations widen admissible neighbors under standing filters.",
+                "inclusion_rationale": "Class and standing filters apply to seed objects and expansion by default; relation filters control traversable edges. Set expansion.object_filter=none to deliberately widen boundaries.",
                 "render": declaration.render,
                 "visibility": declaration.visibility,
             }))

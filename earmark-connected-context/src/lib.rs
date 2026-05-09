@@ -3,9 +3,13 @@ use std::{
     fs,
 };
 
+mod filter;
+
+use crate::filter::{object_summary_admissible, relation_type_admissible};
 use chrono::Utc;
 use earmark_core::{
-    parse_yaml, CompiledContextTemplate, ObjectId, ObjectRef, ScalarValue, VersionRef,
+    parse_yaml, CompiledContextTemplate, ExpansionObjectFilter, ObjectId, ObjectRef, ScalarValue,
+    VersionRef,
 };
 use earmark_index::{DerivedIndex, ObjectSummary, QueryFilter};
 use earmark_store::CanonicalStore;
@@ -156,6 +160,20 @@ impl CompiledContextService {
                 "include_provenance".to_string(),
                 ScalarValue::Bool(template.visibility.include_provenance),
             ),
+            (
+                "expansion_object_filter".to_string(),
+                ScalarValue::String(
+                    match template.select.expansion.object_filter {
+                        ExpansionObjectFilter::Inherit => "inherit",
+                        ExpansionObjectFilter::None => "none",
+                    }
+                    .to_string(),
+                ),
+            ),
+            (
+                "include_boundary_relations".to_string(),
+                ScalarValue::Bool(template.select.expansion.include_boundary_relations),
+            ),
         ]);
 
         let manifest = WorkSurfaceManifest {
@@ -204,17 +222,27 @@ fn collect_selected_objects<S: CanonicalStore>(
     template: &CompiledContextTemplate,
 ) -> Result<Vec<ObjectSummary>, ProjectError> {
     const MAX_RELATION_EXPANSION_DEPTH: usize = 64;
+    let enforce_expansion_object_filter = matches!(
+        template.select.expansion.object_filter,
+        ExpansionObjectFilter::Inherit
+    );
 
     let mut selected = Vec::new();
     let mut seen = BTreeSet::new();
 
-    for class in &template.select.classes {
+    let seed_queries: Vec<Option<String>> = if template.select.classes.is_empty() {
+        vec![None]
+    } else {
+        template.select.classes.iter().cloned().map(Some).collect()
+    };
+
+    for class in seed_queries {
         let rows = index.query_objects(&QueryFilter {
-            class: Some(class.clone()),
+            class,
             ..Default::default()
         })?;
         for row in rows {
-            if matches_standing(&row, &template.select.standing)
+            if object_summary_admissible(&row, &template.select.classes, &template.select.standing)
                 && seen.insert((row.object_id.clone(), row.version_id.clone()))
             {
                 selected.push(row);
@@ -243,7 +271,7 @@ fn collect_selected_objects<S: CanonicalStore>(
                 index.relation_adjacency(&ObjectId::parse(current_object_id.clone())?)?;
             edges.sort_by(|a, b| a.version_id.cmp(&b.version_id));
             for edge in edges {
-                if !template.select.relations.contains(&edge.relation_type) {
+                if !relation_type_admissible(&edge.relation_type, &template.select.relations) {
                     continue;
                 }
                 if !visited_relations.insert(edge.version_id.clone()) {
@@ -263,12 +291,25 @@ fn collect_selected_objects<S: CanonicalStore>(
                     ..Default::default()
                 })?;
                 related_rows.sort_by(|a, b| a.version_id.cmp(&b.version_id));
+                let mut admitted_any = false;
                 for related in related_rows {
+                    if enforce_expansion_object_filter
+                        && !object_summary_admissible(
+                            &related,
+                            &template.select.classes,
+                            &template.select.standing,
+                        )
+                    {
+                        continue;
+                    }
+                    admitted_any = true;
                     if seen.insert((related.object_id.clone(), related.version_id.clone())) {
                         additions.push(related);
                     }
                 }
-                queue.push_back((related_id, depth + 1));
+                if admitted_any {
+                    queue.push_back((related_id, depth + 1));
+                }
             }
         }
 
@@ -283,21 +324,6 @@ fn collect_selected_objects<S: CanonicalStore>(
             .then(a.object_id.cmp(&b.object_id))
     });
     Ok(selected)
-}
-
-fn matches_standing(row: &ObjectSummary, standing_filters: &BTreeMap<String, Vec<String>>) -> bool {
-    standing_filters.iter().all(|(dimension, allowed)| {
-        if allowed.is_empty() {
-            return true;
-        }
-        let current = match dimension.as_str() {
-            "epistemic" => &row.standing_epistemic,
-            "review" => &row.standing_review,
-            "process" => &row.standing_process,
-            _ => return true,
-        };
-        allowed.iter().any(|candidate| candidate == current)
-    })
 }
 
 fn render_readme(manifest: &WorkSurfaceManifest) -> String {
@@ -345,16 +371,17 @@ use earmark_index::IndexError;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::filter::object_summary_matches_standing;
     use earmark_core::{
-        EpistemicStanding, Kind, ProcessStanding, Provenance, ReviewStanding, Standing,
+        CompiledContextExpansion, EpistemicStanding, ExpansionObjectFilter, Kind, ProcessStanding,
+        Provenance, ReviewStanding, Standing,
     };
-    use earmark_index::ObjectSummary;
     use earmark_store::{CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload};
     use tempfile::tempdir;
 
     #[test]
     fn test_matches_standing() {
-        let row = ObjectSummary {
+        let row = earmark_index::ObjectSummary {
             object_id: "o1".to_string(),
             version_id: "v1".to_string(),
             kind: "Object".to_string(),
@@ -370,13 +397,13 @@ mod tests {
 
         let mut filters = BTreeMap::new();
         filters.insert("review".to_string(), vec!["accepted".to_string()]);
-        assert!(matches_standing(&row, &filters));
+        assert!(object_summary_matches_standing(&row, &filters));
 
         filters.insert("review".to_string(), vec!["rejected".to_string()]);
-        assert!(!matches_standing(&row, &filters));
+        assert!(!object_summary_matches_standing(&row, &filters));
 
         let empty_filters = BTreeMap::new();
-        assert!(matches_standing(&row, &empty_filters));
+        assert!(object_summary_matches_standing(&row, &empty_filters));
     }
 
     #[test]
@@ -449,15 +476,33 @@ mod tests {
     }
 
     fn template_with_standing(standing: BTreeMap<String, Vec<String>>) -> CompiledContextTemplate {
+        template_with_select(
+            vec!["note".to_string()],
+            standing,
+            vec!["linked".to_string()],
+            None,
+        )
+    }
+
+    fn template_with_select(
+        classes: Vec<String>,
+        standing: BTreeMap<String, Vec<String>>,
+        relations: Vec<String>,
+        expansion: Option<ExpansionObjectFilter>,
+    ) -> CompiledContextTemplate {
         CompiledContextTemplate {
             name: "ctx".to_string(),
             version: "1.0.0".to_string(),
             description: None,
             select: earmark_core::CompiledContextSelect {
-                classes: vec!["note".to_string()],
+                classes,
                 standing,
-                relations: vec!["linked".to_string()],
+                relations,
                 time_range: None,
+                expansion: CompiledContextExpansion {
+                    object_filter: expansion.unwrap_or(ExpansionObjectFilter::Inherit),
+                    include_boundary_relations: false,
+                },
             },
             group_by: vec![],
             render: earmark_core::CompiledContextRender {
@@ -593,6 +638,247 @@ mod tests {
             .map(|r| r.object_id.clone())
             .collect::<BTreeSet<_>>();
         assert!(ids.contains(accepted.envelope.id.as_str()));
+        assert!(!ids.contains(rejected.envelope.id.as_str()));
+    }
+
+    #[test]
+    fn compiled_context_expansion_excludes_wrong_class_neighbor_by_default() {
+        let dir = tempdir().unwrap();
+        let store = GitCanonicalStore::new(dir.path());
+        let index = DerivedIndex::open(dir.path()).unwrap();
+
+        let finding = StoredObject::new(
+            Kind::Object,
+            Some("finding".to_string()),
+            Standing::default(),
+            Provenance::direct_input("operator"),
+            BTreeMap::new(),
+            StoredPayload::from_markdown("finding"),
+            vec![],
+        );
+        let source_note = StoredObject::new(
+            Kind::Object,
+            Some("source_note".to_string()),
+            Standing::default(),
+            Provenance::direct_input("operator"),
+            BTreeMap::new(),
+            StoredPayload::from_markdown("source"),
+            vec![],
+        );
+        store.write_object(&finding).unwrap();
+        store.write_object(&source_note).unwrap();
+        store
+            .write_object(&relation(&finding, &source_note, "linked"))
+            .unwrap();
+        index.rebuild_from_store(&store).unwrap();
+
+        let selected = collect_selected_objects(
+            &store,
+            &index,
+            &template_with_select(
+                vec!["finding".to_string()],
+                BTreeMap::new(),
+                vec!["linked".to_string()],
+                None,
+            ),
+        )
+        .unwrap();
+        let ids = selected
+            .iter()
+            .map(|r| r.object_id.clone())
+            .collect::<BTreeSet<_>>();
+        assert!(ids.contains(finding.envelope.id.as_str()));
+        assert!(!ids.contains(source_note.envelope.id.as_str()));
+    }
+
+    #[test]
+    fn compiled_context_expansion_respects_relation_type_filter() {
+        let dir = tempdir().unwrap();
+        let store = GitCanonicalStore::new(dir.path());
+        let index = DerivedIndex::open(dir.path()).unwrap();
+
+        let accepted = object(
+            "accepted",
+            Standing {
+                epistemic: EpistemicStanding::Working,
+                review: ReviewStanding::Accepted,
+                process: ProcessStanding::Active,
+            },
+        );
+        let rejected = object(
+            "rejected",
+            Standing {
+                epistemic: EpistemicStanding::Working,
+                review: ReviewStanding::Rejected,
+                process: ProcessStanding::Active,
+            },
+        );
+        store.write_object(&accepted).unwrap();
+        store.write_object(&rejected).unwrap();
+        store
+            .write_object(&relation(&accepted, &rejected, "mentions"))
+            .unwrap();
+        index.rebuild_from_store(&store).unwrap();
+
+        let standing = BTreeMap::from([("review".to_string(), vec!["accepted".to_string()])]);
+        let selected = collect_selected_objects(
+            &store,
+            &index,
+            &template_with_select(
+                vec!["note".to_string()],
+                standing,
+                vec!["derived_from".to_string()],
+                Some(ExpansionObjectFilter::None),
+            ),
+        )
+        .unwrap();
+
+        let ids = selected
+            .iter()
+            .map(|r| r.object_id.clone())
+            .collect::<BTreeSet<_>>();
+        assert!(ids.contains(accepted.envelope.id.as_str()));
+        assert!(!ids.contains(rejected.envelope.id.as_str()));
+    }
+
+    #[test]
+    fn compiled_context_expansion_object_filter_none_includes_rejected_neighbor() {
+        let dir = tempdir().unwrap();
+        let store = GitCanonicalStore::new(dir.path());
+        let index = DerivedIndex::open(dir.path()).unwrap();
+
+        let accepted = object(
+            "accepted",
+            Standing {
+                epistemic: EpistemicStanding::Working,
+                review: ReviewStanding::Accepted,
+                process: ProcessStanding::Active,
+            },
+        );
+        let rejected = object(
+            "rejected",
+            Standing {
+                epistemic: EpistemicStanding::Working,
+                review: ReviewStanding::Rejected,
+                process: ProcessStanding::Active,
+            },
+        );
+        store.write_object(&accepted).unwrap();
+        store.write_object(&rejected).unwrap();
+        store
+            .write_object(&relation(&accepted, &rejected, "linked"))
+            .unwrap();
+        index.rebuild_from_store(&store).unwrap();
+
+        let standing = BTreeMap::from([("review".to_string(), vec!["accepted".to_string()])]);
+        let selected = collect_selected_objects(
+            &store,
+            &index,
+            &template_with_select(
+                vec!["note".to_string()],
+                standing,
+                vec!["linked".to_string()],
+                Some(ExpansionObjectFilter::None),
+            ),
+        )
+        .unwrap();
+        let ids = selected
+            .iter()
+            .map(|r| r.object_id.clone())
+            .collect::<BTreeSet<_>>();
+        assert!(ids.contains(accepted.envelope.id.as_str()));
         assert!(ids.contains(rejected.envelope.id.as_str()));
+    }
+
+    #[test]
+    fn compiled_context_does_not_enqueue_filtered_neighbor_for_further_traversal() {
+        let dir = tempdir().unwrap();
+        let store = GitCanonicalStore::new(dir.path());
+        let index = DerivedIndex::open(dir.path()).unwrap();
+
+        let accepted = object(
+            "accepted",
+            Standing {
+                epistemic: EpistemicStanding::Working,
+                review: ReviewStanding::Accepted,
+                process: ProcessStanding::Active,
+            },
+        );
+        let rejected = object(
+            "rejected",
+            Standing {
+                epistemic: EpistemicStanding::Working,
+                review: ReviewStanding::Rejected,
+                process: ProcessStanding::Active,
+            },
+        );
+        let hidden_parent = StoredObject::new(
+            Kind::Object,
+            Some("source_note".to_string()),
+            Standing {
+                epistemic: EpistemicStanding::Working,
+                review: ReviewStanding::Accepted,
+                process: ProcessStanding::Active,
+            },
+            Provenance::direct_input("operator"),
+            BTreeMap::new(),
+            StoredPayload::from_markdown("hidden_parent"),
+            vec![],
+        );
+
+        store.write_object(&accepted).unwrap();
+        store.write_object(&rejected).unwrap();
+        store.write_object(&hidden_parent).unwrap();
+        store
+            .write_object(&relation(&accepted, &rejected, "linked"))
+            .unwrap();
+        store
+            .write_object(&relation(&rejected, &hidden_parent, "linked"))
+            .unwrap();
+        index.rebuild_from_store(&store).unwrap();
+
+        let standing = BTreeMap::from([("review".to_string(), vec!["accepted".to_string()])]);
+        let selected =
+            collect_selected_objects(&store, &index, &template_with_standing(standing)).unwrap();
+        let ids = selected
+            .iter()
+            .map(|r| r.object_id.clone())
+            .collect::<BTreeSet<_>>();
+        assert!(ids.contains(accepted.envelope.id.as_str()));
+        assert!(!ids.contains(rejected.envelope.id.as_str()));
+        assert!(!ids.contains(hidden_parent.envelope.id.as_str()));
+    }
+
+    #[test]
+    fn compiled_context_existing_yaml_without_expansion_defaults_to_inherit() {
+        let parsed: CompiledContextTemplate = parse_yaml(
+            r#"
+name: findings_for_summary
+version: 0.2.0
+description: Compile findings for summarization.
+select:
+  classes:
+    - finding
+  standing: {}
+  relations:
+    - derived_from
+  time_range: null
+group_by: []
+render:
+  mode: work_surface_compilation
+  manifest_format: json
+  prose_template: null
+visibility:
+  include_lineage: true
+  include_constraints: true
+  include_provenance: true
+"#,
+        )
+        .unwrap();
+        assert_eq!(
+            parsed.select.expansion.object_filter,
+            ExpansionObjectFilter::Inherit
+        );
+        assert!(!parsed.select.expansion.include_boundary_relations);
     }
 }

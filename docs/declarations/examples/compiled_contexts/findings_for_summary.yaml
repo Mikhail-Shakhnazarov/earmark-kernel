@@ -7,6 +7,9 @@ select:
   standing: {}
   relations:
     - derived_from
+  expansion:
+    object_filter: inherit
+    include_boundary_relations: false
   time_range: null
 group_by: []
 render:
@@ -17,4 +20,3 @@ visibility:
   include_lineage: true
   include_constraints: true
   include_provenance: true
-

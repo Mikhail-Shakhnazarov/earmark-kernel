@@ -641,6 +641,38 @@ pub struct CompiledContextSelect {
     pub standing: BTreeMap<String, Vec<String>>,
     pub relations: Vec<String>,
     pub time_range: Option<String>,
+    #[serde(default)]
+    pub expansion: CompiledContextExpansion,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CompiledContextExpansion {
+    #[serde(default)]
+    pub object_filter: ExpansionObjectFilter,
+    #[serde(default)]
+    pub include_boundary_relations: bool,
+}
+
+impl Default for CompiledContextExpansion {
+    fn default() -> Self {
+        Self {
+            object_filter: ExpansionObjectFilter::Inherit,
+            include_boundary_relations: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ExpansionObjectFilter {
+    Inherit,
+    None,
+}
+
+impl Default for ExpansionObjectFilter {
+    fn default() -> Self {
+        Self::Inherit
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

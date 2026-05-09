@@ -16,6 +16,8 @@ The runtime requests a compiled context — the bounded set of objects it will w
 - **CLI**: `em context compile --root <object_id> --depth 2 --json`
 - **Returns**: `WorkSurfaceManifest` or `ConnectedContextManifest`
 
+Default compiled-context filter semantics are conservative: class and standing filters apply to both seed objects and objects reached through relation expansion, while relation filters control which edges are traversed. A context selecting `review = accepted` must not pull in `rejected` neighbors unless expansion is explicitly widened in the declaration.
+
 ### Step 2: Receive Work Packet
 
 During workflow execution, the engine emits a `WorkPacket` containing inputs, constraints, the instruction, and the provider profile.
