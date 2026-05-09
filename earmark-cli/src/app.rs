@@ -82,7 +82,7 @@ pub fn run(cli: Cli) -> Result<(), CliError> {
                         "next_commands": [
                             "em doctor",
                             "em status",
-                            "em declare validate --kind class docs/declarations/examples/classes/finding.yaml"
+                            "em declare list-examples"
                         ],
                     }),
                 );
@@ -494,17 +494,30 @@ pub fn run(cli: Cli) -> Result<(), CliError> {
                         )?;
                     }
                     examples.sort();
+
+                    let summary = if examples.is_empty() {
+                        "No workspace-local declaration examples found under docs/declarations/examples".to_string()
+                    } else {
+                        format!("{} declaration examples found", examples.len())
+                    };
+
+                    let next_commands = if examples.is_empty() {
+                        vec![]
+                    } else {
+                        vec![
+                            "em declare validate --kind class docs/declarations/examples/classes/finding.yaml".to_string(),
+                            "em declare explain --kind workflow docs/declarations/examples/workflows/source_to_finding.yaml".to_string(),
+                        ]
+                    };
+
                     emit(
                         as_json,
                         json!({
                             "ok": true,
-                            "summary": format!("{} declaration examples found", examples.len()),
+                            "summary": summary,
                             "examples_root": examples_dir.display().to_string(),
                             "examples": examples,
-                            "next_commands": [
-                                "em declare validate --kind class docs/declarations/examples/classes/finding.yaml",
-                                "em declare explain --kind workflow docs/declarations/examples/workflows/source_to_finding.yaml",
-                            ],
+                            "next_commands": next_commands,
                         }),
                     );
                 }

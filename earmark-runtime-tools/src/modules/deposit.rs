@@ -118,16 +118,18 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
             .unwrap_or(Kind::Object);
 
         let stored_payload = match k {
-            Kind::Instruction | Kind::Object if payload.is_string() => StoredPayload::from_markdown(
-                payload
-                    .as_str()
-                    .ok_or_else(|| {
-                        RuntimeToolError::InvalidPayloadShape(
-                            "Expected string payload for markdown".to_string(),
-                        )
-                    })?
-                    .to_string(),
-            ),
+            Kind::Instruction | Kind::Object if payload.is_string() => {
+                StoredPayload::from_markdown(
+                    payload
+                        .as_str()
+                        .ok_or_else(|| {
+                            RuntimeToolError::InvalidPayloadShape(
+                                "Expected string payload for markdown".to_string(),
+                            )
+                        })?
+                        .to_string(),
+                )
+            }
             Kind::Workflow
             | Kind::Policy
             | Kind::CompiledContextTemplate
@@ -155,7 +157,8 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
 
         // 2. Apply schema validation if a class definition was resolved
         if let Some(class_def) = admitted_class_definition {
-            if !class_def.payload_schema.0.is_empty() && class_def.payload_schema.0 != "inline:any" {
+            if !class_def.payload_schema.0.is_empty() && class_def.payload_schema.0 != "inline:any"
+            {
                 let schema_str = if class_def.payload_schema.0.starts_with("inline:") {
                     &class_def.payload_schema.0[7..]
                 } else {
