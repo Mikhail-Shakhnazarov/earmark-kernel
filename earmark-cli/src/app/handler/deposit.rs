@@ -24,10 +24,13 @@ pub fn handle(
         {
             validation_context.namespace = Some(namespace);
         } else {
-            return Err(earmark_runtime_tools::RuntimeToolError::SystemIntegrity(format!(
+            return Err(
+                earmark_runtime_tools::RuntimeToolError::SystemIntegrity(format!(
                 "configured system context '{}' not found in index; cannot ensure admission safety",
                 system_id
-            )).into());
+            ))
+                .into(),
+            );
         }
     }
 

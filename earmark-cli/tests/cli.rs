@@ -228,8 +228,44 @@ fn declare_list_examples_outputs_examples() {
         .clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
     assert_eq!(parsed["data"]["ok"], true);
-    let examples = parsed["data"]["examples"].as_array().unwrap();
-    assert!(!examples.is_empty());
+    assert_eq!(parsed["data"]["examples"].as_array().unwrap().len(), 1);
+    assert!(parsed["data"]["summary"]
+        .as_str()
+        .unwrap()
+        .contains("1 declaration examples found"));
+}
+
+#[test]
+fn declare_list_examples_empty_in_fresh_workspace() {
+    let dir = tempdir().unwrap();
+    Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(dir.path())
+        .arg("--json")
+        .arg("init")
+        .assert()
+        .success();
+    let output = Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(dir.path())
+        .arg("--json")
+        .arg("declare")
+        .arg("list-examples")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["data"]["examples"].as_array().unwrap().len(), 0);
+    assert!(parsed["data"]["summary"]
+        .as_str()
+        .unwrap()
+        .contains("No workspace-local declaration examples found"));
+    assert_eq!(parsed["data"]["next_commands"].as_array().unwrap().len(), 0);
 }
 
 #[test]
@@ -578,14 +614,31 @@ fn test_deposit_rejection_in_active_system() {
     let dir = tempdir().unwrap();
     let config_dir = dir.path().join(".earmark");
     fs::create_dir_all(&config_dir).unwrap();
-    
+
     // 1. Setup classes and system (using research-synthesis example)
     let workspace = workspace_root();
-    let system_manifest = workspace.join("examples/research-synthesis/declarations/systems/system.yaml");
-    
+    let system_manifest =
+        workspace.join("examples/research-synthesis/declarations/systems/system.yaml");
+
     // Register and activate system
-    Command::cargo_bin("earmark-cli").unwrap().arg("--root").arg(dir.path()).arg("system").arg("register").arg(&system_manifest).assert().success();
-    Command::cargo_bin("earmark-cli").unwrap().arg("--root").arg(dir.path()).arg("system").arg("activate").arg("sys_research_synthesis").assert().success();
+    Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(dir.path())
+        .arg("system")
+        .arg("register")
+        .arg(&system_manifest)
+        .assert()
+        .success();
+    Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(dir.path())
+        .arg("system")
+        .arg("activate")
+        .arg("sys_research_synthesis")
+        .assert()
+        .success();
 
     // 2. Setup env for system context
     unsafe { std::env::set_var("EM_SYSTEM_ID", "sys_research_synthesis") };
@@ -608,7 +661,10 @@ fn test_deposit_rejection_in_active_system() {
         .failure();
 
     let count_after = fs::read_dir(&canonical_path).unwrap().count();
-    assert_eq!(count_before, count_after, "No new objects should be created on admission rejection");
+    assert_eq!(
+        count_before, count_after,
+        "No new objects should be created on admission rejection"
+    );
 
     unsafe { std::env::remove_var("EM_SYSTEM_ID") };
 }
@@ -616,7 +672,13 @@ fn test_deposit_rejection_in_active_system() {
 #[test]
 fn test_deposit_fails_on_bad_system_context() {
     let dir = tempdir().unwrap();
-    Command::cargo_bin("earmark-cli").unwrap().arg("--root").arg(dir.path()).arg("init").assert().success();
+    Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(dir.path())
+        .arg("init")
+        .assert()
+        .success();
 
     // Set a system ID that doesn't exist
     unsafe { std::env::set_var("EM_SYSTEM_ID", "non_existent_system") };
@@ -637,7 +699,10 @@ fn test_deposit_fails_on_bad_system_context() {
         .failure();
 
     let count_after = fs::read_dir(&canonical_path).unwrap().count();
-    assert_eq!(count_before, count_after, "No new objects should be created on bad system context failure");
+    assert_eq!(
+        count_before, count_after,
+        "No new objects should be created on bad system context failure"
+    );
 
     unsafe { std::env::remove_var("EM_SYSTEM_ID") };
 }

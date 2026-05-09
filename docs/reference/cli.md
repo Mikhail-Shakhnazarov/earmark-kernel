@@ -52,8 +52,10 @@ Generate a new declaration from a built-in template.
 Register a declaration in the workspace index.
 
 ### `em declare list-examples`
+ 
+Lists declaration examples found in the current workspace under `docs/declarations/examples`.
 
-List built-in declaration examples available for reference.
+A fresh workspace does not include declaration examples by default. Add examples under `docs/declarations/examples` to make them appear in this command.
 
 ## Systems
 
