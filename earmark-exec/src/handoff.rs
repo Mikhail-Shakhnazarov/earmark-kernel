@@ -1,8 +1,8 @@
 use crate::error::ExecError;
 use crate::helpers::dedupe_strings;
 use crate::ir::{ExecutionIr, ExecutionTransition, SuccessorHandoffSpec};
-use crate::resolution::load_class_definition;
 use crate::relation::persist_relation_canonical;
+use crate::resolution::load_class_definition;
 use earmark_core::{
     HandoffManifest, HandoffManifestId, Kind, ObjectId, ObjectRef, RelationCreationMode,
     RelationPayload, RequiredCheck, StandingConstraint, REL_TYPE_DERIVED_FROM,

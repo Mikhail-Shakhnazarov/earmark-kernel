@@ -104,7 +104,6 @@ fn normalized_authorizing_endpoint(rule: &RelationRule) -> Result<&str, RuntimeT
     }
 }
 
-
 fn source_rule_authorizes(
     rule: &RelationRule,
     target_class_name: &str,
@@ -114,7 +113,10 @@ fn source_rule_authorizes(
         return Ok(false);
     }
 
-    if !rule.counterparty_classes.contains(&target_class_name.to_string()) {
+    if !rule
+        .counterparty_classes
+        .contains(&target_class_name.to_string())
+    {
         return Ok(false);
     }
 
@@ -125,7 +127,7 @@ fn source_rule_authorizes(
         ("outgoing", "source") | ("outgoing", "either_endpoint") => Ok(true),
         ("bidirectional", "source") | ("bidirectional", "either_endpoint") => Ok(true),
         ("incoming", "target") | ("incoming", "either_endpoint") => Ok(false), // matches rel type but source is not source
-        ("bidirectional", "target") => Ok(false), // target auth only
+        ("bidirectional", "target") => Ok(false),                              // target auth only
         ("outgoing", "target") | ("incoming", "source") => {
             Err(RuntimeToolError::RelationRuleViolation(format!(
                 "malformed matching rule: direction {} with authorizing_endpoint {}",
@@ -145,7 +147,10 @@ fn target_rule_authorizes(
         return Ok(false);
     }
 
-    if !rule.counterparty_classes.contains(&source_class_name.to_string()) {
+    if !rule
+        .counterparty_classes
+        .contains(&source_class_name.to_string())
+    {
         return Ok(false);
     }
 
@@ -156,7 +161,7 @@ fn target_rule_authorizes(
         ("incoming", "target") | ("incoming", "either_endpoint") => Ok(true),
         ("bidirectional", "target") | ("bidirectional", "either_endpoint") => Ok(true),
         ("outgoing", "source") | ("outgoing", "either_endpoint") => Ok(false), // matches rel type but target is not source
-        ("bidirectional", "source") => Ok(false), // source auth only
+        ("bidirectional", "source") => Ok(false),                              // source auth only
         ("outgoing", "target") | ("incoming", "source") => {
             Err(RuntimeToolError::RelationRuleViolation(format!(
                 "malformed matching rule: direction {} with authorizing_endpoint {}",

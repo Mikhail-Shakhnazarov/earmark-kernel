@@ -2185,9 +2185,9 @@ fn load_relation_object_by_id<S: CanonicalStore>(
 ) -> Result<StoredObject, CliError> {
     let id = earmark_core::ObjectId::parse(relation_id)
         .map_err(|_| CliError::argument(format!("invalid relation ID: {}", relation_id)))?;
-    let found = store.read_head(&id)?.ok_or_else(|| {
-        CliError::not_found(format!("relation not found: {}", relation_id))
-    })?;
+    let found = store
+        .read_head(&id)?
+        .ok_or_else(|| CliError::not_found(format!("relation not found: {}", relation_id)))?;
     if found.envelope.kind != Kind::Relation {
         return Err(CliError::argument(format!(
             "object {} is not a relation",
@@ -2686,16 +2686,21 @@ fn render_explanation(value: &serde_json::Value) -> Option<String> {
 
             if let Some(auth) = related.get("authorization") {
                 output.push_str("\nAuthorization Trace:\n");
-                if let Some(endpoint) = auth.get("relation_auth_endpoint").and_then(|v| v.as_str()) {
+                if let Some(endpoint) = auth.get("relation_auth_endpoint").and_then(|v| v.as_str())
+                {
                     output.push_str(&format!("  Authorizing Endpoint: {}\n", endpoint));
                 }
                 if let Some(class) = auth.get("relation_auth_class").and_then(|v| v.as_str()) {
                     output.push_str(&format!("  Authorizing Class: {}\n", class));
                 }
-                if let Some(auth_type) = auth.get("relation_auth_authority").and_then(|v| v.as_str()) {
+                if let Some(auth_type) =
+                    auth.get("relation_auth_authority").and_then(|v| v.as_str())
+                {
                     output.push_str(&format!("  Configured Authority: {}\n", auth_type));
                 }
-                if let Some(direction) = auth.get("relation_auth_direction").and_then(|v| v.as_str()) {
+                if let Some(direction) =
+                    auth.get("relation_auth_direction").and_then(|v| v.as_str())
+                {
                     output.push_str(&format!("  Rule Direction: {}\n", direction));
                 }
             }

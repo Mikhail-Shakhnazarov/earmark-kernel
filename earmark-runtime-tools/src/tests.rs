@@ -1342,7 +1342,13 @@ fn test_endpoint_authorized_relations() {
 
     // Should succeed (source authorized)
     surface
-        .create_relation(obj_a.id.clone(), obj_b.id.clone(), "linked_to".to_string(), json!({}), provenance.clone())
+        .create_relation(
+            obj_a.id.clone(),
+            obj_b.id.clone(),
+            "linked_to".to_string(),
+            json!({}),
+            provenance.clone(),
+        )
         .expect("source authorized relation should succeed");
 
     // 2. Target-only authorization
@@ -1384,14 +1390,47 @@ fn test_endpoint_authorized_relations() {
 
     // Should succeed (target authorized)
     let rel_mentions = surface
-        .create_relation(obj_c.id.clone(), obj_d.id.clone(), "mentions".to_string(), json!({}), provenance.clone())
+        .create_relation(
+            obj_c.id.clone(),
+            obj_d.id.clone(),
+            "mentions".to_string(),
+            json!({}),
+            provenance.clone(),
+        )
         .expect("target authorized relation should succeed");
-    
+
     // Verify headers
     let rel_obj = store.read_version(&rel_mentions.version_ref()).unwrap();
-    assert_eq!(rel_obj.envelope.headers.get("relation_auth_endpoint").unwrap().as_string().unwrap(), "target");
-    assert_eq!(rel_obj.envelope.headers.get("relation_auth_class").unwrap().as_string().unwrap(), "class_d");
-    assert_eq!(rel_obj.envelope.headers.get("relation_auth_authority").unwrap().as_string().unwrap(), "target");
+    assert_eq!(
+        rel_obj
+            .envelope
+            .headers
+            .get("relation_auth_endpoint")
+            .unwrap()
+            .as_string()
+            .unwrap(),
+        "target"
+    );
+    assert_eq!(
+        rel_obj
+            .envelope
+            .headers
+            .get("relation_auth_class")
+            .unwrap()
+            .as_string()
+            .unwrap(),
+        "class_d"
+    );
+    assert_eq!(
+        rel_obj
+            .envelope
+            .headers
+            .get("relation_auth_authority")
+            .unwrap()
+            .as_string()
+            .unwrap(),
+        "target"
+    );
 
     // 3. Either-endpoint authorization
     // class_e allows bidirectional 'partner' with class_f, either can authorize
@@ -1432,12 +1471,24 @@ fn test_endpoint_authorized_relations() {
 
     // Should succeed (source authorized via either_endpoint)
     surface
-        .create_relation(obj_e.id.clone(), obj_f.id.clone(), "partner".to_string(), json!({}), provenance.clone())
+        .create_relation(
+            obj_e.id.clone(),
+            obj_f.id.clone(),
+            "partner".to_string(),
+            json!({}),
+            provenance.clone(),
+        )
         .expect("either_endpoint authorized relation (source side) should succeed");
 
     // Should also succeed if we reverse them (target authorized via either_endpoint)
     surface
-        .create_relation(obj_f.id.clone(), obj_e.id.clone(), "partner".to_string(), json!({}), provenance.clone())
+        .create_relation(
+            obj_f.id.clone(),
+            obj_e.id.clone(),
+            "partner".to_string(),
+            json!({}),
+            provenance.clone(),
+        )
         .expect("either_endpoint authorized relation (target side) should succeed");
 
     // 4. Rejection Case
@@ -1468,7 +1519,13 @@ fn test_endpoint_authorized_relations() {
         .unwrap();
 
     surface
-        .create_relation(obj_g.id.clone(), obj_h.id.clone(), "unauthorized".to_string(), json!({}), provenance)
+        .create_relation(
+            obj_g.id.clone(),
+            obj_h.id.clone(),
+            "unauthorized".to_string(),
+            json!({}),
+            provenance,
+        )
         .unwrap_err();
 }
 
