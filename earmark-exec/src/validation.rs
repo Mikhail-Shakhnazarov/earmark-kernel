@@ -457,12 +457,12 @@ pub(crate) fn validate_relation_object<S: CanonicalStore>(
                 || relation.relation_type == "used_compiled_context"
                 || definition.relation_rules.iter().any(|rule| {
                     rule.relation_type == relation.relation_type
-                        && (rule.target_classes.is_empty()
+                        && (rule.counterparty_classes.is_empty()
                             || relation
                                 .target
                                 .class
                                 .as_ref()
-                                .map(|target_class| rule.target_classes.contains(target_class))
+                                .map(|target_class| rule.counterparty_classes.contains(target_class))
                                 .unwrap_or(false))
                 });
             if !relation_allowed && !definition.relation_rules.is_empty() {

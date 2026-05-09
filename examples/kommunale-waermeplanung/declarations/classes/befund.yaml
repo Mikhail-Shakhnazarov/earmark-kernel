@@ -17,9 +17,9 @@ standing_rules:
     - completed
 relation_rules:
   - relation_type: derived_from
-    target_classes:
+    counterparty_classes:
       - quellnotiz
   - relation_type: source_of
-    target_classes:
+    counterparty_classes:
       - briefingkarte
 validators: []

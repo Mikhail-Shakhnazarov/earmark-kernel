@@ -45,7 +45,7 @@ standing_rules:
     - completed
 relation_rules:
   - relation_type: extracted_from
-    target_classes:
+    counterparty_classes:
       - contract
 validators: []
 ```

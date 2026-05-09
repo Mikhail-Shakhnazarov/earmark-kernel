@@ -16,6 +16,6 @@ standing_rules:
     - completed
 relation_rules:
   - relation_type: source_of
-    target_classes:
+    counterparty_classes:
       - befund
 validators: []

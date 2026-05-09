@@ -854,6 +854,91 @@ pub fn run(cli: Cli) -> Result<(), CliError> {
                     }),
                 );
             }
+            Commands::Relation(command) => match command.action {
+                RelationAction::Show { relation_id } => {
+                    let relation = load_relation_object_by_id(&store, &relation_id)?;
+                    emit(as_json, serde_json::to_value(relation)?);
+                }
+                RelationAction::Explain { relation_id } => {
+                    let relation = load_relation_object_by_id(&store, &relation_id)?;
+                    let payload: earmark_core::RelationPayload =
+                        serde_json::from_slice(&relation.payload.bytes)?;
+
+                    let mut related = json!({
+                        "source": payload.source,
+                        "target": payload.target,
+                        "relation_type": payload.relation_type,
+                    });
+
+                    let mut auth = BTreeMap::new();
+                    for key in [
+                        "relation_auth_endpoint",
+                        "relation_auth_class",
+                        "relation_auth_authority",
+                        "relation_auth_direction",
+                    ] {
+                        if let Some(val) = relation.envelope.headers.get(key) {
+                            auth.insert(key, val);
+                        }
+                    }
+                    if !auth.is_empty() {
+                        related["authorization"] = json!(auth);
+                    }
+
+                    emit(
+                        as_json,
+                        json!({
+                            "ok": true,
+                            "kind": "relation",
+                            "id": relation_id,
+                            "summary": format!("relation '{}' from {} to {}", payload.relation_type, payload.source.id, payload.target.id),
+                            "artifact": relation.clone(),
+                            "related": related,
+                            "next_commands": [
+                                format!("em relation show {}", relation_id),
+                                format!("em query --object-id {}", payload.source.id),
+                                format!("em query --object-id {}", payload.target.id),
+                            ]
+                        }),
+                    );
+                }
+                RelationAction::List {
+                    source_id,
+                    target_id,
+                    relation_type,
+                } => {
+                    let mut relations = Vec::new();
+                    for object in store.scan_objects()? {
+                        if object.envelope.kind != Kind::Relation {
+                            continue;
+                        }
+                        if let Some(head_ref) = store.read_head_ref(&object.envelope.id)? {
+                            if head_ref.version_id != object.envelope.version_id {
+                                continue;
+                            }
+                        }
+                        let payload: earmark_core::RelationPayload =
+                            serde_json::from_slice(&object.payload.bytes)?;
+                        if let Some(sid) = &source_id {
+                            if payload.source.id.as_str() != sid {
+                                continue;
+                            }
+                        }
+                        if let Some(tid) = &target_id {
+                            if payload.target.id.as_str() != tid {
+                                continue;
+                            }
+                        }
+                        if let Some(rt) = &relation_type {
+                            if &payload.relation_type != rt {
+                                continue;
+                            }
+                        }
+                        relations.push(object);
+                    }
+                    emit(as_json, serde_json::to_value(relations)?);
+                }
+            },
         }
         Ok(())
     })();
@@ -895,6 +980,7 @@ fn workspace_access_mode(command: &Commands) -> WorkspaceAccessMode {
         Commands::Context(_) => WorkspaceAccessMode::Write,
         Commands::Report(_) => WorkspaceAccessMode::Write,
         Commands::Provider(_) => WorkspaceAccessMode::None,
+        Commands::Relation(_) => WorkspaceAccessMode::ReadOnly,
     }
 }
 
@@ -927,6 +1013,7 @@ fn command_family_name(command: &Commands) -> &'static str {
         Commands::Provider(_) => "provider",
         Commands::Completions { .. } => "completions",
         Commands::Status => "status",
+        Commands::Relation(_) => "relation",
     }
 }
 
@@ -1106,8 +1193,9 @@ fn explain_declaration_file<S: CanonicalStore>(
                 "standing_rules": declaration.standing_rules,
                 "allowed_relations": declaration.relation_rules.iter().map(|rule| json!({
                     "relation_type": rule.relation_type,
-                    "target_classes": rule.target_classes,
+                    "counterparty_classes": rule.counterparty_classes,
                     "direction": rule.direction,
+                    "authorizing_endpoint": rule.authorizing_endpoint,
                 })).collect::<Vec<_>>(),
             }))
         }
@@ -2060,6 +2148,24 @@ fn load_failure_by_id<S: CanonicalStore>(
     )))
 }
 
+fn load_relation_object_by_id<S: CanonicalStore>(
+    store: &S,
+    relation_id: &str,
+) -> Result<StoredObject, CliError> {
+    let id = earmark_core::ObjectId::parse(relation_id)
+        .map_err(|_| CliError::argument(format!("invalid relation ID: {}", relation_id)))?;
+    let found = store.read_head(&id)?.ok_or_else(|| {
+        CliError::not_found(format!("relation not found: {}", relation_id))
+    })?;
+    if found.envelope.kind != Kind::Relation {
+        return Err(CliError::argument(format!(
+            "object {} is not a relation",
+            relation_id
+        )));
+    }
+    Ok(found)
+}
+
 pub(crate) fn parse_epistemic(value: &str) -> Result<EpistemicStanding, CliError> {
     match value {
         "unresolved" => Ok(EpistemicStanding::Unresolved),
@@ -2527,6 +2633,38 @@ fn render_explanation(value: &serde_json::Value) -> Option<String> {
                 "Output Path: {}\n",
                 value.get("output")?.as_str()?
             ));
+        }
+        "relation" => {
+            let related = value.get("related")?;
+            output.push_str("Purpose: A relation defines a directed link between two objects.\n");
+            output.push_str(&format!(
+                "Relation Type: {}\n",
+                related.get("relation_type")?.as_str()?
+            ));
+            output.push_str(&format!(
+                "Source: {}\n",
+                related.get("source")?.get("id")?.as_str()?
+            ));
+            output.push_str(&format!(
+                "Target: {}\n",
+                related.get("target")?.get("id")?.as_str()?
+            ));
+
+            if let Some(auth) = related.get("authorization") {
+                output.push_str("\nAuthorization Trace:\n");
+                if let Some(endpoint) = auth.get("relation_auth_endpoint").and_then(|v| v.as_str()) {
+                    output.push_str(&format!("  Authorizing Endpoint: {}\n", endpoint));
+                }
+                if let Some(class) = auth.get("relation_auth_class").and_then(|v| v.as_str()) {
+                    output.push_str(&format!("  Authorizing Class: {}\n", class));
+                }
+                if let Some(auth_type) = auth.get("relation_auth_authority").and_then(|v| v.as_str()) {
+                    output.push_str(&format!("  Configured Authority: {}\n", auth_type));
+                }
+                if let Some(direction) = auth.get("relation_auth_direction").and_then(|v| v.as_str()) {
+                    output.push_str(&format!("  Rule Direction: {}\n", direction));
+                }
+            }
         }
         _ => return None,
     }

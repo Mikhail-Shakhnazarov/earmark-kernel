@@ -52,8 +52,9 @@ fn test_neutral_staged_fixture_source_note_to_summary() {
         },
         relation_rules: vec![earmark_core::RelationRule {
             relation_type: "derived_from".to_string(),
-            target_classes: vec!["source_note".to_string()],
+            counterparty_classes: vec!["source_note".to_string()],
             direction: None,
+            authorizing_endpoint: None,
         }],
         validators: vec![],
     };
@@ -78,8 +79,9 @@ fn test_neutral_staged_fixture_source_note_to_summary() {
         standing_rules: ClassStandingRules::default(),
         relation_rules: vec![earmark_core::RelationRule {
             relation_type: "derived_from".to_string(),
-            target_classes: vec!["finding".to_string()],
+            counterparty_classes: vec!["finding".to_string()],
             direction: None,
+            authorizing_endpoint: None,
         }],
         validators: vec![],
     };

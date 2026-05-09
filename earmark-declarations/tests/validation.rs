@@ -77,8 +77,9 @@ fn class_rejects_invalid_relation_type() {
         standing_rules: ClassStandingRules::default(),
         relation_rules: vec![earmark_core::RelationRule {
             relation_type: "bad-type".to_string(),
-            target_classes: vec!["source_note".to_string()],
+            counterparty_classes: vec!["source_note".to_string()],
             direction: None,
+            authorizing_endpoint: None,
         }],
         validators: vec![],
     };
@@ -295,8 +296,9 @@ fn class_rejects_invalid_relation_direction() {
         standing_rules: ClassStandingRules::default(),
         relation_rules: vec![earmark_core::RelationRule {
             relation_type: "derived_from".to_string(),
-            target_classes: vec!["source_note".to_string()],
+            counterparty_classes: vec!["source_note".to_string()],
             direction: Some("invalid".to_string()),
+            authorizing_endpoint: None,
         }],
         validators: vec![],
     };
@@ -306,11 +308,13 @@ fn class_rejects_invalid_relation_direction() {
 
     // Valid succeeds
     class.relation_rules[0].direction = Some("incoming".to_string());
+    class.relation_rules[0].authorizing_endpoint = Some("target".to_string());
     assert!(validate_class_definition(&class).is_ok());
 
     class.relation_rules[0].direction = Some("bidirectional".to_string());
     assert!(validate_class_definition(&class).is_ok());
 
     class.relation_rules[0].direction = None;
+    class.relation_rules[0].authorizing_endpoint = None;
     assert!(validate_class_definition(&class).is_ok());
 }
