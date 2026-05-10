@@ -208,7 +208,7 @@ fn test_work_packet_honest_constraints() {
 
     // VERIFY: the helper preserves what it's given.
     // This test ensures the WorkPacket structure is correctly populated.
-    assert_eq!(work_packet.constraints.export_permitted, true);
+    assert!(work_packet.constraints.export_permitted);
     assert_eq!(work_packet.advisory_warnings.len(), 0); // No warnings added by default helper
 }
 
@@ -414,8 +414,8 @@ fn test_transition_enforces_honest_work_packet_defaults() {
     let wp: earmark_core::WorkPacket = serde_json::from_slice(&wp_obj.payload.bytes).unwrap();
 
     // SUBSTANTIVE ASSERTION: transition.rs MUST have hardcoded false
-    assert_eq!(
-        wp.constraints.export_permitted, false,
+    assert!(
+        !wp.constraints.export_permitted,
         "Transition engine must enforce export_permitted: false by default"
     );
 }
