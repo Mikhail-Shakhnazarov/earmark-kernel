@@ -359,19 +359,7 @@ pub fn run(cli: Cli) -> Result<(), CliError> {
                 }
                 RunAction::Show { run_id } => {
                     let ledger = load_run_record_by_id(&store, &run_id)?;
-                    let resolved_id = ledger.run_id.clone();
-                    emit(
-                        as_json,
-                        json!({
-                            "ok": true,
-                            "kind": "run",
-                            "id": resolved_id,
-                            "summary": format!("run {} is {}", resolved_id, format!("{:?}", ledger.status).to_lowercase()),
-                            "artifact": ledger,
-                            "related": run_related_artifacts(&store, &resolved_id)?,
-                            "next_commands": next_commands_for_run(&resolved_id),
-                        }),
-                    );
+                    emit(as_json, serde_json::to_value(ledger)?);
                 }
                 RunAction::Timeline { run_id } => {
                     let mut ledger = load_run_record_by_id(&store, &run_id)?;
@@ -778,7 +766,19 @@ pub fn run(cli: Cli) -> Result<(), CliError> {
                         run_id.as_deref(),
                         transition_id.as_deref(),
                     )?);
-                    emit(as_json, json!({ "ok": true, "failures": failures }));
+                    emit(
+                        as_json,
+                        json!({
+                            "ok": true,
+                            "kind": "audit_failures",
+                            "summary": format!("{} failures found", failures.len()),
+                            "failures": failures,
+                            "next_commands": [
+                                "em failure show <failure_id>",
+                                "em failure explain <failure_id>",
+                            ],
+                        }),
+                    );
                 }
                 AuditAction::Show { failure_id } => {
                     let failure = load_failure_by_id(&store, &failure_id)?;
@@ -1038,6 +1038,7 @@ pub fn run(cli: Cli) -> Result<(), CliError> {
                     emit(
                         as_json,
                         json!({
+                            "ok": true,
                             "id": obj.envelope.id.as_str(),
                             "version_id": obj.envelope.version_id.as_str(),
                             "request": request
@@ -2595,12 +2596,13 @@ fn next_commands_for_handoff(handoff: &earmark_core::HandoffManifest) -> Vec<Str
     let mut commands = vec![format!("em run explain {}", handoff.run_id)];
     if let Some(transition_id) = &handoff.to_transition_id {
         commands.push(format!(
-            "em workflow run <workflow_id> --system-id <system_id> --handoff-manifest {} # successor {}",
-            handoff.id.as_str(), transition_id
+            "em workflow run <workflow_id> --system-id <system_id> --handoff {} # successor {}",
+            handoff.id.as_str(),
+            transition_id
         ));
     } else {
         commands.push(format!(
-            "em workflow run <workflow_id> --system-id <system_id> --handoff-manifest {}",
+            "em workflow run <workflow_id> --system-id <system_id> --handoff {}",
             handoff.id.as_str()
         ));
     }
