@@ -5,7 +5,7 @@ use earmark_core::{
     HeaderValue, Kind, ObjectRef, ProcessStanding, Provenance, ReviewStanding, Standing,
     StandingDimension, StandingPolicy, Timestamp,
 };
-use earmark_store::{CanonicalStore, StoredObject, StoredPayload};
+use earmark_store::{StoredObject, StoredPayload};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 

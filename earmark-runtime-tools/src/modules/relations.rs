@@ -100,7 +100,7 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
             captured_at: chrono::Utc::now(),
         };
 
-        Ok(earmark_exec::persist_relation_canonical(
+        Ok(persist_relation_canonical(
             self.store,
             self.index,
             relation,
