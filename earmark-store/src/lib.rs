@@ -167,7 +167,10 @@ impl StoredObject {
         }
     }
 
-    pub(crate) fn verify_payload_ref(envelope: &earmark_core::Envelope, payload: &StoredPayload) -> Result<(), StoreError> {
+    pub(crate) fn verify_payload_ref(
+        envelope: &earmark_core::Envelope,
+        payload: &StoredPayload,
+    ) -> Result<(), StoreError> {
         let actual = payload.payload_ref();
         if actual != envelope.payload_ref {
             return Err(StoreError::PayloadIntegrityMismatch {
@@ -492,7 +495,11 @@ impl CanonicalStore for GitCanonicalStore {
                 // Try to clean up parent directories if they are empty
                 let mut current = dir.parent();
                 while let Some(path) = current {
-                    if path == self.objects_dir() || path == self.payloads_dir() || path == self.heads_dir() || path == self.canonical_dir() {
+                    if path == self.objects_dir()
+                        || path == self.payloads_dir()
+                        || path == self.heads_dir()
+                        || path == self.canonical_dir()
+                    {
                         break;
                     }
                     if path.exists() {
@@ -500,7 +507,11 @@ impl CanonicalStore for GitCanonicalStore {
                             Ok(mut entries) => {
                                 if entries.next().is_none() {
                                     if let Err(e) = fs::remove_dir(path) {
-                                        rollback_failures.push(format!("remove parent dir {}: {}", path.display(), e));
+                                        rollback_failures.push(format!(
+                                            "remove parent dir {}: {}",
+                                            path.display(),
+                                            e
+                                        ));
                                     }
                                 } else {
                                     break;

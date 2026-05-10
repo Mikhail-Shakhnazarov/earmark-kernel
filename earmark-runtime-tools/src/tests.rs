@@ -861,7 +861,7 @@ fn test_create_relation_enforces_rules() {
         &index,
         "finding",
         vec![earmark_core::RelationRule {
-            relation_type: "derived_from".to_string(),
+            relation_type: "references".to_string(),
             counterparty_classes: vec!["source_note".to_string()],
             direction: Some("outgoing".to_string()),
             authorizing_endpoint: None,
@@ -885,7 +885,7 @@ fn test_create_relation_enforces_rules() {
         .create_relation(
             source_id.clone(),
             target_note_id.clone(),
-            "derived_from".to_string(),
+            "references".to_string(),
             json!({}),
             provenance.clone(),
         )
@@ -908,7 +908,7 @@ fn test_create_relation_enforces_rules() {
         .create_relation(
             source_id.clone(),
             target_summary_id,
-            "derived_from".to_string(),
+            "references".to_string(),
             json!({}),
             provenance.clone(),
         )
@@ -1028,7 +1028,7 @@ fn test_create_relation_direction_enforcement() {
 
     assert!(matches!(
         err,
-        RuntimeToolError::RelationRuleViolation(ref msg) if msg.contains("unknown relation direction: invalid")
+        RuntimeToolError::RelationRuleViolation(ref msg) if msg.contains("invalid direction: invalid")
     ));
     assert_eq!(surface.index.relation_count().unwrap(), count_before);
 }
@@ -1571,10 +1571,10 @@ fn test_relation_rule_ordering_is_non_semantic() {
     let obj_a = create_test_object(&store, &index, "class_a");
     let obj_b = create_test_object(&store, &index, "class_b");
 
-    // Should succeed because the second rule matches
+    // Should succeed because the second rule matches (central resolver evaluates all rules and continues on counterparty mismatch)
     surface
         .create_relation(obj_a, obj_b, "linked_to".to_string(), json!({}), provenance)
-        .expect("relation should succeed even if earlier rule does not match");
+        .expect("relation should succeed even if earlier rule does not match counterparty");
 }
 
 #[test]
@@ -1645,6 +1645,6 @@ fn test_malformed_relation_rule_fails_hard() {
 
     assert!(matches!(
         err,
-        RuntimeToolError::RelationRuleViolation(ref msg) if msg.contains("unknown authorizing endpoint: INVALID_AUTH_MODE")
+        RuntimeToolError::RelationRuleViolation(ref msg) if msg.contains("invalid authorizing_endpoint: INVALID_AUTH_MODE")
     ));
 }

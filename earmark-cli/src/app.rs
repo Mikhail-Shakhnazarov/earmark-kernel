@@ -183,7 +183,9 @@ pub fn run(cli: Cli) -> Result<(), CliError> {
                 mirror_surface(&store, &review)?;
                 earmark_exec::persistence_helpers::write_object_and_index(
                     &store,
-                    index.as_ref().expect("index available for workspace command"),
+                    index
+                        .as_ref()
+                        .expect("index available for workspace command"),
                     &review,
                 )?;
                 emit(
@@ -455,12 +457,8 @@ pub fn run(cli: Cli) -> Result<(), CliError> {
                 }
                 DeclareAction::Register(args) => {
                     tracing::info!(kind = %args.kind.as_str(), path = %args.path.display(), "registering declaration");
-                    let version_ref = register_declaration_file(
-                        &store,
-                        index.as_ref(),
-                        args.kind,
-                        &args.path,
-                    )?;
+                    let version_ref =
+                        register_declaration_file(&store, index.as_ref(), args.kind, &args.path)?;
                     if matches!(args.kind, DeclarationKind::System) {
                         index
                             .as_ref()

@@ -25,18 +25,18 @@ fn test_git_index_restoration_on_failure() {
     let head1 = store.read_head(&obj1.envelope.id).unwrap().unwrap();
     assert_eq!(head1.envelope.id, obj1.envelope.id);
 
-    // 2. Force failure by creating a directory where a file should be, 
+    // 2. Force failure by creating a directory where a file should be,
     // or making a file unreadable in the corpus/objects path.
-    
+
     // We'll create a file in the canonical dir that we then make unreadable.
     // Wait, GixBackend walks .earmark and corpus.
     let malicious_path = dir.path().join("corpus").join("malicious.md");
     fs::create_dir_all(malicious_path.parent().unwrap()).unwrap();
     fs::write(&malicious_path, "can't read me").unwrap();
-    
+
     // On Windows, making it unreadable is tricky with just fs::set_permissions.
     // We'll try to use a directory with the same name as a file GixBackend expects to write.
-    
+
     let obj2 = StoredObject::new(
         Kind::Object,
         Some("test".to_string()),
@@ -46,7 +46,7 @@ fn test_git_index_restoration_on_failure() {
         StoredPayload::from_markdown("fail me".to_string()),
         vec![],
     );
-    
+
     // We'll make the version path a directory to force failure during fs::write or during gix walk.
     // Force failure by locking the git index
     let lock_path = dir.path().join(".git").join("index.lock");
@@ -68,12 +68,18 @@ fn test_git_index_restoration_on_failure() {
 
     let head_check = store.read_head(&obj1.envelope.id).unwrap().unwrap();
     assert_eq!(head_check.envelope.id, obj1.envelope.id);
-    
+
     let version_path2 = store.version_path(&obj2.envelope.version_ref());
-    assert!(!version_path2.exists(), "Version file should have been cleaned up");
-    
+    assert!(
+        !version_path2.exists(),
+        "Version file should have been cleaned up"
+    );
+
     let head2_check = store.read_head(&obj2.envelope.id).unwrap();
-    assert!(head2_check.is_none(), "Head file should have been cleaned up");
+    assert!(
+        head2_check.is_none(),
+        "Head file should have been cleaned up"
+    );
 
     // 4. Verify we can write again successfully
     let obj3 = StoredObject::new(
@@ -85,7 +91,12 @@ fn test_git_index_restoration_on_failure() {
         StoredPayload::from_markdown("i am third".to_string()),
         vec![],
     );
-    store.write_object(&obj3).expect("Should be able to write again after failure");
-    let head3 = store.read_head(&obj3.envelope.id).unwrap().expect("Obj3 should be there");
+    store
+        .write_object(&obj3)
+        .expect("Should be able to write again after failure");
+    let head3 = store
+        .read_head(&obj3.envelope.id)
+        .unwrap()
+        .expect("Obj3 should be there");
     assert_eq!(head3.envelope.id, obj3.envelope.id);
 }

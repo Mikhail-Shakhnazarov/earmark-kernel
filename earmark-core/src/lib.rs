@@ -528,6 +528,7 @@ pub const PRIVILEGED_RELATION_TYPES: &[&str] = &[
     REL_TYPE_USED_COMPILED_CONTEXT,
     REL_TYPE_REQUESTS_STANDING,
     REL_TYPE_RESULTED_IN_FAILURE,
+    REL_TYPE_DERIVED_FROM,
 ];
 
 pub fn is_privileged_relation(rel_type: &str) -> bool {
