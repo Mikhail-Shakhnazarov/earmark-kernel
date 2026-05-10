@@ -1,3 +1,6 @@
+use crate::relation_logic::{
+    RelationAuthorizationDecision, RelationAuthorizationResolver, RelationEndpointFacts,
+};
 use earmark_core::{
     ChangeSetDraft, ChangeSetValidationResult, ClassDefinition, Kind, ObjectId, ObjectRef,
     Standing, SystemDefinition, WorkflowGuard,
@@ -256,7 +259,7 @@ pub fn validate_transition_change_set<S: CanonicalStore>(
 
     let mut failures = Vec::new();
     let warnings = Vec::new();
-    let info = Vec::new();
+    let mut info = Vec::new();
     let mut created_output_classes = Vec::new();
     let mut all_standing_requests = Vec::new();
 
@@ -296,6 +299,7 @@ pub fn validate_transition_change_set<S: CanonicalStore>(
                 &stored,
                 &declared_classes,
                 &mut failures,
+                &mut info,
             )?,
             _ => {}
         }
@@ -314,6 +318,7 @@ pub fn validate_transition_change_set<S: CanonicalStore>(
             &stored,
             &declared_classes,
             &mut failures,
+            &mut info,
         )?;
     }
 
@@ -423,12 +428,17 @@ pub fn validate_standing_rules(
     requests
 }
 
-pub(crate) fn validate_relation_object<S: CanonicalStore>(
+fn is_trusted_actor(actor: &str) -> bool {
+    actor == "runtime" || actor == "execution_engine" || actor == "system"
+}
+
+pub fn validate_relation_object<S: CanonicalStore>(
     store: &S,
     object_id: &ObjectId,
     stored: &StoredObject,
     declared_classes: &HashMap<String, ClassDefinition>,
     failures: &mut Vec<String>,
+    info: &mut Vec<String>,
 ) -> Result<(), ExecError> {
     let relation: earmark_core::RelationPayload = serde_json::from_slice(&stored.payload.bytes)?;
     if relation.relation_type.trim().is_empty() {
@@ -437,43 +447,150 @@ pub(crate) fn validate_relation_object<S: CanonicalStore>(
             object_id.as_str()
         ));
     }
-    if store.read_head(&relation.source.id)?.is_none() {
-        failures.push(format!(
-            "created relation {} references missing source {}",
-            object_id.as_str(),
-            relation.source.id.as_str()
-        ));
+
+    // Step 2 & 3: Load canonical endpoint versions and verify identity
+    let source_stored = load_relation_endpoint(
+        store,
+        &relation.source.id,
+        &relation.source.version_id,
+        "source",
+        failures,
+    )?;
+    let target_stored = load_relation_endpoint(
+        store,
+        &relation.target.id,
+        &relation.target.version_id,
+        "target",
+        failures,
+    )?;
+
+    if let Some(source_stored) = &source_stored {
+        verify_endpoint_identity(
+            &relation.source,
+            &source_stored.envelope,
+            "source",
+            failures,
+        );
     }
-    if store.read_head(&relation.target.id)?.is_none() {
-        failures.push(format!(
-            "created relation {} references missing target {}",
-            object_id.as_str(),
-            relation.target.id.as_str()
-        ));
+    if let Some(target_stored) = &target_stored {
+        verify_endpoint_identity(
+            &relation.target,
+            &target_stored.envelope,
+            "target",
+            failures,
+        );
     }
-    if earmark_core::is_privileged_relation(&relation.relation_type) {
+
+    // Stop if we couldn't load endpoints or identity failed
+    if !failures.is_empty() {
         return Ok(());
     }
 
-    if let Some(source_class) = &relation.source.class {
-        if let Some(definition) = declared_classes.get(source_class) {
-            let relation_allowed = definition.relation_rules.iter().any(|rule| {
-                rule.relation_type == relation.relation_type
-                    && (rule.counterparty_classes.is_empty()
-                        || relation
-                            .target
-                            .class
-                            .as_ref()
-                            .map(|target_class| rule.counterparty_classes.contains(target_class))
-                            .unwrap_or(false))
-            });
-            if !relation_allowed && !definition.relation_rules.is_empty() {
-                failures.push(format!(
-                    "relation {} is not allowed from class {}",
-                    relation.relation_type, source_class
-                ));
-            }
+    let source_stored = source_stored.unwrap();
+    let target_stored = target_stored.unwrap();
+
+    // Step 4: Construct facts
+    let source_facts = RelationEndpointFacts {
+        id: source_stored.envelope.id.clone(),
+        version_id: source_stored.envelope.version_id.clone(),
+        kind: source_stored.envelope.kind.clone(),
+        class: source_stored.envelope.class.clone(),
+    };
+    let target_facts = RelationEndpointFacts {
+        id: target_stored.envelope.id.clone(),
+        version_id: target_stored.envelope.version_id.clone(),
+        kind: target_stored.envelope.kind.clone(),
+        class: target_stored.envelope.class.clone(),
+    };
+
+    // Step 5: Evaluate authorization
+    let creation_mode = stored
+        .envelope
+        .headers
+        .get("relation_creation_mode")
+        .and_then(|v| v.as_string());
+
+    let resolver = RelationAuthorizationResolver {
+        relation_type: &relation.relation_type,
+        source: &source_facts,
+        target: &target_facts,
+        source_definition: source_facts
+            .class
+            .as_ref()
+            .and_then(|c| declared_classes.get(c)),
+        target_definition: target_facts
+            .class
+            .as_ref()
+            .and_then(|c| declared_classes.get(c)),
+        creation_mode: creation_mode.as_deref(),
+        is_trusted_provenance: is_trusted_actor(&stored.envelope.provenance.actor),
+    };
+
+    match resolver.resolve() {
+        RelationAuthorizationDecision::Allowed(reason) => {
+            info.push(format!("relation {} authorized: {}", object_id, reason));
+        }
+        RelationAuthorizationDecision::Blocked(failure) => {
+            failures.push(format!(
+                "relation {} authorization failed: {}",
+                object_id, failure
+            ));
         }
     }
+
     Ok(())
+}
+
+fn load_relation_endpoint<S: CanonicalStore>(
+    store: &S,
+    id: &ObjectId,
+    version_id: &earmark_core::VersionId,
+    role: &str,
+    failures: &mut Vec<String>,
+) -> Result<Option<StoredObject>, ExecError> {
+    let version_ref = earmark_core::VersionRef::new(id.clone(), version_id.clone());
+    match store.read_version(&version_ref) {
+        Ok(stored) => Ok(Some(stored)),
+        Err(_) => {
+            failures.push(format!(
+                "relation references missing {} version {} for object {}",
+                role,
+                version_id.as_str(),
+                id.as_str()
+            ));
+            Ok(None)
+        }
+    }
+}
+
+fn verify_endpoint_identity(
+    expected: &earmark_core::ObjectRef,
+    actual: &earmark_core::Envelope,
+    role: &str,
+    failures: &mut Vec<String>,
+) {
+    if expected.id != actual.id {
+        failures.push(format!(
+            "relation {} object ID mismatch: payload has {}, canonical has {}",
+            role, expected.id, actual.id
+        ));
+    }
+    if expected.version_id != actual.version_id {
+        failures.push(format!(
+            "relation {} version ID mismatch: payload has {}, canonical has {}",
+            role, expected.version_id, actual.version_id
+        ));
+    }
+    if expected.kind != actual.kind {
+        failures.push(format!(
+            "relation {} kind mismatch: payload has {:?}, canonical has {:?}",
+            role, expected.kind, actual.kind
+        ));
+    }
+    if expected.class != actual.class {
+        failures.push(format!(
+            "relation {} class mismatch: payload has {:?}, canonical has {:?}",
+            role, expected.class, actual.class
+        ));
+    }
 }

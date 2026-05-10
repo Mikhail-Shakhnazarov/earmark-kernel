@@ -1,6 +1,7 @@
 use crate::error::ExecError;
 use crate::handoff::create_lineage_relations;
 use crate::ir::TransformArtifacts;
+use crate::persistence_helpers::write_object_and_index;
 use crate::provider::{provider_metadata_synthetic_source, provider_response_is_synthetic};
 use crate::relation::persist_relation_canonical;
 use chrono::Utc;
@@ -10,7 +11,6 @@ use earmark_core::{
     RunRecord, Standing, TransformationFailure, TransitionAssignment, REL_TYPE_REQUESTS_STANDING,
     REL_TYPE_RESULTED_IN_FAILURE,
 };
-use crate::persistence_helpers::write_object_and_index;
 use earmark_index::DerivedIndex;
 use earmark_store::{CanonicalStore, StoredObject, StoredPayload};
 use std::collections::BTreeMap;

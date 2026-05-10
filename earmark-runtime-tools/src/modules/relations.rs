@@ -3,6 +3,7 @@ use crate::modules::surface::RuntimeToolSurface;
 use earmark_core::{
     ObjectId, ObjectRef, Provenance, RelationCreationMode, RelationFilter, RuntimeProvenance,
 };
+use earmark_exec::{persist_relation_canonical, RelationAuthorizationReason};
 use earmark_store::CanonicalStore;
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -32,25 +33,46 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
             &relation_type,
         )?;
 
+        let (endpoint, class_name, direction, auth_endpoint) = match authorization {
+            RelationAuthorizationReason::SourceOutgoingRule { class, .. } => {
+                ("source", class, "outgoing", "source")
+            }
+            RelationAuthorizationReason::TargetIncomingRule { class, .. } => {
+                ("target", class, "incoming", "target")
+            }
+            RelationAuthorizationReason::SourceBidirectionalRule { class, .. } => {
+                ("source", class, "bidirectional", "source")
+            }
+            RelationAuthorizationReason::TargetBidirectionalRule { class, .. } => {
+                ("target", class, "bidirectional", "target")
+            }
+            RelationAuthorizationReason::EitherEndpointSourceRule { class, .. } => {
+                ("source", class, "either", "either_endpoint")
+            }
+            RelationAuthorizationReason::EitherEndpointTargetRule { class, .. } => {
+                ("target", class, "either", "either_endpoint")
+            }
+            RelationAuthorizationReason::PrivilegedSystemRelation { .. } => {
+                ("system", "system".to_string(), "system", "privileged")
+            }
+        };
+
         let mut headers = BTreeMap::new();
         headers.insert(
             "relation_auth_endpoint".to_string(),
-            earmark_core::HeaderValue::String(match authorization.endpoint {
-                crate::modules::relation_rules::AuthorizingEndpoint::Source => "source".to_string(),
-                crate::modules::relation_rules::AuthorizingEndpoint::Target => "target".to_string(),
-            }),
+            earmark_core::HeaderValue::String(endpoint.to_string()),
         );
         headers.insert(
             "relation_auth_class".to_string(),
-            earmark_core::HeaderValue::String(authorization.class_name),
+            earmark_core::HeaderValue::String(class_name),
         );
         headers.insert(
             "relation_auth_authority".to_string(),
-            earmark_core::HeaderValue::String(authorization.authorizing_endpoint),
+            earmark_core::HeaderValue::String(auth_endpoint.to_string()),
         );
         headers.insert(
             "relation_auth_direction".to_string(),
-            earmark_core::HeaderValue::String(authorization.direction),
+            earmark_core::HeaderValue::String(direction.to_string()),
         );
 
         let mut qualifiers = BTreeMap::new();

@@ -195,6 +195,7 @@ pub(crate) fn create_lineage_relations<S: CanonicalStore>(
     inputs: &[ObjectRef],
     instruction_ref: &earmark_core::VersionRef,
 ) -> Result<Vec<ObjectId>, ExecError> {
+    let instruction_stored = store.read_version(instruction_ref)?;
     let mut relation_ids = Vec::new();
     for input in inputs {
         if input.kind != Kind::Object {
@@ -212,7 +213,7 @@ pub(crate) fn create_lineage_relations<S: CanonicalStore>(
             index,
             relation,
             earmark_core::Provenance::direct_input("runtime"),
-            RelationCreationMode::Declared,
+            RelationCreationMode::PrivilegedSystem,
             None,
         )?;
         relation_ids.push(relation_ref.id);
@@ -223,8 +224,8 @@ pub(crate) fn create_lineage_relations<S: CanonicalStore>(
         target: ObjectRef::new(
             instruction_ref.id.clone(),
             instruction_ref.version_id.clone(),
-            Kind::Instruction,
-            None,
+            instruction_stored.envelope.kind.clone(),
+            instruction_stored.envelope.class.clone(),
         ),
         relation_type: REL_TYPE_USED_INSTRUCTION.to_string(),
         qualifiers: std::collections::BTreeMap::new(),

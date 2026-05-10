@@ -313,6 +313,17 @@ fn delegated_transform_output_sets_synthetic_headers() {
         received_at: chrono::Utc::now(),
     };
 
+    let instr_stored = StoredObject::new(
+        Kind::Instruction,
+        Some("instruction".to_string()),
+        earmark_core::Standing::default(),
+        earmark_core::Provenance::direct_input("test"),
+        BTreeMap::new(),
+        StoredPayload::from_markdown("extract"),
+        vec![],
+    );
+    let instr_ref = store.write_object(&instr_stored).unwrap();
+
     let index = DerivedIndex::open(dir.path()).unwrap();
     let artifacts = crate::persistence::create_delegated_transform_output(
         &store,
@@ -320,7 +331,7 @@ fn delegated_transform_output_sets_synthetic_headers() {
         &instruction,
         "finding",
         &[input_obj_ref],
-        &VersionRef::new(ObjectId::new(), VersionId::new()),
+        &instr_ref,
         response,
     )
     .unwrap();
@@ -629,7 +640,7 @@ fn test_privileged_relation_creation_and_validation() {
         &store,
         &index,
         rel_payload,
-        earmark_core::Provenance::direct_input("test"),
+        earmark_core::Provenance::direct_input("runtime"),
         earmark_core::RelationCreationMode::PrivilegedSystem,
         None,
     )

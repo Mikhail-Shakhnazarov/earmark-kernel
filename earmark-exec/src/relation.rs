@@ -25,6 +25,15 @@ pub fn persist_relation_canonical<S: CanonicalStore>(
         )));
     }
 
+    if mode == RelationCreationMode::Declared
+        && earmark_core::is_privileged_relation(&payload.relation_type)
+    {
+        return Err(ExecError::InvalidRelationMode(format!(
+            "relation type '{}' is a privileged system relation and cannot be created in 'declared' mode",
+            payload.relation_type
+        )));
+    }
+
     let mut headers = additional_headers.unwrap_or_default();
 
     // Attach creation mode header

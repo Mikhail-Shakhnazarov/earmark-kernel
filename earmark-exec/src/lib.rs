@@ -8,10 +8,11 @@ pub(crate) mod persistence;
 pub mod persistence_helpers;
 pub mod provider;
 pub mod relation;
+pub mod relation_logic;
 pub(crate) mod resolution;
 pub mod state;
 pub(crate) mod transition;
-pub(crate) mod validation;
+pub mod validation;
 
 // Intended public surface
 pub use engine::ExecutionEngine;
@@ -26,6 +27,10 @@ pub use provider::{
     ProviderService, RetrySleeper, ThreadSleepSleeper,
 };
 pub use relation::persist_relation_canonical;
+pub use relation_logic::{
+    RelationAuthorizationDecision, RelationAuthorizationReason, RelationAuthorizationResolver,
+    RelationEndpointFacts,
+};
 
 // Specialized adapters
 pub mod gemini;
