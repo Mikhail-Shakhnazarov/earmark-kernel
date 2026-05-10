@@ -33,6 +33,7 @@ impl ProviderAdapter for GeminiAdapter {
         &self,
         request: ProviderRequest,
         profile: &ProviderProfile,
+        _transition_operation: &str,
     ) -> Result<ProviderResponse, ProviderFailure> {
         #[cfg(not(feature = "gemini"))]
         {
@@ -195,6 +196,7 @@ impl ProviderAdapter for GeminiAdapter {
                 status: "success".to_string(),
                 candidate_payload: candidate_text,
                 metadata: BTreeMap::new(),
+                advisory_warnings: vec![],
                 usage,
                 received_at: Utc::now(),
             })

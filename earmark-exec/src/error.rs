@@ -9,6 +9,7 @@ pub enum ProviderFailureKind {
     Timeout,
     MalformedResponse,
     PolicyViolation,
+    ForbiddenOperation,
     AdapterNotRegistered,
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -61,6 +62,10 @@ pub enum ExecError {
     Index(#[from] earmark_index::IndexError),
     #[error("project error: {0}")]
     Project(#[from] earmark_connected_context::ProjectError),
+    #[error("governance operation error: {0}")]
+    GovernanceOperation(String),
+    #[error("handoff reconstruction error: {0}")]
+    HandoffReconstruction(String),
     #[error("governance error: {0}")]
     Governance(#[from] earmark_governance::GovernanceError),
     #[error("core error: {0}")]

@@ -23,3 +23,4 @@ gemini = ["dep:reqwest"]
 [dev-dependencies]
 tempfile.workspace = true
 earmark-runtime-tools = { path = "../earmark-runtime-tools" }
+earmark-declarations = { path = "../earmark-declarations" }

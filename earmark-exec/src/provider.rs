@@ -58,6 +58,7 @@ pub trait ProviderAdapter: Send + Sync {
         &self,
         request: ProviderRequest,
         profile: &ProviderProfile,
+        transition_operation: &str,
     ) -> Result<ProviderResponse, ProviderFailure>;
 
     fn capability(&self) -> ProviderCapability {
@@ -77,6 +78,7 @@ pub trait ProviderService: Send + Sync {
         &self,
         profile: &ProviderProfile,
         request: ProviderRequest,
+        transition_operation: &str,
     ) -> Result<ProviderExecutionOutcome, ProviderFailure>;
 }
 
@@ -86,6 +88,7 @@ pub trait AsyncProviderAdapter: Send + Sync {
         &self,
         request: ProviderRequest,
         profile: &ProviderProfile,
+        transition_operation: &str,
     ) -> Result<ProviderResponse, ProviderFailure>;
 }
 
@@ -94,6 +97,7 @@ pub trait AsyncProviderService: Send + Sync {
         &self,
         profile: &ProviderProfile,
         request: ProviderRequest,
+        transition_operation: &str,
     ) -> Result<ProviderExecutionOutcome, ProviderFailure>;
 }
 
@@ -107,8 +111,9 @@ impl ProviderService for ProviderRegistry {
         &self,
         profile: &ProviderProfile,
         request: ProviderRequest,
+        transition_operation: &str,
     ) -> Result<ProviderExecutionOutcome, ProviderFailure> {
-        provide_with_registry(self, profile, request)
+        provide_with_registry(self, profile, request, transition_operation)
     }
 }
 
@@ -117,8 +122,9 @@ impl AsyncProviderService for ProviderRegistry {
         &self,
         profile: &ProviderProfile,
         request: ProviderRequest,
+        transition_operation: &str,
     ) -> Result<ProviderExecutionOutcome, ProviderFailure> {
-        provide_with_registry(self, profile, request)
+        provide_with_registry(self, profile, request, transition_operation)
     }
 }
 
@@ -226,6 +232,7 @@ impl ProviderAdapter for MockAdapter {
         &self,
         request: ProviderRequest,
         profile: &ProviderProfile,
+        _transition_operation: &str,
     ) -> Result<ProviderResponse, ProviderFailure> {
         if profile.model == "fail" {
             return Err(ProviderFailure::new(
@@ -258,10 +265,93 @@ impl ProviderAdapter for MockAdapter {
             status: "completed".to_string(),
             candidate_payload: "[SYNTHETIC MOCK OUTPUT] Fixture response for extraction/synthesis tests. Federated graphs provide agile ownership but introduce heterogeneity costs.".to_string(),
             metadata,
+            advisory_warnings: vec![],
             usage: None,
             received_at: Utc::now(),
         })
     }
+}
+
+pub struct ProviderPolicyDecision {
+    pub advisory_warnings: Vec<String>,
+}
+
+pub(crate) fn validate_provider_invocation(
+    profile: &ProviderProfile,
+    transition_operation: &str,
+    request: &ProviderRequest,
+) -> Result<ProviderPolicyDecision, ProviderFailure> {
+    let mut warnings = Vec::new();
+
+    // 1. Allowed operations
+    if profile.allowed_operations.is_empty() {
+        return Err(ProviderFailure::new(
+            ProviderFailureKind::ForbiddenOperation,
+            format!(
+                "Provider profile '{}' does not allow any operations (allowed_operations is empty).",
+                profile.name
+            ),
+        ));
+    }
+    if !profile.allowed_operations.contains(&transition_operation.to_string()) {
+        return Err(ProviderFailure::new(
+            ProviderFailureKind::ForbiddenOperation,
+            format!(
+                "Provider profile '{}' does not allow operation '{}'. Allowed: {:?}",
+                profile.name, transition_operation, profile.allowed_operations
+            ),
+        ));
+    }
+
+    // 2. Exposure policies
+    if profile.exposure.allow_work_surface_only && request.work_surface_manifest.is_none() {
+        return Err(ProviderFailure::new(
+            ProviderFailureKind::ForbiddenOperation,
+            format!(
+                "Provider profile '{}' requires work_surface_only, but no work surface manifest was provided.",
+                profile.name
+            ),
+        ));
+    }
+
+    if !profile.exposure.allow_prose_objects {
+        warnings.push("Advisory: allow_prose_objects is false, but prose payload filtering is not yet enforced in this path.".to_string());
+    }
+    if !profile.exposure.allow_structured_declarations {
+        warnings.push("Advisory: allow_structured_declarations is false, but declaration filtering is not yet enforced in this path.".to_string());
+    }
+    if !profile.exposure.allow_export_requests && transition_operation == "export" {
+        return Err(ProviderFailure::new(
+            ProviderFailureKind::ForbiddenOperation,
+            format!(
+                "Provider profile '{}' disallows export requests.",
+                profile.name
+            ),
+        ));
+    }
+
+    // 3. Budgets (Advisory)
+    if profile.budget.max_input_tokens.is_some() {
+        warnings.push("Advisory: max_input_tokens budget is not yet enforced.".to_string());
+    }
+    if profile.budget.max_output_tokens.is_some() {
+        warnings.push("Advisory: max_output_tokens budget is not yet enforced.".to_string());
+    }
+    if profile.budget.max_cost_usd.is_some() {
+        warnings.push("Advisory: max_cost_usd budget is not yet enforced.".to_string());
+    }
+
+    // 4. Response Contract (Advisory)
+    if profile.response_contract.must_include_lineage {
+        warnings.push("Advisory: must_include_lineage is true, but lineage capture is not yet enforced by all adapters.".to_string());
+    }
+    if !profile.response_contract.must_return_candidate_only {
+        warnings.push("Advisory: must_return_candidate_only is false, but full message capture is not yet supported in this path.".to_string());
+    }
+
+    Ok(ProviderPolicyDecision {
+        advisory_warnings: warnings,
+    })
 }
 
 #[derive(Debug, Clone)]
@@ -320,14 +410,16 @@ pub fn provide_with_registry(
     registry: &ProviderRegistry,
     profile: &ProviderProfile,
     request: ProviderRequest,
+    transition_operation: &str,
 ) -> Result<ProviderExecutionOutcome, ProviderFailure> {
-    provide_with_registry_and_sleeper(registry, profile, request, &ThreadSleepSleeper)
+    provide_with_registry_and_sleeper(registry, profile, request, transition_operation, &ThreadSleepSleeper)
 }
 
 pub fn provide_with_registry_and_sleeper(
     registry: &ProviderRegistry,
     profile: &ProviderProfile,
     request: ProviderRequest,
+    transition_operation: &str,
     sleeper: &dyn RetrySleeper,
 ) -> Result<ProviderExecutionOutcome, ProviderFailure> {
     let circuit_key = provider_circuit_key(&request, profile);
@@ -355,6 +447,9 @@ pub fn provide_with_registry_and_sleeper(
         )
     })?;
 
+    // Policy Gate
+    let policy_decision = validate_provider_invocation(profile, transition_operation, &request)?;
+
     let mut effective_profile = profile.clone();
     if effective_profile.budget.max_latency_ms.is_none() {
         effective_profile.budget.max_latency_ms = Some(30_000);
@@ -364,7 +459,7 @@ pub fn provide_with_registry_and_sleeper(
     let mut last_error: Option<ProviderFailure> = None;
     let mut response: Option<ProviderResponse> = None;
     for attempt in 0..3 {
-        match adapter.provide(request.clone(), &effective_profile) {
+        match adapter.provide(request.clone(), &effective_profile, transition_operation) {
             Ok(resp) => {
                 match validate_provider_response(&resp, &effective_profile.response_contract) {
                     Ok(()) => {
@@ -413,6 +508,11 @@ pub fn provide_with_registry_and_sleeper(
             return Err(err);
         }
     };
+
+    // Merge advisory warnings
+    let mut final_warnings = policy_decision.advisory_warnings;
+    final_warnings.extend(response.advisory_warnings.clone());
+
     {
         let mut lock = provider_circuit_registry().lock().map_err(|_| {
             ProviderFailure::new(
@@ -422,7 +522,8 @@ pub fn provide_with_registry_and_sleeper(
         })?;
         lock.remove(&circuit_key);
     }
-    let record = provider_record_from_response(&request, profile, &response, None);
+    let mut record = provider_record_from_response(&request, profile, &response, None);
+    record.advisory_warnings = final_warnings;
     Ok(ProviderExecutionOutcome {
         response: Some(response),
         record,
@@ -460,6 +561,16 @@ pub fn provider_record_from_response(
     response: &ProviderResponse,
     message: Option<String>,
 ) -> ProviderRecord {
+    let mut metadata = response.metadata.clone();
+    if profile.provider == "mock" {
+        metadata.insert("synthetic".to_string(), ScalarValue::Bool(true));
+        metadata.insert(
+            "synthetic_source".to_string(),
+            ScalarValue::String("mock_provider".to_string()),
+        );
+        metadata.insert("production_eligible".to_string(), ScalarValue::Bool(false));
+    }
+
     ProviderRecord {
         record_id: format!("prec_{}", uuid_like()),
         request_id: request.request_id.clone(),
@@ -469,7 +580,8 @@ pub fn provider_record_from_response(
         provider: profile.provider.clone(),
         model: profile.model.clone(),
         status: response.status.clone(),
-        metadata: response.metadata.clone(),
+        metadata,
+        advisory_warnings: response.advisory_warnings.clone(),
         usage: response.usage.clone(),
         message,
         recorded_at: Utc::now(),
@@ -500,6 +612,7 @@ pub fn provider_record_from_failure(
         model: profile.model.clone(),
         status: format!("{:?}", failure.kind).to_lowercase(),
         metadata,
+        advisory_warnings: vec![],
         usage: None,
         message: Some(failure.message.clone()),
         recorded_at: Utc::now(),

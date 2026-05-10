@@ -838,6 +838,7 @@ pub struct WorkPacket {
     pub constraints: WorkPacketConstraints,
     pub expected_outputs: Vec<String>,
     pub work_surface: Option<WorkSurfaceRef>,
+    pub advisory_warnings: Vec<String>,
     pub created_at: Timestamp,
 }
 
@@ -877,6 +878,7 @@ pub struct ProviderResponse {
     pub status: String,
     pub candidate_payload: String,
     pub metadata: BTreeMap<String, ScalarValue>,
+    pub advisory_warnings: Vec<String>,
     pub usage: Option<ProviderUsage>,
     pub received_at: Timestamp,
 }
@@ -899,8 +901,8 @@ pub struct ProviderRecord {
     pub provider: String,
     pub model: String,
     pub status: String,
-    #[serde(default)]
     pub metadata: BTreeMap<String, ScalarValue>,
+    pub advisory_warnings: Vec<String>,
     pub usage: Option<ProviderUsage>,
     pub message: Option<String>,
     pub recorded_at: Timestamp,
@@ -1193,8 +1195,10 @@ pub struct StandingTransitionRequest {
 #[serde(rename_all = "snake_case")]
 pub enum StandingRequestStatus {
     Proposed,
-    Accepted,
+    Approved,
     Rejected,
+    Applied,
+    Superseded,
 }
 
 pub fn validate_standing_request(request: &StandingTransitionRequest) -> Result<(), String> {

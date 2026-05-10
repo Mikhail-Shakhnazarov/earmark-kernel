@@ -97,7 +97,7 @@ pub(crate) fn record_transition(
     });
 }
 
-pub(crate) fn work_packet_from_compiled_context(
+pub fn work_packet_from_compiled_context(
     request: &WorkflowRunRequest,
     transition: &ExecutionTransition,
     manifest: &WorkSurfaceManifest,
@@ -125,6 +125,7 @@ pub(crate) fn work_packet_from_compiled_context(
             ),
             render_mode: "prose".to_string(), // Default
         }),
+        advisory_warnings: vec![],
         created_at: Utc::now(),
     }
 }

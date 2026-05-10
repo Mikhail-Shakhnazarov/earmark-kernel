@@ -23,6 +23,7 @@ impl ProviderAdapter for MockAdapter {
         &self,
         request: ProviderRequest,
         _profile: &earmark_core::ProviderProfile,
+        _transition_operation: &str,
     ) -> Result<ProviderResponse, ProviderFailure> {
         Ok(ProviderResponse {
             request_id: request.request_id,
@@ -31,6 +32,7 @@ impl ProviderAdapter for MockAdapter {
             status: "success".to_string(),
             candidate_payload: "Mocked candidate response".to_string(),
             metadata: BTreeMap::new(),
+            advisory_warnings: vec![],
             usage: Some(ProviderUsage {
                 input_tokens: Some(100),
                 output_tokens: Some(50),

@@ -60,6 +60,7 @@ impl ProviderService for NoopProviderService {
         &self,
         _profile: &earmark_core::ProviderProfile,
         _request: earmark_core::ProviderRequest,
+        _transition_operation: &str,
     ) -> Result<ProviderExecutionOutcome, ProviderFailure> {
         Err(ProviderFailure::new(
             crate::error::ProviderFailureKind::ProviderUnavailable,
@@ -104,6 +105,7 @@ impl ProviderService for BrokenProvider {
         &self,
         _profile: &earmark_core::ProviderProfile,
         _request: earmark_core::ProviderRequest,
+        _transition_operation: &str,
     ) -> Result<ProviderExecutionOutcome, ProviderFailure> {
         Ok(ProviderExecutionOutcome {
             response: None,
@@ -122,6 +124,7 @@ impl ProviderService for BrokenProvider {
                 model: "broken".to_string(),
                 status: "ok".to_string(),
                 metadata: std::collections::BTreeMap::new(),
+                advisory_warnings: vec![],
                 usage: None,
                 message: None,
                 recorded_at: chrono::Utc::now(),
@@ -177,7 +180,7 @@ fn mock_adapter_provide_sets_synthetic_metadata() {
         response_contract: request.response_contract.clone(),
     };
 
-    let response = adapter.provide(request, &profile).expect("mock response");
+    let response = adapter.provide(request, &profile, "transform").expect("mock response");
     assert!(provider_response_is_synthetic(&response));
     assert_eq!(
         response.metadata.get("synthetic"),
@@ -243,14 +246,9 @@ fn provider_record_from_response_preserves_synthetic_metadata() {
         provider: "mock".to_string(),
         model: "echo".to_string(),
         status: "completed".to_string(),
-        candidate_payload: "fixture".to_string(),
-        metadata: std::collections::BTreeMap::from([
-            ("synthetic".to_string(), ScalarValue::Bool(true)),
-            (
-                "synthetic_source".to_string(),
-                ScalarValue::String("mock_provider".to_string()),
-            ),
-        ]),
+        candidate_payload: "{}".to_string(),
+        metadata: BTreeMap::new(),
+        advisory_warnings: vec![],
         usage: None,
         received_at: chrono::Utc::now(),
     };
@@ -309,6 +307,7 @@ fn delegated_transform_output_sets_synthetic_headers() {
             ),
             ("production_eligible".to_string(), ScalarValue::Bool(false)),
         ]),
+        advisory_warnings: vec![],
         usage: None,
         received_at: chrono::Utc::now(),
     };
@@ -474,7 +473,8 @@ fn test_delegated_outcome_with_none_response_returns_error_instead_of_panicking(
         generated_at: chrono::Utc::now(),
         objects: vec![],
         boundary_relations: vec![],
-        constraints: std::collections::BTreeMap::new(),
+        constraints: BTreeMap::new(),
+        warnings: vec![],
     });
 
     let mut state = crate::state::ExecutionState {

@@ -7,7 +7,7 @@ use crate::config::{load_config, resolve_json, resolve_root, resolve_system_id};
 use crate::output;
 use clap_complete::{generate, shells};
 use earmark_core::{
-    EpistemicStanding, HeaderValue, Kind, ObjectRef, Provenance, Standing, VersionRef,
+    EpistemicStanding, HeaderValue, Kind, ObjectId, ObjectRef, Provenance, Standing, VersionRef,
 };
 use earmark_declarations::{
     load_class_definition, load_compiled_context_template, load_instruction, load_provider_profile,
@@ -947,6 +947,129 @@ pub fn run(cli: Cli) -> Result<(), CliError> {
                     emit(as_json, serde_json::to_value(relations)?);
                 }
             },
+            Commands::StandingRequest(command) => match command.action {
+                StandingRequestAction::List { status, target } => {
+                    let index = index.as_ref().unwrap();
+                    let mut requests = Vec::new();
+                    let objects = index.get_objects_by_kind(Kind::Object)?;
+                    for obj_ref in objects {
+                        let obj = store.read_version(&obj_ref)?;
+                        if obj.envelope.class.as_deref() == Some("standing_transition_request") {
+                            let request: earmark_core::StandingTransitionRequest =
+                                serde_json::from_slice(&obj.payload.bytes)?;
+                            if let Some(status_str) = &status {
+                                if format!("{:?}", request.status).to_lowercase()
+                                    != status_str.to_lowercase()
+                                {
+                                    continue;
+                                }
+                            }
+                            if let Some(target_id) = &target {
+                                if request.target_object_id.as_str() != target_id {
+                                    continue;
+                                }
+                            }
+                            requests.push(json!({
+                                "id": obj.envelope.id.as_str(),
+                                "version_id": obj.envelope.version_id.as_str(),
+                                "request": request
+                            }));
+                        }
+                    }
+                    emit(as_json, serde_json::to_value(requests)?);
+                }
+                StandingRequestAction::Show { request_id } => {
+                    let index = index.as_ref().unwrap();
+                    let id = ObjectId::parse(&request_id)
+                        .map_err(|e| CliError::argument(e.to_string()))?;
+                    let head_ref = index
+                        .get_head(&id)?
+                        .ok_or_else(|| CliError::not_found(format!("request {}", request_id)))?;
+                    let obj = store.read_version(&head_ref)?;
+                    let request: earmark_core::StandingTransitionRequest =
+                        serde_json::from_slice(&obj.payload.bytes)?;
+                    emit(
+                        as_json,
+                        json!({
+                            "id": obj.envelope.id.as_str(),
+                            "version_id": obj.envelope.version_id.as_str(),
+                            "request": request
+                        }),
+                    );
+                }
+                StandingRequestAction::Approve { request_id, reason } => {
+                    let index = index.as_ref().unwrap();
+                    let id = ObjectId::parse(&request_id)
+                        .map_err(|e| CliError::argument(e.to_string()))?;
+                    let head_ref = index
+                        .get_head(&id)?
+                        .ok_or_else(|| CliError::not_found(format!("request {}", request_id)))?;
+                    let new_version = earmark_exec::governance_ops::approve_standing_request(
+                        &store, index, &head_ref, reason,
+                    )?;
+                    emit(
+                        as_json,
+                        json!({
+                            "ok": true,
+                            "request_id": request_id,
+                            "new_version_id": new_version.version_id.as_str(),
+                            "status": "approved"
+                        }),
+                    );
+                }
+                StandingRequestAction::Reject { request_id, reason } => {
+                    let index = index.as_ref().unwrap();
+                    let id = ObjectId::parse(&request_id)
+                        .map_err(|e| CliError::argument(e.to_string()))?;
+                    let head_ref = index
+                        .get_head(&id)?
+                        .ok_or_else(|| CliError::not_found(format!("request {}", request_id)))?;
+                    let new_version = earmark_exec::governance_ops::reject_standing_request(
+                        &store, index, &head_ref, reason,
+                    )?;
+                    emit(
+                        as_json,
+                        json!({
+                            "ok": true,
+                            "request_id": request_id,
+                            "new_version_id": new_version.version_id.as_str(),
+                            "status": "rejected"
+                        }),
+                    );
+                }
+                StandingRequestAction::Apply {
+                    request_id,
+                    policy,
+                    reason,
+                } => {
+                    let index = index.as_ref().unwrap();
+                    let id = ObjectId::parse(&request_id)
+                        .map_err(|e| CliError::argument(e.to_string()))?;
+                    let head_ref = index
+                        .get_head(&id)?
+                        .ok_or_else(|| CliError::not_found(format!("request {}", request_id)))?;
+
+                    let (target_ref, request_ref) = earmark_exec::governance_ops::apply_standing_request(
+                        &store,
+                        index,
+                        &head_ref,
+                        policy.as_deref(),
+                        reason,
+                    )?;
+
+                    emit(
+                        as_json,
+                        json!({
+                            "ok": true,
+                            "request_id": request_id,
+                            "new_request_version_id": request_ref.version_id.as_str(),
+                            "target_id": target_ref.id.as_str(),
+                            "new_target_version_id": target_ref.version_id.as_str(),
+                            "status": "applied"
+                        }),
+                    );
+                }
+            },
         }
         Ok(())
     })();
@@ -989,6 +1112,14 @@ fn workspace_access_mode(command: &Commands) -> WorkspaceAccessMode {
         Commands::Report(_) => WorkspaceAccessMode::Write,
         Commands::Provider(_) => WorkspaceAccessMode::None,
         Commands::Relation(_) => WorkspaceAccessMode::ReadOnly,
+        Commands::StandingRequest(command) => match command.action {
+            StandingRequestAction::List { .. } | StandingRequestAction::Show { .. } => {
+                WorkspaceAccessMode::ReadOnly
+            }
+            StandingRequestAction::Approve { .. }
+            | StandingRequestAction::Reject { .. }
+            | StandingRequestAction::Apply { .. } => WorkspaceAccessMode::Write,
+        },
     }
 }
 
@@ -1022,6 +1153,7 @@ fn command_family_name(command: &Commands) -> &'static str {
         Commands::Completions { .. } => "completions",
         Commands::Status => "status",
         Commands::Relation(_) => "relation",
+        Commands::StandingRequest(_) => "standing-request",
     }
 }
 

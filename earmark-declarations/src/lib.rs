@@ -161,6 +161,12 @@ pub fn validate_workflow_definition(value: &WorkflowDefinition) -> Result<(), De
                 op.id
             )));
         }
+        if op.kind == "transform" && op.output_contracts.len() > 1 {
+            return Err(DeriveError::Validation(format!(
+                "multi-output transform operations are not implemented; declare one output contract for operation '{}'",
+                op.id
+            )));
+        }
     }
     let mut guard_ids = std::collections::BTreeSet::new();
     for guard in &value.guards {

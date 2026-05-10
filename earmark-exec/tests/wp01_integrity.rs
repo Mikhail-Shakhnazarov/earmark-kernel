@@ -1,5 +1,5 @@
 use earmark_connected_context::DEFAULT_COMPILED_CONTEXT_COMPILER;
-use earmark_core::{Kind, ObjectId, ObjectRef, RunRecord};
+use earmark_core::{Kind, ObjectId, RunRecord};
 use earmark_exec::engine::ExecutionEngine;
 use earmark_exec::helpers::store_work_packet;
 use earmark_exec::ir::{ExecutionIr, ExecutionTransition, WorkflowRunRequest};
@@ -130,6 +130,7 @@ fn test_immediate_index_visibility_in_transition() {
         },
         expected_outputs: vec![],
         work_surface: None,
+        advisory_warnings: vec![],
         created_at: chrono::Utc::now(),
     };
 
@@ -159,6 +160,7 @@ fn test_live_transition_indexing() {
             &self,
             _: &earmark_core::ProviderProfile,
             _: earmark_core::ProviderRequest,
+            _: &str,
         ) -> Result<ProviderExecutionOutcome, earmark_exec::error::ProviderFailure> {
             unimplemented!()
         }

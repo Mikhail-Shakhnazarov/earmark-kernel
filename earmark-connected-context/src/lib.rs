@@ -26,6 +26,8 @@ pub struct WorkSurfaceManifest {
     #[serde(default)]
     pub boundary_relations: Vec<WorkSurfaceBoundaryRelation>,
     pub constraints: BTreeMap<String, ScalarValue>,
+    #[serde(default)]
+    pub warnings: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -55,11 +57,13 @@ pub struct CompiledContextPlan {
     pub relation_expansion_count: usize,
     pub boundary_relation_count: usize,
     pub grouped_by: Vec<String>,
+    pub warnings: Vec<String>,
 }
 
 struct CompiledContextSelection {
     objects: Vec<ObjectSummary>,
     boundary_relations: Vec<BoundaryRelationCandidate>,
+    warnings: Vec<String>,
 }
 
 struct BoundaryRelationCandidate {
@@ -121,6 +125,7 @@ impl CompiledContextService {
             relation_expansion_count: template.select.relations.len(),
             boundary_relation_count: selection.boundary_relations.len(),
             grouped_by: template.group_by,
+            warnings: selection.warnings,
         })
     }
 
@@ -254,6 +259,7 @@ impl CompiledContextService {
             objects,
             boundary_relations,
             constraints,
+            warnings: selection.warnings,
         };
 
         fs::write(
@@ -310,6 +316,11 @@ fn collect_selection<S: CanonicalStore>(
     let mut selected = Vec::new();
     let mut seen = BTreeSet::new();
     let mut boundary_relations = Vec::new();
+    let mut warnings = Vec::new();
+
+    if !enforce_expansion_object_filter && (!template.select.classes.is_empty() || !template.select.standing.is_empty()) {
+        warnings.push("Unfiltered expansion is active while seed class/standing filters are present. Expanded objects will bypass these filters.".to_string());
+    }
 
     let seed_queries: Vec<Option<String>> = if template.select.classes.is_empty() {
         vec![None]
@@ -422,6 +433,7 @@ fn collect_selection<S: CanonicalStore>(
     Ok(CompiledContextSelection {
         objects: selected,
         boundary_relations,
+        warnings,
     })
 }
 
@@ -562,6 +574,7 @@ mod tests {
             }],
             boundary_relations: vec![],
             constraints: BTreeMap::new(),
+            warnings: vec![],
         };
         assert_eq!(
             CompiledContextService::cli_summary(&manifest),
@@ -921,6 +934,9 @@ mod tests {
             .collect::<BTreeSet<_>>();
         assert!(ids.contains(accepted.envelope.id.as_str()));
         assert!(ids.contains(rejected.envelope.id.as_str()));
+
+        assert!(!selection.warnings.is_empty());
+        assert!(selection.warnings[0].contains("Unfiltered expansion is active"));
     }
 
     #[test]
