@@ -53,6 +53,7 @@ pub struct QueryFilter {
     pub object_id: Option<String>,
 }
 
+#[derive(Debug)]
 pub struct DerivedIndex {
     conn: Connection,
     path: PathBuf,
@@ -761,6 +762,18 @@ impl DerivedIndex {
             self.conn
                 .query_row("SELECT COUNT(*) FROM active_systems", [], |row| row.get(0))?;
         Ok((objects, active_systems))
+    }
+
+    pub fn object_count(&self) -> Result<u64, IndexError> {
+        Ok(self
+            .conn
+            .query_row("SELECT COUNT(*) FROM objects", [], |row| row.get(0))?)
+    }
+
+    pub fn head_count(&self) -> Result<u64, IndexError> {
+        Ok(self
+            .conn
+            .query_row("SELECT COUNT(*) FROM heads", [], |row| row.get(0))?)
     }
 
     pub fn relation_count(&self) -> Result<u64, IndexError> {

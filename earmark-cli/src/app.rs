@@ -104,27 +104,54 @@ pub fn run(cli: Cli) -> Result<(), CliError> {
                     return Ok(());
                 }
 
-                let store_scan_ok = store.scan_objects().is_ok();
-                let index_exists = store
+                let store_scan = store.scan_objects();
+                let store_scan_ok = store_scan.is_ok();
+                let canonical_count = store_scan.as_ref().map(|v| v.len() as u64).unwrap_or(0);
+
+                let index_path = store
                     .root()
                     .join(".earmark")
                     .join("derived")
-                    .join("index.sqlite")
-                    .exists();
-                let index_open_ok = if index_exists {
-                    DerivedIndex::open_existing(store.root()).is_ok()
-                } else {
-                    false
-                };
-                let all_ok = store_scan_ok && index_open_ok;
-                let warnings = if all_ok {
-                    vec![]
-                } else {
-                    vec![
-                        "one or more workspace health checks failed; review check results"
+                    .join("index.sqlite");
+                let index_exists = index_path.exists();
+                let mut warnings: Vec<String> = Vec::new();
+                let mut all_ok = store_scan_ok;
+
+                let (index_open_ok, indexed_count, indexed_head_count, counts_match) =
+                    if index_exists {
+                        match DerivedIndex::open_existing(store.root()) {
+                            Ok(idx) => {
+                                let obj_count = idx.object_count().unwrap_or(0);
+                                let head_count = idx.head_count().unwrap_or(0);
+                                let match_ok = obj_count == canonical_count;
+                                if !match_ok {
+                                    warnings.push(format!(
+                                        "store/index count mismatch: {} canonical objects vs {} indexed objects",
+                                        canonical_count, obj_count
+                                    ));
+                                }
+                                all_ok = all_ok && match_ok;
+                                (true, obj_count, head_count, match_ok)
+                            }
+                            Err(e) => {
+                                warnings.push(format!("index open failed: {}", e));
+                                all_ok = false;
+                                (false, 0, 0, false)
+                            }
+                        }
+                    } else {
+                        warnings.push("derived index is missing; run a write command or system register to rebuild it".to_string());
+                        all_ok = false;
+                        (false, 0, 0, false)
+                    };
+
+                if !store_scan_ok {
+                    warnings.push(
+                        "canonical store scan failed; review .earmark/canonical for corruption"
                             .to_string(),
-                    ]
-                };
+                    );
+                }
+
                 emit(
                     as_json,
                     json!({
@@ -133,14 +160,27 @@ pub fn run(cli: Cli) -> Result<(), CliError> {
                         "root": store.root().display().to_string(),
                         "layout": layout,
                         "store_scan_ok": store_scan_ok,
+                        "canonical_object_count": canonical_count,
                         "index_exists": index_exists,
                         "index_open_ok": index_open_ok,
+                        "indexed_object_count": indexed_count,
+                        "indexed_head_count": indexed_head_count,
+                        "counts_match": counts_match,
                         "provider_capabilities": earmark_exec::compiled_provider_capabilities(),
                         "warnings": warnings,
                         "next_commands": if all_ok {
                             vec!["em status", "em run list"]
                         } else {
-                            vec!["em init", "em status"]
+                            let mut cmds = Vec::new();
+                            if !layout.is_initialized() {
+                                cmds.push("em init");
+                            }
+                            if !index_exists || !index_open_ok || !counts_match {
+                                cmds.push("em system register <manifest>");
+                                cmds.push("no standalone index rebuild command exists yet; system registration triggers a full rebuild");
+                            }
+                            cmds.push("em status");
+                            cmds
                         },
                     }),
                 );
