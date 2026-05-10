@@ -783,8 +783,8 @@ impl DerivedIndex {
         for row in rows {
             let (oid, vid) = row?;
             results.push(VersionRef::new(
-                ObjectId::parse(oid).map_err(|e| IndexError::Core(e))?,
-                earmark_core::VersionId::parse(vid).map_err(|e| IndexError::Core(e))?,
+                ObjectId::parse(oid).map_err(IndexError::Core)?,
+                earmark_core::VersionId::parse(vid).map_err(IndexError::Core)?,
             ));
         }
         Ok(results)
