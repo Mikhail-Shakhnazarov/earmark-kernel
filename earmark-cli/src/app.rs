@@ -1049,13 +1049,14 @@ pub fn run(cli: Cli) -> Result<(), CliError> {
                         .get_head(&id)?
                         .ok_or_else(|| CliError::not_found(format!("request {}", request_id)))?;
 
-                    let (target_ref, request_ref) = earmark_exec::governance_ops::apply_standing_request(
-                        &store,
-                        index,
-                        &head_ref,
-                        policy.as_deref(),
-                        reason,
-                    )?;
+                    let (target_ref, request_ref) =
+                        earmark_exec::governance_ops::apply_standing_request(
+                            &store,
+                            index,
+                            &head_ref,
+                            policy.as_deref(),
+                            reason,
+                        )?;
 
                     emit(
                         as_json,

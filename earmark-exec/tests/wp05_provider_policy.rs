@@ -1,19 +1,19 @@
+use earmark_connected_context::DEFAULT_COMPILED_CONTEXT_COMPILER;
 use earmark_core::{
     Kind, ObjectId, ObjectRef, ProviderBudget, ProviderExposure, ProviderProfile, ProviderRequest,
-    ProviderResponseContract, ScalarValue, VersionId, VersionRef, RunRecord, RunStatus,
-    SystemDefinition, RuntimeProfile,
+    ProviderResponseContract, RunRecord, RunStatus, RuntimeProfile, ScalarValue, SystemDefinition,
+    VersionId, VersionRef,
 };
 use earmark_exec::{
-    default_provider_registry, provide_with_registry, ProviderFailureKind,
-    WorkflowRunRequest, ExecutionTransition, ProviderService, ProviderExecutionOutcome, 
-    ProviderFailure, provider_record_from_response, engine::ExecutionEngine,
-    ir::ExecutionIr, state::ExecutionState,
+    default_provider_registry, engine::ExecutionEngine, ir::ExecutionIr, provide_with_registry,
+    provider_record_from_response, state::ExecutionState, ExecutionTransition,
+    ProviderExecutionOutcome, ProviderFailure, ProviderFailureKind, ProviderService,
+    WorkflowRunRequest,
 };
+use earmark_index::DerivedIndex;
+use earmark_store::{CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload};
 use std::collections::BTreeMap;
 use tempfile::tempdir;
-use earmark_store::{GitCanonicalStore, CanonicalStore, StoredObject, StoredPayload};
-use earmark_index::DerivedIndex;
-use earmark_connected_context::DEFAULT_COMPILED_CONTEXT_COMPILER;
 
 fn setup_env() -> (GitCanonicalStore, DerivedIndex) {
     let dir = tempdir().unwrap();
@@ -81,7 +81,10 @@ fn test_allowed_operations_blocking() {
     let profile = mock_profile(vec!["transform"]);
     let result = provide_with_registry(&registry, &profile, request.clone(), "export");
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err().kind, ProviderFailureKind::ForbiddenOperation);
+    assert_eq!(
+        result.unwrap_err().kind,
+        ProviderFailureKind::ForbiddenOperation
+    );
 
     // 2. Allowed operation
     let result = provide_with_registry(&registry, &profile, request.clone(), "transform");
@@ -91,7 +94,10 @@ fn test_allowed_operations_blocking() {
     let profile_empty = mock_profile(vec![]);
     let result = provide_with_registry(&registry, &profile_empty, request.clone(), "transform");
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err().kind, ProviderFailureKind::ForbiddenOperation);
+    assert_eq!(
+        result.unwrap_err().kind,
+        ProviderFailureKind::ForbiddenOperation
+    );
 }
 
 #[test]
@@ -104,7 +110,10 @@ fn test_exposure_work_surface_only_enforcement() {
     let request_no_surface = mock_request();
     let result = provide_with_registry(&registry, &profile, request_no_surface, "transform");
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err().kind, ProviderFailureKind::ForbiddenOperation);
+    assert_eq!(
+        result.unwrap_err().kind,
+        ProviderFailureKind::ForbiddenOperation
+    );
 
     // 2. Request with work surface manifest
     let mut request_with_surface = mock_request();
@@ -117,28 +126,38 @@ fn test_exposure_work_surface_only_enforcement() {
 fn test_advisory_warnings_for_unmeasurable_fields() {
     let registry = default_provider_registry();
     let mut profile = mock_profile(vec!["transform"]);
-    
+
     // Set some unmeasurable/unsupported fields
     profile.exposure.allow_prose_objects = false;
     profile.budget.max_input_tokens = Some(1000);
-    
+
     let outcome = provide_with_registry(&registry, &profile, mock_request(), "transform").unwrap();
-    
+
     let warnings = outcome.record.advisory_warnings;
-    assert!(warnings.iter().any(|w| w.contains("allow_prose_objects is false")));
-    assert!(warnings.iter().any(|w| w.contains("max_input_tokens budget is not yet enforced")));
+    assert!(warnings
+        .iter()
+        .any(|w| w.contains("allow_prose_objects is false")));
+    assert!(warnings
+        .iter()
+        .any(|w| w.contains("max_input_tokens budget is not yet enforced")));
 }
 
 #[test]
 fn test_synthetic_marking_integrity() {
     let registry = default_provider_registry();
     let profile = mock_profile(vec!["transform"]);
-    
+
     // Even if a provider tries to claim production_eligible: true, the gate should force it to false for mock
     let outcome = provide_with_registry(&registry, &profile, mock_request(), "transform").unwrap();
-    
-    assert_eq!(outcome.record.metadata.get("synthetic"), Some(&ScalarValue::Bool(true)));
-    assert_eq!(outcome.record.metadata.get("production_eligible"), Some(&ScalarValue::Bool(false)));
+
+    assert_eq!(
+        outcome.record.metadata.get("synthetic"),
+        Some(&ScalarValue::Bool(true))
+    );
+    assert_eq!(
+        outcome.record.metadata.get("production_eligible"),
+        Some(&ScalarValue::Bool(false))
+    );
 }
 
 #[test]
@@ -187,9 +206,9 @@ fn test_work_packet_honest_constraints() {
         vec![],
     );
 
-    // VERIFY: the helper preserves what it's given. 
+    // VERIFY: the helper preserves what it's given.
     // This test ensures the WorkPacket structure is correctly populated.
-    assert_eq!(work_packet.constraints.export_permitted, true); 
+    assert_eq!(work_packet.constraints.export_permitted, true);
     assert_eq!(work_packet.advisory_warnings.len(), 0); // No warnings added by default helper
 }
 
@@ -197,16 +216,20 @@ fn test_work_packet_honest_constraints() {
 fn test_advisory_warnings_for_response_contract() {
     let registry = default_provider_registry();
     let mut profile = mock_profile(vec!["transform"]);
-    
+
     // Set unsupported response contract flags
     profile.response_contract.must_include_lineage = true;
     profile.response_contract.must_return_candidate_only = false;
-    
+
     let outcome = provide_with_registry(&registry, &profile, mock_request(), "transform").unwrap();
-    
+
     let warnings = outcome.record.advisory_warnings;
-    assert!(warnings.iter().any(|w| w.contains("must_include_lineage is true")));
-    assert!(warnings.iter().any(|w| w.contains("must_return_candidate_only is false")));
+    assert!(warnings
+        .iter()
+        .any(|w| w.contains("must_include_lineage is true")));
+    assert!(warnings
+        .iter()
+        .any(|w| w.contains("must_return_candidate_only is false")));
 }
 
 #[test]
@@ -271,8 +294,8 @@ fn test_transition_enforces_honest_work_packet_defaults() {
             output_contracts: vec![],
             instruction: None,
             compiled_context: Some(VersionRef::new(
-                earmark_core::ObjectId::parse("obj_00000000000000000000000000000001").unwrap(), 
-                earmark_core::VersionId::parse("ver_00000000000000000000000000000001").unwrap()
+                earmark_core::ObjectId::parse("obj_00000000000000000000000000000001").unwrap(),
+                earmark_core::VersionId::parse("ver_00000000000000000000000000000001").unwrap(),
             )),
             policy: None,
             provider_profile: None,
@@ -318,7 +341,7 @@ fn test_transition_enforces_honest_work_packet_defaults() {
         vec![],
     );
     let template_ref = store.write_object(&template_obj).unwrap();
-    
+
     // Update IR with real ref
     let mut ir_fixed = ir.clone();
     ir_fixed.transitions[0].compiled_context = Some(template_ref.clone());
@@ -327,12 +350,12 @@ fn test_transition_enforces_honest_work_packet_defaults() {
     let request = WorkflowRunRequest {
         run_id: "run_1".to_string(),
         system_definition: VersionRef::new(
-            earmark_core::ObjectId::parse("obj_00000000000000000000000000000002").unwrap(), 
-            earmark_core::VersionId::parse("ver_00000000000000000000000000000002").unwrap()
+            earmark_core::ObjectId::parse("obj_00000000000000000000000000000002").unwrap(),
+            earmark_core::VersionId::parse("ver_00000000000000000000000000000002").unwrap(),
         ),
         workflow: VersionRef::new(
-            earmark_core::ObjectId::parse("obj_00000000000000000000000000000003").unwrap(), 
-            earmark_core::VersionId::parse("ver_00000000000000000000000000000003").unwrap()
+            earmark_core::ObjectId::parse("obj_00000000000000000000000000000003").unwrap(),
+            earmark_core::VersionId::parse("ver_00000000000000000000000000000003").unwrap(),
         ),
         inputs: vec![],
         handoff_manifest: None,
@@ -372,30 +395,35 @@ fn test_transition_enforces_honest_work_packet_defaults() {
     };
 
     // 2. Execute transition
-    engine.execute_transition(
-        &request,
-        &system,
-        &ir_fixed,
-        &ir_fixed.transitions[0],
-        &mut state,
-        &mut record,
-        &DEFAULT_COMPILED_CONTEXT_COMPILER,
-    ).unwrap();
+    engine
+        .execute_transition(
+            &request,
+            &system,
+            &ir_fixed,
+            &ir_fixed.transitions[0],
+            &mut state,
+            &mut record,
+            &DEFAULT_COMPILED_CONTEXT_COMPILER,
+        )
+        .unwrap();
 
     // 3. VERIFY: emitted work packet must have export_permitted: false
     assert_eq!(emitted_packets.len(), 1);
     let wp_ref = &emitted_packets[0];
     let wp_obj = store.read_version(&wp_ref.version_ref()).unwrap();
     let wp: earmark_core::WorkPacket = serde_json::from_slice(&wp_obj.payload.bytes).unwrap();
-    
+
     // SUBSTANTIVE ASSERTION: transition.rs MUST have hardcoded false
-    assert_eq!(wp.constraints.export_permitted, false, "Transition engine must enforce export_permitted: false by default");
+    assert_eq!(
+        wp.constraints.export_permitted, false,
+        "Transition engine must enforce export_permitted: false by default"
+    );
 }
 
 #[test]
 fn test_transition_preserves_provider_record_warnings() {
     let (store, index) = setup_env();
-    
+
     struct WarningProvider;
     impl ProviderService for WarningProvider {
         fn provide(
@@ -416,8 +444,12 @@ fn test_transition_preserves_provider_record_warnings() {
                 received_at: chrono::Utc::now(),
             };
             // Mock the validation gate warning as well
-            let mut record = provider_record_from_response(&request, &mock_profile(vec![]), &response, None);
-            record.advisory_warnings = vec!["Policy-level warning".to_string(), "Provider-level warning".to_string()];
+            let mut record =
+                provider_record_from_response(&request, &mock_profile(vec![]), &response, None);
+            record.advisory_warnings = vec![
+                "Policy-level warning".to_string(),
+                "Provider-level warning".to_string(),
+            ];
             Ok(ProviderExecutionOutcome {
                 response: Some(response),
                 record,
@@ -426,7 +458,7 @@ fn test_transition_preserves_provider_record_warnings() {
     }
 
     let engine = ExecutionEngine::new(&store, &index, &WarningProvider);
-    
+
     // Setup minimal environment for transform
     let class_def_2 = earmark_core::ClassDefinition {
         name: "candidate_output".to_string(),
@@ -497,7 +529,7 @@ fn test_transition_preserves_provider_record_warnings() {
         vec![],
     );
     let instr_ref = store.write_object(&instr_obj).unwrap();
-    
+
     let profile = ProviderProfile {
         name: "mock".to_string(),
         version: "1".to_string(),
@@ -555,12 +587,12 @@ fn test_transition_preserves_provider_record_warnings() {
     let request = WorkflowRunRequest {
         run_id: "run_1".to_string(),
         system_definition: VersionRef::new(
-            earmark_core::ObjectId::parse("obj_00000000000000000000000000000004").unwrap(), 
-            earmark_core::VersionId::parse("ver_00000000000000000000000000000004").unwrap()
+            earmark_core::ObjectId::parse("obj_00000000000000000000000000000004").unwrap(),
+            earmark_core::VersionId::parse("ver_00000000000000000000000000000004").unwrap(),
         ),
         workflow: VersionRef::new(
-            earmark_core::ObjectId::parse("obj_00000000000000000000000000000005").unwrap(), 
-            earmark_core::VersionId::parse("ver_00000000000000000000000000000005").unwrap()
+            earmark_core::ObjectId::parse("obj_00000000000000000000000000000005").unwrap(),
+            earmark_core::VersionId::parse("ver_00000000000000000000000000000005").unwrap(),
         ),
         inputs: vec![],
         handoff_manifest: None,
@@ -592,8 +624,8 @@ fn test_transition_preserves_provider_record_warnings() {
     let mut compiled_context = Some(earmark_connected_context::WorkSurfaceManifest {
         surface_id: "test".to_string(),
         compiled_context: VersionRef::new(
-            earmark_core::ObjectId::parse("obj_00000000000000000000000000000006").unwrap(), 
-            earmark_core::VersionId::parse("ver_00000000000000000000000000000006").unwrap()
+            earmark_core::ObjectId::parse("obj_00000000000000000000000000000006").unwrap(),
+            earmark_core::VersionId::parse("ver_00000000000000000000000000000006").unwrap(),
         ),
         work_packet: None,
         generated_at: chrono::Utc::now(),
@@ -612,23 +644,30 @@ fn test_transition_preserves_provider_record_warnings() {
     };
 
     // 2. Execute transition
-    engine.execute_transition(
-        &request,
-        &system,
-        &ir,
-        &ir.transitions[0],
-        &mut state,
-        &mut record,
-        &DEFAULT_COMPILED_CONTEXT_COMPILER,
-    ).unwrap();
+    engine
+        .execute_transition(
+            &request,
+            &system,
+            &ir,
+            &ir.transitions[0],
+            &mut state,
+            &mut record,
+            &DEFAULT_COMPILED_CONTEXT_COMPILER,
+        )
+        .unwrap();
 
     // 3. VERIFY: governance event for provider record MUST have all warnings
     assert!(!governance_events.is_empty());
     let event_ref = &governance_events[0];
     let event_obj = store.read_version(&event_ref.version_ref()).unwrap();
-    let pr: earmark_core::ProviderRecord = serde_json::from_slice(&event_obj.payload.bytes).unwrap();
-    
+    let pr: earmark_core::ProviderRecord =
+        serde_json::from_slice(&event_obj.payload.bytes).unwrap();
+
     // SUBSTANTIVE ASSERTIONS: verify both warnings are preserved
-    assert!(pr.advisory_warnings.contains(&"Policy-level warning".to_string()));
-    assert!(pr.advisory_warnings.contains(&"Provider-level warning".to_string()));
+    assert!(pr
+        .advisory_warnings
+        .contains(&"Policy-level warning".to_string()));
+    assert!(pr
+        .advisory_warnings
+        .contains(&"Provider-level warning".to_string()));
 }

@@ -284,7 +284,12 @@ fn dispatch_resolution_precedence() {
 #[test]
 fn adapter_not_registered_failure() {
     let registry = ProviderRegistry::default();
-    let result = provide_with_registry(&registry, &profile("google", "gemma"), request(), "transform");
+    let result = provide_with_registry(
+        &registry,
+        &profile("google", "gemma"),
+        request(),
+        "transform",
+    );
     let err = result.err().unwrap();
     assert_eq!(err.kind, ProviderFailureKind::AdapterNotRegistered);
 }
@@ -298,7 +303,12 @@ fn default_registry_can_be_extended_with_custom_provider() {
     assert!(registry.get("google_gemini").is_some());
 
     registry.register(Arc::new(CustomEchoAdapter));
-    let outcome = provide_with_registry(&registry, &profile("custom_echo", "custom"), request(), "transform");
+    let outcome = provide_with_registry(
+        &registry,
+        &profile("custom_echo", "custom"),
+        request(),
+        "transform",
+    );
     assert!(outcome.is_ok());
 }
 
@@ -306,7 +316,12 @@ fn default_registry_can_be_extended_with_custom_provider() {
 fn malformed_response_handling() {
     let mut registry = ProviderRegistry::default();
     registry.register(Arc::new(MalformedAdapter));
-    let result = provide_with_registry(&registry, &profile("local_http", "broken"), request(), "transform");
+    let result = provide_with_registry(
+        &registry,
+        &profile("local_http", "broken"),
+        request(),
+        "transform",
+    );
     let err = result.err().unwrap();
     assert_eq!(err.kind, ProviderFailureKind::MalformedResponse);
 }
@@ -345,9 +360,19 @@ fn circuit_opens_after_repeated_failures() {
     let prof = profile("always_fail", "down");
     let provider_profile = VersionRef::new(ObjectId::new(), VersionId::new());
     for _ in 0..5 {
-        let _ = provide_with_registry(&registry, &prof, request_with_provider_profile(provider_profile.clone()), "transform");
+        let _ = provide_with_registry(
+            &registry,
+            &prof,
+            request_with_provider_profile(provider_profile.clone()),
+            "transform",
+        );
     }
-    let err = provide_with_registry(&registry, &prof, request_with_provider_profile(provider_profile), "transform")
+    let err = provide_with_registry(
+        &registry,
+        &prof,
+        request_with_provider_profile(provider_profile),
+        "transform",
+    )
     .unwrap_err();
     assert!(err.message.contains("circuit open"));
 }
@@ -359,7 +384,12 @@ fn retry_succeeds_after_rate_limit_failures() {
     registry.register(Arc::new(ThrottleThenSucceedAdapter {
         calls: calls.clone(),
     }));
-    let outcome = provide_with_registry(&registry, &profile("throttle_then_succeed", "ok"), request(), "transform");
+    let outcome = provide_with_registry(
+        &registry,
+        &profile("throttle_then_succeed", "ok"),
+        request(),
+        "transform",
+    );
     assert!(outcome.is_ok());
     assert!(calls.load(Ordering::SeqCst) >= 3);
 }
@@ -385,14 +415,29 @@ fn circuit_isolated_by_provider_profile_identity() {
 
     let first_profile = VersionRef::new(ObjectId::new(), VersionId::new());
     for _ in 0..5 {
-        let _ = provide_with_registry(&registry, &prof, request_with_provider_profile(first_profile.clone()), "transform");
+        let _ = provide_with_registry(
+            &registry,
+            &prof,
+            request_with_provider_profile(first_profile.clone()),
+            "transform",
+        );
     }
-    let first_err = provide_with_registry(&registry, &prof, request_with_provider_profile(first_profile), "transform")
+    let first_err = provide_with_registry(
+        &registry,
+        &prof,
+        request_with_provider_profile(first_profile),
+        "transform",
+    )
     .unwrap_err();
     assert!(first_err.message.contains("circuit open"));
 
     let second_profile = VersionRef::new(ObjectId::new(), VersionId::new());
-    let second_err = provide_with_registry(&registry, &prof, request_with_provider_profile(second_profile), "transform")
+    let second_err = provide_with_registry(
+        &registry,
+        &prof,
+        request_with_provider_profile(second_profile),
+        "transform",
+    )
     .unwrap_err();
     assert!(!second_err.message.contains("circuit open"));
 }

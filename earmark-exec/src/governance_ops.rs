@@ -1,4 +1,6 @@
-use std::collections::BTreeMap;
+use crate::error::ExecError;
+use crate::persistence_helpers::write_object_and_index;
+use crate::resolution::load_standing_policy;
 use chrono::Utc;
 use earmark_core::{
     HeaderValue, Kind, ObjectId, Provenance, Standing, StandingRequestStatus,
@@ -7,9 +9,7 @@ use earmark_core::{
 use earmark_governance::{validate_standing_transition, ReviewPayload};
 use earmark_index::DerivedIndex;
 use earmark_store::{CanonicalStore, StoredObject, StoredPayload};
-use crate::error::ExecError;
-use crate::persistence_helpers::write_object_and_index;
-use crate::resolution::load_standing_policy;
+use std::collections::BTreeMap;
 
 pub fn approve_standing_request<S: CanonicalStore>(
     store: &S,
@@ -42,7 +42,9 @@ pub fn reject_standing_request<S: CanonicalStore>(
 ) -> Result<VersionRef, ExecError> {
     let mut request = load_standing_request(store, request_ref)?;
 
-    if request.status != StandingRequestStatus::Proposed && request.status != StandingRequestStatus::Approved {
+    if request.status != StandingRequestStatus::Proposed
+        && request.status != StandingRequestStatus::Approved
+    {
         return Err(ExecError::GovernanceOperation(format!(
             "cannot reject request with status {:?}",
             request.status
@@ -75,8 +77,9 @@ pub fn apply_standing_request<S: CanonicalStore>(
 
     // 1. Load target object
     let target_id = &request.target_object_id;
-    let target_head_ref = index.get_head(target_id)?
-        .ok_or_else(|| ExecError::GovernanceOperation(format!("target object {} not found", target_id.as_str())))?;
+    let target_head_ref = index.get_head(target_id)?.ok_or_else(|| {
+        ExecError::GovernanceOperation(format!("target object {} not found", target_id.as_str()))
+    })?;
     let target_head = store.read_version(&target_head_ref)?;
     let current_standing = &target_head.envelope.standing;
 
@@ -85,7 +88,12 @@ pub fn apply_standing_request<S: CanonicalStore>(
         "epistemic" => format!("{:?}", current_standing.epistemic).to_lowercase(),
         "review" => format!("{:?}", current_standing.review).to_lowercase(),
         "process" => format!("{:?}", current_standing.process).to_lowercase(),
-        _ => return Err(ExecError::GovernanceOperation(format!("invalid dimension {}", request.dimension))),
+        _ => {
+            return Err(ExecError::GovernanceOperation(format!(
+                "invalid dimension {}",
+                request.dimension
+            )))
+        }
     };
 
     if current_value != request.from_value.to_lowercase() {
@@ -100,10 +108,15 @@ pub fn apply_standing_request<S: CanonicalStore>(
 
     // 2. Load policy
     let policy_ref = if let Some(pid) = policy_id {
-        index.get_head(&ObjectId::parse(pid).map_err(|e| ExecError::GovernanceOperation(e.to_string()))?)?
+        index
+            .get_head(
+                &ObjectId::parse(pid).map_err(|e| ExecError::GovernanceOperation(e.to_string()))?,
+            )?
             .ok_or_else(|| ExecError::GovernanceOperation(format!("policy {} not found", pid)))?
     } else {
-        return Err(ExecError::GovernanceOperation("policy required for application".to_string()));
+        return Err(ExecError::GovernanceOperation(
+            "policy required for application".to_string(),
+        ));
     };
     let policy = load_standing_policy(store, index, &policy_ref)?;
 
@@ -111,15 +124,23 @@ pub fn apply_standing_request<S: CanonicalStore>(
     let mut next_standing = target_head.envelope.standing.clone();
     match request.dimension.as_str() {
         "epistemic" => {
-            next_standing.epistemic = serde_json::from_value(serde_json::Value::String(request.to_value.clone()))?;
+            next_standing.epistemic =
+                serde_json::from_value(serde_json::Value::String(request.to_value.clone()))?;
         }
         "review" => {
-            next_standing.review = serde_json::from_value(serde_json::Value::String(request.to_value.clone()))?;
+            next_standing.review =
+                serde_json::from_value(serde_json::Value::String(request.to_value.clone()))?;
         }
         "process" => {
-            next_standing.process = serde_json::from_value(serde_json::Value::String(request.to_value.clone()))?;
+            next_standing.process =
+                serde_json::from_value(serde_json::Value::String(request.to_value.clone()))?;
         }
-        _ => return Err(ExecError::GovernanceOperation(format!("invalid dimension {}", request.dimension))),
+        _ => {
+            return Err(ExecError::GovernanceOperation(format!(
+                "invalid dimension {}",
+                request.dimension
+            )))
+        }
     }
 
     // 3b. No-op Protection: skip version creation if already at next_standing
@@ -133,12 +154,15 @@ pub fn apply_standing_request<S: CanonicalStore>(
     }
 
     // 4. Validate transition
-    let transition_res = validate_standing_transition(&policy, &target_head.envelope.standing, &next_standing)?;
+    let transition_res =
+        validate_standing_transition(&policy, &target_head.envelope.standing, &next_standing)?;
 
     // 5. Enforce review if required (transition-specific matching)
     if transition_res.requires_review {
         if !has_accepted_review(store, index, &target_head_ref)? {
-            return Err(ExecError::GovernanceOperation("transition requires accepted review evidence for the current version".to_string()));
+            return Err(ExecError::GovernanceOperation(
+                "transition requires accepted review evidence for the current version".to_string(),
+            ));
         }
     }
 
@@ -148,7 +172,7 @@ pub fn apply_standing_request<S: CanonicalStore>(
     next_target.envelope.parents = vec![target_head_ref];
     next_target.envelope.version_id = earmark_core::VersionId::new();
     next_target.envelope.updated_at = Utc::now();
-    
+
     let next_target_ref = write_object_and_index(store, index, &next_target)?;
 
     // 7. Update request status to Applied
@@ -192,7 +216,7 @@ fn persist_request_update<S: CanonicalStore>(
         vec![parent_ref.clone()],
     );
     stored.envelope.id = parent_ref.id.clone();
-    
+
     write_object_and_index(store, index, &stored)
 }
 
@@ -205,7 +229,10 @@ fn has_accepted_review<S: CanonicalStore>(
     for review_ref in reviews {
         let obj = store.read_version(&review_ref)?;
         let payload: ReviewPayload = serde_json::from_slice(&obj.payload.bytes)?;
-        if payload.target.id == target_ref.id && payload.target.version_id == target_ref.version_id && payload.status == "accepted" {
+        if payload.target.id == target_ref.id
+            && payload.target.version_id == target_ref.version_id
+            && payload.status == "accepted"
+        {
             return Ok(true);
         }
     }

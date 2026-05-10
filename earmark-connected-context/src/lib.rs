@@ -318,7 +318,9 @@ fn collect_selection<S: CanonicalStore>(
     let mut boundary_relations = Vec::new();
     let mut warnings = Vec::new();
 
-    if !enforce_expansion_object_filter && (!template.select.classes.is_empty() || !template.select.standing.is_empty()) {
+    if !enforce_expansion_object_filter
+        && (!template.select.classes.is_empty() || !template.select.standing.is_empty())
+    {
         warnings.push("Unfiltered expansion is active while seed class/standing filters are present. Expanded objects will bypass these filters.".to_string());
     }
 

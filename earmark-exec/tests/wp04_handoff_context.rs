@@ -1,15 +1,14 @@
-use std::collections::BTreeMap;
+use chrono::Utc;
 use earmark_core::{
-    HandoffManifest, Kind, ObjectId, Standing,
-    StandingConstraint, ReviewStanding,
-    WorkflowDefinition, WorkflowOperation, ChangeSetId,
+    ChangeSetId, HandoffManifest, Kind, ObjectId, ReviewStanding, Standing, StandingConstraint,
+    WorkflowDefinition, WorkflowOperation,
 };
 use earmark_exec::handoff::reconstruct_successor_inputs_from_handoff;
-use earmark_exec::persistence_helpers::{write_object_and_index, write_batch_and_index};
+use earmark_exec::persistence_helpers::{write_batch_and_index, write_object_and_index};
 use earmark_index::DerivedIndex;
-use earmark_store::{GitCanonicalStore, StoredObject, StoredPayload, CanonicalStore, BatchWrite};
+use earmark_store::{BatchWrite, CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload};
+use std::collections::BTreeMap;
 use tempfile::tempdir;
-use chrono::Utc;
 
 #[test]
 fn test_handoff_class_exclusion() {
@@ -50,23 +49,26 @@ fn test_handoff_class_exclusion() {
         Standing::default(),
         earmark_core::Provenance::direct_input("operator"),
         BTreeMap::new(),
-        StoredPayload::from_json_bytes(serde_json::to_vec(&serde_json::json!({
-            "source": earmark_core::ObjectRef {
-                id: root_ref.id.clone(),
-                version_id: root_ref.version_id.clone(),
-                kind: Kind::Object,
-                class: Some("finding".to_string()),
-            },
-            "target": earmark_core::ObjectRef {
-                id: note_ref.id.clone(),
-                version_id: note_ref.version_id.clone(),
-                kind: Kind::Object,
-                class: Some("source_note".to_string()),
-            },
-            "relation_type": "linked",
-            "qualifiers": {},
-            "scope": "test"
-        })).unwrap()),
+        StoredPayload::from_json_bytes(
+            serde_json::to_vec(&serde_json::json!({
+                "source": earmark_core::ObjectRef {
+                    id: root_ref.id.clone(),
+                    version_id: root_ref.version_id.clone(),
+                    kind: Kind::Object,
+                    class: Some("finding".to_string()),
+                },
+                "target": earmark_core::ObjectRef {
+                    id: note_ref.id.clone(),
+                    version_id: note_ref.version_id.clone(),
+                    kind: Kind::Object,
+                    class: Some("source_note".to_string()),
+                },
+                "relation_type": "linked",
+                "qualifiers": {},
+                "scope": "test"
+            }))
+            .unwrap(),
+        ),
         vec![],
     );
     write_object_and_index(&store, &index, &rel).unwrap();
@@ -145,23 +147,26 @@ fn test_handoff_standing_exclusion() {
         Standing::default(),
         earmark_core::Provenance::direct_input("operator"),
         BTreeMap::new(),
-        StoredPayload::from_json_bytes(serde_json::to_vec(&serde_json::json!({
-            "source": earmark_core::ObjectRef {
-                id: root_ref.id.clone(),
-                version_id: root_ref.version_id.clone(),
-                kind: Kind::Object,
-                class: Some("finding".to_string()),
-            },
-            "target": earmark_core::ObjectRef {
-                id: rejected_ref.id.clone(),
-                version_id: rejected_ref.version_id.clone(),
-                kind: Kind::Object,
-                class: Some("finding".to_string()),
-            },
-            "relation_type": "linked",
-            "qualifiers": {},
-            "scope": "test"
-        })).unwrap()),
+        StoredPayload::from_json_bytes(
+            serde_json::to_vec(&serde_json::json!({
+                "source": earmark_core::ObjectRef {
+                    id: root_ref.id.clone(),
+                    version_id: root_ref.version_id.clone(),
+                    kind: Kind::Object,
+                    class: Some("finding".to_string()),
+                },
+                "target": earmark_core::ObjectRef {
+                    id: rejected_ref.id.clone(),
+                    version_id: rejected_ref.version_id.clone(),
+                    kind: Kind::Object,
+                    class: Some("finding".to_string()),
+                },
+                "relation_type": "linked",
+                "qualifiers": {},
+                "scope": "test"
+            }))
+            .unwrap(),
+        ),
         vec![],
     );
     write_object_and_index(&store, &index, &rel).unwrap();
@@ -210,7 +215,7 @@ fn test_handoff_depth_limit() {
 
     // Create a chain of 4 objects: A -> B -> C -> D
     // Depth limit is 2, so A (0), B (1), C (2) should be admitted, D (3) should NOT.
-    
+
     let a = write_object_and_index(&store, &index, &simple_obj("a")).unwrap();
     let b = write_object_and_index(&store, &index, &simple_obj("b")).unwrap();
     let c = write_object_and_index(&store, &index, &simple_obj("c")).unwrap();
@@ -245,7 +250,8 @@ fn test_handoff_depth_limit() {
     let inputs = reconstruct_successor_inputs_from_handoff(&store, &index, &handoff).unwrap();
 
     assert_eq!(inputs.len(), 3); // A, B, C
-    let ids: std::collections::BTreeSet<_> = inputs.iter().map(|o| o.id.as_str().to_string()).collect();
+    let ids: std::collections::BTreeSet<_> =
+        inputs.iter().map(|o| o.id.as_str().to_string()).collect();
     assert!(ids.contains(a.id.as_str()));
     assert!(ids.contains(b.id.as_str()));
     assert!(ids.contains(c.id.as_str()));
@@ -264,30 +270,39 @@ fn simple_obj(title: &str) -> StoredObject {
     )
 }
 
-fn write_rel<S: CanonicalStore>(store: &S, index: &DerivedIndex, source: &earmark_core::VersionRef, target: &earmark_core::VersionRef, rel_type: &str) {
+fn write_rel<S: CanonicalStore>(
+    store: &S,
+    index: &DerivedIndex,
+    source: &earmark_core::VersionRef,
+    target: &earmark_core::VersionRef,
+    rel_type: &str,
+) {
     let rel = StoredObject::new(
         Kind::Relation,
         None,
         Standing::default(),
         earmark_core::Provenance::direct_input("operator"),
         BTreeMap::new(),
-        StoredPayload::from_json_bytes(serde_json::to_vec(&serde_json::json!({
-            "source": earmark_core::ObjectRef {
-                id: source.id.clone(),
-                version_id: source.version_id.clone(),
-                kind: Kind::Object,
-                class: Some("finding".to_string()),
-            },
-            "target": earmark_core::ObjectRef {
-                id: target.id.clone(),
-                version_id: target.version_id.clone(),
-                kind: Kind::Object,
-                class: Some("finding".to_string()),
-            },
-            "relation_type": rel_type,
-            "qualifiers": {},
-            "scope": "test"
-        })).unwrap()),
+        StoredPayload::from_json_bytes(
+            serde_json::to_vec(&serde_json::json!({
+                "source": earmark_core::ObjectRef {
+                    id: source.id.clone(),
+                    version_id: source.version_id.clone(),
+                    kind: Kind::Object,
+                    class: Some("finding".to_string()),
+                },
+                "target": earmark_core::ObjectRef {
+                    id: target.id.clone(),
+                    version_id: target.version_id.clone(),
+                    kind: Kind::Object,
+                    class: Some("finding".to_string()),
+                },
+                "relation_type": rel_type,
+                "qualifiers": {},
+                "scope": "test"
+            }))
+            .unwrap(),
+        ),
         vec![],
     );
     write_object_and_index(store, index, &rel).unwrap();
@@ -318,7 +333,10 @@ fn test_multi_output_transform_rejection() {
 
     let res = earmark_declarations::validate_workflow_definition(&workflow);
     assert!(res.is_err());
-    assert!(res.unwrap_err().to_string().contains("multi-output transform operations are not implemented"));
+    assert!(res
+        .unwrap_err()
+        .to_string()
+        .contains("multi-output transform operations are not implemented"));
 }
 
 #[test]
@@ -381,10 +399,10 @@ fn test_handoff_object_limit_exhaustion() {
     for i in 0..101 {
         batch.objects.push(simple_obj(&format!("child_{}", i)));
     }
-    
+
     let refs = write_batch_and_index(&store, &index, &batch).unwrap();
     let root_ref = &refs[0];
-    
+
     let mut rel_batch = BatchWrite {
         message: "rel setup".to_string(),
         objects: vec![],
@@ -397,23 +415,26 @@ fn test_handoff_object_limit_exhaustion() {
             Standing::default(),
             earmark_core::Provenance::direct_input("operator"),
             BTreeMap::new(),
-            StoredPayload::from_json_bytes(serde_json::to_vec(&serde_json::json!({
-                "source": earmark_core::ObjectRef {
-                    id: root_ref.id.clone(),
-                    version_id: root_ref.version_id.clone(),
-                    kind: Kind::Object,
-                    class: Some("finding".to_string()),
-                },
-                "target": earmark_core::ObjectRef {
-                    id: child_ref.id.clone(),
-                    version_id: child_ref.version_id.clone(),
-                    kind: Kind::Object,
-                    class: Some("finding".to_string()),
-                },
-                "relation_type": "linked",
-                "qualifiers": {},
-                "scope": "test"
-            })).unwrap()),
+            StoredPayload::from_json_bytes(
+                serde_json::to_vec(&serde_json::json!({
+                    "source": earmark_core::ObjectRef {
+                        id: root_ref.id.clone(),
+                        version_id: root_ref.version_id.clone(),
+                        kind: Kind::Object,
+                        class: Some("finding".to_string()),
+                    },
+                    "target": earmark_core::ObjectRef {
+                        id: child_ref.id.clone(),
+                        version_id: child_ref.version_id.clone(),
+                        kind: Kind::Object,
+                        class: Some("finding".to_string()),
+                    },
+                    "relation_type": "linked",
+                    "qualifiers": {},
+                    "scope": "test"
+                }))
+                .unwrap(),
+            ),
             vec![],
         );
         rel_batch.objects.push(rel);
@@ -444,7 +465,10 @@ fn test_handoff_object_limit_exhaustion() {
 
     let res = reconstruct_successor_inputs_from_handoff(&store, &index, &handoff);
     assert!(res.is_err());
-    assert!(res.unwrap_err().to_string().contains("expansion object limit reached (100)"));
+    assert!(res
+        .unwrap_err()
+        .to_string()
+        .contains("expansion object limit reached (100)"));
 }
 
 #[test]
@@ -457,10 +481,15 @@ fn test_handoff_relation_limit_exhaustion() {
 
     let target = simple_obj("target");
     let source = simple_obj("source");
-    let refs = write_batch_and_index(&store, &index, &BatchWrite {
-        message: "setup".to_string(),
-        objects: vec![target.clone(), source.clone()],
-    }).unwrap();
+    let refs = write_batch_and_index(
+        &store,
+        &index,
+        &BatchWrite {
+            message: "setup".to_string(),
+            objects: vec![target.clone(), source.clone()],
+        },
+    )
+    .unwrap();
     let target_ref = &refs[0];
     let source_ref = &refs[1];
 
@@ -475,23 +504,26 @@ fn test_handoff_relation_limit_exhaustion() {
             Standing::default(),
             earmark_core::Provenance::direct_input("operator"),
             BTreeMap::new(),
-            StoredPayload::from_json_bytes(serde_json::to_vec(&serde_json::json!({
-                "source": earmark_core::ObjectRef {
-                    id: source_ref.id.clone(),
-                    version_id: source_ref.version_id.clone(),
-                    kind: Kind::Object,
-                    class: Some("finding".to_string()),
-                },
-                "target": earmark_core::ObjectRef {
-                    id: target_ref.id.clone(),
-                    version_id: target_ref.version_id.clone(),
-                    kind: Kind::Object,
-                    class: Some("finding".to_string()),
-                },
-                "relation_type": "linked",
-                "qualifiers": { "id": i },
-                "scope": "test"
-            })).unwrap()),
+            StoredPayload::from_json_bytes(
+                serde_json::to_vec(&serde_json::json!({
+                    "source": earmark_core::ObjectRef {
+                        id: source_ref.id.clone(),
+                        version_id: source_ref.version_id.clone(),
+                        kind: Kind::Object,
+                        class: Some("finding".to_string()),
+                    },
+                    "target": earmark_core::ObjectRef {
+                        id: target_ref.id.clone(),
+                        version_id: target_ref.version_id.clone(),
+                        kind: Kind::Object,
+                        class: Some("finding".to_string()),
+                    },
+                    "relation_type": "linked",
+                    "qualifiers": { "id": i },
+                    "scope": "test"
+                }))
+                .unwrap(),
+            ),
             vec![],
         );
         rel_batch.objects.push(rel);
@@ -522,5 +554,8 @@ fn test_handoff_relation_limit_exhaustion() {
 
     let res = reconstruct_successor_inputs_from_handoff(&store, &index, &handoff);
     assert!(res.is_err());
-    assert!(res.unwrap_err().to_string().contains("expansion relation limit reached (500)"));
+    assert!(res
+        .unwrap_err()
+        .to_string()
+        .contains("expansion relation limit reached (500)"));
 }

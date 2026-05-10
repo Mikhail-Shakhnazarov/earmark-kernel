@@ -180,7 +180,9 @@ fn mock_adapter_provide_sets_synthetic_metadata() {
         response_contract: request.response_contract.clone(),
     };
 
-    let response = adapter.provide(request, &profile, "transform").expect("mock response");
+    let response = adapter
+        .provide(request, &profile, "transform")
+        .expect("mock response");
     assert!(provider_response_is_synthetic(&response));
     assert_eq!(
         response.metadata.get("synthetic"),
