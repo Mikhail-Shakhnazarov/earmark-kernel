@@ -1,8 +1,8 @@
 use std::{fs, path::Path};
 
 use earmark_core::{
-    parse_yaml, ClassDefinition, CompiledContextTemplate, InstructionPayload, Kind,
-    ProviderProfile, StandingPolicy, SystemDefinition, VersionRef, WorkflowDefinition,
+    parse_yaml, ClassDefinition, ClassStandingRules, CompiledContextTemplate, InstructionPayload,
+    Kind, ProviderProfile, StandingPolicy, SystemDefinition, VersionRef, WorkflowDefinition,
 };
 use earmark_index::{ActiveSystemRecord, DerivedIndex};
 use earmark_store::CanonicalStore;
@@ -43,11 +43,21 @@ pub fn load_system_definition(path: impl AsRef<Path>) -> Result<SystemDefinition
 pub fn validate_class_definition(value: &ClassDefinition) -> Result<(), DeriveError> {
     earmark_core::validate_class_name(&value.name)
         .map_err(|e| DeriveError::Validation(e.to_string()))?;
-    if value.version.trim().is_empty() || value.kind.trim().is_empty() {
+    if value.version.trim().is_empty() {
         return Err(DeriveError::Validation(
-            "class definition requires version and kind".to_string(),
+            "class definition requires non-empty version".to_string(),
         ));
     }
+    match value.kind.as_str() {
+        "object" | "relation" => {}
+        _ => {
+            return Err(DeriveError::Validation(format!(
+                "class definition has invalid kind '{}': expected 'object' or 'relation'",
+                value.kind
+            )));
+        }
+    }
+    validate_standing_rules(&value.standing_rules)?;
     for rule in &value.relation_rules {
         validate_relation_type_token(&rule.relation_type)?;
         if rule.counterparty_classes.is_empty() {
@@ -102,13 +112,73 @@ pub fn validate_class_definition(value: &ClassDefinition) -> Result<(), DeriveEr
     Ok(())
 }
 
+fn validate_standing_rules(rules: &ClassStandingRules) -> Result<(), DeriveError> {
+    let valid_epistemic = [
+        "unresolved",
+        "working",
+        "supported",
+        "contested",
+        "superseded",
+    ];
+    for token in &rules.allowed_epistemic {
+        let s = token.as_str();
+        if !valid_epistemic.contains(&s) {
+            return Err(DeriveError::Validation(format!(
+                "invalid epistemic standing token '{}'",
+                s
+            )));
+        }
+    }
+    let valid_review = ["unreviewed", "pending", "accepted", "rejected"];
+    for token in &rules.allowed_review {
+        let s = token.as_str();
+        if !valid_review.contains(&s) {
+            return Err(DeriveError::Validation(format!(
+                "invalid review standing token '{}'",
+                s
+            )));
+        }
+    }
+    let valid_process = ["active", "blocked", "completed", "archived"];
+    for token in &rules.allowed_process {
+        let s = token.as_str();
+        if !valid_process.contains(&s) {
+            return Err(DeriveError::Validation(format!(
+                "invalid process standing token '{}'",
+                s
+            )));
+        }
+    }
+    Ok(())
+}
+
 pub fn validate_instruction(value: &InstructionPayload) -> Result<(), DeriveError> {
     earmark_core::validate_class_name(&value.name)
         .map_err(|e| DeriveError::Validation(e.to_string()))?;
+    if value.version.trim().is_empty() {
+        return Err(DeriveError::Validation(
+            "instruction requires non-empty version".to_string(),
+        ));
+    }
+    if value.purpose.trim().is_empty() {
+        return Err(DeriveError::Validation(
+            "instruction requires a purpose".to_string(),
+        ));
+    }
     if value.body.as_str().trim().is_empty() {
         return Err(DeriveError::Validation(
             "instruction requires a body".to_string(),
         ));
+    }
+    for class in &value.input_classes {
+        earmark_core::validate_class_name(class).map_err(|e| {
+            DeriveError::Validation(format!("instruction has invalid input class token: {}", e))
+        })?;
+    }
+    for class in &value.output_classes {
+        earmark_core::validate_class_name(class).map_err(|e| {
+            DeriveError::Validation(format!("instruction has invalid output class token: {}", e))
+        })?;
     }
     Ok(())
 }
@@ -116,6 +186,11 @@ pub fn validate_instruction(value: &InstructionPayload) -> Result<(), DeriveErro
 pub fn validate_standing_policy(value: &StandingPolicy) -> Result<(), DeriveError> {
     earmark_core::validate_class_name(&value.name)
         .map_err(|e| DeriveError::Validation(e.to_string()))?;
+    if value.version.trim().is_empty() {
+        return Err(DeriveError::Validation(
+            "standing policy requires non-empty version".to_string(),
+        ));
+    }
     for rule in &value.transition_rules {
         let dimension = earmark_core::StandingDimension::parse(&rule.dimension)
             .map_err(|e| DeriveError::Validation(e.to_string()))?;
@@ -140,18 +215,43 @@ pub fn validate_standing_policy(value: &StandingPolicy) -> Result<(), DeriveErro
             }
         }
     }
+    for escalation in &value.escalations {
+        if escalation.trigger.trim().is_empty() {
+            return Err(DeriveError::Validation(
+                "escalation rule must have non-empty trigger".to_string(),
+            ));
+        }
+        if escalation.message.trim().is_empty() {
+            return Err(DeriveError::Validation(
+                "escalation rule must have non-empty message".to_string(),
+            ));
+        }
+    }
     Ok(())
 }
 
 pub fn validate_workflow_definition(value: &WorkflowDefinition) -> Result<(), DeriveError> {
     earmark_core::validate_class_name(&value.name)
         .map_err(|e| DeriveError::Validation(e.to_string()))?;
+    let valid_kinds = ["compile_context", "transform", "nop"];
     let mut ids = std::collections::BTreeSet::new();
     for op in &value.operations {
         validate_workflow_token(&op.id, "operation id")?;
+        if !valid_kinds.contains(&op.kind.as_str()) {
+            return Err(DeriveError::Validation(format!(
+                "workflow operation '{}' has invalid kind '{}': expected compile_context, transform, or nop",
+                op.id, op.kind
+            )));
+        }
         if !ids.insert(op.id.as_str()) {
             return Err(DeriveError::Validation(format!(
                 "duplicate workflow operation id '{}'",
+                op.id
+            )));
+        }
+        if op.kind == "compile_context" && op.compiled_context.is_none() {
+            return Err(DeriveError::Validation(format!(
+                "workflow operation '{}' of kind compile_context requires a compiled_context reference",
                 op.id
             )));
         }
@@ -166,6 +266,22 @@ pub fn validate_workflow_definition(value: &WorkflowDefinition) -> Result<(), De
                 "multi-output transform operations are not implemented; declare one output contract for operation '{}'",
                 op.id
             )));
+        }
+        for class in &op.input_contracts {
+            earmark_core::validate_class_name(class).map_err(|e| {
+                DeriveError::Validation(format!(
+                    "workflow operation '{}' has invalid input contract class: {}",
+                    op.id, e
+                ))
+            })?;
+        }
+        for class in &op.output_contracts {
+            earmark_core::validate_class_name(class).map_err(|e| {
+                DeriveError::Validation(format!(
+                    "workflow operation '{}' has invalid output contract class: {}",
+                    op.id, e
+                ))
+            })?;
         }
     }
     let mut guard_ids = std::collections::BTreeSet::new();
@@ -202,14 +318,30 @@ pub fn validate_compiled_context_template(
 ) -> Result<(), DeriveError> {
     earmark_core::validate_class_name(&value.name)
         .map_err(|e| DeriveError::Validation(e.to_string()))?;
+    if value.version.trim().is_empty() {
+        return Err(DeriveError::Validation(
+            "compiled context template requires non-empty version".to_string(),
+        ));
+    }
+    for class in &value.select.classes {
+        earmark_core::validate_class_name(class).map_err(|e| {
+            DeriveError::Validation(format!(
+                "compiled context template has invalid selected class token: {}",
+                e
+            ))
+        })?;
+    }
     if value.render.mode.trim().is_empty() {
         return Err(DeriveError::Validation(
             "compiled context template requires a render mode".to_string(),
         ));
     }
-    for dimension in value.select.standing.keys() {
-        earmark_core::StandingDimension::parse(dimension)
+    for (dimension, tokens) in &value.select.standing {
+        let dim = earmark_core::StandingDimension::parse(dimension)
             .map_err(|e| DeriveError::Validation(e.to_string()))?;
+        for token in tokens {
+            validate_standing_token_for_dimension(dim, token)?;
+        }
     }
     for relation in &value.select.relations {
         validate_relation_type_token(relation)?;
@@ -277,10 +409,27 @@ fn validate_standing_token_for_dimension(
 pub fn validate_provider_profile(value: &ProviderProfile) -> Result<(), DeriveError> {
     earmark_core::validate_class_name(&value.name)
         .map_err(|e| DeriveError::Validation(e.to_string()))?;
+    if value.version.trim().is_empty() {
+        return Err(DeriveError::Validation(
+            "provider profile requires non-empty version".to_string(),
+        ));
+    }
     if value.provider.trim().is_empty() || value.model.trim().is_empty() {
         return Err(DeriveError::Validation(
             "provider profile requires provider and model".to_string(),
         ));
+    }
+    if value.response_contract.format.trim().is_empty() {
+        return Err(DeriveError::Validation(
+            "provider profile response contract format must be non-empty".to_string(),
+        ));
+    }
+    if let Some(max_cost) = value.budget.max_cost_usd {
+        if max_cost.is_sign_negative() {
+            return Err(DeriveError::Validation(
+                "provider profile max_cost_usd must be non-negative".to_string(),
+            ));
+        }
     }
     if let Some(auth_env) = &value.auth_env {
         earmark_core::validate_env_var_name(auth_env)
@@ -374,6 +523,12 @@ pub fn validate_system_definition<S: CanonicalStore>(
         None,
         |text| parse_yaml::<ProviderProfile>(text).map(|_| ()),
     )?;
+
+    earmark_core::validate_title(&value.title)
+        .map_err(|e| DeriveError::Validation(format!("invalid system title: {}", e)))?;
+
+    validate_runtime_profile(&value.runtime_profile)?;
+
     Ok(())
 }
 
@@ -438,6 +593,25 @@ where
                 e
             ))
         })?;
+    }
+    Ok(())
+}
+
+fn validate_runtime_profile(profile: &earmark_core::RuntimeProfile) -> Result<(), DeriveError> {
+    if profile.execution_surface.trim().is_empty() {
+        return Err(DeriveError::Validation(
+            "runtime_profile execution_surface must be non-empty".to_string(),
+        ));
+    }
+    if profile.machine_output_default.trim().is_empty() {
+        return Err(DeriveError::Validation(
+            "runtime_profile machine_output_default must be non-empty".to_string(),
+        ));
+    }
+    if profile.work_surface_mode.trim().is_empty() {
+        return Err(DeriveError::Validation(
+            "runtime_profile work_surface_mode must be non-empty".to_string(),
+        ));
     }
     Ok(())
 }
