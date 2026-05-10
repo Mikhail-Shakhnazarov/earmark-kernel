@@ -35,6 +35,8 @@ tempfile = "3.10"
 assert_cmd = "2.0"
 predicates = "3.1"
 proptest = "1.4"
+fs4 = "0.12"
+
 
 [profile.dev]
 debug = 1

@@ -67,4 +67,10 @@ pub enum ExecError {
     Core(#[from] earmark_core::CoreError),
     #[error("serde json error: {0}")]
     Json(#[from] serde_json::Error),
+    #[error("canonical write succeeded but index update failed for {object_id} version {version_id}: {error}")]
+    IndexUpdateFailure {
+        object_id: String,
+        version_id: String,
+        error: String,
+    },
 }

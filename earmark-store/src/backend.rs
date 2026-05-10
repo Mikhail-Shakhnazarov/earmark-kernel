@@ -156,26 +156,49 @@ impl GitBackend for GixBackend {
 
     fn commit_paths(&self, root: &Path, message: &str) -> Result<(), StoreError> {
         let repo = gix::open(root).map_err(|e| StoreError::GitBackend(e.to_string()))?;
-        let signature = self.resolve_signature(&repo)?;
-        let tree_id = self.stage_index_and_write_tree(&repo, root)?;
-        let parent_ids: Vec<_> = repo
-            .head_id()
-            .ok()
-            .map(|id| vec![id.detach()])
-            .unwrap_or_default();
 
-        let mut time_buf = gix::date::parse::TimeBuf::default();
-        let sig_ref = signature.to_ref(&mut time_buf);
+        // Snapshot current index to allow rollback on failure
+        let index_path = repo.index_path();
+        let index_snapshot = if index_path.exists() {
+            Some(std::fs::read(&index_path)?)
+        } else {
+            None
+        };
 
-        repo.commit_as(
-            sig_ref,
-            sig_ref,
-            "HEAD",
-            message,
-            tree_id.detach(),
-            parent_ids,
-        )
-        .map_err(|e| StoreError::GitBackend(e.to_string()))?;
+        let commit_result: Result<(), StoreError> = (|| {
+            let signature = self.resolve_signature(&repo)?;
+            let tree_id = self.stage_index_and_write_tree(&repo, root)?;
+            let parent_ids: Vec<_> = repo
+                .head_id()
+                .ok()
+                .map(|id| vec![id.detach()])
+                .unwrap_or_default();
+
+            let mut time_buf = gix::date::parse::TimeBuf::default();
+            let sig_ref = signature.to_ref(&mut time_buf);
+
+            repo.commit_as(
+                sig_ref,
+                sig_ref,
+                "HEAD",
+                message,
+                tree_id.detach(),
+                parent_ids,
+            )
+            .map_err(|e| StoreError::GitBackend(e.to_string()))?;
+
+            Ok(())
+        })();
+
+        if let Err(err) = commit_result {
+            // Restore the index to its previous state
+            if let Some(bytes) = index_snapshot {
+                std::fs::write(&index_path, bytes)?;
+            } else if index_path.exists() {
+                let _ = std::fs::remove_file(&index_path);
+            }
+            return Err(err);
+        }
 
         Ok(())
     }

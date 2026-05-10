@@ -176,16 +176,16 @@ pub fn run(cli: Cli) -> Result<(), CliError> {
                     resolve_version_ref(&store, &args.object_id, args.version_id.as_deref())?;
                 let target_object = store.read_version(&reference)?;
                 let review = GovernanceService::create_review_object(
-                    &store,
                     target_object.object_ref(),
                     !args.reject,
                     args.reason,
                 )?;
                 mirror_surface(&store, &review)?;
-                index
-                    .as_ref()
-                    .expect("index available for workspace command")
-                    .upsert_head_object_from_store(&store, &review.envelope.id)?;
+                earmark_exec::persistence_helpers::write_object_and_index(
+                    &store,
+                    index.as_ref().expect("index available for workspace command"),
+                    &review,
+                )?;
                 emit(
                     as_json,
                     json!({
@@ -455,17 +455,17 @@ pub fn run(cli: Cli) -> Result<(), CliError> {
                 }
                 DeclareAction::Register(args) => {
                     tracing::info!(kind = %args.kind.as_str(), path = %args.path.display(), "registering declaration");
-                    let version_ref = register_declaration_file(&store, args.kind, &args.path)?;
+                    let version_ref = register_declaration_file(
+                        &store,
+                        index.as_ref(),
+                        args.kind,
+                        &args.path,
+                    )?;
                     if matches!(args.kind, DeclarationKind::System) {
                         index
                             .as_ref()
                             .expect("index available for workspace command")
                             .rebuild_from_store(&store)?;
-                    } else {
-                        index
-                            .as_ref()
-                            .expect("index available for workspace command")
-                            .upsert_head_object_from_store(&store, &version_ref.id)?;
                     }
                     emit(
                         as_json,
@@ -1369,6 +1369,7 @@ fn explain_declaration_file<S: CanonicalStore>(
 
 pub(crate) fn register_declaration_file<S: CanonicalStore>(
     store: &S,
+    index: Option<&DerivedIndex>,
     kind: DeclarationKind,
     path: &PathBuf,
 ) -> Result<VersionRef, CliError> {
@@ -1493,7 +1494,11 @@ pub(crate) fn register_declaration_file<S: CanonicalStore>(
     // Validate symbolic declaration names explicitly; durable ids are store-generated.
     earmark_core::SymbolicName::parse(explicit_symbolic_name)?;
 
-    let version_ref = store.write_object(&object)?;
+    let version_ref = if let Some(idx) = index {
+        earmark_exec::persistence_helpers::write_object_and_index(store, idx, &object)?
+    } else {
+        store.write_object(&object)?
+    };
     Ok(version_ref)
 }
 
@@ -1648,6 +1653,7 @@ fn assemble_system_definition_from_manifest<S: CanonicalStore>(
         .map(|rel| {
             register_declaration_file(
                 store,
+                None,
                 DeclarationKind::Class,
                 &resolve_manifest_path(path, rel),
             )
@@ -1659,6 +1665,7 @@ fn assemble_system_definition_from_manifest<S: CanonicalStore>(
         .map(|rel| {
             register_declaration_file(
                 store,
+                None,
                 DeclarationKind::Instruction,
                 &resolve_manifest_path(path, rel),
             )
@@ -1670,6 +1677,7 @@ fn assemble_system_definition_from_manifest<S: CanonicalStore>(
         .map(|rel| {
             register_declaration_file(
                 store,
+                None,
                 DeclarationKind::StandingPolicy,
                 &resolve_manifest_path(path, rel),
             )
@@ -1681,6 +1689,7 @@ fn assemble_system_definition_from_manifest<S: CanonicalStore>(
         .map(|rel| {
             register_declaration_file(
                 store,
+                None,
                 DeclarationKind::CompiledContext,
                 &resolve_manifest_path(path, rel),
             )
@@ -1692,6 +1701,7 @@ fn assemble_system_definition_from_manifest<S: CanonicalStore>(
         .map(|rel| {
             register_declaration_file(
                 store,
+                None,
                 DeclarationKind::ProviderProfile,
                 &resolve_manifest_path(path, rel),
             )
@@ -1703,6 +1713,7 @@ fn assemble_system_definition_from_manifest<S: CanonicalStore>(
         .map(|rel| {
             register_declaration_file(
                 store,
+                None,
                 DeclarationKind::Workflow,
                 &resolve_manifest_path(path, rel),
             )
@@ -1715,6 +1726,7 @@ fn assemble_system_definition_from_manifest<S: CanonicalStore>(
         .map(|rel| {
             register_declaration_file(
                 store,
+                None,
                 DeclarationKind::CompiledContext,
                 &resolve_manifest_path(path, rel),
             )
@@ -1726,6 +1738,7 @@ fn assemble_system_definition_from_manifest<S: CanonicalStore>(
         .map(|rel| {
             register_declaration_file(
                 store,
+                None,
                 DeclarationKind::ProviderProfile,
                 &resolve_manifest_path(path, rel),
             )

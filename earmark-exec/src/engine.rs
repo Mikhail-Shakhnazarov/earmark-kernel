@@ -202,7 +202,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                     })
                     .collect();
                 record.ended_at = Some(Utc::now());
-                persist_run_record(self.store, &record)?;
+                persist_run_record(self.store, self.index, &record)?;
                 return Err(error);
             }
 
@@ -293,7 +293,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
             })
             .collect();
         record.ended_at = Some(Utc::now());
-        persist_run_record(self.store, &record)?;
+        persist_run_record(self.store, self.index, &record)?;
 
         Ok(WorkflowRunOutcome {
             record: record.clone(),

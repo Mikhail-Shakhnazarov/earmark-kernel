@@ -29,8 +29,7 @@ pub struct ReviewPayload {
 pub struct GovernanceService;
 
 impl GovernanceService {
-    pub fn create_review_object<S: CanonicalStore>(
-        store: &S,
+    pub fn create_review_object(
         target: ObjectRef,
         accepted: bool,
         rationale: Option<String>,
@@ -57,12 +56,10 @@ impl GovernanceService {
             StoredPayload::from_json_bytes(serde_json::to_vec_pretty(&payload)?),
             vec![],
         );
-        store.write_object(&stored)?;
         Ok(stored)
     }
 
-    pub fn create_governance_event_object<S: CanonicalStore>(
-        store: &S,
+    pub fn create_governance_event_object(
         event: GovernanceEvent,
     ) -> Result<StoredObject, GovernanceError> {
         let stored = StoredObject::new(
@@ -83,7 +80,6 @@ impl GovernanceService {
             StoredPayload::from_json_bytes(serde_json::to_vec_pretty(&event)?),
             vec![],
         );
-        store.write_object(&stored)?;
         Ok(stored)
     }
 

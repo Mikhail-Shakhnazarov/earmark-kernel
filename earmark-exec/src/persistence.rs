@@ -10,6 +10,7 @@ use earmark_core::{
     RunRecord, Standing, TransformationFailure, TransitionAssignment, REL_TYPE_REQUESTS_STANDING,
     REL_TYPE_RESULTED_IN_FAILURE,
 };
+use crate::persistence_helpers::write_object_and_index;
 use earmark_index::DerivedIndex;
 use earmark_store::{CanonicalStore, StoredObject, StoredPayload};
 use std::collections::BTreeMap;
@@ -73,7 +74,7 @@ pub(crate) fn persist_change_set<S: CanonicalStore>(
         vec![],
     );
     stored_change_set.envelope.id = ObjectId::parse(change_set_id.as_str()).unwrap();
-    store.write_object(&stored_change_set)?;
+    write_object_and_index(store, index, &stored_change_set)?;
 
     // Link standing requests via Relations
     for request in &draft.standing_requests {
@@ -97,7 +98,7 @@ pub(crate) fn persist_change_set<S: CanonicalStore>(
             StoredPayload::from_json_bytes(serde_json::to_vec_pretty(request)?),
             vec![],
         );
-        let request_ref = store.write_object(&stored_request)?;
+        let request_ref = write_object_and_index(store, index, &stored_request)?;
 
         let rel_payload = RelationPayload {
             source: ObjectRef::new(
@@ -131,6 +132,7 @@ pub(crate) fn persist_change_set<S: CanonicalStore>(
 
 pub(crate) fn persist_assignment_update<S: CanonicalStore>(
     store: &S,
+    index: &DerivedIndex,
     previous: &StoredObject,
     assignment: &TransitionAssignment,
 ) -> Result<(), ExecError> {
@@ -140,7 +142,7 @@ pub(crate) fn persist_assignment_update<S: CanonicalStore>(
         previous.envelope.headers.clone(),
         StoredPayload::from_json_bytes(serde_json::to_vec_pretty(assignment)?),
     );
-    store.write_object(&updated)?;
+    write_object_and_index(store, index, &updated)?;
     Ok(())
 }
 
@@ -175,7 +177,7 @@ pub(crate) fn persist_transformation_failure<S: CanonicalStore>(
         StoredPayload::from_json_bytes(serde_json::to_vec_pretty(&failure)?),
         vec![],
     );
-    let version_ref = store.write_object(&stored)?;
+    let version_ref = write_object_and_index(store, index, &stored)?;
     let failure_ref = ObjectRef::new(
         version_ref.id.clone(),
         version_ref.version_id.clone(),
@@ -257,7 +259,7 @@ pub(crate) fn create_local_transform_output<S: CanonicalStore>(
         StoredPayload::from_markdown(body),
         vec![],
     );
-    store.write_object(&stored)?;
+    write_object_and_index(store, index, &stored)?;
     let relation_ids =
         create_lineage_relations(store, index, &stored.object_ref(), inputs, instruction_ref)?;
     Ok(TransformArtifacts {
@@ -331,7 +333,7 @@ pub(crate) fn create_delegated_transform_output<S: CanonicalStore>(
         StoredPayload::from_json_bytes(response.candidate_payload.into_bytes()),
         vec![],
     );
-    store.write_object(&stored)?;
+    write_object_and_index(store, index, &stored)?;
     let relation_ids =
         create_lineage_relations(store, index, &stored.object_ref(), inputs, instruction_ref)?;
     Ok(TransformArtifacts {
@@ -342,6 +344,7 @@ pub(crate) fn create_delegated_transform_output<S: CanonicalStore>(
 
 pub(crate) fn persist_run_record<S: CanonicalStore>(
     store: &S,
+    index: &DerivedIndex,
     record: &RunRecord,
 ) -> Result<(), ExecError> {
     let stored = StoredObject::new(
@@ -356,6 +359,9 @@ pub(crate) fn persist_run_record<S: CanonicalStore>(
         StoredPayload::from_json_bytes(earmark_core::to_json_pretty(record)?.into_bytes()),
         vec![],
     );
-    store.write_object(&stored)?;
+    // RunRecord indexing?
+    // Let's check if RunRecord should be indexed.
+    // Usually yes, so we can list runs.
+    write_object_and_index(store, index, &stored)?;
     Ok(())
 }

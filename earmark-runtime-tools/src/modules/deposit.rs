@@ -4,6 +4,7 @@ use earmark_core::{
     HeaderValue, Kind, ObjectId, ObjectRef, Provenance, RuntimeProvenance, Standing, VersionId,
     VersionRef,
 };
+use earmark_exec::persistence_helpers::write_object_and_index;
 use earmark_store::{CanonicalStore, PayloadEncoding, StoredObject, StoredPayload};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
@@ -208,9 +209,7 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
             stored_payload,
             vec![],
         );
-        let version_ref = self.store.write_object(&object)?;
-        self.index
-            .upsert_head_object_from_store(self.store, &version_ref.id)?;
+        let version_ref = write_object_and_index(self.store, self.index, &object)?;
         Ok(ObjectRef::new(
             version_ref.id,
             version_ref.version_id,

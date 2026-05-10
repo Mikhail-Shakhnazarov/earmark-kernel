@@ -22,6 +22,7 @@ use crate::persistence::{
     persist_assignment_update, persist_change_set, persist_transformation_failure,
     ChangeSetPersistence,
 };
+use crate::persistence_helpers::write_object_and_index;
 use crate::provider::{
     provider_metadata_synthetic_source, provider_record_from_failure,
     provider_record_from_response, provider_response_is_synthetic, resolve_provider_profile,
@@ -35,7 +36,7 @@ use crate::validation::validate_transition_change_set;
 
 impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn execute_transition<C: CompiledContextCompiler<S>>(
+    pub fn execute_transition<C: CompiledContextCompiler<S>>(
         &self,
         request: &WorkflowRunRequest,
         system: &earmark_core::SystemDefinition,
@@ -81,7 +82,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
             StoredPayload::from_json_bytes(serde_json::to_vec_pretty(&assignment)?),
             vec![],
         );
-        let assignment_version_ref = store.write_object(&stored_assignment)?;
+        let assignment_version_ref = write_object_and_index(store, index, &stored_assignment)?;
         let stored_assignment_head = store.read_version(&assignment_version_ref)?;
         record.assignments.push(assignment_id.clone());
 
@@ -145,7 +146,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                     },
                     filtered_inputs.clone(),
                 );
-                let work_packet_object = store_work_packet(store, &work_packet)?;
+                let work_packet_object = store_work_packet(store, index, &work_packet)?;
                 let work_packet_ref = work_packet_object.object_ref();
                 change_set_draft
                     .created_objects
@@ -197,7 +198,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                     },
                     filtered_inputs.clone(),
                 );
-                let work_packet_object = store_work_packet(store, &work_packet)?;
+                let work_packet_object = store_work_packet(store, index, &work_packet)?;
                 let work_packet_ref = work_packet_object.object_ref();
                 change_set_draft
                     .created_objects
@@ -282,7 +283,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                                     )?),
                                     vec![],
                                 );
-                                let event_ref = store.write_object(&event)?;
+                                let event_ref = write_object_and_index(store, index, &event)?;
                                 change_set_draft
                                     .governance_events
                                     .push(event_ref.id.clone());
@@ -329,7 +330,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                                     )?),
                                     vec![],
                                 );
-                                let event_ref = store.write_object(&event)?;
+                                let event_ref = write_object_and_index(store, index, &event)?;
                                 change_set_draft
                                     .governance_events
                                     .push(event_ref.id.clone());
@@ -377,13 +378,13 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                 let target = state.active_objects.first().cloned().ok_or_else(|| {
                     ExecError::MissingInput("review requires a target object".to_string())
                 })?;
-                let review = GovernanceService::create_review_object(
-                    store,
+                let review_object = GovernanceService::create_review_object(
                     target.clone(),
                     request.operator_approved,
                     Some("review recorded by execution engine".to_string()),
                 )?;
-                let review_ref = review.object_ref();
+                write_object_and_index(store, index, &review_object)?;
+                let review_ref = review_object.object_ref();
                 change_set_draft.created_objects.push(review_ref.id.clone());
                 state.emitted_objects.push(review_ref.clone());
                 record_transition(
@@ -431,7 +432,8 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                             Some(target.clone()),
                         ) {
                             let stored_event =
-                                GovernanceService::create_governance_event_object(store, event)?;
+                                GovernanceService::create_governance_event_object(event)?;
+                            write_object_and_index(store, index, &stored_event)?;
                             let event_ref = stored_event.object_ref();
                             change_set_draft
                                 .governance_events
@@ -484,7 +486,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                 failure_ref.id.as_str()
             ));
             assignment.updated_at = Utc::now();
-            persist_assignment_update(store, &stored_assignment_head, &assignment)?;
+            persist_assignment_update(store, index, &stored_assignment_head, &assignment)?;
 
             record_transition(
                 record,
@@ -555,7 +557,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                     failure_ref.id.as_str()
                 ));
                 assignment.updated_at = now_end;
-                persist_assignment_update(store, &stored_assignment_head, &assignment)?;
+                persist_assignment_update(store, index, &stored_assignment_head, &assignment)?;
                 return Err(error);
             }
             let handoff_specs = derive_successor_handoff(store, index, system, ir, transition)?;
@@ -628,7 +630,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                     StoredPayload::from_json_bytes(serde_json::to_vec_pretty(&handoff)?),
                     vec![],
                 );
-                store.write_object(&stored_handoff)?;
+                write_object_and_index(store, index, &stored_handoff)?;
                 handoff_manifest_ids.push(handoff_manifest_id);
             }
 
@@ -650,7 +652,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
             assignment.status = AssignmentStatus::Completed;
             assignment.updated_at = now_end;
             assignment.completed_at = Some(now_end);
-            persist_assignment_update(store, &stored_assignment_head, &assignment)?;
+            persist_assignment_update(store, index, &stored_assignment_head, &assignment)?;
         }
 
         Ok(())
