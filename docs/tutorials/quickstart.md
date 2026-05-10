@@ -21,20 +21,20 @@ You should see:
 
 ```json
 {
-  "ok": true,
-  "summary": "workspace initialized",
-  "root": ".",
-  "paths": {
-    "canonical_dir": ".\\.earmark\\canonical",
-    "declarations_dir": ".\\.earmark\\declarations",
-    "work_surfaces_dir": ".\\.earmark\\work_surfaces",
-    "index_path": ".\\.earmark\\derived\\index.sqlite"
-  },
   "next_commands": [
     "em doctor",
     "em status",
-    "em declare validate --kind class docs/declarations/examples/classes/finding.yaml"
-  ]
+    "em declare list-examples"
+  ],
+  "ok": true,
+  "paths": {
+    "canonical_dir": "/path/to/my-workspace/.earmark/canonical",
+    "declarations_dir": "/path/to/my-workspace/.earmark/declarations",
+    "index_path": "/path/to/my-workspace/.earmark/derived/index.sqlite",
+    "work_surfaces_dir": "/path/to/my-workspace/.earmark/work_surfaces"
+  },
+  "root": "/path/to/my-workspace",
+  "summary": "workspace initialized"
 }
 ```
 
@@ -53,12 +53,12 @@ Expected output for registration:
 {
   "ok": true,
   "kind": "system_registration",
-  "object_id": "obj_c5ef57bdcbcf4be5a67ec0b467b75012",
-  "version_id": "ver_c7ba974ad96047ecb39b914207600ac4"
+  "object_id": "obj_...",
+  "version_id": "ver_..."
 }
 ```
 
-This registers the research synthesis domain — three object classes (`source_note`, `finding`, `summary`), two instructions, and one two-stage workflow.
+Object and version IDs will differ on each run. This registers the research synthesis domain — three object classes (`source_note`, `finding`, `summary`), two instructions, and one two-stage workflow.
 
 ## Deposit some data
 
@@ -78,8 +78,9 @@ Expected output for each deposit:
 {
   "ok": true,
   "class": "source_note",
-  "object_id": "obj_92aef3ed1ade41fea3a47019cc734181",
-  "version_id": "ver_a04062dba5394bb38ea533469ec7df8b",
+  "kind": "object",
+  "object_id": "obj_...",
+  "version_id": "ver_...",
   "title": "Context Boundaries"
 }
 ```
@@ -97,11 +98,15 @@ Expected output (snippet):
 ```json
 [
   {
-    "object_id": "obj_92aef3ed1ade41fea3a47019cc734181",
+    "object_id": "obj_...",
     "class": "source_note",
+    "kind": "object",
     "title": "Context Boundaries",
+    "summary": "AI context should be bounded, not ambient.",
+    "standing_epistemic": "working",
     "standing_process": "active",
-    "standing_review": "unreviewed"
+    "standing_review": "unreviewed",
+    "version_id": "ver_..."
   }
 ]
 ```
@@ -117,12 +122,16 @@ Expected output:
 ```json
 {
   "ok": true,
-  "run_id": "run_1778353534174187900",
+  "run_id": "run_...",
   "summary": "workflow run completed",
   "status": "completed",
-  "created_assignments": ["obj_...", "obj_..."],
-  "created_change_sets": ["obj_...", "obj_..."],
-  "created_handoffs": ["obj_...", "obj_..."]
+  "created_assignments": ["obj_...", "obj_...", "obj_...", "obj_..."],
+  "created_change_sets": ["obj_...", "obj_...", "obj_...", "obj_..."],
+  "created_failures": [],
+  "created_handoffs": ["obj_...", "obj_...", "obj_...", "obj_..."],
+  "event_count": 5,
+  "output_count": 2,
+  "packet_count": 4
 }
 ```
 
@@ -142,12 +151,14 @@ em report run latest --output report.html
 `em run explain latest` will show:
 
 ```text
---- RUN Explanation: run_1778353534174187900 ---
+--- RUN Explanation: run_... ---
 
-Summary: run run_1778353534174187900 is completed
+Summary: run run_... is completed
+
+Purpose: A run records the execution of a workflow system.
 Status: completed
-Started At: 2026-05-09T19:05:34.178213100Z
-Ended At: 2026-05-09T19:05:40.728925100Z
+Started At: 2026-05-10T...
+Ended At: 2026-05-10T...
 
 Related Artifacts:
   Assignments: 4

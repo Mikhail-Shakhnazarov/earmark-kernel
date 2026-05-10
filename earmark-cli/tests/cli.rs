@@ -873,6 +873,340 @@ fn doctor_reports_index_missing_after_deletion() {
     );
 }
 
+#[test]
+fn demo_path_research_synthesis_full_workflow() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+    let repo_root = workspace_root();
+
+    let system_manifest =
+        repo_root.join("examples/research-synthesis/declarations/systems/system.yaml");
+    let seed_note_1 =
+        repo_root.join("examples/research-synthesis/data/seed_notes/note_1_benefits.md");
+    let seed_note_2 =
+        repo_root.join("examples/research-synthesis/data/seed_notes/note_2_challenges.md");
+
+    // 1. init
+    let output = Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(root)
+        .arg("--json")
+        .arg("init")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(parsed["data"]["ok"], true);
+
+    // 2. system register
+    let output = Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(root)
+        .arg("--json")
+        .arg("system")
+        .arg("register")
+        .arg(&system_manifest)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["data"]["kind"], "system_registration");
+
+    // 3. system activate
+    let output = Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(root)
+        .arg("--json")
+        .arg("system")
+        .arg("activate")
+        .arg("sys_research_synthesis")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["data"]["system_id"], "sys_research_synthesis");
+
+    // 4. deposit seed note 1
+    let output = Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(root)
+        .arg("--json")
+        .arg("deposit")
+        .arg("--class")
+        .arg("source_note")
+        .arg("--title")
+        .arg("Federated Graphs: Agility and Ownership")
+        .arg("--payload-file")
+        .arg(&seed_note_1)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["data"]["class"], "source_note");
+    let note1_id = parsed["data"]["object_id"].as_str().unwrap().to_string();
+
+    // 5. deposit seed note 2
+    let output = Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(root)
+        .arg("--json")
+        .arg("deposit")
+        .arg("--class")
+        .arg("source_note")
+        .arg("--title")
+        .arg("The Cost of Heterogeneity")
+        .arg("--payload-file")
+        .arg(&seed_note_2)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["data"]["class"], "source_note");
+
+    // 6. query source notes
+    let output = Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(root)
+        .arg("--json")
+        .arg("query")
+        .arg("--class")
+        .arg("source_note")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).unwrap();
+    let results = parsed["data"].as_array().unwrap();
+    assert_eq!(results.len(), 2);
+
+    // 7. workflow run
+    let output = Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(root)
+        .arg("--json")
+        .arg("workflow")
+        .arg("run")
+        .arg("research_synthesis")
+        .arg("--system-id")
+        .arg("sys_research_synthesis")
+        .arg("--with")
+        .arg(&note1_id)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["data"]["status"], "completed");
+    let run_id = parsed["data"]["run_id"].as_str().unwrap().to_string();
+    assert!(!parsed["data"]["created_assignments"]
+        .as_array()
+        .unwrap()
+        .is_empty());
+    assert!(!parsed["data"]["created_change_sets"]
+        .as_array()
+        .unwrap()
+        .is_empty());
+    assert!(!parsed["data"]["created_handoffs"]
+        .as_array()
+        .unwrap()
+        .is_empty());
+    assert!(parsed["data"]["output_count"].as_u64().unwrap() > 0);
+
+    // 8. run explain
+    let output = Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(root)
+        .arg("--json")
+        .arg("run")
+        .arg("explain")
+        .arg("latest")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["data"]["kind"], "run");
+
+    // 9. run timeline
+    let output = Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(root)
+        .arg("--json")
+        .arg("run")
+        .arg("timeline")
+        .arg("latest")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(parsed["data"]["ok"], true);
+
+    // 10. query findings
+    let output = Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(root)
+        .arg("--json")
+        .arg("query")
+        .arg("--class")
+        .arg("finding")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).unwrap();
+    let findings = parsed["data"].as_array().unwrap();
+    assert!(!findings.is_empty());
+    let finding_id = findings[0]["object_id"].as_str().unwrap().to_string();
+
+    // 11. query summaries
+    let output = Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(root)
+        .arg("--json")
+        .arg("query")
+        .arg("--class")
+        .arg("summary")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).unwrap();
+    let summaries = parsed["data"].as_array().unwrap();
+    assert!(!summaries.is_empty());
+    let summary_id = summaries[0]["object_id"].as_str().unwrap().to_string();
+    assert_ne!(finding_id, summary_id);
+
+    // 12. handoff explain (use first handoff from the run)
+    let output = Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(root)
+        .arg("--json")
+        .arg("run")
+        .arg("artifacts")
+        .arg(&run_id)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(parsed["data"]["ok"], true);
+    let handoffs = parsed["data"]["artifact"]["handoff_ids"].as_array();
+    if let Some(handoffs) = handoffs {
+        if let Some(first_handoff) = handoffs.first().and_then(|v| v.as_str()) {
+            let output = Command::cargo_bin("earmark-cli")
+                .unwrap()
+                .arg("--root")
+                .arg(root)
+                .arg("--json")
+                .arg("handoff")
+                .arg("explain")
+                .arg(first_handoff)
+                .assert()
+                .success()
+                .get_output()
+                .stdout
+                .clone();
+            let parsed: Value = serde_json::from_slice(&output).unwrap();
+            assert_eq!(parsed["data"]["ok"], true);
+        }
+    }
+
+    // 13. run graph
+    let output = Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(root)
+        .arg("--json")
+        .arg("run")
+        .arg("graph")
+        .arg("latest")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(parsed["data"]["ok"], true);
+
+    // 14. report generation
+    let report_path = root.join("research_report.html");
+    let output = Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(root)
+        .arg("--json")
+        .arg("report")
+        .arg("run")
+        .arg("latest")
+        .arg("--output")
+        .arg(&report_path)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["data"]["kind"], "report_generation");
+    assert!(report_path.exists());
+    let report_bytes = std::fs::read(&report_path).unwrap();
+    assert!(!report_bytes.is_empty());
+
+    // 15. doctor reports healthy
+    let output = Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(root)
+        .arg("--json")
+        .arg("doctor")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["data"]["store_scan_ok"], true);
+    assert_eq!(parsed["data"]["index_exists"], true);
+    assert!(parsed["data"]["canonical_object_count"].as_u64().unwrap() > 0);
+}
+
 fn workspace_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
