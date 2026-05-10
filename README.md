@@ -100,6 +100,7 @@ See the [Quickstart Tutorial](docs/tutorials/quickstart.md) for a complete walkt
 | **[Practical Guide](docs/tutorials/practical-guide.md)** | Plain-language explanation and use cases |
 | **[Staged Execution](docs/concepts/staged-execution.md)** | How transitions, assignments, and handoffs work |
 | **[Context Compilation](docs/concepts/context-compilation.md)** | How Earmark bounds what a runtime sees |
+| **[Relation Authorization](docs/concepts/relation-authorization.md)** | How relation creation records the rule that authorized it |
 | **[Research Synthesis Demo](docs/tutorials/research-synthesis-demo.md)** | Walk through a complete two-stage workflow |
 | **[Build a Domain](docs/tutorials/build-a-domain-definition.md)** | Define your own classes, workflows, and system |
 | **[CLI Reference](docs/reference/cli.md)** | Command lookup |
