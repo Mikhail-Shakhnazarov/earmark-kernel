@@ -74,13 +74,12 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
             StoredPayload::from_json_bytes(serde_json::to_vec_pretty(&assignment)?),
             vec![],
         );
-        write_object_and_index(self.store, self.index, &stored).map_err(|err| {
+        write_object_and_index(self.store, self.index, &stored).inspect_err(|_err| {
             let _ = self.index.release_active_assignment(
                 &assignment.run_id,
                 &assignment.transition_id,
                 assignment_id.as_str(),
             );
-            err
         })?;
         Ok(assignment)
     }
@@ -385,13 +384,12 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
             StoredPayload::from_json_bytes(serde_json::to_vec_pretty(&new_assignment)?),
             vec![],
         );
-        write_object_and_index(self.store, self.index, &stored).map_err(|err| {
+        write_object_and_index(self.store, self.index, &stored).inspect_err(|_err| {
             let _ = self.index.release_active_assignment(
                 &new_assignment.run_id,
                 &new_assignment.transition_id,
                 new_assignment_id.as_str(),
             );
-            err
         })?;
         Ok(new_assignment)
     }

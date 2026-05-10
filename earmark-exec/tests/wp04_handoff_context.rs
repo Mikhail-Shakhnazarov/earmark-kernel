@@ -113,8 +113,10 @@ fn test_handoff_standing_exclusion() {
     let index = DerivedIndex::open(root).unwrap();
 
     // 1. Create a root object (Accepted)
-    let mut standing_accepted = Standing::default();
-    standing_accepted.review = ReviewStanding::Accepted;
+    let standing_accepted = Standing {
+        review: ReviewStanding::Accepted,
+        ..Default::default()
+    };
     let root_obj = StoredObject::new(
         Kind::Object,
         Some("finding".to_string()),
@@ -127,8 +129,10 @@ fn test_handoff_standing_exclusion() {
     let root_ref = write_object_and_index(&store, &index, &root_obj).unwrap();
 
     // 2. Create a related object (Rejected)
-    let mut standing_rejected = Standing::default();
-    standing_rejected.review = ReviewStanding::Rejected;
+    let standing_rejected = Standing {
+        review: ReviewStanding::Rejected,
+        ..Default::default()
+    };
     let rejected_obj = StoredObject::new(
         Kind::Object,
         Some("finding".to_string()),
@@ -407,8 +411,7 @@ fn test_handoff_object_limit_exhaustion() {
         message: "rel setup".to_string(),
         objects: vec![],
     };
-    for i in 1..102 {
-        let child_ref = &refs[i];
+    for child_ref in refs.iter().take(102).skip(1) {
         let rel = StoredObject::new(
             Kind::Relation,
             None,
