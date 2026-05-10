@@ -176,7 +176,8 @@ pub fn run(cli: Cli) -> Result<(), CliError> {
                                 cmds.push("em init");
                             }
                             if !index_exists || !index_open_ok || !counts_match {
-                                cmds.push("em system register --manifest <path> or em declare register --kind workflow <path>");
+                                cmds.push("em system register <manifest>");
+                                cmds.push("no standalone index rebuild command exists yet; system registration triggers a full rebuild");
                             }
                             cmds.push("em status");
                             cmds

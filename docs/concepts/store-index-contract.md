@@ -54,7 +54,7 @@ The derived index can be rebuilt from canonical state:
 
 - **Programmatic**: `index.rebuild_from_store(&store)`
 - **CLI**: registering a system definition (`em system register`) triggers a full rebuild
-- **Manual**: any write command that opens the index in write mode will recreate it if missing
+- **File recreation**: a write command may recreate the SQLite file if it is missing, but that only creates an empty index. A full rebuild requires `rebuild_from_store(&store)`, currently exposed through system registration.
 
 Rebuilding does not destroy active system registrations or active assignment claims.
 
