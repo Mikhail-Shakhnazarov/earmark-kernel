@@ -1170,6 +1170,39 @@ guards: []
         .as_ref()
         .unwrap()
         .contains("validation failed"));
+
+    // Verify failure object and timeline event for validation failure
+    let failure_store_entry = objects
+        .iter()
+        .find(|obj| obj.envelope.kind == Kind::TransformationFailure)
+        .expect("TransformationFailure not found");
+    let val_failure: TransformationFailure =
+        serde_json::from_slice(&failure_store_entry.payload.bytes).unwrap();
+    assert_eq!(val_failure.error_type, "validation_error");
+    assert!(!val_failure.input_object_ids.is_empty());
+
+    // Verify run timeline includes a validation_error event with the failure ref
+    let run_record: earmark_core::RunRecord = objects
+        .iter()
+        .find(|obj| obj.envelope.kind == Kind::RunRecord)
+        .map(|obj| serde_json::from_slice(&obj.payload.bytes).unwrap())
+        .expect("run record not found");
+    let failure_event = run_record
+        .events
+        .iter()
+        .find(|ev| ev.event_type == "validation_error");
+    assert!(
+        failure_event.is_some(),
+        "expected validation_error timeline event"
+    );
+    let event = failure_event.unwrap();
+    assert!(
+        event
+            .outputs
+            .iter()
+            .any(|o| o.id == failure_store_entry.envelope.id),
+        "validation_error event outputs should contain failure object id"
+    );
 }
 
 #[test]
@@ -1852,6 +1885,12 @@ guards: []
         .as_ref()
         .unwrap()
         .contains(delta_id.as_str()));
+
+    // Verify failure links to run_id and transition_id are populated
+    assert_eq!(failure.run_id, "fail_run");
+    assert_eq!(failure.transition_id, "op_fail");
+    assert_eq!(failure.error_type, "invalid_workflow");
+    assert!(!failure.input_object_ids.is_empty());
 }
 
 #[test]

@@ -42,7 +42,7 @@ The important part: both paths persist artifacts. When work succeeds, you get a 
 
 **Change Set** — The collection of creates, links, and changes produced by a transition. Persisted whether valid or invalid.
 
-**Failure** — A record linking the failed assignment and change set to the specific error. Created when validation fails or execution errors out.
+**Failure** — A record linking the failed assignment and change set to the specific error. Created when validation fails or execution errors out. Each failure preserves the run id, transition id, assignment id, error type, error message, timestamp, input object ids that were active at the time of failure, and the failed change set id when one was produced. The failure is linked to the assignment via a `resulted_in_failure` relation. Failures are inspectable via `em failure show`, `em failure explain`, `em failure list`, and appear in `em run artifacts` and `em run timeline`.
 
 **Handoff** — Defines the bounded input for the next stage. See [Handoffs](handoffs.md).
 

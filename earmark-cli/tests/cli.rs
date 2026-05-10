@@ -1,6 +1,13 @@
-use std::{fs, path::PathBuf};
+use std::{collections::BTreeMap, fs, path::PathBuf};
 
 use assert_cmd::Command;
+use earmark_core::{
+    to_yaml, Kind, Provenance, RuntimeProfile, Standing, SystemDefinition, TransformationFailure,
+    VersionRef,
+};
+use earmark_exec::{ExecutionEngine, ProviderRegistry, WorkflowRunRequest};
+use earmark_index::DerivedIndex;
+use earmark_store::{CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload};
 use serde_json::Value;
 use tempfile::tempdir;
 
@@ -911,4 +918,192 @@ fn provider_capabilities_outputs_json() {
     assert_eq!(parsed["data"]["ok"], true);
     assert_eq!(parsed["data"]["kind"], "provider_capabilities");
     assert!(parsed["data"]["providers"].is_array());
+}
+
+#[test]
+fn failure_cli_inspection_commands_with_real_failure() {
+    let dir = tempdir().unwrap();
+
+    // Init workspace via CLI
+    Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(dir.path())
+        .arg("--json")
+        .arg("init")
+        .assert()
+        .success();
+
+    // Create objects and run a failing workflow via Rust API
+    let (failure_id, run_id) = {
+        let store = GitCanonicalStore::new(dir.path());
+        let index = DerivedIndex::open(dir.path()).unwrap();
+
+        let note = StoredObject::new(
+            Kind::Object,
+            Some("note".to_string()),
+            Standing::default(),
+            Provenance::direct_input("operator"),
+            BTreeMap::new(),
+            StoredPayload::from_markdown("seed body"),
+            vec![],
+        );
+        store.write_object(&note).unwrap();
+
+        let system = SystemDefinition {
+            system_id: "test_system".to_string(),
+            namespace: "systems/test".to_string(),
+            title: "Test System".to_string(),
+            description: None,
+            classes: vec![],
+            instructions: vec![],
+            policies: vec![],
+            workflows: vec![],
+            compiled_contexts: vec![],
+            provider_profiles: vec![],
+            default_compiled_context: None,
+            default_provider_profile: None,
+            runtime_profile: RuntimeProfile {
+                execution_surface: "runtime_over_folder".to_string(),
+                machine_output_default: "json".to_string(),
+                work_surface_mode: "materialized_manifest".to_string(),
+            },
+            activated_at: None,
+        };
+        let system_obj = StoredObject::new(
+            Kind::SystemDefinition,
+            Some("system_definition".to_string()),
+            Standing::default(),
+            Provenance::direct_input("operator"),
+            BTreeMap::new(),
+            StoredPayload::from_yaml(to_yaml(&system).unwrap()),
+            vec![],
+        );
+        let system_ref = store.write_object(&system_obj).unwrap();
+
+        let workflow_yaml = r#"name: fail_flow
+version: "1"
+description: fail during transform
+operations:
+  - id: op_fail
+    kind: transform
+    input_contracts: [note]
+    output_contracts: [note]
+    instruction: null
+    compiled_context: null
+    policy: null
+    provider_profile: null
+edges: []
+guards: []
+"#;
+        let workflow_obj = StoredObject::new(
+            Kind::Workflow,
+            Some("composition_workflow".to_string()),
+            Standing::default(),
+            Provenance::direct_input("operator"),
+            BTreeMap::new(),
+            StoredPayload::from_yaml(workflow_yaml),
+            vec![],
+        );
+        let workflow_ref = store.write_object(&workflow_obj).unwrap();
+        index.rebuild_from_store(&store).unwrap();
+
+        let registry = ProviderRegistry::default();
+        let engine = ExecutionEngine {
+            store: &store,
+            index: &index,
+            provider_service: &registry,
+        };
+
+        let result = engine.run_workflow(WorkflowRunRequest {
+            run_id: "cli_test_fail_run".to_string(),
+            system_definition: VersionRef::new(system_ref.id, system_ref.version_id),
+            workflow: VersionRef::new(workflow_ref.id, workflow_ref.version_id),
+            inputs: vec![note.object_ref()],
+            handoff_manifest: None,
+            transition_assignment: None,
+            operator_approved: true,
+        });
+        assert!(result.is_err());
+
+        let objects = store.scan_objects().unwrap();
+        let failure_obj = objects
+            .iter()
+            .find(|obj| obj.envelope.kind == Kind::TransformationFailure)
+            .expect("TransformationFailure not found");
+        let failure: TransformationFailure =
+            serde_json::from_slice(&failure_obj.payload.bytes).unwrap();
+
+        (
+            failure_obj.envelope.id.as_str().to_string(),
+            failure.run_id.clone(),
+        )
+    };
+
+    // Test failure explain exposes related context and next commands
+    let output = Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(dir.path())
+        .arg("--json")
+        .arg("failure")
+        .arg("explain")
+        .arg(&failure_id)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["data"]["kind"], "failure");
+    assert_eq!(parsed["data"]["related"]["run_id"], run_id);
+    assert!(parsed["data"]["next_commands"].as_array().unwrap().len() >= 2);
+    assert!(parsed["data"]["artifact"]["input_object_ids"].is_array());
+
+    // Test failure list --run-id returns the failure
+    let output = Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(dir.path())
+        .arg("--json")
+        .arg("failure")
+        .arg("list")
+        .arg("--run-id")
+        .arg(&run_id)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(parsed["data"]["ok"], true);
+    let failures = parsed["data"]["failures"].as_array().unwrap();
+    assert!(failures
+        .iter()
+        .any(|f| f["failure_id"].as_str() == Some(&failure_id)));
+    assert!(failures
+        .iter()
+        .any(|f| f["assignment_id"].as_str().is_some()));
+
+    // Test run artifacts includes the failure
+    let output = Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(dir.path())
+        .arg("--json")
+        .arg("run")
+        .arg("artifacts")
+        .arg(&run_id)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(parsed["data"]["ok"], true);
+    let artifact_failures = parsed["data"]["artifact"]["failures"].as_array().unwrap();
+    assert!(artifact_failures
+        .iter()
+        .any(|f| f.as_str() == Some(&failure_id)));
 }

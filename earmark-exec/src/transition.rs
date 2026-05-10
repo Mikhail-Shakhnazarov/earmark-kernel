@@ -469,6 +469,23 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                 },
             )?;
 
+            let failure_error_type = match &error {
+                ExecError::Provider(_) => "provider_error",
+                ExecError::IncompleteExecution(_) => "execution_error",
+                ExecError::MissingInput(_) => "missing_input",
+                ExecError::MissingWorkSurface(_) => "missing_work_surface",
+                ExecError::UnsupportedOperation(_) => "unsupported_operation",
+                ExecError::GovernanceOperation(_) => "governance_error",
+                ExecError::HandoffReconstruction(_) => "handoff_error",
+                ExecError::Governance(_) => "governance_error",
+                ExecError::MissingTransitionAssignment(_) => "missing_assignment",
+                ExecError::InvalidTransitionAssignment(_) => "invalid_assignment",
+                ExecError::MissingHandoffManifest(_) => "missing_handoff",
+                ExecError::InvalidWorkflow(_) => "invalid_workflow",
+                ExecError::InvalidRelationMode(_) => "invalid_relation_mode",
+                ExecError::ConflictingContinuationSources(_) => "conflicting_continuation",
+                _ => "execution_error",
+            };
             let failure_ref = persist_transformation_failure(
                 store,
                 index,
@@ -476,6 +493,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                 &assignment,
                 Some(blocked_change_set_id.clone()),
                 &error,
+                failure_error_type,
             )?;
 
             assignment.status = AssignmentStatus::Blocked;
@@ -548,6 +566,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                     &assignment,
                     Some(blocked_change_set_id.clone()),
                     &error,
+                    "validation_error",
                 )?;
 
                 assignment.status = AssignmentStatus::Blocked;
@@ -558,6 +577,14 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                 ));
                 assignment.updated_at = now_end;
                 persist_assignment_update(store, index, &stored_assignment_head, &assignment)?;
+                record_transition(
+                    record,
+                    transition.id.clone(),
+                    "validation_error",
+                    vec![],
+                    vec![failure_ref],
+                    Some(error.to_string()),
+                );
                 return Err(error);
             }
             let handoff_specs = derive_successor_handoff(store, index, system, ir, transition)?;

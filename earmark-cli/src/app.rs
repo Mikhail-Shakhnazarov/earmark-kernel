@@ -734,7 +734,7 @@ pub fn run(cli: Cli) -> Result<(), CliError> {
                                 "failed_change_set_id": failure.failed_change_set_id.clone().map(|id| id.as_str().to_string()),
                                 "error_type": failure.error_type,
                             },
-                            "next_commands": next_commands_for_failure(&failure),
+                            "next_commands": next_commands_for_failure(&failure_id, &failure),
                         }),
                     );
                 }
@@ -2216,6 +2216,7 @@ fn list_failures<S: CanonicalStore>(
             "failure_id": failure_id,
             "run_id": failure.run_id,
             "transition_id": failure.transition_id,
+            "assignment_id": failure.assignment_id.as_str(),
             "error_type": failure.error_type,
             "message": failure.message,
             "created_at": failure.created_at,
@@ -2607,8 +2608,14 @@ fn next_commands_for_handoff(handoff: &earmark_core::HandoffManifest) -> Vec<Str
     commands
 }
 
-fn next_commands_for_failure(failure: &earmark_core::TransformationFailure) -> Vec<String> {
-    let mut commands = vec![format!("em run explain {}", failure.run_id)];
+fn next_commands_for_failure(
+    failure_id: &str,
+    failure: &earmark_core::TransformationFailure,
+) -> Vec<String> {
+    let mut commands = vec![
+        format!("em failure show {}", failure_id),
+        format!("em run explain {}", failure.run_id),
+    ];
     if let Some(delta_id) = &failure.failed_change_set_id {
         commands.push(format!("em change-set explain {}", delta_id.as_str()));
     }

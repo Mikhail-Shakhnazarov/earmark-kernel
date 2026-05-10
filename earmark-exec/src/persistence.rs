@@ -153,15 +153,17 @@ pub(crate) fn persist_transformation_failure<S: CanonicalStore>(
     assignment: &TransitionAssignment,
     failed_change_set_id: Option<ChangeSetId>,
     error: &ExecError,
+    error_type: &str,
 ) -> Result<ObjectRef, ExecError> {
     let failure = TransformationFailure {
         run_id: assignment.run_id.clone(),
         transition_id: assignment.transition_id.clone(),
         assignment_id: assignment.id.clone(),
         failed_change_set_id,
-        error_type: "execution_error".to_string(),
+        error_type: error_type.to_string(),
         message: error.to_string(),
         stack_trace: None,
+        input_object_ids: assignment.input_object_ids.clone(),
         created_at: Utc::now(),
     };
 
