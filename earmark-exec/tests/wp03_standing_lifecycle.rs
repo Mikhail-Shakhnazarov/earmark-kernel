@@ -249,8 +249,10 @@ fn test_standing_request_noop_apply() {
     let index = DerivedIndex::open(root).unwrap();
 
     // 1. Create a target object already in "accepted" review state
-    let mut standing = Standing::default();
-    standing.review = ReviewStanding::Accepted;
+    let standing = Standing {
+        review: ReviewStanding::Accepted,
+        ..Default::default()
+    };
     let target = StoredObject::new(
         Kind::Object,
         Some("artifact".to_string()),
