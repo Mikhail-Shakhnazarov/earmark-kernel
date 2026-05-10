@@ -47,7 +47,7 @@ fn test_payload_integrity_verification() {
     // Retry for 5 seconds.
     let mut success = false;
     for _ in 0..50 {
-        if let Ok(_) = fs::write(&payload_file, "corrupted world") {
+        if fs::write(&payload_file, "corrupted world").is_ok() {
             success = true;
             break;
         }

@@ -15,7 +15,7 @@ use tempfile::tempdir;
 fn test_immediate_index_visibility_in_transition() {
     let tmp = tempdir().unwrap();
     let root = tmp.path();
-    let store = GitCanonicalStore::new(root.to_path_buf());
+    let store = GitCanonicalStore::new(root);
     store.init_layout().unwrap();
 
     let index = DerivedIndex::open(root).unwrap();
@@ -150,7 +150,7 @@ fn test_immediate_index_visibility_in_transition() {
 fn test_live_transition_indexing() {
     let tmp = tempdir().unwrap();
     let root = tmp.path();
-    let store = GitCanonicalStore::new(root.to_path_buf());
+    let store = GitCanonicalStore::new(root);
     store.init_layout().unwrap();
     let index = DerivedIndex::open(root).unwrap();
 

@@ -136,12 +136,13 @@ pub fn validate_standing_transition(
 
     for rule in &policy.transition_rules {
         if let Ok(rule_dim) = StandingDimension::parse(&rule.dimension) {
-            if rule_dim == dim {
-                if rule.from.iter().any(|v| v == from) && rule.to.iter().any(|v| v == to) {
-                    return Ok(StandingTransitionResult {
-                        requires_review: rule.requires_review,
-                    });
-                }
+            if rule_dim == dim
+                && rule.from.iter().any(|v| v == from)
+                && rule.to.iter().any(|v| v == to)
+            {
+                return Ok(StandingTransitionResult {
+                    requires_review: rule.requires_review,
+                });
             }
         }
     }

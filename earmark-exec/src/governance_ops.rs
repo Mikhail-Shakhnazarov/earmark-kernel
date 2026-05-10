@@ -158,12 +158,10 @@ pub fn apply_standing_request<S: CanonicalStore>(
         validate_standing_transition(&policy, &target_head.envelope.standing, &next_standing)?;
 
     // 5. Enforce review if required (transition-specific matching)
-    if transition_res.requires_review {
-        if !has_accepted_review(store, index, &target_head_ref)? {
-            return Err(ExecError::GovernanceOperation(
-                "transition requires accepted review evidence for the current version".to_string(),
-            ));
-        }
+    if transition_res.requires_review && !has_accepted_review(store, index, &target_head_ref)? {
+        return Err(ExecError::GovernanceOperation(
+            "transition requires accepted review evidence for the current version".to_string(),
+        ));
     }
 
     // 6. Create new target version
