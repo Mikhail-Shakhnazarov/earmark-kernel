@@ -25,8 +25,7 @@ use crate::persistence::{
 use crate::persistence_helpers::write_object_and_index;
 use crate::provider::{
     provider_metadata_synthetic_source, provider_record_from_failure,
-    provider_response_is_synthetic, resolve_provider_profile,
-    ProviderMode,
+    provider_response_is_synthetic, resolve_provider_profile, ProviderMode,
 };
 use crate::resolution::{
     load_instruction, load_provider_profile, load_standing_policy, resolve_version_for_kind,
@@ -240,10 +239,11 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                             issued_at: Utc::now(),
                         };
 
-                        match self
-                            .provider_service
-                            .provide(&profile, provider_request.clone(), transition.operation.as_str())
-                        {
+                        match self.provider_service.provide(
+                            &profile,
+                            provider_request.clone(),
+                            transition.operation.as_str(),
+                        ) {
                             Ok(mut outcome) => {
                                 let response = outcome.response.take().ok_or_else(|| {
                                     ExecError::Provider(ProviderFailure::new(

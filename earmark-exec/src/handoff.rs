@@ -240,7 +240,9 @@ fn handoff_object_admissible(
     // 3. Standing check
     for constraint in &handoff.standing_constraints {
         let actual_value = match constraint.constraint_type.as_str() {
-            "allowed_epistemic" => format!("{:?}", object.envelope.standing.epistemic).to_lowercase(),
+            "allowed_epistemic" => {
+                format!("{:?}", object.envelope.standing.epistemic).to_lowercase()
+            }
             "allowed_review" => format!("{:?}", object.envelope.standing.review).to_lowercase(),
             "allowed_process" => format!("{:?}", object.envelope.standing.process).to_lowercase(),
             unknown => {

@@ -293,7 +293,10 @@ pub(crate) fn validate_provider_invocation(
             ),
         ));
     }
-    if !profile.allowed_operations.contains(&transition_operation.to_string()) {
+    if !profile
+        .allowed_operations
+        .contains(&transition_operation.to_string())
+    {
         return Err(ProviderFailure::new(
             ProviderFailureKind::ForbiddenOperation,
             format!(
@@ -412,7 +415,13 @@ pub fn provide_with_registry(
     request: ProviderRequest,
     transition_operation: &str,
 ) -> Result<ProviderExecutionOutcome, ProviderFailure> {
-    provide_with_registry_and_sleeper(registry, profile, request, transition_operation, &ThreadSleepSleeper)
+    provide_with_registry_and_sleeper(
+        registry,
+        profile,
+        request,
+        transition_operation,
+        &ThreadSleepSleeper,
+    )
 }
 
 pub fn provide_with_registry_and_sleeper(

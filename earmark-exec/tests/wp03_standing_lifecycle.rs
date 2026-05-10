@@ -1,14 +1,12 @@
-use std::collections::BTreeMap;
 use earmark_core::{
-    Kind, ReviewStanding, Standing,
-    StandingPolicy, StandingTransitionRule, StandingRequestStatus, VersionId,
+    Kind, ReviewStanding, Standing, StandingPolicy, StandingRequestStatus, StandingTransitionRule,
+    VersionId,
 };
-use earmark_exec::governance_ops::{
-    approve_standing_request, apply_standing_request,
-};
+use earmark_exec::governance_ops::{apply_standing_request, approve_standing_request};
 use earmark_exec::persistence_helpers::write_object_and_index;
 use earmark_index::DerivedIndex;
-use earmark_store::{GitCanonicalStore, StoredObject, StoredPayload, CanonicalStore};
+use earmark_store::{CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload};
+use std::collections::BTreeMap;
 use tempfile::tempdir;
 
 #[test]
@@ -36,14 +34,12 @@ fn test_standing_request_lifecycle() {
         name: "test-policy".to_string(),
         version: "1".to_string(),
         description: None,
-        transition_rules: vec![
-            StandingTransitionRule {
-                dimension: "review".to_string(),
-                from: vec!["unreviewed".to_string()],
-                to: vec!["accepted".to_string()],
-                requires_review: true,
-            },
-        ],
+        transition_rules: vec![StandingTransitionRule {
+            dimension: "review".to_string(),
+            from: vec!["unreviewed".to_string()],
+            to: vec!["accepted".to_string()],
+            requires_review: true,
+        }],
         operation_requirements: vec![],
         escalations: vec![],
         rationale: None,
@@ -53,7 +49,10 @@ fn test_standing_request_lifecycle() {
         Some("standing_policy".to_string()),
         Standing::default(),
         earmark_core::Provenance::direct_input("governance"),
-        BTreeMap::from([("title".to_string(), earmark_core::HeaderValue::String("Test Policy".to_string()))]),
+        BTreeMap::from([(
+            "title".to_string(),
+            earmark_core::HeaderValue::String("Test Policy".to_string()),
+        )]),
         StoredPayload::from_json_bytes(serde_json::to_vec_pretty(&policy).unwrap()),
         vec![],
     );
@@ -80,14 +79,28 @@ fn test_standing_request_lifecycle() {
     let request_ref = write_object_and_index(&store, &index, &stored_request).unwrap();
 
     // 4. Try to apply Proposed request (should fail)
-    let res = apply_standing_request(&store, &index, &request_ref, Some(policy_ref.id.as_str()), None);
+    let res = apply_standing_request(
+        &store,
+        &index,
+        &request_ref,
+        Some(policy_ref.id.as_str()),
+        None,
+    );
     assert!(res.is_err(), "should fail to apply proposed request");
 
     // 5. Approve the request
-    let approved_ref = approve_standing_request(&store, &index, &request_ref, Some("Approved".to_string())).unwrap();
+    let approved_ref =
+        approve_standing_request(&store, &index, &request_ref, Some("Approved".to_string()))
+            .unwrap();
 
     // 6. Try to apply Approved request without review evidence (should fail because rule requires review)
-    let res = apply_standing_request(&store, &index, &approved_ref, Some(policy_ref.id.as_str()), None);
+    let res = apply_standing_request(
+        &store,
+        &index,
+        &approved_ref,
+        Some(policy_ref.id.as_str()),
+        None,
+    );
     assert!(res.is_err(), "should fail to apply without review evidence");
 
     // 7. Create review evidence
@@ -115,15 +128,26 @@ fn test_standing_request_lifecycle() {
 
     // 8. Apply Approved request with review evidence and a reason
     let apply_reason = "Final approval reason".to_string();
-    let (new_target_ref, final_request_ref) = apply_standing_request(&store, &index, &approved_ref, Some(policy_ref.id.as_str()), Some(apply_reason.clone())).unwrap();
+    let (new_target_ref, final_request_ref) = apply_standing_request(
+        &store,
+        &index,
+        &approved_ref,
+        Some(policy_ref.id.as_str()),
+        Some(apply_reason.clone()),
+    )
+    .unwrap();
 
     // 9. Verify results
     let updated_target = store.read_version(&new_target_ref).unwrap();
-    assert_eq!(updated_target.envelope.standing.review, ReviewStanding::Accepted);
+    assert_eq!(
+        updated_target.envelope.standing.review,
+        ReviewStanding::Accepted
+    );
     assert_eq!(updated_target.envelope.parents, vec![target_ref]);
 
     let final_request_obj = store.read_version(&final_request_ref).unwrap();
-    let final_request: earmark_core::StandingTransitionRequest = serde_json::from_slice(&final_request_obj.payload.bytes).unwrap();
+    let final_request: earmark_core::StandingTransitionRequest =
+        serde_json::from_slice(&final_request_obj.payload.bytes).unwrap();
     assert_eq!(final_request.status, StandingRequestStatus::Applied);
     assert_eq!(final_request.rationale, Some(apply_reason));
 }
@@ -180,14 +204,12 @@ fn test_standing_request_drift_failure() {
         name: "test-policy".to_string(),
         version: "1".to_string(),
         description: None,
-        transition_rules: vec![
-            StandingTransitionRule {
-                dimension: "review".to_string(),
-                from: vec!["unreviewed".to_string()],
-                to: vec!["accepted".to_string()],
-                requires_review: false,
-            },
-        ],
+        transition_rules: vec![StandingTransitionRule {
+            dimension: "review".to_string(),
+            from: vec!["unreviewed".to_string()],
+            to: vec!["accepted".to_string()],
+            requires_review: false,
+        }],
         operation_requirements: vec![],
         escalations: vec![],
         rationale: None,
@@ -202,10 +224,20 @@ fn test_standing_request_drift_failure() {
         vec![],
     );
     let policy_ref = write_object_and_index(&store, &index, &stored_policy).unwrap();
-    let res = apply_standing_request(&store, &index, &approved_ref, Some(policy_ref.id.as_str()), None);
+    let res = apply_standing_request(
+        &store,
+        &index,
+        &approved_ref,
+        Some(policy_ref.id.as_str()),
+        None,
+    );
     assert!(res.is_err());
     let err = res.unwrap_err().to_string();
-    assert!(err.contains("drift detected"), "error should mention drift, got: {}", err);
+    assert!(
+        err.contains("drift detected"),
+        "error should mention drift, got: {}",
+        err
+    );
 }
 
 #[test]
@@ -256,14 +288,12 @@ fn test_standing_request_noop_apply() {
         name: "test-policy".to_string(),
         version: "1".to_string(),
         description: None,
-        transition_rules: vec![
-            StandingTransitionRule {
-                dimension: "review".to_string(),
-                from: vec!["accepted".to_string()],
-                to: vec!["accepted".to_string()],
-                requires_review: false,
-            },
-        ],
+        transition_rules: vec![StandingTransitionRule {
+            dimension: "review".to_string(),
+            from: vec!["accepted".to_string()],
+            to: vec!["accepted".to_string()],
+            requires_review: false,
+        }],
         operation_requirements: vec![],
         escalations: vec![],
         rationale: None,
@@ -280,12 +310,23 @@ fn test_standing_request_noop_apply() {
     let policy_ref = write_object_and_index(&store, &index, &stored_policy).unwrap();
 
     // 3. Apply request (should be no-op for target but Applied for request)
-    let (final_target_ref, final_request_ref) = apply_standing_request(&store, &index, &approved_ref, Some(policy_ref.id.as_str()), Some("No-op reason".to_string())).unwrap();
+    let (final_target_ref, final_request_ref) = apply_standing_request(
+        &store,
+        &index,
+        &approved_ref,
+        Some(policy_ref.id.as_str()),
+        Some("No-op reason".to_string()),
+    )
+    .unwrap();
 
-    assert_eq!(final_target_ref, target_ref, "target version should not have changed");
-    
+    assert_eq!(
+        final_target_ref, target_ref,
+        "target version should not have changed"
+    );
+
     let final_request_obj = store.read_version(&final_request_ref).unwrap();
-    let final_request: earmark_core::StandingTransitionRequest = serde_json::from_slice(&final_request_obj.payload.bytes).unwrap();
+    let final_request: earmark_core::StandingTransitionRequest =
+        serde_json::from_slice(&final_request_obj.payload.bytes).unwrap();
     assert_eq!(final_request.status, StandingRequestStatus::Applied);
     assert_eq!(final_request.rationale, Some("No-op reason".to_string()));
 }
@@ -322,14 +363,12 @@ fn test_standing_request_version_specific_review() {
         name: "test-policy".to_string(),
         version: "1".to_string(),
         description: None,
-        transition_rules: vec![
-            StandingTransitionRule {
-                dimension: "review".to_string(),
-                from: vec!["unreviewed".to_string()],
-                to: vec!["accepted".to_string()],
-                requires_review: true,
-            },
-        ],
+        transition_rules: vec![StandingTransitionRule {
+            dimension: "review".to_string(),
+            from: vec!["unreviewed".to_string()],
+            to: vec!["accepted".to_string()],
+            requires_review: true,
+        }],
         operation_requirements: vec![],
         escalations: vec![],
         rationale: None,
@@ -390,7 +429,16 @@ fn test_standing_request_version_specific_review() {
     write_object_and_index(&store, &index, &stored_review).unwrap();
 
     // 6. Try to apply request to V2 (should fail because review is for V1)
-    let res = apply_standing_request(&store, &index, &approved_ref, Some(policy_ref.id.as_str()), None);
+    let res = apply_standing_request(
+        &store,
+        &index,
+        &approved_ref,
+        Some(policy_ref.id.as_str()),
+        None,
+    );
     assert!(res.is_err());
-    assert!(res.unwrap_err().to_string().contains("requires accepted review evidence for the current version"));
+    assert!(res
+        .unwrap_err()
+        .to_string()
+        .contains("requires accepted review evidence for the current version"));
 }

@@ -1,10 +1,10 @@
 pub mod async_prep;
 pub mod engine;
 pub mod error;
+pub mod governance_ops;
 pub mod handoff;
 pub mod helpers;
 pub mod ir;
-pub mod governance_ops;
 pub(crate) mod persistence;
 pub mod persistence_helpers;
 pub mod provider;
