@@ -83,10 +83,17 @@ alias em="$(pwd)/target/debug/earmark-cli"
 mkdir my-workspace && cd my-workspace
 em init
 
-# Register and run the demo
+# Register the demo system
 em system register ../examples/research-synthesis/declarations/systems/system.yaml
 em system activate sys_research_synthesis
+
+# Deposit a source note
 em deposit --class source_note --title "Test Note" --body "AI context should be bounded."
+
+# Find the deposited object's ID
+em query --class source_note
+
+# Run the workflow (use the object_id from the deposit or query output)
 em workflow run research_synthesis --system-id sys_research_synthesis --with <object_id>
 ```
 
