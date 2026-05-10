@@ -4,6 +4,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use fs4::fs_std::FileExt;
+
 mod backend;
 
 use crate::backend::{GitBackend, GixBackend};
@@ -165,6 +167,19 @@ impl StoredObject {
         }
     }
 
+    pub(crate) fn verify_payload_ref(envelope: &earmark_core::Envelope, payload: &StoredPayload) -> Result<(), StoreError> {
+        let actual = payload.payload_ref();
+        if actual != envelope.payload_ref {
+            return Err(StoreError::PayloadIntegrityMismatch {
+                object_id: envelope.id.as_str().to_string(),
+                version_id: envelope.version_id.as_str().to_string(),
+                expected: envelope.payload_ref.0.clone(),
+                actual: actual.0,
+            });
+        }
+        Ok(())
+    }
+
     pub fn object_ref(&self) -> ObjectRef {
         self.envelope.object_ref()
     }
@@ -188,6 +203,33 @@ pub trait CanonicalStore {
     fn resolve_payload(&self, payload_ref: &PayloadRef) -> Result<StoredPayload, StoreError>;
     fn scan_objects(&self) -> Result<Vec<StoredObject>, StoreError>;
     fn version_path(&self, version: &VersionRef) -> PathBuf;
+
+    fn acquire_write_lock(&self) -> Result<WorkspaceWriteGuard, StoreError>;
+    fn write_batch_locked(
+        &self,
+        guard: &WorkspaceWriteGuard,
+        batch: &BatchWrite,
+    ) -> Result<Vec<VersionRef>, StoreError>;
+    fn write_object_locked(
+        &self,
+        guard: &WorkspaceWriteGuard,
+        object: &StoredObject,
+    ) -> Result<VersionRef, StoreError> {
+        self.write_batch_locked(
+            guard,
+            &BatchWrite {
+                message: format!(
+                    "deposit {} {}",
+                    object.envelope.kind.as_str(),
+                    object.envelope.version_id.as_str()
+                ),
+                objects: vec![object.clone()],
+            },
+        )?
+        .into_iter()
+        .next()
+        .ok_or_else(|| StoreError::Invariant("batch write returned no refs".to_string()))
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -197,9 +239,10 @@ pub struct GitCanonicalStore {
 }
 
 impl GitCanonicalStore {
-    pub fn new(root: impl Into<PathBuf>) -> Self {
+    pub fn new(root: impl AsRef<Path>) -> Self {
+        let root = root.as_ref();
         Self {
-            root: root.into(),
+            root: root.canonicalize().unwrap_or_else(|_| root.to_path_buf()),
             backend: GixBackend,
         }
     }
@@ -284,14 +327,22 @@ impl GitCanonicalStore {
             corpus_dir_exists: self.corpus_dir().exists(),
         }
     }
-}
 
-impl CanonicalStore for GitCanonicalStore {
-    fn root(&self) -> &Path {
-        &self.root
+    pub fn lock_path(&self) -> PathBuf {
+        self.root.join(".earmark_lock")
     }
 
-    fn init_layout(&self) -> Result<(), StoreError> {
+    pub fn acquire_write_lock(&self) -> Result<WorkspaceWriteGuard, StoreError> {
+        let lock_path = self.lock_path();
+        if let Some(parent) = lock_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        let file = fs::File::create(&lock_path)?;
+        file.lock_exclusive()?;
+        Ok(WorkspaceWriteGuard { _file: file })
+    }
+
+    fn init_layout_unlocked(&self) -> Result<(), StoreError> {
         fs::create_dir_all(self.objects_dir())?;
         fs::create_dir_all(self.payloads_dir())?;
         fs::create_dir_all(self.heads_dir())?;
@@ -325,23 +376,42 @@ impl CanonicalStore for GitCanonicalStore {
         self.backend.ensure_repo(&self.root)?;
         Ok(())
     }
+}
+
+pub struct WorkspaceWriteGuard {
+    _file: fs::File,
+}
+
+impl CanonicalStore for GitCanonicalStore {
+    fn root(&self) -> &Path {
+        &self.root
+    }
+
+    fn acquire_write_lock(&self) -> Result<WorkspaceWriteGuard, StoreError> {
+        self.acquire_write_lock()
+    }
+
+    fn init_layout(&self) -> Result<(), StoreError> {
+        let _guard = self.acquire_write_lock()?;
+        self.init_layout_unlocked()
+    }
 
     fn write_object(&self, object: &StoredObject) -> Result<VersionRef, StoreError> {
-        self.write_batch(&BatchWrite {
-            message: format!(
-                "deposit {} {}",
-                object.envelope.kind.as_str(),
-                object.envelope.version_id.as_str()
-            ),
-            objects: vec![object.clone()],
-        })?
-        .into_iter()
-        .next()
-        .ok_or_else(|| StoreError::Invariant("batch write returned no refs".to_string()))
+        let guard = self.acquire_write_lock()?;
+        self.write_object_locked(&guard, object)
     }
 
     fn write_batch(&self, batch: &BatchWrite) -> Result<Vec<VersionRef>, StoreError> {
-        self.init_layout()?;
+        let guard = self.acquire_write_lock()?;
+        self.write_batch_locked(&guard, batch)
+    }
+
+    fn write_batch_locked(
+        &self,
+        _guard: &WorkspaceWriteGuard,
+        batch: &BatchWrite,
+    ) -> Result<Vec<VersionRef>, StoreError> {
+        self.init_layout_unlocked()?;
         let mut written = Vec::with_capacity(batch.objects.len());
         let mut total_size = 0;
         let mut created_files: Vec<PathBuf> = Vec::new();
@@ -419,6 +489,28 @@ impl CanonicalStore for GitCanonicalStore {
                         rollback_failures.push(format!("remove dir {}: {}", dir.display(), e));
                     }
                 }
+                // Try to clean up parent directories if they are empty
+                let mut current = dir.parent();
+                while let Some(path) = current {
+                    if path == self.objects_dir() || path == self.payloads_dir() || path == self.heads_dir() || path == self.canonical_dir() {
+                        break;
+                    }
+                    if path.exists() {
+                        match fs::read_dir(path) {
+                            Ok(mut entries) => {
+                                if entries.next().is_none() {
+                                    if let Err(e) = fs::remove_dir(path) {
+                                        rollback_failures.push(format!("remove parent dir {}: {}", path.display(), e));
+                                    }
+                                } else {
+                                    break;
+                                }
+                            }
+                            Err(_) => break,
+                        }
+                    }
+                    current = path.parent();
+                }
             }
             for (head_path, previous_contents) in overwritten_heads.iter().rev() {
                 if let Err(e) = fs::write(head_path, previous_contents) {
@@ -454,6 +546,7 @@ impl CanonicalStore for GitCanonicalStore {
 
         let format = Self::infer_encoding(&payload_path)?;
         let payload = StoredPayload::new(format, fs::read(payload_path)?);
+        StoredObject::verify_payload_ref(&envelope, &payload)?;
         Ok(StoredObject { envelope, payload })
     }
 
@@ -534,6 +627,7 @@ impl CanonicalStore for GitCanonicalStore {
                     Self::infer_encoding(&payload_path)?,
                     fs::read(payload_path)?,
                 );
+                StoredObject::verify_payload_ref(&envelope, &payload)?;
                 objects.push(StoredObject { envelope, payload });
             }
         }
@@ -563,6 +657,13 @@ pub enum StoreError {
     Core(#[from] earmark_core::CoreError),
     #[error("payload ref mismatch between envelope and stored bytes")]
     PayloadRefMismatch,
+    #[error("payload integrity mismatch for {object_id} version {version_id}: expected {expected}, actual {actual}")]
+    PayloadIntegrityMismatch {
+        object_id: String,
+        version_id: String,
+        expected: String,
+        actual: String,
+    },
     #[error("missing payload for {0}")]
     MissingPayload(String),
     #[error("unknown payload encoding: {0}")]

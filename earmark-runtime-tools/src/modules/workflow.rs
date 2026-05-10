@@ -5,6 +5,7 @@ use earmark_core::{
     RelationCreationMode, Standing, TransitionAssignment, TransitionAssignmentId,
     REL_TYPE_REQUESTS_STANDING,
 };
+use earmark_exec::persistence_helpers::write_object_and_index;
 use earmark_exec::{ExecutionEngine, WorkflowRunOutcome, WorkflowRunRequest};
 use earmark_store::{CanonicalStore, StoredObject, StoredPayload};
 use std::collections::BTreeMap;
@@ -73,16 +74,14 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
             StoredPayload::from_json_bytes(serde_json::to_vec_pretty(&assignment)?),
             vec![],
         );
-        if let Err(err) = self.store.write_object(&stored) {
+        write_object_and_index(self.store, self.index, &stored).map_err(|err| {
             let _ = self.index.release_active_assignment(
                 &assignment.run_id,
                 &assignment.transition_id,
                 assignment_id.as_str(),
             );
-            return Err(err.into());
-        }
-        self.index
-            .upsert_head_object_from_store(self.store, &stored.envelope.id)?;
+            err
+        })?;
         Ok(assignment)
     }
 
@@ -137,9 +136,7 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
             StoredPayload::from_json_bytes(serde_json::to_vec_pretty(&change_set)?),
             vec![],
         );
-        self.store.write_object(&stored_change_set)?;
-        self.index
-            .upsert_head_object_from_store(self.store, &stored_change_set.envelope.id)?;
+        write_object_and_index(self.store, self.index, &stored_change_set)?;
 
         for request in &standing_requests {
             if earmark_core::validate_standing_request(request).is_err() {
@@ -161,9 +158,7 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
                 StoredPayload::from_json_bytes(serde_json::to_vec_pretty(request)?),
                 vec![],
             );
-            let request_ref = self.store.write_object(&stored_request)?;
-            self.index
-                .upsert_head_object_from_store(self.store, &stored_request.envelope.id)?;
+            let request_ref = write_object_and_index(self.store, self.index, &stored_request)?;
 
             let rel_payload = earmark_core::RelationPayload {
                 source: earmark_core::ObjectRef::new(
@@ -202,9 +197,7 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
             old_obj.envelope.headers.clone(),
             StoredPayload::from_json_bytes(serde_json::to_vec_pretty(&assignment)?),
         );
-        self.store.write_object(&stored_assignment_update)?;
-        self.index
-            .upsert_head_object_from_store(self.store, &old_obj.envelope.id)?;
+        write_object_and_index(self.store, self.index, &stored_assignment_update)?;
         self.index.release_active_assignment(
             &assignment.run_id,
             &assignment.transition_id,
@@ -235,9 +228,7 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
             old_obj.envelope.headers.clone(),
             StoredPayload::from_json_bytes(serde_json::to_vec_pretty(&assignment)?),
         );
-        self.store.write_object(&update)?;
-        self.index
-            .upsert_head_object_from_store(self.store, &old_obj.envelope.id)?;
+        write_object_and_index(self.store, self.index, &update)?;
         self.index.release_active_assignment(
             &assignment.run_id,
             &assignment.transition_id,
@@ -267,9 +258,7 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
             old_obj.envelope.headers.clone(),
             StoredPayload::from_json_bytes(serde_json::to_vec_pretty(&assignment)?),
         );
-        self.store.write_object(&update)?;
-        self.index
-            .upsert_head_object_from_store(self.store, &old_obj.envelope.id)?;
+        write_object_and_index(self.store, self.index, &update)?;
         self.index.release_active_assignment(
             &assignment.run_id,
             &assignment.transition_id,
@@ -302,9 +291,7 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
             old_obj.envelope.headers.clone(),
             StoredPayload::from_json_bytes(serde_json::to_vec_pretty(&assignment)?),
         );
-        self.store.write_object(&update)?;
-        self.index
-            .upsert_head_object_from_store(self.store, &old_obj.envelope.id)?;
+        write_object_and_index(self.store, self.index, &update)?;
         self.index.release_active_assignment(
             &assignment.run_id,
             &assignment.transition_id,
@@ -398,16 +385,14 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
             StoredPayload::from_json_bytes(serde_json::to_vec_pretty(&new_assignment)?),
             vec![],
         );
-        if let Err(err) = self.store.write_object(&stored) {
+        write_object_and_index(self.store, self.index, &stored).map_err(|err| {
             let _ = self.index.release_active_assignment(
                 &new_assignment.run_id,
                 &new_assignment.transition_id,
                 new_assignment_id.as_str(),
             );
-            return Err(err.into());
-        }
-        self.index
-            .upsert_head_object_from_store(self.store, &stored.envelope.id)?;
+            err
+        })?;
         Ok(new_assignment)
     }
 

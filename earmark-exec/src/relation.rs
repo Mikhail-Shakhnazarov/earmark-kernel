@@ -46,8 +46,8 @@ pub fn persist_relation_canonical<S: CanonicalStore>(
         vec![],
     );
 
-    let version_ref = store.write_object(&stored)?;
-    index.upsert_head_object_from_store(store, &version_ref.id)?;
+    use crate::persistence_helpers::write_object_and_index;
+    let version_ref = write_object_and_index(store, index, &stored)?;
 
     Ok(ObjectRef::new(
         version_ref.id,

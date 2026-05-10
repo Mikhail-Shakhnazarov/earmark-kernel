@@ -13,6 +13,7 @@ chrono.workspace = true
 thiserror.workspace = true
 gix = { workspace = true, features = ["tree-editor"] }
 walkdir.workspace = true
+fs4 = { workspace = true }
 
 [dev-dependencies]
 tempfile.workspace = true

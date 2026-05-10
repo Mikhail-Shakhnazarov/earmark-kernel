@@ -9,6 +9,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::error::ExecError;
 use crate::ir::{ExecutionEdge, ExecutionIr, ExecutionTransition, WorkflowRunRequest};
+use crate::persistence_helpers::write_object_and_index;
+use earmark_index::DerivedIndex;
 
 pub(crate) fn compile_workflow(workflow: &WorkflowDefinition) -> Result<ExecutionIr, ExecError> {
     let mut seen_ids = BTreeSet::new();
@@ -127,8 +129,9 @@ pub(crate) fn work_packet_from_compiled_context(
     }
 }
 
-pub(crate) fn store_work_packet<S: CanonicalStore>(
+pub fn store_work_packet<S: CanonicalStore>(
     store: &S,
+    index: &DerivedIndex,
     work_packet: &WorkPacket,
 ) -> Result<StoredObject, ExecError> {
     let stored = StoredObject::new(
@@ -143,7 +146,7 @@ pub(crate) fn store_work_packet<S: CanonicalStore>(
         StoredPayload::from_json_bytes(serde_json::to_vec_pretty(&work_packet)?),
         vec![],
     );
-    store.write_object(&stored)?;
+    write_object_and_index(store, index, &stored)?;
     Ok(stored)
 }
 

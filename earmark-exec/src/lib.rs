@@ -1,14 +1,15 @@
 pub mod async_prep;
-pub(crate) mod engine;
-pub(crate) mod error;
+pub mod engine;
+pub mod error;
 pub(crate) mod handoff;
-pub(crate) mod helpers;
-pub(crate) mod ir;
+pub mod helpers;
+pub mod ir;
 pub(crate) mod persistence;
-pub(crate) mod provider;
+pub mod persistence_helpers;
+pub mod provider;
 pub mod relation;
 pub(crate) mod resolution;
-pub(crate) mod state;
+pub mod state;
 pub(crate) mod transition;
 pub(crate) mod validation;
 
