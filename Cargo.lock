@@ -558,6 +558,7 @@ dependencies = [
  "chrono",
  "earmark-connected-context",
  "earmark-core",
+ "earmark-declarations",
  "earmark-governance",
  "earmark-index",
  "earmark-runtime-tools",

@@ -768,6 +768,50 @@ impl DerivedIndex {
             .conn
             .query_row("SELECT COUNT(*) FROM relations", [], |row| row.get(0))?)
     }
+
+    pub fn get_objects_by_kind(&self, kind: Kind) -> Result<Vec<VersionRef>, IndexError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT o.object_id, o.version_id FROM objects o JOIN heads h ON o.object_id = h.object_id AND o.version_id = h.version_id WHERE o.kind = ?1",
+        )?;
+        let rows = stmt.query_map(params![kind.as_str()], |row| {
+            let object_id_str: String = row.get(0)?;
+            let version_id_str: String = row.get(1)?;
+            Ok((object_id_str, version_id_str))
+        })?;
+
+        let mut results = Vec::new();
+        for row in rows {
+            let (oid, vid) = row?;
+            results.push(VersionRef::new(
+                ObjectId::parse(oid).map_err(|e| IndexError::Core(e))?,
+                earmark_core::VersionId::parse(vid).map_err(|e| IndexError::Core(e))?,
+            ));
+        }
+        Ok(results)
+    }
+
+    pub fn get_head(&self, object_id: &ObjectId) -> Result<Option<VersionRef>, IndexError> {
+        self.conn
+            .query_row(
+                "SELECT version_id FROM heads WHERE object_id = ?1",
+                params![object_id.as_str()],
+                |row| {
+                    let vid: String = row.get(0)?;
+                    Ok(VersionRef::new(
+                        object_id.clone(),
+                        earmark_core::VersionId::parse(vid).map_err(|e| {
+                            rusqlite::Error::FromSqlConversionFailure(
+                                0,
+                                rusqlite::types::Type::Text,
+                                Box::new(e),
+                            )
+                        })?,
+                    ))
+                },
+            )
+            .optional()
+            .map_err(IndexError::from)
+    }
 }
 
 fn snippet(input: &str) -> String {

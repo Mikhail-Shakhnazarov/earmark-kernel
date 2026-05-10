@@ -1,9 +1,10 @@
 pub mod async_prep;
 pub mod engine;
 pub mod error;
-pub(crate) mod handoff;
+pub mod handoff;
 pub mod helpers;
 pub mod ir;
+pub mod governance_ops;
 pub(crate) mod persistence;
 pub mod persistence_helpers;
 pub mod provider;
@@ -17,7 +18,7 @@ pub mod validation;
 // Intended public surface
 pub use engine::ExecutionEngine;
 pub use error::{ExecError, ProviderFailure, ProviderFailureKind};
-pub use ir::{WorkflowRunOutcome, WorkflowRunRequest};
+pub use ir::{ExecutionIr, ExecutionTransition, WorkflowRunOutcome, WorkflowRunRequest};
 pub use provider::{
     compiled_provider_capabilities, default_provider_registry, provide_with_registry,
     provider_metadata_synthetic_source, provider_record_from_failure,

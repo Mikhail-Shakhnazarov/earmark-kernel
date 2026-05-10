@@ -100,6 +100,7 @@ impl<S: CanonicalStore> CompiledContextCompiler<S> for FakeContextCompiler {
             objects: vec![],
             boundary_relations: vec![],
             constraints: BTreeMap::new(),
+            warnings: vec![],
         })
     }
 }

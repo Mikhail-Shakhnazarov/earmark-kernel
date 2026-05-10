@@ -42,6 +42,7 @@ pub enum Commands {
     Completions { shell: CompletionShell },
     Status,
     Relation(RelationCommand),
+    StandingRequest(StandingRequestCommand),
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -392,6 +393,42 @@ pub struct ProviderCommand {
 #[derive(Subcommand)]
 pub enum ProviderAction {
     Capabilities,
+}
+
+#[derive(Args)]
+pub struct StandingRequestCommand {
+    #[command(subcommand)]
+    pub action: StandingRequestAction,
+}
+
+#[derive(Subcommand)]
+pub enum StandingRequestAction {
+    List {
+        #[arg(long)]
+        status: Option<String>,
+        #[arg(long)]
+        target: Option<String>,
+    },
+    Show {
+        request_id: String,
+    },
+    Approve {
+        request_id: String,
+        #[arg(long)]
+        reason: Option<String>,
+    },
+    Reject {
+        request_id: String,
+        #[arg(long)]
+        reason: Option<String>,
+    },
+    Apply {
+        request_id: String,
+        #[arg(long)]
+        policy: Option<String>,
+        #[arg(long)]
+        reason: Option<String>,
+    },
 }
 
 pub fn command_for_completions() -> clap::Command {

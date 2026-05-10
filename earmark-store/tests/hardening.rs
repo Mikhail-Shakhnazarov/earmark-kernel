@@ -1,4 +1,4 @@
-use earmark_core::{HeaderValue, Kind, Provenance, Standing};
+use earmark_core::{Kind, Provenance, Standing};
 use earmark_store::{
     BatchWrite, CanonicalStore, GitCanonicalStore, StoreError, StoredObject, StoredPayload,
 };

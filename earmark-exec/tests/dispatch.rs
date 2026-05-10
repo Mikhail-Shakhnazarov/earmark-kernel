@@ -26,6 +26,7 @@ impl ProviderAdapter for GoodAdapter {
         &self,
         request: ProviderRequest,
         _profile: &ProviderProfile,
+        _transition_operation: &str,
     ) -> Result<ProviderResponse, ProviderFailure> {
         Ok(ProviderResponse {
             request_id: request.request_id,
@@ -34,6 +35,7 @@ impl ProviderAdapter for GoodAdapter {
             status: "ok".to_string(),
             candidate_payload: r#"{"candidate":"ok"}"#.to_string(),
             metadata: BTreeMap::new(),
+            advisory_warnings: vec![],
             usage: Some(ProviderUsage {
                 input_tokens: Some(10),
                 output_tokens: Some(5),
@@ -55,6 +57,7 @@ impl ProviderAdapter for CustomEchoAdapter {
         &self,
         request: ProviderRequest,
         _profile: &ProviderProfile,
+        _transition_operation: &str,
     ) -> Result<ProviderResponse, ProviderFailure> {
         Ok(ProviderResponse {
             request_id: request.request_id,
@@ -63,6 +66,7 @@ impl ProviderAdapter for CustomEchoAdapter {
             status: "ok".to_string(),
             candidate_payload: r#"{"candidate":"custom"}"#.to_string(),
             metadata: BTreeMap::new(),
+            advisory_warnings: vec![],
             usage: None,
             received_at: chrono::Utc::now(),
         })
@@ -79,6 +83,7 @@ impl ProviderAdapter for MalformedAdapter {
         &self,
         request: ProviderRequest,
         _profile: &ProviderProfile,
+        _transition_operation: &str,
     ) -> Result<ProviderResponse, ProviderFailure> {
         Ok(ProviderResponse {
             request_id: request.request_id,
@@ -87,6 +92,7 @@ impl ProviderAdapter for MalformedAdapter {
             status: "ok".to_string(),
             candidate_payload: "not-json".to_string(),
             metadata: BTreeMap::new(),
+            advisory_warnings: vec![],
             usage: None,
             received_at: chrono::Utc::now(),
         })
@@ -104,6 +110,7 @@ impl ProviderAdapter for FlakyAdapter {
         &self,
         request: ProviderRequest,
         _profile: &ProviderProfile,
+        _transition_operation: &str,
     ) -> Result<ProviderResponse, ProviderFailure> {
         let n = self.fail_count.fetch_add(1, Ordering::SeqCst);
         if n < 2 {
@@ -119,6 +126,7 @@ impl ProviderAdapter for FlakyAdapter {
             status: "ok".to_string(),
             candidate_payload: r#"{"candidate":"ok"}"#.to_string(),
             metadata: BTreeMap::new(),
+            advisory_warnings: vec![],
             usage: None,
             received_at: chrono::Utc::now(),
         })
@@ -134,6 +142,7 @@ impl ProviderAdapter for AlwaysFailAdapter {
         &self,
         _request: ProviderRequest,
         _profile: &ProviderProfile,
+        _transition_operation: &str,
     ) -> Result<ProviderResponse, ProviderFailure> {
         Err(ProviderFailure::new(
             ProviderFailureKind::ProviderUnavailable,
@@ -157,6 +166,7 @@ impl ProviderAdapter for ThrottleThenSucceedAdapter {
         &self,
         request: ProviderRequest,
         _profile: &ProviderProfile,
+        _transition_operation: &str,
     ) -> Result<ProviderResponse, ProviderFailure> {
         let n = self.calls.fetch_add(1, Ordering::SeqCst);
         if n < 2 {
@@ -172,6 +182,7 @@ impl ProviderAdapter for ThrottleThenSucceedAdapter {
             status: "ok".to_string(),
             candidate_payload: r#"{"candidate":"ok"}"#.to_string(),
             metadata: BTreeMap::new(),
+            advisory_warnings: vec![],
             usage: None,
             received_at: chrono::Utc::now(),
         })
@@ -185,6 +196,7 @@ impl ProviderAdapter for BudgetFailAdapter {
         &self,
         _request: ProviderRequest,
         _profile: &ProviderProfile,
+        _transition_operation: &str,
     ) -> Result<ProviderResponse, ProviderFailure> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         Err(ProviderFailure::new(
@@ -213,7 +225,7 @@ fn profile(provider: &str, model: &str) -> ProviderProfile {
         exposure: ProviderExposure {
             allow_prose_objects: true,
             allow_structured_declarations: true,
-            allow_work_surface_only: true,
+            allow_work_surface_only: false,
             allow_export_requests: false,
         },
         response_contract: ProviderResponseContract {
@@ -272,7 +284,7 @@ fn dispatch_resolution_precedence() {
 #[test]
 fn adapter_not_registered_failure() {
     let registry = ProviderRegistry::default();
-    let result = provide_with_registry(&registry, &profile("google", "gemma"), request());
+    let result = provide_with_registry(&registry, &profile("google", "gemma"), request(), "transform");
     let err = result.err().unwrap();
     assert_eq!(err.kind, ProviderFailureKind::AdapterNotRegistered);
 }
@@ -286,7 +298,7 @@ fn default_registry_can_be_extended_with_custom_provider() {
     assert!(registry.get("google_gemini").is_some());
 
     registry.register(Arc::new(CustomEchoAdapter));
-    let outcome = provide_with_registry(&registry, &profile("custom_echo", "custom"), request());
+    let outcome = provide_with_registry(&registry, &profile("custom_echo", "custom"), request(), "transform");
     assert!(outcome.is_ok());
 }
 
@@ -294,7 +306,7 @@ fn default_registry_can_be_extended_with_custom_provider() {
 fn malformed_response_handling() {
     let mut registry = ProviderRegistry::default();
     registry.register(Arc::new(MalformedAdapter));
-    let result = provide_with_registry(&registry, &profile("local_http", "broken"), request());
+    let result = provide_with_registry(&registry, &profile("local_http", "broken"), request(), "transform");
     let err = result.err().unwrap();
     assert_eq!(err.kind, ProviderFailureKind::MalformedResponse);
 }
@@ -305,7 +317,7 @@ fn dispatch_record_creation() {
     registry.register(Arc::new(GoodAdapter));
     let req = request();
     let prof = profile("google", "gemma");
-    let outcome = provide_with_registry(&registry, &prof, req.clone()).unwrap();
+    let outcome = provide_with_registry(&registry, &prof, req.clone(), "transform").unwrap();
     assert_eq!(outcome.record.provider, "google");
     assert_eq!(outcome.record.model, "gemma");
 
@@ -321,7 +333,7 @@ fn retry_succeeds_after_transient_failures() {
     registry.register(Arc::new(FlakyAdapter {
         fail_count: counter.clone(),
     }));
-    let outcome = provide_with_registry(&registry, &profile("flaky", "ok"), request());
+    let outcome = provide_with_registry(&registry, &profile("flaky", "ok"), request(), "transform");
     assert!(outcome.is_ok());
     assert!(counter.load(Ordering::SeqCst) >= 3);
 }
@@ -333,17 +345,9 @@ fn circuit_opens_after_repeated_failures() {
     let prof = profile("always_fail", "down");
     let provider_profile = VersionRef::new(ObjectId::new(), VersionId::new());
     for _ in 0..5 {
-        let _ = provide_with_registry(
-            &registry,
-            &prof,
-            request_with_provider_profile(provider_profile.clone()),
-        );
+        let _ = provide_with_registry(&registry, &prof, request_with_provider_profile(provider_profile.clone()), "transform");
     }
-    let err = provide_with_registry(
-        &registry,
-        &prof,
-        request_with_provider_profile(provider_profile),
-    )
+    let err = provide_with_registry(&registry, &prof, request_with_provider_profile(provider_profile), "transform")
     .unwrap_err();
     assert!(err.message.contains("circuit open"));
 }
@@ -355,11 +359,7 @@ fn retry_succeeds_after_rate_limit_failures() {
     registry.register(Arc::new(ThrottleThenSucceedAdapter {
         calls: calls.clone(),
     }));
-    let outcome = provide_with_registry(
-        &registry,
-        &profile("throttle_then_succeed", "ok"),
-        request(),
-    );
+    let outcome = provide_with_registry(&registry, &profile("throttle_then_succeed", "ok"), request(), "transform");
     assert!(outcome.is_ok());
     assert!(calls.load(Ordering::SeqCst) >= 3);
 }
@@ -372,7 +372,7 @@ fn budget_exceeded_is_not_retried() {
         calls: calls.clone(),
     }));
     let prof = profile("budget_fail", "budget");
-    let err = provide_with_registry(&registry, &prof, request()).unwrap_err();
+    let err = provide_with_registry(&registry, &prof, request(), "transform").unwrap_err();
     assert_eq!(err.kind, ProviderFailureKind::BudgetExceeded);
     assert_eq!(calls.load(Ordering::SeqCst), 1);
 }
@@ -385,26 +385,14 @@ fn circuit_isolated_by_provider_profile_identity() {
 
     let first_profile = VersionRef::new(ObjectId::new(), VersionId::new());
     for _ in 0..5 {
-        let _ = provide_with_registry(
-            &registry,
-            &prof,
-            request_with_provider_profile(first_profile.clone()),
-        );
+        let _ = provide_with_registry(&registry, &prof, request_with_provider_profile(first_profile.clone()), "transform");
     }
-    let first_err = provide_with_registry(
-        &registry,
-        &prof,
-        request_with_provider_profile(first_profile),
-    )
+    let first_err = provide_with_registry(&registry, &prof, request_with_provider_profile(first_profile), "transform")
     .unwrap_err();
     assert!(first_err.message.contains("circuit open"));
 
     let second_profile = VersionRef::new(ObjectId::new(), VersionId::new());
-    let second_err = provide_with_registry(
-        &registry,
-        &prof,
-        request_with_provider_profile(second_profile),
-    )
+    let second_err = provide_with_registry(&registry, &prof, request_with_provider_profile(second_profile), "transform")
     .unwrap_err();
     assert!(!second_err.message.contains("circuit open"));
 }

@@ -25,7 +25,7 @@ use crate::persistence::{
 use crate::persistence_helpers::write_object_and_index;
 use crate::provider::{
     provider_metadata_synthetic_source, provider_record_from_failure,
-    provider_record_from_response, provider_response_is_synthetic, resolve_provider_profile,
+    provider_response_is_synthetic, resolve_provider_profile,
     ProviderMode,
 };
 use crate::resolution::{
@@ -142,7 +142,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                         standing_requirements: BTreeMap::new(),
                         review_requirements: vec![],
                         prohibited_operations: vec![],
-                        export_permitted: true,
+                        export_permitted: false,
                     },
                     filtered_inputs.clone(),
                 );
@@ -194,7 +194,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                         standing_requirements: BTreeMap::new(),
                         review_requirements: vec![],
                         prohibited_operations: vec![],
-                        export_permitted: true,
+                        export_permitted: false,
                     },
                     filtered_inputs.clone(),
                 );
@@ -242,7 +242,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
 
                         match self
                             .provider_service
-                            .provide(&profile, provider_request.clone())
+                            .provide(&profile, provider_request.clone(), transition.operation.as_str())
                         {
                             Ok(mut outcome) => {
                                 let response = outcome.response.take().ok_or_else(|| {
@@ -251,12 +251,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                                         "delegated outcome did not contain a response",
                                     ))
                                 })?;
-                                let provider_record = provider_record_from_response(
-                                    &provider_request,
-                                    &profile,
-                                    &response,
-                                    None,
-                                );
+
                                 if provider_response_is_synthetic(&response) {
                                     let source =
                                         provider_metadata_synthetic_source(&response.metadata)
@@ -265,6 +260,11 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                                         "synthetic provider output detected (source: {}); artifact is not production evidence",
                                         source
                                     ));
+                                }
+
+                                let mut provider_record = outcome.record;
+                                if let Some(warning) = &synthetic_output_warning {
+                                    provider_record.advisory_warnings.push(warning.clone());
                                 }
                                 let event = StoredObject::new(
                                     Kind::Event,

@@ -9,7 +9,7 @@ use earmark_core::{
     REL_TYPE_REQUESTS_STANDING, REL_TYPE_USED_COMPILED_CONTEXT, REL_TYPE_USED_INSTRUCTION,
 };
 use earmark_index::{DerivedIndex, RelationEdge};
-use earmark_store::CanonicalStore;
+use earmark_store::{CanonicalStore, StoredObject};
 use std::collections::{BTreeSet, VecDeque};
 
 /// Base set of relation types that are always carried across handoffs.
@@ -19,6 +19,10 @@ pub const HANDOFF_BASE_RELATION_TYPES: &[&str] = &[
     REL_TYPE_USED_COMPILED_CONTEXT,
     REL_TYPE_REQUESTS_STANDING,
 ];
+
+const MAX_EXPANSION_DEPTH: usize = 2;
+const MAX_EXPANSION_OBJECTS: usize = 100;
+const MAX_EXPANSION_RELATIONS: usize = 500;
 
 pub(crate) fn load_handoff<S: CanonicalStore>(
     store: &S,
@@ -143,7 +147,7 @@ pub(crate) fn derive_successor_handoff<S: CanonicalStore>(
     Ok(specs)
 }
 
-pub(crate) fn reconstruct_successor_inputs_from_handoff<S: CanonicalStore>(
+pub fn reconstruct_successor_inputs_from_handoff<S: CanonicalStore>(
     store: &S,
     index: &DerivedIndex,
     handoff: &HandoffManifest,
@@ -151,27 +155,55 @@ pub(crate) fn reconstruct_successor_inputs_from_handoff<S: CanonicalStore>(
     let mut inputs = Vec::new();
     let mut seen_ids = BTreeSet::<ObjectId>::new();
 
-    let mut pending_ids = VecDeque::new();
+    let mut pending = VecDeque::new();
     for id in &handoff.root_object_ids {
-        pending_ids.push_back(id.clone());
+        pending.push_back((id.clone(), 0));
     }
     for id in &handoff.newly_created_object_ids {
-        pending_ids.push_back(id.clone());
+        pending.push_back((id.clone(), 0));
     }
     for id in &handoff.inherited_input_object_ids {
-        pending_ids.push_back(id.clone());
+        pending.push_back((id.clone(), 0));
     }
 
-    while let Some(current_id) = pending_ids.pop_front() {
+    let mut objects_processed = 0;
+    let mut relations_processed = 0;
+
+    while let Some((current_id, depth)) = pending.pop_front() {
         if !seen_ids.insert(current_id.clone()) {
             continue;
         }
 
+        objects_processed += 1;
+        if objects_processed > MAX_EXPANSION_OBJECTS {
+            return Err(ExecError::HandoffReconstruction(format!(
+                "expansion object limit reached ({})",
+                MAX_EXPANSION_OBJECTS
+            )));
+        }
+
         if let Some(head) = store.read_head(&current_id)? {
+            // Check admissibility
+            if !handoff_object_admissible(&head, handoff)? {
+                continue;
+            }
+
             inputs.push(head.object_ref());
+
+            if depth >= MAX_EXPANSION_DEPTH {
+                continue;
+            }
 
             let edges: Vec<RelationEdge> = index.relation_adjacency(&current_id)?;
             for edge in edges {
+                relations_processed += 1;
+                if relations_processed > MAX_EXPANSION_RELATIONS {
+                    return Err(ExecError::HandoffReconstruction(format!(
+                        "expansion relation limit reached ({})",
+                        MAX_EXPANSION_RELATIONS
+                    )));
+                }
+
                 if !handoff.allowed_relation_types.contains(&edge.relation_type) {
                     continue;
                 }
@@ -181,11 +213,50 @@ pub(crate) fn reconstruct_successor_inputs_from_handoff<S: CanonicalStore>(
                     &edge.source_object_id
                 };
                 let related_id = ObjectId::parse(related_id_str)?;
-                pending_ids.push_back(related_id);
+                pending.push_back((related_id, depth + 1));
             }
         }
     }
     Ok(inputs)
+}
+
+fn handoff_object_admissible(
+    object: &StoredObject,
+    handoff: &HandoffManifest,
+) -> Result<bool, ExecError> {
+    // 1. Kind check
+    if object.envelope.kind != Kind::Object {
+        return Ok(false);
+    }
+
+    // 2. Class check
+    if !handoff.allowed_input_classes.is_empty() {
+        let class = object.envelope.class.as_deref().unwrap_or("");
+        if !handoff.allowed_input_classes.iter().any(|c| c == class) {
+            return Ok(false);
+        }
+    }
+
+    // 3. Standing check
+    for constraint in &handoff.standing_constraints {
+        let actual_value = match constraint.constraint_type.as_str() {
+            "allowed_epistemic" => format!("{:?}", object.envelope.standing.epistemic).to_lowercase(),
+            "allowed_review" => format!("{:?}", object.envelope.standing.review).to_lowercase(),
+            "allowed_process" => format!("{:?}", object.envelope.standing.process).to_lowercase(),
+            unknown => {
+                return Err(ExecError::HandoffReconstruction(format!(
+                    "unknown standing constraint type: {}",
+                    unknown
+                )));
+            }
+        };
+
+        if !constraint.requirements.contains(&actual_value) {
+            return Ok(false);
+        }
+    }
+
+    Ok(true)
 }
 
 pub(crate) fn create_lineage_relations<S: CanonicalStore>(
