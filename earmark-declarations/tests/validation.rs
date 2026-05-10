@@ -286,6 +286,66 @@ fn system_validation_rejects_wrong_class_marker_for_class_reference() {
 }
 
 #[test]
+fn class_rejects_invalid_authorizing_endpoint() {
+    let class = ClassDefinition {
+        name: "test".to_string(),
+        version: "1.0.0".to_string(),
+        kind: "object".to_string(),
+        required_headers: vec![],
+        payload_schema: JsonSchemaRef("inline:any".to_string()),
+        standing_rules: ClassStandingRules::default(),
+        relation_rules: vec![earmark_core::RelationRule {
+            relation_type: "mentions".to_string(),
+            counterparty_classes: vec!["other".to_string()],
+            direction: Some("outgoing".to_string()),
+            authorizing_endpoint: Some("INVALID".to_string()),
+        }],
+        validators: vec![],
+    };
+    assert!(validate_class_definition(&class).is_err());
+}
+
+#[test]
+fn class_rejects_dead_outgoing_target() {
+    let class = ClassDefinition {
+        name: "test".to_string(),
+        version: "1.0.0".to_string(),
+        kind: "object".to_string(),
+        required_headers: vec![],
+        payload_schema: JsonSchemaRef("inline:any".to_string()),
+        standing_rules: ClassStandingRules::default(),
+        relation_rules: vec![earmark_core::RelationRule {
+            relation_type: "mentions".to_string(),
+            counterparty_classes: vec!["other".to_string()],
+            direction: Some("outgoing".to_string()),
+            authorizing_endpoint: Some("target".to_string()),
+        }],
+        validators: vec![],
+    };
+    assert!(validate_class_definition(&class).is_err());
+}
+
+#[test]
+fn class_rejects_dead_incoming_source() {
+    let class = ClassDefinition {
+        name: "test".to_string(),
+        version: "1.0.0".to_string(),
+        kind: "object".to_string(),
+        required_headers: vec![],
+        payload_schema: JsonSchemaRef("inline:any".to_string()),
+        standing_rules: ClassStandingRules::default(),
+        relation_rules: vec![earmark_core::RelationRule {
+            relation_type: "mentions".to_string(),
+            counterparty_classes: vec!["other".to_string()],
+            direction: Some("incoming".to_string()),
+            authorizing_endpoint: Some("source".to_string()),
+        }],
+        validators: vec![],
+    };
+    assert!(validate_class_definition(&class).is_err());
+}
+
+#[test]
 fn class_rejects_invalid_relation_direction() {
     let mut class = ClassDefinition {
         name: "finding".to_string(),

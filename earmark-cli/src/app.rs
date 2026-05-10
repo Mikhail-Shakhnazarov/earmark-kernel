@@ -878,20 +878,27 @@ pub fn run(cli: Cli) -> Result<(), CliError> {
                         related["creation_mode"] = json!(mode);
                     }
 
-                    let mut auth = BTreeMap::new();
-                    for key in [
-                        "relation_auth_endpoint",
-                        "relation_auth_class",
-                        "relation_auth_authority",
-                        "relation_auth_direction",
-                    ] {
-                        if let Some(val) = relation.envelope.headers.get(key) {
-                            auth.insert(key, val);
+                    let auth = {
+                        let endpoint = relation.envelope.headers.get("relation_auth_endpoint");
+                        let class_val = relation.envelope.headers.get("relation_auth_class");
+                        let authority = relation.envelope.headers.get("relation_auth_authority");
+                        let direction = relation.envelope.headers.get("relation_auth_direction");
+                        if endpoint.is_some()
+                            || class_val.is_some()
+                            || authority.is_some()
+                            || direction.is_some()
+                        {
+                            json!({
+                                "endpoint": endpoint,
+                                "class": class_val,
+                                "authority": authority,
+                                "direction": direction,
+                            })
+                        } else {
+                            serde_json::Value::Null
                         }
-                    }
-                    if !auth.is_empty() {
-                        related["authorization"] = json!(auth);
-                    }
+                    };
+                    related["authorization"] = auth;
 
                     emit(
                         as_json,
@@ -2829,23 +2836,20 @@ fn render_explanation(value: &serde_json::Value) -> Option<String> {
             }
 
             if let Some(auth) = related.get("authorization") {
-                output.push_str("\nAuthorization Trace:\n");
-                if let Some(endpoint) = auth.get("relation_auth_endpoint").and_then(|v| v.as_str())
-                {
-                    output.push_str(&format!("  Authorizing Endpoint: {}\n", endpoint));
-                }
-                if let Some(class) = auth.get("relation_auth_class").and_then(|v| v.as_str()) {
-                    output.push_str(&format!("  Authorizing Class: {}\n", class));
-                }
-                if let Some(auth_type) =
-                    auth.get("relation_auth_authority").and_then(|v| v.as_str())
-                {
-                    output.push_str(&format!("  Configured Authority: {}\n", auth_type));
-                }
-                if let Some(direction) =
-                    auth.get("relation_auth_direction").and_then(|v| v.as_str())
-                {
-                    output.push_str(&format!("  Rule Direction: {}\n", direction));
+                if !auth.is_null() {
+                    output.push_str("\nAuthorization Trace:\n");
+                    if let Some(endpoint) = auth.get("endpoint").and_then(|v| v.as_str()) {
+                        output.push_str(&format!("  Authorizing Endpoint: {}\n", endpoint));
+                    }
+                    if let Some(class) = auth.get("class").and_then(|v| v.as_str()) {
+                        output.push_str(&format!("  Authorizing Class: {}\n", class));
+                    }
+                    if let Some(authority) = auth.get("authority").and_then(|v| v.as_str()) {
+                        output.push_str(&format!("  Configured Authority: {}\n", authority));
+                    }
+                    if let Some(direction) = auth.get("direction").and_then(|v| v.as_str()) {
+                        output.push_str(&format!("  Rule Direction: {}\n", direction));
+                    }
                 }
             }
         }
