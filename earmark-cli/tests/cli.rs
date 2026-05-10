@@ -770,6 +770,102 @@ fn cli_root_overrides_env_root() {
     assert_paths_eq(actual_root, &cli_root);
 }
 
+#[test]
+fn doctor_reports_healthy_workspace_after_deposit() {
+    let dir = tempdir().unwrap();
+    Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(dir.path())
+        .arg("--json")
+        .arg("init")
+        .assert()
+        .success();
+
+    Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(dir.path())
+        .arg("--json")
+        .arg("deposit")
+        .arg("--class")
+        .arg("note")
+        .arg("--title")
+        .arg("Test")
+        .arg("--body")
+        .arg("content")
+        .assert()
+        .success();
+
+    let output = Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(dir.path())
+        .arg("--json")
+        .arg("doctor")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["data"]["store_scan_ok"], true);
+    assert_eq!(parsed["data"]["index_exists"], true);
+    assert_eq!(parsed["data"]["index_open_ok"], true);
+    assert_eq!(parsed["data"]["counts_match"], true);
+    assert!(parsed["data"]["canonical_object_count"].as_u64().unwrap() > 0);
+    assert!(parsed["data"]["indexed_object_count"].as_u64().unwrap() > 0);
+    assert_eq!(
+        parsed["data"]["canonical_object_count"],
+        parsed["data"]["indexed_object_count"]
+    );
+}
+
+#[test]
+fn doctor_reports_index_missing_after_deletion() {
+    let dir = tempdir().unwrap();
+    Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(dir.path())
+        .arg("--json")
+        .arg("init")
+        .assert()
+        .success();
+
+    let index_path = dir
+        .path()
+        .join(".earmark")
+        .join("derived")
+        .join("index.sqlite");
+    let _ = std::fs::remove_file(&index_path);
+
+    let output = Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(dir.path())
+        .arg("--json")
+        .arg("doctor")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(parsed["data"]["ok"], false);
+    assert_eq!(parsed["data"]["store_scan_ok"], true);
+    assert_eq!(parsed["data"]["index_exists"], false);
+    assert_eq!(parsed["data"]["index_open_ok"], false);
+    assert_eq!(parsed["data"]["counts_match"], false);
+    assert_eq!(
+        parsed["data"]["canonical_object_count"].as_u64().unwrap(),
+        0
+    );
+}
+
 fn workspace_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()

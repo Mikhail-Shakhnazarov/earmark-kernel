@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use earmark_core::{
     to_yaml, Kind, Provenance, RuntimeProfile, Standing, SystemDefinition, WorkflowDefinition,
 };
-use earmark_index::{DerivedIndex, QueryFilter};
+use earmark_index::{DerivedIndex, IndexError, QueryFilter};
 use earmark_store::{CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload};
 use tempfile::tempdir;
 
@@ -201,4 +201,302 @@ fn symbolic_resolution_uses_explicit_declaration_identity_not_title_or_class() {
     assert_eq!(resolved.id, target_ref.id);
     assert_eq!(resolved.version_id, target_ref.version_id);
     assert_ne!(resolved.id, collision_ref.id);
+}
+
+#[test]
+fn test_upsert_head_object_coherence() {
+    let dir = tempdir().unwrap();
+    let store = GitCanonicalStore::new(dir.path());
+    store.init_layout().unwrap();
+
+    let obj = StoredObject::new(
+        Kind::Object,
+        Some("note".to_string()),
+        Standing::default(),
+        Provenance::direct_input("operator"),
+        BTreeMap::from([(
+            "title".to_string(),
+            earmark_core::HeaderValue::String("Upserted note".to_string()),
+        )]),
+        StoredPayload::from_markdown("upserted content"),
+        vec![],
+    );
+
+    let version_ref = store.write_object(&obj).unwrap();
+
+    let index = DerivedIndex::open(dir.path()).unwrap();
+    index
+        .upsert_head_object_from_store(&store, &version_ref.id)
+        .unwrap();
+
+    let rows = index
+        .query_objects(&QueryFilter {
+            class: Some("note".to_string()),
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].title.as_deref(), Some("Upserted note"));
+
+    let head = index.get_head(&version_ref.id).unwrap().unwrap();
+    assert_eq!(head.version_id, version_ref.version_id);
+}
+
+#[test]
+fn test_index_count_after_rebuild() {
+    let dir = tempdir().unwrap();
+    let store = GitCanonicalStore::new(dir.path());
+
+    for i in 0..5 {
+        let obj = StoredObject::new(
+            Kind::Object,
+            Some("note".to_string()),
+            Standing::default(),
+            Provenance::direct_input("operator"),
+            BTreeMap::from([(
+                "title".to_string(),
+                earmark_core::HeaderValue::String(format!("note {}", i)),
+            )]),
+            StoredPayload::from_markdown(format!("content {}", i)),
+            vec![],
+        );
+        store.write_object(&obj).unwrap();
+    }
+
+    let index = DerivedIndex::open(dir.path()).unwrap();
+    index.rebuild_from_store(&store).unwrap();
+
+    let canonical_count = store.scan_objects().unwrap().len() as u64;
+    let indexed_count = index.object_count().unwrap();
+    assert_eq!(
+        indexed_count, canonical_count,
+        "indexed object count should match canonical store scan count after rebuild"
+    );
+
+    let head_count = index.head_count().unwrap();
+    assert_eq!(head_count, 5, "all 5 objects should have heads");
+}
+
+#[test]
+fn test_rebuild_preserves_active_systems() {
+    let dir = tempdir().unwrap();
+    let store = GitCanonicalStore::new(dir.path());
+
+    let system = SystemDefinition {
+        system_id: "test-system".to_string(),
+        namespace: "test/ns".to_string(),
+        title: "Test".to_string(),
+        description: None,
+        classes: vec![],
+        instructions: vec![],
+        policies: vec![],
+        workflows: vec![],
+        compiled_contexts: vec![],
+        provider_profiles: vec![],
+        default_compiled_context: None,
+        default_provider_profile: None,
+        runtime_profile: RuntimeProfile {
+            execution_surface: "local".to_string(),
+            machine_output_default: "json".to_string(),
+            work_surface_mode: "manifest".to_string(),
+        },
+        activated_at: None,
+    };
+
+    let stored = StoredObject::new(
+        Kind::SystemDefinition,
+        Some("system_definition".to_string()),
+        Standing::default(),
+        Provenance::direct_input("operator"),
+        BTreeMap::from([(
+            "title".to_string(),
+            earmark_core::HeaderValue::String(system.title.clone()),
+        )]),
+        StoredPayload::from_yaml(to_yaml(&system).unwrap()),
+        vec![],
+    );
+    let version = store.write_object(&stored).unwrap();
+
+    let index = DerivedIndex::open(dir.path()).unwrap();
+    index.rebuild_from_store(&store).unwrap();
+    index
+        .activate_system("test/ns", "test-system", &version)
+        .unwrap();
+
+    index.rebuild_from_store(&store).unwrap();
+
+    let active = index.get_active_system("test/ns").unwrap();
+    assert!(
+        active.is_some(),
+        "active system should survive rebuild_from_store"
+    );
+    assert_eq!(active.unwrap().system_id, "test-system");
+}
+
+#[test]
+fn test_rebuild_objects_by_kind_and_class() {
+    let dir = tempdir().unwrap();
+    let store = GitCanonicalStore::new(dir.path());
+
+    let note = StoredObject::new(
+        Kind::Object,
+        Some("note".to_string()),
+        Standing::default(),
+        Provenance::direct_input("operator"),
+        BTreeMap::new(),
+        StoredPayload::from_markdown("note content"),
+        vec![],
+    );
+    store.write_object(&note).unwrap();
+
+    let finding = StoredObject::new(
+        Kind::Object,
+        Some("finding".to_string()),
+        Standing::default(),
+        Provenance::direct_input("operator"),
+        BTreeMap::new(),
+        StoredPayload::from_markdown("finding content"),
+        vec![],
+    );
+    store.write_object(&finding).unwrap();
+
+    let instruction = StoredObject::new(
+        Kind::Instruction,
+        Some("instruction".to_string()),
+        Standing::default(),
+        Provenance::direct_input("operator"),
+        BTreeMap::new(),
+        StoredPayload::from_markdown("---\nname: test_instruction\nversion: \"1\"\npurpose: test\ninput_classes: []\noutput_classes: []\nexecution_policy: default\ntrace_policy: summary\nregister: user\n---\ninstruction body"),
+        vec![],
+    );
+    store.write_object(&instruction).unwrap();
+
+    let index = DerivedIndex::open(dir.path()).unwrap();
+    index.rebuild_from_store(&store).unwrap();
+
+    let objects = index.get_objects_by_kind(Kind::Object).unwrap();
+    assert_eq!(objects.len(), 2, "should find 2 Kind::Object entries");
+
+    let instructions = index.get_objects_by_kind(Kind::Instruction).unwrap();
+    assert_eq!(
+        instructions.len(),
+        1,
+        "should find 1 Kind::Instruction entry"
+    );
+
+    let rows = index
+        .query_objects(&QueryFilter {
+            class: Some("note".to_string()),
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].class.as_deref(), Some("note"));
+
+    let rows = index
+        .query_objects(&QueryFilter {
+            class: Some("finding".to_string()),
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].class.as_deref(), Some("finding"));
+}
+
+#[test]
+fn test_missing_index_error() {
+    let dir = tempdir().unwrap();
+
+    let err = DerivedIndex::open_existing(dir.path()).unwrap_err();
+    assert!(
+        matches!(err, IndexError::MissingIndex(_)),
+        "Expected MissingIndex error, got {}",
+        err
+    );
+}
+
+#[test]
+fn test_open_existing_reads_correct_counts() {
+    let dir = tempdir().unwrap();
+    let store = GitCanonicalStore::new(dir.path());
+
+    let obj = StoredObject::new(
+        Kind::Object,
+        Some("note".to_string()),
+        Standing::default(),
+        Provenance::direct_input("operator"),
+        BTreeMap::new(),
+        StoredPayload::from_markdown("content"),
+        vec![],
+    );
+    store.write_object(&obj).unwrap();
+
+    let index = DerivedIndex::open(dir.path()).unwrap();
+    index.rebuild_from_store(&store).unwrap();
+    drop(index);
+
+    let opened = DerivedIndex::open_existing(dir.path()).unwrap();
+    assert_eq!(opened.object_count().unwrap(), 1);
+    assert_eq!(opened.head_count().unwrap(), 1);
+}
+
+#[test]
+fn test_relation_count_after_rebuild() {
+    let dir = tempdir().unwrap();
+    let store = GitCanonicalStore::new(dir.path());
+
+    let a = StoredObject::new(
+        Kind::Object,
+        Some("note".to_string()),
+        Standing::default(),
+        Provenance::direct_input("operator"),
+        BTreeMap::new(),
+        StoredPayload::from_markdown("a"),
+        vec![],
+    );
+    let b = StoredObject::new(
+        Kind::Object,
+        Some("finding".to_string()),
+        Standing::default(),
+        Provenance::direct_input("operator"),
+        BTreeMap::new(),
+        StoredPayload::from_markdown("b"),
+        vec![],
+    );
+    store.write_object(&a).unwrap();
+    store.write_object(&b).unwrap();
+
+    let relation = StoredObject::new(
+        Kind::Relation,
+        None,
+        Standing::default(),
+        Provenance::direct_input("operator"),
+        BTreeMap::new(),
+        StoredPayload::from_json_bytes(
+            serde_json::to_vec(&serde_json::json!({
+                "source": a.object_ref(),
+                "target": b.object_ref(),
+                "relation_type": "supports",
+                "qualifiers": {},
+                "scope": "test"
+            }))
+            .unwrap(),
+        ),
+        vec![],
+    );
+    store.write_object(&relation).unwrap();
+
+    let index = DerivedIndex::open(dir.path()).unwrap();
+    index.rebuild_from_store(&store).unwrap();
+
+    assert_eq!(index.relation_count().unwrap(), 1);
+
+    // Verify adjacency query works
+    let adjacency = index.relation_adjacency(&a.envelope.id).unwrap();
+    assert_eq!(adjacency.len(), 1);
+    assert_eq!(adjacency[0].relation_type, "supports");
+
+    // Head query should work for source
+    let head = index.get_head(&a.envelope.id).unwrap();
+    assert!(head.is_some());
 }
