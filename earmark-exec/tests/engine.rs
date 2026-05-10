@@ -1852,6 +1852,12 @@ guards: []
         .as_ref()
         .unwrap()
         .contains(delta_id.as_str()));
+
+    // Verify failure links to run_id and transition_id are populated
+    assert_eq!(failure.run_id, "fail_run");
+    assert_eq!(failure.transition_id, "op_fail");
+    assert_eq!(failure.error_type, "invalid_workflow");
+    assert!(!failure.input_object_ids.is_empty());
 }
 
 #[test]
