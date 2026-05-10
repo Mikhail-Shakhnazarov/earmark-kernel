@@ -577,6 +577,14 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                 ));
                 assignment.updated_at = now_end;
                 persist_assignment_update(store, index, &stored_assignment_head, &assignment)?;
+                record_transition(
+                    record,
+                    transition.id.clone(),
+                    "validation_error",
+                    vec![],
+                    vec![failure_ref],
+                    Some(error.to_string()),
+                );
                 return Err(error);
             }
             let handoff_specs = derive_successor_handoff(store, index, system, ir, transition)?;
