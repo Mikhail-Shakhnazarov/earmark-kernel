@@ -1105,6 +1105,8 @@ pub struct TransformationFailure {
     pub error_type: String,
     pub message: String,
     pub stack_trace: Option<String>,
+    #[serde(default)]
+    pub input_object_ids: Vec<ObjectId>,
     pub created_at: DateTime<Utc>,
 }
 

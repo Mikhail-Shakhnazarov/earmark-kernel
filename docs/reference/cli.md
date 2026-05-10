@@ -163,15 +163,15 @@ List handoffs, optionally filtered by run.
 
 ### `em failure show <id>`
 
-Show raw data for a failure.
+Show the complete failure artifact as stored. Includes run id, transition id, assignment id, error type, error message, failed change set id (if any), input object ids at time of failure, and timestamp.
 
 ### `em failure explain <id>`
 
-Explain what went wrong in a transition.
+Explain what went wrong in a transition. Returns interpreted context: run id, assignment id, transition id, failed change set id, error type, and suggested next commands (`em failure show`, `em run explain`, `em change-set explain`, `em assignment explain`, `em run timeline`).
 
 ### `em failure list [--run-id <id>] [--transition-id <id>]`
 
-List failures, optionally filtered.
+List failures with summary fields (failure id, run id, transition id, assignment id, error type, message, timestamp). Filter by run id, transition id, or both.
 
 ### `em relation show <id>`
 
