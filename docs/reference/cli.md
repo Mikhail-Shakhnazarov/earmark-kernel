@@ -107,11 +107,11 @@ List recent workflow runs.
 
 ### `em run show <run_id>`
 
-Show detailed data for a specific run.
+Show the raw run record for a specific run. Returns the stored ledger data directly (run_id, status, events, timestamps). Accepts `latest` for the most recent run.
 
 ### `em run explain <run_id>`
 
-Summary of a run: status, transitions, created artifacts. Use `latest` for the most recent run.
+Interpreted run context: status, transitions, related artifacts (assignments, change sets, handoffs, failures), and suggested next commands. Use `latest` for the most recent run.
 
 ### `em run timeline <run_id>`
 
@@ -189,7 +189,7 @@ List relations, optionally filtered by source, target, or type.
 
 ### `em audit failures [--run-id <id>] [--transition-id <id>]`
 
-Audit workflow failures.
+Audit workflow failures. Returns failure count summary and suggested next commands in addition to failure details.
 
 ### `em audit show <failure_id>`
 
