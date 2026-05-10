@@ -1,6 +1,6 @@
 # Relation Authorization
 
-Every relation in Earmark is authorized before creation. The authorization decision is recorded as headers on the relation object, making it inspectable after the fact.
+Relations created through the declared runtime path are authorized before creation. The authorization decision is recorded as headers on the relation object, making it inspectable after the fact.
 
 ## Why This Matters
 
@@ -78,7 +78,7 @@ A `finding` declares an incoming `referenced_by` rule targeting `source_note`. A
 
 ### Either-Endpoint Authorization
 
-A class declares a rule with `authorizing_endpoint: either_endpoint`. The relation can be created from either direction, and the authority is recorded as `either_endpoint` regardless of which side matched.
+A rule with `authorizing_endpoint: either_endpoint` allows either the source-side rule or the target-side rule to authorize the relation, provided the rule direction matches that endpoint's position in the relation. The recorded authority is `either_endpoint`; the recorded endpoint still shows which side's rule matched.
 
 ## Relation Show vs Explain
 
