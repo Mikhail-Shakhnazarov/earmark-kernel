@@ -2153,6 +2153,18 @@ guards: []
         extract_events.len()
     );
 
+    // Verify no misleading partial_execution event for intentionally skipped ancestors
+    let partial_events: Vec<_> = second_outcome
+        .record
+        .events
+        .iter()
+        .filter(|e| e.event_type == "partial_execution")
+        .collect();
+    assert!(
+        partial_events.is_empty(),
+        "should not report partial_execution for intentionally skipped upstream ancestors"
+    );
+
     // Verify no new findings were created by the handoff continuation run
     let final_objects = store.scan_objects().unwrap();
     let final_finding_count = final_objects

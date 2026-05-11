@@ -147,11 +147,21 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                         Some(format!("continued from handoff {}", handoff_id.as_str())),
                     );
 
-                    if let Some(predecessors) = incoming.get(&target_id) {
-                        for edge in predecessors {
-                            executed.insert(edge.from.clone());
+                    let mut ancestors = BTreeSet::new();
+                    let mut stack: Vec<String> = incoming
+                        .get(&target_id)
+                        .map(|edges| edges.iter().map(|e| e.from.clone()).collect())
+                        .unwrap_or_default();
+                    while let Some(ancestor_id) = stack.pop() {
+                        if ancestors.insert(ancestor_id.clone()) {
+                            if let Some(preds) = incoming.get(&ancestor_id) {
+                                for edge in preds {
+                                    stack.push(edge.from.clone());
+                                }
+                            }
                         }
                     }
+                    executed.extend(ancestors);
 
                     vec![target_id]
                 }
@@ -179,7 +189,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                 &request,
                 &effective_inputs,
             )? {
-                ready_queue.push_back((transition_id, effective_inputs.clone()));
+                ready_queue.push_back((transition_id.clone(), effective_inputs.clone()));
             }
         }
 
