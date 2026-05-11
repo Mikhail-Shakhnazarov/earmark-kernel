@@ -76,7 +76,7 @@ for object in outcome.emitted_objects {
 
 You can drive Earmark from any language by spawning the `em` binary and parsing its JSON output.
 
-All JSON output is wrapped in a versioned envelope. Always check `contract_version`:
+With `--json`, most command output is wrapped in a versioned envelope. Always check `contract_version`:
 
 ```json
 {
@@ -84,6 +84,8 @@ All JSON output is wrapped in a versioned envelope. Always check `contract_versi
   "data": { ... }
 }
 ```
+
+Some output-special commands (`completions`, `run explain`) return shell code or formatted text even with `--json`; they are not designed for machine-driven parsing.
 
 ### Python Example
 

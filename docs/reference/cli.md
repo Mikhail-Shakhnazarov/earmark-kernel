@@ -1,6 +1,6 @@
 # CLI Reference
 
-The Earmark CLI (`em`) is the primary interface for operators and developers. All commands support `--json` for machine-readable output.
+The Earmark CLI (`em`) is the primary interface for operators and developers. Most commands support `--json` for machine-readable output wrapped in a versioned envelope. Output-special commands such as `completions` and `run explain` (text-format inspection) bypass the JSON envelope.
 
 ## Global Flags
 

@@ -240,7 +240,7 @@ pub fn render_provider_context(manifest: &WorkSurfaceManifest) -> String {
     rendered.push_str("### Work Surface Context\n\n");
     rendered.push_str(&format!("Surface ID: {}\n", manifest.surface_id));
     rendered.push_str(&format!("Object Count: {}\n", manifest.objects.len()));
-    rendered.push_str("\n");
+    rendered.push('\n');
     rendered
 }
 
@@ -277,14 +277,19 @@ pub fn render_provider_input<S: CanonicalStore>(
     // If allow_work_surface_only is false, ensure all active inputs are also included
     if !profile.exposure.allow_work_surface_only {
         for input in inputs {
-            if !to_render_refs.iter().any(|r| r.id == input.id && r.version_id == input.version_id) {
+            if !to_render_refs
+                .iter()
+                .any(|r| r.id == input.id && r.version_id == input.version_id)
+            {
                 to_render_refs.push(input.clone());
             }
         }
     }
 
-    let active_refs: BTreeSet<(earmark_core::ObjectId, earmark_core::VersionId)> =
-        inputs.iter().map(|o| (o.id.clone(), o.version_id.clone())).collect();
+    let active_refs: BTreeSet<(earmark_core::ObjectId, earmark_core::VersionId)> = inputs
+        .iter()
+        .map(|o| (o.id.clone(), o.version_id.clone()))
+        .collect();
 
     for (i, obj_ref) in to_render_refs.iter().enumerate() {
         let obj = store.read_version(&obj_ref.version_ref()).map_err(|e| {
@@ -343,7 +348,7 @@ pub fn render_provider_input<S: CanonicalStore>(
             };
             rendered.push_str(&format!("\n({})\n", reason));
         }
-        rendered.push_str("\n");
+        rendered.push('\n');
     }
 
     Ok(rendered)

@@ -472,7 +472,7 @@ pub fn validate_provider_profile(value: &ProviderProfile) -> Result<(), DeriveEr
                     .auth
                     .header_name
                     .as_ref()
-                    .map_or(true, |s| s.trim().is_empty())
+                    .is_none_or(|s| s.trim().is_empty())
                 {
                     return Err(DeriveError::Validation(
                         "http auth kind 'header' requires a header_name".to_string(),
@@ -500,7 +500,7 @@ pub fn validate_provider_profile(value: &ProviderProfile) -> Result<(), DeriveEr
                     .auth
                     .param_name
                     .as_ref()
-                    .map_or(true, |s| s.trim().is_empty())
+                    .is_none_or(|s| s.trim().is_empty())
                 {
                     return Err(DeriveError::Validation(
                         "http auth kind 'query_parameter' requires a param_name".to_string(),

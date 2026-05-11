@@ -1,4 +1,3 @@
-use serde_json;
 use std::collections::BTreeMap;
 
 use chrono::{DateTime, Utc};
@@ -715,19 +714,14 @@ pub struct CompiledContextVisibility {
     pub include_provenance: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HttpAuthKind {
+    #[default]
     None,
     Header,
     Bearer,
     QueryParameter,
-}
-
-impl Default for HttpAuthKind {
-    fn default() -> Self {
-        Self::None
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]

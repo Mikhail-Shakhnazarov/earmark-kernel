@@ -87,7 +87,7 @@ The continuation run:
 - Rebuilds the compiled work surface from the handoff's template reference
 - Uses the bounded input objects reconstructed from the handoff manifest
 
-You can re-run from the same handoff multiple times — with a different model, different parameters, or after fixing the instruction.
+You can re-run from the same handoff multiple times — a later run can consume the same handoff under a different system configuration or after fixing the instruction.
 
 ## Why It Matters
 
