@@ -55,11 +55,7 @@ impl ProviderAdapter for HttpGenerationAdapter {
         );
         vars.insert(
             "max_output_tokens".to_string(),
-            profile
-                .budget
-                .max_output_tokens
-                .unwrap_or(256)
-                .to_string(),
+            profile.budget.max_output_tokens.unwrap_or(256).to_string(),
         );
 
         // 4. Resolve Auth
@@ -75,12 +71,17 @@ impl ProviderAdapter for HttpGenerationAdapter {
                         "missing header_name for header auth",
                     )
                 })?;
-                let env_name = http.auth.env.as_ref().or(profile.auth_env.as_ref()).ok_or_else(|| {
-                    ProviderFailure::new(
-                        ProviderFailureKind::AuthenticationFailed,
-                        "missing auth env variable name",
-                    )
-                })?;
+                let env_name = http
+                    .auth
+                    .env
+                    .as_ref()
+                    .or(profile.auth_env.as_ref())
+                    .ok_or_else(|| {
+                        ProviderFailure::new(
+                            ProviderFailureKind::AuthenticationFailed,
+                            "missing auth env variable name",
+                        )
+                    })?;
                 let val = env::var(env_name).map_err(|_| {
                     ProviderFailure::new(
                         ProviderFailureKind::AuthenticationFailed,
@@ -91,12 +92,17 @@ impl ProviderAdapter for HttpGenerationAdapter {
                 auth_value = Some(val);
             }
             earmark_core::HttpAuthKind::Bearer => {
-                let env_name = http.auth.env.as_ref().or(profile.auth_env.as_ref()).ok_or_else(|| {
-                    ProviderFailure::new(
-                        ProviderFailureKind::AuthenticationFailed,
-                        "missing auth env variable name",
-                    )
-                })?;
+                let env_name = http
+                    .auth
+                    .env
+                    .as_ref()
+                    .or(profile.auth_env.as_ref())
+                    .ok_or_else(|| {
+                        ProviderFailure::new(
+                            ProviderFailureKind::AuthenticationFailed,
+                            "missing auth env variable name",
+                        )
+                    })?;
                 let val = env::var(env_name).map_err(|_| {
                     ProviderFailure::new(
                         ProviderFailureKind::AuthenticationFailed,
@@ -107,12 +113,17 @@ impl ProviderAdapter for HttpGenerationAdapter {
                 auth_value = Some(format!("Bearer {}", val));
             }
             earmark_core::HttpAuthKind::QueryParameter => {
-                let env_name = http.auth.env.as_ref().or(profile.auth_env.as_ref()).ok_or_else(|| {
-                    ProviderFailure::new(
-                        ProviderFailureKind::AuthenticationFailed,
-                        "missing auth env variable name",
-                    )
-                })?;
+                let env_name = http
+                    .auth
+                    .env
+                    .as_ref()
+                    .or(profile.auth_env.as_ref())
+                    .ok_or_else(|| {
+                        ProviderFailure::new(
+                            ProviderFailureKind::AuthenticationFailed,
+                            "missing auth env variable name",
+                        )
+                    })?;
                 let val = env::var(env_name).map_err(|_| {
                     ProviderFailure::new(
                         ProviderFailureKind::AuthenticationFailed,
@@ -121,10 +132,6 @@ impl ProviderAdapter for HttpGenerationAdapter {
                 })?;
                 auth_value = Some(val);
             }
-        }
-
-        if let Some(val) = &auth_value {
-            vars.insert("auth_key".to_string(), val.clone());
         }
 
         // 2. Build URL
@@ -279,7 +286,7 @@ fn extract_path(value: &serde_json::Value, path: &str) -> Option<String> {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "http-provider"))]
 mod tests {
     use super::*;
     use earmark_core::{
@@ -449,7 +456,7 @@ mod tests {
                 method: Some("POST".to_string()),
                 url_template: "https://generativelanguage.googleapis.com/v1beta/models/{{model}}:generateContent".to_string(),
                 auth: HttpAuthConfig {
-                    kind: HttpAuthKind::QueryParameter, 
+                    kind: HttpAuthKind::QueryParameter,
                     param_name: Some("key".to_string()),
                     header_name: None,
                     env: None,
@@ -484,15 +491,122 @@ mod tests {
                 earmark_core::ObjectId::new(),
                 earmark_core::VersionId::new(),
             ),
-            instruction_text: "Say hello".to_string(),
+            instruction_text: "Return exactly: EARMARK_GEMINI_SMOKE_OK".to_string(),
             work_surface_manifest: None,
             inputs: vec![],
             response_contract: profile.response_contract.clone(),
             issued_at: chrono::Utc::now(),
         };
 
+        let api_key = std::env::var("GEMINI_API_KEY").unwrap_or_default();
         let response = adapter.provide(request, &profile, "transform").unwrap();
-        println!("Response: {}", response.candidate_payload);
-        assert!(!response.candidate_payload.is_empty());
+        let sanitized = response.candidate_payload.replace(&api_key, "***");
+        println!("Sanitized Response: {}", sanitized);
+        assert!(response
+            .candidate_payload
+            .contains("EARMARK_GEMINI_SMOKE_OK"));
+    }
+
+    #[test]
+    #[cfg(feature = "http-provider")]
+    fn test_provider_service_integration() {
+        use crate::provider::{provide_with_registry, ProviderRegistry};
+        use earmark_core::{ProviderExposure, ProviderResponseContract};
+        use std::sync::Arc;
+
+        let server = httpmock::MockServer::start();
+        let m = server.mock(|when, then| {
+            when.method(httpmock::Method::POST)
+                .path("/v1/test")
+                .json_body(serde_json::json!({ "prompt": "hi" }));
+            then.status(200).json_body(serde_json::json!({
+                "result": "ok",
+                "usage": { "tokens": 10 }
+            }));
+        });
+
+        let profile = ProviderProfile {
+            name: "service_test".to_string(),
+            version: "1".to_string(),
+            description: None,
+            provider: "http_generation".to_string(),
+            model: "service-model".to_string(),
+            endpoint_env: None,
+            auth_env: None,
+            budget: earmark_core::ProviderBudget::default(),
+            allowed_operations: vec!["transform".to_string()],
+            exposure: ProviderExposure {
+                allow_prose_objects: true,
+                allow_structured_declarations: true,
+                allow_work_surface_only: false,
+                allow_export_requests: false,
+            },
+            response_contract: ProviderResponseContract {
+                format: "markdown".to_string(),
+                must_return_candidate_only: true,
+                must_include_lineage: false,
+            },
+            http: Some(HttpGenerationProfile {
+                method: Some("POST".to_string()),
+                url_template: format!("{}/v1/test", server.base_url()),
+                auth: HttpAuthConfig {
+                    kind: earmark_core::HttpAuthKind::None,
+                    ..Default::default()
+                },
+                request: HttpRequestTemplate {
+                    content_type: Some("application/json".to_string()),
+                    body: serde_json::json!({ "prompt": "{{instruction_text}}" }),
+                },
+                response: HttpResponseExtraction {
+                    text_path: "$.result".to_string(),
+                    input_tokens_path: Some("$.usage.tokens".to_string()),
+                    ..Default::default()
+                },
+            }),
+        };
+
+        let mut registry = ProviderRegistry::new();
+        registry.register(Arc::new(HttpGenerationAdapter));
+
+        let request = ProviderRequest {
+            request_id: "req_test".to_string(),
+            run_id: "run_test".to_string(),
+            work_packet: earmark_core::ObjectRef::new(
+                earmark_core::ObjectId::new(),
+                earmark_core::VersionId::new(),
+                earmark_core::Kind::WorkPacket,
+                None,
+            ),
+            provider_profile: earmark_core::VersionRef::new(
+                earmark_core::ObjectId::new(),
+                earmark_core::VersionId::new(),
+            ),
+            instruction_text: "hi".to_string(),
+            work_surface_manifest: None,
+            inputs: vec![],
+            response_contract: profile.response_contract.clone(),
+            issued_at: chrono::Utc::now(),
+        };
+
+        // 1. Success case
+        let outcome =
+            provide_with_registry(&registry, &profile, request.clone(), "transform").unwrap();
+        assert_eq!(outcome.record.provider, "http_generation");
+        assert_eq!(outcome.record.model, "service-model");
+        assert_eq!(
+            outcome.record.usage.as_ref().unwrap().input_tokens,
+            Some(10)
+        );
+        assert!(!outcome.record.metadata.contains_key("synthetic"));
+
+        // 2. Policy gate test (forbidden operation)
+        let forbidden_res = provide_with_registry(&registry, &profile, request.clone(), "export");
+        assert!(forbidden_res.is_err());
+        assert_eq!(
+            forbidden_res.unwrap_err().kind,
+            crate::error::ProviderFailureKind::ForbiddenOperation
+        );
+
+        m.assert();
     }
 }

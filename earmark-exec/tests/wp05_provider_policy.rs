@@ -51,6 +51,7 @@ fn mock_profile(allowed_ops: Vec<&str>) -> ProviderProfile {
             must_return_candidate_only: true,
             must_include_lineage: false,
         },
+        http: None,
     }
 }
 
@@ -556,6 +557,7 @@ fn test_transition_preserves_provider_record_warnings() {
             must_return_candidate_only: false,
             must_include_lineage: false,
         },
+        http: None,
     };
     let profile_obj = StoredObject::new(
         Kind::ProviderProfile,

@@ -149,6 +149,7 @@ fn system_validation_rejects_wrong_kind_reference() {
                 must_return_candidate_only: false,
                 must_include_lineage: false,
             },
+            http: None,
         })
         .unwrap(),
     );
@@ -487,6 +488,7 @@ fn provider_profile_rejects_empty_response_format() {
             must_return_candidate_only: true,
             must_include_lineage: false,
         },
+        http: None,
     };
     assert!(validate_provider_profile(&profile).is_err());
 }
@@ -519,6 +521,7 @@ fn provider_profile_rejects_negative_budget() {
             must_return_candidate_only: true,
             must_include_lineage: false,
         },
+        http: None,
     };
     assert!(validate_provider_profile(&profile).is_err());
 }
@@ -794,6 +797,7 @@ fn valid_provider_profile_passes() {
             must_return_candidate_only: true,
             must_include_lineage: false,
         },
+        http: None,
     };
     assert!(validate_provider_profile(&profile).is_ok());
 }

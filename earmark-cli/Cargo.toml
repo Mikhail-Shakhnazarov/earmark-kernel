@@ -30,6 +30,6 @@ predicates.workspace = true
 tempfile.workspace = true
 
 [features]
-default = ["gemini"]
+default = ["http-provider"]
 http-provider = ["earmark-exec/http-provider"]
 gemini = ["earmark-exec/gemini"]

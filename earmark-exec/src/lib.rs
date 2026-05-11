@@ -4,6 +4,7 @@ pub mod error;
 pub mod governance_ops;
 pub mod handoff;
 pub mod helpers;
+pub mod http_generation;
 pub mod ir;
 pub(crate) mod persistence;
 pub mod persistence_helpers;
@@ -14,7 +15,6 @@ pub(crate) mod resolution;
 pub mod state;
 pub(crate) mod transition;
 pub mod validation;
-pub mod http_generation;
 
 // Intended public surface
 pub use engine::ExecutionEngine;
@@ -35,8 +35,11 @@ pub use relation_logic::{
 };
 
 // Specialized adapters
+#[cfg(feature = "gemini")]
 pub mod gemini;
+#[cfg(feature = "gemini")]
 pub use gemini::GeminiAdapter;
+#[cfg(feature = "http-provider")]
 pub use http_generation::HttpGenerationAdapter;
 
 #[cfg(test)]

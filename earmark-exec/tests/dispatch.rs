@@ -233,6 +233,7 @@ fn profile(provider: &str, model: &str) -> ProviderProfile {
             must_return_candidate_only: true,
             must_include_lineage: true,
         },
+        http: None,
     }
 }
 

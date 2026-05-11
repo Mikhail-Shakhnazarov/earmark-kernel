@@ -1,5 +1,5 @@
-use std::collections::BTreeMap;
 use serde_json;
+use std::collections::BTreeMap;
 
 use chrono::{DateTime, Utc};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
