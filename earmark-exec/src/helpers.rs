@@ -1,8 +1,9 @@
 use chrono::Utc;
 use earmark_connected_context::WorkSurfaceManifest;
 use earmark_core::{
-    Kind, ObjectRef, RunRecord, RunStatus, TokenRecord, TransitionAssignment, VersionRef,
-    WorkPacket, WorkPacketConstraints, WorkSurfaceRef, WorkflowDefinition,
+    projection::project_visibility, Kind, ObjectRef, RunRecord, RunStatus, StandingRegistry,
+    TokenRecord, TransitionAssignment, VersionRef, WorkPacket, WorkPacketConstraints,
+    WorkSurfaceRef, WorkflowDefinition,
 };
 use earmark_store::{CanonicalStore, StoredObject, StoredPayload};
 use std::collections::{BTreeMap, BTreeSet};
@@ -250,6 +251,7 @@ pub fn render_provider_input<S: CanonicalStore>(
     manifest: Option<&WorkSurfaceManifest>,
     inputs: &[ObjectRef],
     profile: &earmark_core::ProviderProfile,
+    registry: &StandingRegistry,
 ) -> Result<String, ExecError> {
     let mut rendered = String::new();
 
@@ -314,6 +316,9 @@ pub fn render_provider_input<S: CanonicalStore>(
             rendered.push_str(&format!("Title: {:?}\n", title));
         }
 
+        // Standing visibility gate
+        let vis = project_visibility(&obj.envelope.standing, registry);
+
         // Determine if this is a structured declaration
         let is_structured = match obj_ref.kind {
             Kind::Instruction
@@ -326,13 +331,18 @@ pub fn render_provider_input<S: CanonicalStore>(
             _ => false,
         };
 
-        let can_inline = if is_structured {
+        let profile_permits = if is_structured {
             profile.exposure.allow_structured_declarations
         } else {
             profile.exposure.allow_prose_objects
         };
 
-        if can_inline {
+        // Two-gate rule: both standing and profile must permit
+        if !vis.expose_to_provider {
+            rendered.push_str(
+                "\n(object omitted from provider evidence by standing visibility policy)\n",
+            );
+        } else if profile_permits {
             if let Ok(payload_str) = String::from_utf8(obj.payload.bytes.clone()) {
                 rendered.push_str("\nPayload:\n---\n");
                 rendered.push_str(&payload_str);

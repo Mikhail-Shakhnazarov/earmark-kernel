@@ -7,6 +7,8 @@ use sha2::{Digest, Sha256};
 use thiserror::Error;
 use uuid::Uuid;
 
+pub mod projection;
+
 pub type Timestamp = DateTime<Utc>;
 
 /// A canonical durable identifier for a kernel object.

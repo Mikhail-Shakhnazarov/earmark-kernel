@@ -8,7 +8,6 @@ pub mod http_generation;
 pub mod ir;
 pub(crate) mod persistence;
 pub mod persistence_helpers;
-pub mod projection;
 pub mod provider;
 pub mod relation;
 pub mod relation_logic;

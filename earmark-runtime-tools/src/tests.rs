@@ -93,6 +93,7 @@ impl<S: CanonicalStore> CompiledContextCompiler<S> for FakeContextCompiler {
         _index: &DerivedIndex,
         template_ref: &earmark_core::VersionRef,
         _work_packet: Option<earmark_core::ObjectRef>,
+        _registry: &earmark_core::StandingRegistry,
     ) -> Result<WorkSurfaceManifest, earmark_connected_context::ProjectError> {
         Ok(WorkSurfaceManifest {
             surface_id: "fake_surface".to_string(),

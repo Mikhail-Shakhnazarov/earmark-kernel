@@ -2,8 +2,9 @@
 
 use earmark_connected_context::{WorkSurfaceManifest, WorkSurfaceObject};
 use earmark_core::{
-    HttpAuthConfig, HttpAuthKind, HttpGenerationProfile, HttpRequestTemplate,
-    HttpResponseExtraction, Kind, ObjectId, ObjectRef, ProviderProfile, VersionId, VersionRef,
+    DimensionId, HttpAuthConfig, HttpAuthKind, HttpGenerationProfile, HttpRequestTemplate,
+    HttpResponseExtraction, Kind, ObjectId, ObjectRef, ProviderProfile, Standing,
+    StandingRegistry, TokenId, VersionId, VersionRef,
 };
 use earmark_exec::{HttpGenerationAdapter, ProviderRegistry, ProviderService};
 use earmark_index::DerivedIndex;
@@ -12,6 +13,46 @@ use httpmock::MockServer;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use tempfile::tempdir;
+
+/// Standing that maps to `expose_to_provider: true` under `test_registry()`.
+fn exposed_standing() -> Standing {
+    let mut values = BTreeMap::new();
+    values.insert(
+        DimensionId::from_static("visibility"),
+        TokenId::from_static("exposed"),
+    );
+    Standing { values }
+}
+
+/// A minimal registry that defines a `visibility` dimension with a token that
+/// permits provider exposure.  Tests that exercise profile‑level exposure
+/// gates (rather than standing gates) use this so the standing gate passes.
+fn test_registry() -> StandingRegistry {
+    use earmark_core::{KernelProtocolId, ProtocolBinding, ScalarValue,
+                       StandingDimensionDefinition, StandingTokenDefinition};
+    StandingRegistry {
+        dimensions: BTreeMap::from([(
+            DimensionId::from_static("visibility"),
+            StandingDimensionDefinition {
+                id: DimensionId::from_static("visibility"),
+                default: TokenId::from_static("exposed"),
+                tokens: vec![StandingTokenDefinition {
+                    id: TokenId::from_static("exposed"),
+                    implements: vec![ProtocolBinding {
+                        protocol: KernelProtocolId::from_static("kernel:visibility"),
+                        state: None,
+                        properties: BTreeMap::from([
+                            (
+                                "expose_to_provider".to_string(),
+                                ScalarValue::Bool(true),
+                            ),
+                        ]),
+                    }],
+                }],
+            },
+        )]),
+    }
+}
 
 #[test]
 #[cfg(feature = "http-provider")]
@@ -25,7 +66,7 @@ fn test_http_provider_e2e_content_rendering() {
     let stored_input = StoredObject::new(
         Kind::Object,
         Some("evidence".to_string()),
-        earmark_core::Standing::default(),
+        exposed_standing(),
         earmark_core::Provenance::direct_input("user"),
         BTreeMap::from([(
             "title".to_string(),
@@ -119,12 +160,14 @@ fn test_http_provider_e2e_content_rendering() {
     };
 
     // 6. Build ProviderRequest (Simulating what transition.rs does)
+    let standing_registry = test_registry();
     let rendered_input = earmark_exec::helpers::render_provider_input(
         &store,
         &instruction,
         None,
         std::slice::from_ref(&input_ref),
         &profile,
+        &standing_registry,
     )
     .unwrap();
 
@@ -170,7 +213,7 @@ fn test_http_provider_rendering_with_manifest() {
     let stored_input = StoredObject::new(
         Kind::Object,
         None,
-        earmark_core::Standing::default(),
+        exposed_standing(),
         earmark_core::Provenance::direct_input("user"),
         BTreeMap::new(),
         StoredPayload::from_markdown("Active input content"),
@@ -187,7 +230,7 @@ fn test_http_provider_rendering_with_manifest() {
     let stored_manifest_obj = StoredObject::new(
         Kind::Object,
         None,
-        earmark_core::Standing::default(),
+        exposed_standing(),
         earmark_core::Provenance::direct_input("user"),
         BTreeMap::from([(
             "title".to_string(),
@@ -261,12 +304,14 @@ fn test_http_provider_rendering_with_manifest() {
     };
 
     // 4. Render
+    let registry = test_registry();
     let rendered = earmark_exec::helpers::render_provider_input(
         &store,
         &instruction,
         Some(&manifest),
-        std::slice::from_ref(&input_ref),
+        &[input_ref.clone()],
         &profile,
+        &registry,
     )
     .unwrap();
 
@@ -289,7 +334,7 @@ fn test_http_provider_exposure_structured_hiding() {
     let stored_workflow = StoredObject::new(
         Kind::Workflow,
         None,
-        earmark_core::Standing::default(),
+        exposed_standing(),
         earmark_core::Provenance::direct_input("user"),
         BTreeMap::new(),
         StoredPayload::from_markdown("SECRET_WORKFLOW_STEPS"),
@@ -341,12 +386,14 @@ fn test_http_provider_exposure_structured_hiding() {
         register: "none".to_string(),
     };
 
+    let registry = test_registry();
     let rendered = earmark_exec::helpers::render_provider_input(
         &store,
         &instruction,
         None,
         &[workflow_ref],
         &profile,
+        &registry,
     )
     .unwrap();
 
@@ -364,7 +411,7 @@ fn test_http_provider_exposure_prose_hiding() {
     let stored_input = StoredObject::new(
         Kind::Object,
         None,
-        earmark_core::Standing::default(),
+        exposed_standing(),
         earmark_core::Provenance::direct_input("user"),
         BTreeMap::from([(
             "title".to_string(),
@@ -419,12 +466,14 @@ fn test_http_provider_exposure_prose_hiding() {
         register: "none".to_string(),
     };
 
+    let registry = test_registry();
     let rendered = earmark_exec::helpers::render_provider_input(
         &store,
         &instruction,
         None,
         &[input_ref],
         &profile,
+        &registry,
     )
     .unwrap();
 
@@ -443,7 +492,7 @@ fn test_http_provider_exposure_class_definition_hiding() {
     let stored_class = StoredObject::new(
         Kind::Object,
         Some("class_definition".to_string()),
-        earmark_core::Standing::default(),
+        exposed_standing(),
         earmark_core::Provenance::direct_input("user"),
         BTreeMap::from([(
             "title".to_string(),
@@ -498,12 +547,14 @@ fn test_http_provider_exposure_class_definition_hiding() {
         register: "none".to_string(),
     };
 
+    let registry = test_registry();
     let rendered = earmark_exec::helpers::render_provider_input(
         &store,
         &instruction,
         None,
         &[class_ref],
         &profile,
+        &registry,
     )
     .unwrap();
 

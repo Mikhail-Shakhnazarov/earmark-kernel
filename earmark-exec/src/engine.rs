@@ -123,8 +123,14 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                     &template_ref,
                     Kind::CompiledContextTemplate,
                 )?;
-                compiled_context =
-                    Some(context_compiler.compile(self.store, self.index, &resolved, None)?);
+                let fallback_registry = earmark_core::StandingRegistry::kernel_defaults();
+                compiled_context = Some(context_compiler.compile(
+                    self.store,
+                    self.index,
+                    &resolved,
+                    None,
+                    &fallback_registry,
+                )?);
             }
 
             match handoff.to_transition_id.clone() {
