@@ -212,8 +212,12 @@ fn test_default_standing_excludes_from_provider() {
         "default standing should not expose payload to provider"
     );
     assert!(
-        rendered.contains("omitted from provider evidence by standing visibility policy"),
-        "should contain advisory warning"
+        !rendered.contains("Title:"),
+        "default standing should not leak title to provider"
+    );
+    assert!(
+        rendered.contains("Evidence item omitted from provider input"),
+        "should contain generic omission notice"
     );
 }
 
@@ -276,8 +280,12 @@ fn test_standing_hides_from_provider_when_expose_false() {
         "object with expose_to_provider=false should not include payload"
     );
     assert!(
-        rendered.contains("omitted from provider evidence by standing visibility policy"),
-        "should contain advisory warning"
+        !rendered.contains("Title:"),
+        "object with expose_to_provider=false should not leak title"
+    );
+    assert!(
+        rendered.contains("Evidence item omitted from provider input"),
+        "should contain generic omission notice"
     );
 }
 
@@ -380,9 +388,15 @@ fn test_advisory_warning_does_not_leak_payload() {
         !rendered.contains(secret_payload),
         "advisory warning must not leak hidden payload"
     );
+    assert!(
+        !rendered.contains("Title:"),
+        "advisory warning must not leak object title"
+    );
     // Warning text must not contain the secret
-    let warning_line = "omitted from provider evidence by standing visibility policy";
-    assert!(rendered.contains(warning_line), "should contain advisory");
+    assert!(
+        rendered.contains("Evidence item omitted from provider input"),
+        "should contain generic omission notice"
+    );
 }
 
 #[test]

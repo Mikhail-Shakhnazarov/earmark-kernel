@@ -3,8 +3,8 @@
 use earmark_connected_context::{WorkSurfaceManifest, WorkSurfaceObject};
 use earmark_core::{
     DimensionId, HttpAuthConfig, HttpAuthKind, HttpGenerationProfile, HttpRequestTemplate,
-    HttpResponseExtraction, Kind, ObjectId, ObjectRef, ProviderProfile, Standing,
-    StandingRegistry, TokenId, VersionId, VersionRef,
+    HttpResponseExtraction, Kind, ObjectId, ObjectRef, ProviderProfile, Standing, StandingRegistry,
+    TokenId, VersionId, VersionRef,
 };
 use earmark_exec::{HttpGenerationAdapter, ProviderRegistry, ProviderService};
 use earmark_index::DerivedIndex;
@@ -28,8 +28,10 @@ fn exposed_standing() -> Standing {
 /// permits provider exposure.  Tests that exercise profile‑level exposure
 /// gates (rather than standing gates) use this so the standing gate passes.
 fn test_registry() -> StandingRegistry {
-    use earmark_core::{KernelProtocolId, ProtocolBinding, ScalarValue,
-                       StandingDimensionDefinition, StandingTokenDefinition};
+    use earmark_core::{
+        KernelProtocolId, ProtocolBinding, ScalarValue, StandingDimensionDefinition,
+        StandingTokenDefinition,
+    };
     StandingRegistry {
         dimensions: BTreeMap::from([(
             DimensionId::from_static("visibility"),
@@ -41,12 +43,10 @@ fn test_registry() -> StandingRegistry {
                     implements: vec![ProtocolBinding {
                         protocol: KernelProtocolId::from_static("kernel:visibility"),
                         state: None,
-                        properties: BTreeMap::from([
-                            (
-                                "expose_to_provider".to_string(),
-                                ScalarValue::Bool(true),
-                            ),
-                        ]),
+                        properties: BTreeMap::from([(
+                            "expose_to_provider".to_string(),
+                            ScalarValue::Bool(true),
+                        )]),
                     }],
                 }],
             },

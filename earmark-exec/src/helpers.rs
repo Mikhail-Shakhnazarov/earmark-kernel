@@ -301,6 +301,18 @@ pub fn render_provider_input<S: CanonicalStore>(
             ))
         })?;
 
+        // Standing visibility gate — checked before any metadata rendering
+        let vis = project_visibility(&obj.envelope.standing, registry);
+
+        if !vis.expose_to_provider {
+            rendered.push_str(&format!("#### Evidence [{}]\n", i + 1));
+            rendered.push_str(
+                "Evidence item omitted from provider input by standing visibility policy.\n",
+            );
+            rendered.push('\n');
+            continue;
+        }
+
         let is_active = active_refs.contains(&(obj_ref.id.clone(), obj_ref.version_id.clone()));
         let active_marker = if is_active { " [Active Input]" } else { "" };
 
@@ -315,9 +327,6 @@ pub fn render_provider_input<S: CanonicalStore>(
         if let Some(title) = obj.envelope.headers.get("title") {
             rendered.push_str(&format!("Title: {:?}\n", title));
         }
-
-        // Standing visibility gate
-        let vis = project_visibility(&obj.envelope.standing, registry);
 
         // Determine if this is a structured declaration
         let is_structured = match obj_ref.kind {
@@ -337,12 +346,8 @@ pub fn render_provider_input<S: CanonicalStore>(
             profile.exposure.allow_prose_objects
         };
 
-        // Two-gate rule: both standing and profile must permit
-        if !vis.expose_to_provider {
-            rendered.push_str(
-                "\n(object omitted from provider evidence by standing visibility policy)\n",
-            );
-        } else if profile_permits {
+        // Second gate: provider profile exposure must also permit
+        if profile_permits {
             if let Ok(payload_str) = String::from_utf8(obj.payload.bytes.clone()) {
                 rendered.push_str("\nPayload:\n---\n");
                 rendered.push_str(&payload_str);
