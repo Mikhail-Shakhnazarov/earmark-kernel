@@ -51,6 +51,7 @@ fn mock_profile(allowed_ops: Vec<&str>) -> ProviderProfile {
             must_return_candidate_only: true,
             must_include_lineage: false,
         },
+        http: None,
     }
 }
 
@@ -61,6 +62,8 @@ fn mock_request() -> ProviderRequest {
         work_packet: ObjectRef::new(ObjectId::new(), VersionId::new(), Kind::WorkPacket, None),
         provider_profile: VersionRef::new(ObjectId::new(), VersionId::new()),
         instruction_text: "Do something".to_string(),
+        context_text: None,
+        input_text: "Do something".to_string(),
         work_surface_manifest: None,
         inputs: vec![],
         response_contract: ProviderResponseContract {
@@ -556,6 +559,7 @@ fn test_transition_preserves_provider_record_warnings() {
             must_return_candidate_only: false,
             must_include_lineage: false,
         },
+        http: None,
     };
     let profile_obj = StoredObject::new(
         Kind::ProviderProfile,

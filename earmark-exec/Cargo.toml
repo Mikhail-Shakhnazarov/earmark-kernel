@@ -18,9 +18,11 @@ thiserror.workspace = true
 reqwest = { version = "0.12", features = ["blocking", "json"], optional = true }
 
 [features]
-gemini = ["dep:reqwest"]
+http-provider = ["dep:reqwest"]
+gemini = ["http-provider"]
 
 [dev-dependencies]
+httpmock = "0.7"
 tempfile.workspace = true
 earmark-runtime-tools = { path = "../earmark-runtime-tools" }
 earmark-declarations = { path = "../earmark-declarations" }
