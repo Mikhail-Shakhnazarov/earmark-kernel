@@ -2,8 +2,8 @@ use crate::relation_logic::{
     RelationAuthorizationDecision, RelationAuthorizationResolver, RelationEndpointFacts,
 };
 use earmark_core::{
-    ChangeSetDraft, ChangeSetValidationResult, ClassDefinition, DimensionId, Kind, ObjectId,
-    ObjectRef, Standing, SystemDefinition, TokenId, WorkflowGuard,
+    ChangeSetDraft, ChangeSetValidationResult, ClassDefinition, Kind, ObjectId, ObjectRef,
+    Standing, SystemDefinition, WorkflowGuard,
 };
 use earmark_index::DerivedIndex;
 use earmark_store::{CanonicalStore, StoredObject};
@@ -361,46 +361,35 @@ pub fn validate_transition_change_set<S: CanonicalStore>(
     Ok((result, all_standing_requests))
 }
 
-fn get_standing_value(standing: &Standing, dim_key: &str) -> String {
-    let dim_id = match dim_key {
-        "epistemic" => DimensionId::new("kernel:epistemic"),
-        "review" => DimensionId::new("kernel:review"),
-        "process" => DimensionId::new("kernel:process"),
-        _ => DimensionId::new(dim_key),
-    };
-    standing
-        .get(&dim_id)
-        .map(TokenId::as_str)
-        .unwrap_or("unknown")
-        .to_string()
-}
-
 fn check_dimension(
     target_object_id: &ObjectId,
     standing: &Standing,
     class: &str,
-    dim_key: &str,
-    allowed_strs: &[&str],
+    dim_id: &earmark_core::DimensionId,
+    allowed_tokens: &[earmark_core::TokenId],
     failures: &mut Vec<String>,
     requests: &mut Vec<earmark_core::StandingTransitionRequest>,
 ) {
-    if allowed_strs.is_empty() {
+    if allowed_tokens.is_empty() {
         return;
     }
-    let actual = get_standing_value(standing, dim_key);
-    if allowed_strs.contains(&actual.as_str()) {
+    let actual = standing.get(dim_id);
+    let actual_str = actual.map(|t| t.as_str()).unwrap_or("unknown");
+    if allowed_tokens.iter().any(|t| t.as_str() == actual_str) {
         return;
     }
     failures.push(format!(
         "created object class {} uses disallowed {} standing {}",
-        class, dim_key, actual
+        class,
+        dim_id.as_str(),
+        actual_str
     ));
-    if let Some(first) = allowed_strs.first() {
+    if let Some(first) = allowed_tokens.first() {
         requests.push(earmark_core::StandingTransitionRequest {
             target_object_id: target_object_id.clone(),
-            dimension: dim_key.to_string(),
-            from_value: actual,
-            to_value: first.to_string(),
+            dimension: dim_id.as_str().to_string(),
+            from_value: actual_str.to_string(),
+            to_value: first.as_str().to_string(),
             rationale: Some("standing rule violation".to_string()),
             status: earmark_core::StandingRequestStatus::Proposed,
         });
@@ -416,38 +405,17 @@ pub fn validate_standing_rules(
 ) -> Vec<earmark_core::StandingTransitionRequest> {
     let mut requests = Vec::new();
 
-    let epi_allowed: Vec<&str> = rules.allowed_epistemic.iter().map(|e| e.as_str()).collect();
-    check_dimension(
-        target_object_id,
-        standing,
-        class,
-        "epistemic",
-        &epi_allowed,
-        failures,
-        &mut requests,
-    );
-
-    let rev_allowed: Vec<&str> = rules.allowed_review.iter().map(|e| e.as_str()).collect();
-    check_dimension(
-        target_object_id,
-        standing,
-        class,
-        "review",
-        &rev_allowed,
-        failures,
-        &mut requests,
-    );
-
-    let proc_allowed: Vec<&str> = rules.allowed_process.iter().map(|e| e.as_str()).collect();
-    check_dimension(
-        target_object_id,
-        standing,
-        class,
-        "process",
-        &proc_allowed,
-        failures,
-        &mut requests,
-    );
+    for (dim_id, allowed_tokens) in &rules.allowed_standing {
+        check_dimension(
+            target_object_id,
+            standing,
+            class,
+            dim_id,
+            allowed_tokens,
+            failures,
+            &mut requests,
+        );
+    }
 
     requests
 }

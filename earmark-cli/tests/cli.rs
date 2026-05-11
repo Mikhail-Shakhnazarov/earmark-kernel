@@ -1315,6 +1315,7 @@ fn failure_cli_inspection_commands_with_real_failure() {
             provider_profiles: vec![],
             default_compiled_context: None,
             default_provider_profile: None,
+            standing_dimensions: vec![],
             runtime_profile: RuntimeProfile {
                 execution_surface: "runtime_over_folder".to_string(),
                 machine_output_default: "json".to_string(),
@@ -1646,6 +1647,7 @@ fn latest_run_resolves_correctly() {
         provider_profiles: vec![],
         default_compiled_context: None,
         default_provider_profile: None,
+        standing_dimensions: vec![],
         runtime_profile: RuntimeProfile {
             execution_surface: "runtime_over_folder".to_string(),
             machine_output_default: "json".to_string(),
@@ -1801,6 +1803,7 @@ fn run_show_and_explain_are_distinct() {
         provider_profiles: vec![],
         default_compiled_context: None,
         default_provider_profile: None,
+        standing_dimensions: vec![],
         runtime_profile: RuntimeProfile {
             execution_surface: "runtime_over_folder".to_string(),
             machine_output_default: "json".to_string(),

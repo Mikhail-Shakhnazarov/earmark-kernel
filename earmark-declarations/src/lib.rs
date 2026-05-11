@@ -2,7 +2,8 @@ use std::{fs, path::Path};
 
 use earmark_core::{
     parse_yaml, ClassDefinition, ClassStandingRules, CompiledContextTemplate, InstructionPayload,
-    Kind, ProviderProfile, StandingPolicy, SystemDefinition, VersionRef, WorkflowDefinition,
+    Kind, ProviderProfile, StandingPolicy, StandingRegistry, SystemDefinition, VersionRef,
+    WorkflowDefinition,
 };
 use earmark_index::{ActiveSystemRecord, DerivedIndex};
 use earmark_store::CanonicalStore;
@@ -113,40 +114,66 @@ pub fn validate_class_definition(value: &ClassDefinition) -> Result<(), DeriveEr
 }
 
 fn validate_standing_rules(rules: &ClassStandingRules) -> Result<(), DeriveError> {
-    let valid_epistemic = [
-        "unresolved",
-        "working",
-        "supported",
-        "contested",
-        "superseded",
-    ];
-    for token in &rules.allowed_epistemic {
-        let s = token.as_str();
-        if !valid_epistemic.contains(&s) {
-            return Err(DeriveError::Validation(format!(
-                "invalid epistemic standing token '{}'",
-                s
-            )));
+    for (dim_id, tokens) in &rules.allowed_standing {
+        earmark_core::DimensionId::parse(dim_id.as_str()).map_err(|e| {
+            DeriveError::Validation(format!(
+                "invalid dimension '{}' in standing rules: {}",
+                dim_id.as_str(),
+                e
+            ))
+        })?;
+        for token in tokens {
+            earmark_core::TokenId::parse(token.as_str()).map_err(|e| {
+                DeriveError::Validation(format!(
+                    "invalid token '{}' in standing rules for dimension '{}': {}",
+                    token.as_str(),
+                    dim_id.as_str(),
+                    e
+                ))
+            })?;
         }
     }
-    let valid_review = ["unreviewed", "pending", "accepted", "rejected"];
-    for token in &rules.allowed_review {
-        let s = token.as_str();
-        if !valid_review.contains(&s) {
-            return Err(DeriveError::Validation(format!(
-                "invalid review standing token '{}'",
-                s
-            )));
+    for (pid, props) in &rules.required_protocols {
+        earmark_core::KernelProtocolId::parse(pid.as_str()).map_err(|e| {
+            DeriveError::Validation(format!(
+                "invalid protocol '{}' in required_protocols: {}",
+                pid.as_str(),
+                e
+            ))
+        })?;
+        for (k, _v) in props {
+            if k.trim().is_empty() {
+                return Err(DeriveError::Validation(
+                    "protocol property key cannot be empty".to_string(),
+                ));
+            }
         }
     }
-    let valid_process = ["active", "blocked", "completed", "archived"];
-    for token in &rules.allowed_process {
-        let s = token.as_str();
-        if !valid_process.contains(&s) {
-            return Err(DeriveError::Validation(format!(
-                "invalid process standing token '{}'",
-                s
-            )));
+    Ok(())
+}
+
+/// Validate class standing rules against a registry, checking that all
+/// referenced dimensions and tokens exist in the registry.
+pub fn validate_class_standing_rules_against_registry(
+    rules: &ClassStandingRules,
+    registry: &earmark_core::StandingRegistry,
+) -> Result<(), DeriveError> {
+    for (dim_id, tokens) in &rules.allowed_standing {
+        let def = registry.dimensions.get(dim_id).ok_or_else(|| {
+            DeriveError::Validation(format!(
+                "unknown dimension '{}' in class standing rules",
+                dim_id.as_str()
+            ))
+        })?;
+        let valid_tokens: Vec<&str> = def.tokens.iter().map(|t| t.id.as_str()).collect();
+        for token in tokens {
+            if !valid_tokens.contains(&token.as_str()) {
+                return Err(DeriveError::Validation(format!(
+                    "unknown token '{}' for dimension '{}' in class standing rules",
+                    token.as_str(),
+                    dim_id.as_str()
+                )));
+            }
         }
     }
     Ok(())
@@ -183,6 +210,21 @@ pub fn validate_instruction(value: &InstructionPayload) -> Result<(), DeriveErro
     Ok(())
 }
 
+fn parse_standing_dim_id(value: &str) -> Result<String, DeriveError> {
+    // Try namespaced format first
+    if let Ok(_dim) = earmark_core::DimensionId::parse(value) {
+        return Ok(value.to_string());
+    }
+    // Fall back to legacy short names for backward compatibility
+    match value {
+        "epistemic" | "review" | "process" => Ok(value.to_string()),
+        _ => Err(DeriveError::Validation(format!(
+            "invalid standing dimension '{}'",
+            value
+        ))),
+    }
+}
+
 pub fn validate_standing_policy(value: &StandingPolicy) -> Result<(), DeriveError> {
     earmark_core::validate_class_name(&value.name)
         .map_err(|e| DeriveError::Validation(e.to_string()))?;
@@ -192,26 +234,43 @@ pub fn validate_standing_policy(value: &StandingPolicy) -> Result<(), DeriveErro
         ));
     }
     for rule in &value.transition_rules {
-        let dimension = earmark_core::StandingDimension::parse(&rule.dimension)
-            .map_err(|e| DeriveError::Validation(e.to_string()))?;
+        let _dim = parse_standing_dim_id(&rule.dimension)?;
         for token in &rule.from {
-            validate_standing_token_for_dimension(dimension, token)?;
+            if token.trim().is_empty() {
+                return Err(DeriveError::Validation(format!(
+                    "empty token in transition rule '{}' from list",
+                    rule.dimension
+                )));
+            }
         }
         for token in &rule.to {
-            validate_standing_token_for_dimension(dimension, token)?;
+            if token.trim().is_empty() {
+                return Err(DeriveError::Validation(format!(
+                    "empty token in transition rule '{}' to list",
+                    rule.dimension
+                )));
+            }
         }
     }
     for req in &value.operation_requirements {
-        for (dimension, token) in &req.minimums {
-            let dimension = earmark_core::StandingDimension::parse(dimension)
-                .map_err(|e| DeriveError::Validation(e.to_string()))?;
-            validate_standing_token_for_dimension(dimension, token)?;
+        for (dimension, token) in &req.required_standing {
+            let _dim = parse_standing_dim_id(dimension)?;
+            if token.trim().is_empty() {
+                return Err(DeriveError::Validation(format!(
+                    "empty token in operation requirement for dimension '{}'",
+                    dimension
+                )));
+            }
         }
-        for (dimension, tokens) in &req.forbidden {
-            let dimension = earmark_core::StandingDimension::parse(dimension)
-                .map_err(|e| DeriveError::Validation(e.to_string()))?;
+        for (dimension, tokens) in &req.forbidden_standing {
+            let _dim = parse_standing_dim_id(dimension)?;
             for token in tokens {
-                validate_standing_token_for_dimension(dimension, token)?;
+                if token.trim().is_empty() {
+                    return Err(DeriveError::Validation(format!(
+                        "empty token in operation requirement forbidden list for dimension '{}'",
+                        dimension
+                    )));
+                }
             }
         }
     }
@@ -225,6 +284,89 @@ pub fn validate_standing_policy(value: &StandingPolicy) -> Result<(), DeriveErro
             return Err(DeriveError::Validation(
                 "escalation rule must have non-empty message".to_string(),
             ));
+        }
+    }
+    Ok(())
+}
+
+/// Validate standing policy references against a registry, checking that all
+/// referenced dimensions and tokens exist in the registry.
+pub fn validate_standing_policy_against_registry(
+    value: &StandingPolicy,
+    registry: &earmark_core::StandingRegistry,
+) -> Result<(), DeriveError> {
+    fn resolve_dim<'a>(
+        d: &str,
+        registry: &'a earmark_core::StandingRegistry,
+    ) -> Result<&'a earmark_core::StandingDimensionDefinition, DeriveError> {
+        // Try namespaced, then legacy short name
+        if let Ok(dim_id) = earmark_core::DimensionId::parse(d) {
+            registry.dimensions.get(&dim_id).ok_or_else(|| {
+                DeriveError::Validation(format!("unknown dimension '{}' in standing policy", d))
+            })
+        } else {
+            let mapped = match d {
+                "epistemic" => "kernel:epistemic",
+                "review" => "kernel:review",
+                "process" => "kernel:process",
+                _ => {
+                    return Err(DeriveError::Validation(format!(
+                        "unknown dimension '{}' in standing policy",
+                        d
+                    )));
+                }
+            };
+            let dim_id = earmark_core::DimensionId::from_static(mapped);
+            registry.dimensions.get(&dim_id).ok_or_else(|| {
+                DeriveError::Validation(format!("unknown dimension '{}' in standing policy", d))
+            })
+        }
+    }
+
+    fn validate_tokens(
+        dim_id_str: &str,
+        tokens: &[String],
+        def: &earmark_core::StandingDimensionDefinition,
+    ) -> Result<(), DeriveError> {
+        let valid: Vec<&str> = def.tokens.iter().map(|t| t.id.as_str()).collect();
+        for token in tokens {
+            if !valid.contains(&token.as_str()) {
+                return Err(DeriveError::Validation(format!(
+                    "unknown token '{}' for dimension '{}' in standing policy",
+                    token, dim_id_str
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    for rule in &value.transition_rules {
+        let def = resolve_dim(&rule.dimension, registry)?;
+        validate_tokens(&rule.dimension, &rule.from, def)?;
+        validate_tokens(&rule.dimension, &rule.to, def)?;
+    }
+    for req in &value.operation_requirements {
+        for (dim_str, token) in &req.required_standing {
+            let def = resolve_dim(dim_str, registry)?;
+            let valid: Vec<&str> = def.tokens.iter().map(|t| t.id.as_str()).collect();
+            if !valid.contains(&token.as_str()) {
+                return Err(DeriveError::Validation(format!(
+                    "unknown token '{}' for dimension '{}' in operation requirement",
+                    token, dim_str
+                )));
+            }
+        }
+        for (dim_str, tokens) in &req.forbidden_standing {
+            let def = resolve_dim(dim_str, registry)?;
+            let valid: Vec<&str> = def.tokens.iter().map(|t| t.id.as_str()).collect();
+            for token in tokens {
+                if !valid.contains(&token.as_str()) {
+                    return Err(DeriveError::Validation(format!(
+                        "unknown token '{}' for dimension '{}' in operation requirement forbidden list",
+                        token, dim_str
+                    )));
+                }
+            }
         }
     }
     Ok(())
@@ -337,14 +479,83 @@ pub fn validate_compiled_context_template(
         ));
     }
     for (dimension, tokens) in &value.select.standing {
-        let dim = earmark_core::StandingDimension::parse(dimension)
-            .map_err(|e| DeriveError::Validation(e.to_string()))?;
+        // Accept both namespaced and legacy short names
+        match earmark_core::DimensionId::parse(dimension) {
+            Ok(_) => {}
+            Err(_) => match dimension.as_str() {
+                "epistemic" | "review" | "process" => {}
+                _ => {
+                    return Err(DeriveError::Validation(format!(
+                        "invalid standing dimension '{}' in compiled context template select",
+                        dimension
+                    )));
+                }
+            },
+        }
         for token in tokens {
-            validate_standing_token_for_dimension(dim, token)?;
+            if token.trim().is_empty() {
+                return Err(DeriveError::Validation(format!(
+                    "empty token in compiled context template standing filter for dimension '{}'",
+                    dimension
+                )));
+            }
         }
     }
     for relation in &value.select.relations {
         validate_relation_type_token(relation)?;
+    }
+    Ok(())
+}
+
+/// Validate compiled context template standing filters against a registry.
+pub fn validate_compiled_context_template_against_registry(
+    value: &CompiledContextTemplate,
+    registry: &earmark_core::StandingRegistry,
+) -> Result<(), DeriveError> {
+    fn resolve_dim<'a>(
+        d: &str,
+        registry: &'a earmark_core::StandingRegistry,
+    ) -> Result<&'a earmark_core::StandingDimensionDefinition, DeriveError> {
+        if let Ok(dim_id) = earmark_core::DimensionId::parse(d) {
+            registry.dimensions.get(&dim_id).ok_or_else(|| {
+                DeriveError::Validation(format!(
+                    "unknown dimension '{}' in compiled context template",
+                    d
+                ))
+            })
+        } else {
+            let mapped = match d {
+                "epistemic" => "kernel:epistemic",
+                "review" => "kernel:review",
+                "process" => "kernel:process",
+                _ => {
+                    return Err(DeriveError::Validation(format!(
+                        "unknown dimension '{}' in compiled context template",
+                        d
+                    )));
+                }
+            };
+            let dim_id = earmark_core::DimensionId::from_static(mapped);
+            registry.dimensions.get(&dim_id).ok_or_else(|| {
+                DeriveError::Validation(format!(
+                    "unknown dimension '{}' in compiled context template",
+                    d
+                ))
+            })
+        }
+    }
+
+    for (dim_str, tokens) in &value.select.standing {
+        let def = resolve_dim(dim_str, registry)?;
+        let valid: Vec<&str> = def.tokens.iter().map(|t| t.id.as_str()).collect();
+        for token in tokens {
+            if !valid.contains(&token.as_str()) {
+                return Err(DeriveError::Validation(format!(
+                    "unknown token '{}' for dimension '{}' in compiled context template",
+                    token, dim_str
+                )));
+            }
+        }
     }
     Ok(())
 }
@@ -375,35 +586,6 @@ fn validate_workflow_token(value: &str, field: &str) -> Result<(), DeriveError> 
 
 fn validate_relation_type_token(value: &str) -> Result<(), DeriveError> {
     validate_workflow_token(value, "relation type")
-}
-
-fn validate_standing_token_for_dimension(
-    dimension: earmark_core::StandingDimension,
-    token: &str,
-) -> Result<(), DeriveError> {
-    let valid = match dimension {
-        earmark_core::StandingDimension::Epistemic => {
-            matches!(
-                token,
-                "unresolved" | "working" | "supported" | "contested" | "superseded"
-            )
-        }
-        earmark_core::StandingDimension::Review => {
-            matches!(token, "unreviewed" | "pending" | "accepted" | "rejected")
-        }
-        earmark_core::StandingDimension::Process => {
-            matches!(token, "active" | "blocked" | "completed" | "archived")
-        }
-    };
-    if valid {
-        Ok(())
-    } else {
-        Err(DeriveError::Validation(format!(
-            "invalid standing token '{}' for dimension '{}'",
-            token,
-            dimension.as_str()
-        )))
-    }
 }
 
 pub fn validate_provider_profile(value: &ProviderProfile) -> Result<(), DeriveError> {
@@ -676,7 +858,80 @@ pub fn validate_system_definition<S: CanonicalStore>(
 
     validate_runtime_profile(&value.runtime_profile)?;
 
+    // Build the registry from system definitions + built-in defaults and
+    // validate it (handles duplicate dims, missing defaults, etc.)
+    let registry = earmark_core::StandingRegistry::from_system_definition(value)
+        .map_err(|e| DeriveError::Validation(e.to_string()))?;
+
+    // Validate that referenced declarations use known dimensions/tokens.
+    // We need to load and re-validate classes, policies, and compiled
+    // contexts against the registry.
+    validate_references_against_registry::<S>(store, value, &registry)?;
+
     Ok(())
+}
+
+/// After constructing the registry from a system definition, re-validate
+/// all referenced class, policy, and compiled context declarations against
+/// the registry to catch unknown dimensions and tokens.
+fn validate_references_against_registry<S: CanonicalStore>(
+    store: &S,
+    system: &SystemDefinition,
+    registry: &StandingRegistry,
+) -> Result<(), DeriveError> {
+    for reference in &system.classes {
+        let stored = load_stored_ref(store, reference)?;
+        if stored.envelope.kind != Kind::Object {
+            continue;
+        }
+        if let Ok(text) = stored.payload.as_utf8() {
+            if let Ok(class_def) = parse_yaml::<ClassDefinition>(&text) {
+                validate_class_standing_rules_against_registry(
+                    &class_def.standing_rules,
+                    registry,
+                )?;
+            }
+        }
+    }
+    for reference in &system.policies {
+        let stored = load_stored_ref(store, reference)?;
+        if let Ok(text) = stored.payload.as_utf8() {
+            if let Ok(policy) = parse_yaml::<StandingPolicy>(&text) {
+                validate_standing_policy_against_registry(&policy, registry)?;
+            }
+        }
+    }
+    for reference in &system.compiled_contexts {
+        let stored = load_stored_ref(store, reference)?;
+        if let Ok(text) = stored.payload.as_utf8() {
+            if let Ok(ctx) = parse_yaml::<CompiledContextTemplate>(&text) {
+                validate_compiled_context_template_against_registry(&ctx, registry)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn load_stored_ref<S: CanonicalStore>(
+    store: &S,
+    reference: &VersionRef,
+) -> Result<earmark_store::StoredObject, DeriveError> {
+    let to_read = if reference.version_id.is_latest_sentinel() {
+        store
+            .read_head_ref(&reference.id)
+            .map_err(DeriveError::Store)?
+            .ok_or_else(|| {
+                DeriveError::Validation(format!("object head not found for {}", reference.id))
+            })?
+    } else {
+        reference.clone()
+    };
+    store.read_version(&to_read).map_err(|_| {
+        DeriveError::Validation(format!(
+            "missing referenced version {}",
+            reference.version_id.as_str()
+        ))
+    })
 }
 
 fn validate_system_reference_group<S: CanonicalStore, F>(

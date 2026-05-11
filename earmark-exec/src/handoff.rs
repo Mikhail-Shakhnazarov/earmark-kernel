@@ -75,41 +75,14 @@ pub(crate) fn derive_successor_handoff<S: CanonicalStore>(
                 if &class.name != contract {
                     continue;
                 }
-                let epi_reqs: Vec<String> = class
-                    .standing_rules
-                    .allowed_epistemic
-                    .iter()
-                    .map(|e| e.as_str().to_string())
-                    .collect();
-                if !epi_reqs.is_empty() {
-                    standing_constraints.push(StandingConstraint {
-                        constraint_type: "allowed_epistemic".to_string(),
-                        requirements: epi_reqs,
-                    });
-                }
-                let rev_reqs: Vec<String> = class
-                    .standing_rules
-                    .allowed_review
-                    .iter()
-                    .map(|r| r.as_str().to_string())
-                    .collect();
-                if !rev_reqs.is_empty() {
-                    standing_constraints.push(StandingConstraint {
-                        constraint_type: "allowed_review".to_string(),
-                        requirements: rev_reqs,
-                    });
-                }
-                let proc_reqs: Vec<String> = class
-                    .standing_rules
-                    .allowed_process
-                    .iter()
-                    .map(|p| p.as_str().to_string())
-                    .collect();
-                if !proc_reqs.is_empty() {
-                    standing_constraints.push(StandingConstraint {
-                        constraint_type: "allowed_process".to_string(),
-                        requirements: proc_reqs,
-                    });
+                for (dim_id, tokens) in &class.standing_rules.allowed_standing {
+                    let reqs: Vec<String> = tokens.iter().map(|t| t.as_str().to_string()).collect();
+                    if !reqs.is_empty() {
+                        standing_constraints.push(StandingConstraint {
+                            constraint_type: dim_id.as_str().to_string(),
+                            requirements: reqs,
+                        });
+                    }
                 }
                 for rule in &class.relation_rules {
                     allowed_relation_types.push(rule.relation_type.clone());
@@ -248,35 +221,20 @@ fn handoff_object_admissible(
 
     // 3. Standing check
     for constraint in &handoff.standing_constraints {
-        let actual_value = match constraint.constraint_type.as_str() {
-            "allowed_epistemic" => object
-                .envelope
-                .standing
-                .get(&earmark_core::DimensionId::new("kernel:epistemic"))
-                .map(earmark_core::TokenId::as_str)
-                .unwrap_or("unknown")
-                .to_string(),
-            "allowed_review" => object
-                .envelope
-                .standing
-                .get(&earmark_core::DimensionId::new("kernel:review"))
-                .map(earmark_core::TokenId::as_str)
-                .unwrap_or("unknown")
-                .to_string(),
-            "allowed_process" => object
-                .envelope
-                .standing
-                .get(&earmark_core::DimensionId::new("kernel:process"))
-                .map(earmark_core::TokenId::as_str)
-                .unwrap_or("unknown")
-                .to_string(),
-            unknown => {
-                return Err(ExecError::HandoffReconstruction(format!(
-                    "unknown standing constraint type: {}",
-                    unknown
-                )));
-            }
-        };
+        let dim_id =
+            earmark_core::DimensionId::parse(&constraint.constraint_type).map_err(|e| {
+                ExecError::HandoffReconstruction(format!(
+                    "invalid standing constraint dimension '{}': {}",
+                    constraint.constraint_type, e
+                ))
+            })?;
+        let actual_value = object
+            .envelope
+            .standing
+            .get(&dim_id)
+            .map(earmark_core::TokenId::as_str)
+            .unwrap_or("unknown")
+            .to_string();
 
         if !constraint.requirements.contains(&actual_value) {
             return Ok(false);

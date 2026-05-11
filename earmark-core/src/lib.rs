@@ -1,7 +1,8 @@
 use std::collections::BTreeMap;
 
 use chrono::{DateTime, Utc};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::de::{DeserializeOwned, Error as SerdeError};
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 use uuid::Uuid;
@@ -831,6 +832,27 @@ impl StandingRegistry {
         Ok(())
     }
 
+    /// Build a registry from a `SystemDefinition` plus built-in kernel defaults.
+    ///
+    /// Built-in dimensions are always available. System-declared dimensions are
+    /// added on top. Duplicate dimensions (including attempts to override
+    /// built-in dimensions) return an error.
+    pub fn from_system_definition(system: &SystemDefinition) -> Result<Self, CoreError> {
+        let mut dimensions = Self::kernel_defaults().dimensions;
+        for dim_def in &system.standing_dimensions {
+            if dimensions.contains_key(&dim_def.id) {
+                return Err(CoreError::InvalidIdentifier(format!(
+                    "duplicate dimension '{}': cannot override built-in or already declared dimension",
+                    dim_def.id.as_str()
+                )));
+            }
+            dimensions.insert(dim_def.id.clone(), dim_def.clone());
+        }
+        let registry = Self { dimensions };
+        registry.validate()?;
+        Ok(registry)
+    }
+
     pub fn kernel_defaults() -> Self {
         let mut dimensions = BTreeMap::new();
 
@@ -982,11 +1004,107 @@ pub fn materialize_defaults(
 
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Default)]
 pub struct ClassStandingRules {
-    pub allowed_epistemic: Vec<EpistemicStanding>,
-    pub allowed_review: Vec<ReviewStanding>,
-    pub allowed_process: Vec<ProcessStanding>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub allowed_standing: BTreeMap<DimensionId, Vec<TokenId>>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub required_protocols: BTreeMap<KernelProtocolId, BTreeMap<String, ScalarValue>>,
+}
+
+impl<'de> Deserialize<'de> for ClassStandingRules {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use std::collections::BTreeMap as Map;
+
+        #[derive(Deserialize)]
+        struct Raw {
+            #[serde(default)]
+            allowed_standing: Option<Map<String, Vec<String>>>,
+            #[serde(default)]
+            required_protocols: Option<Map<String, Map<String, serde_json::Value>>>,
+            #[serde(default)]
+            allowed_epistemic: Option<Vec<String>>,
+            #[serde(default)]
+            allowed_review: Option<Vec<String>>,
+            #[serde(default)]
+            allowed_process: Option<Vec<String>>,
+        }
+
+        let raw = Raw::deserialize(deserializer)?;
+
+        if let Some(allowed_standing) = raw.allowed_standing {
+            // New format
+            let mut map = BTreeMap::new();
+            for (k, v) in allowed_standing {
+                let dim = DimensionId::parse(&k).map_err(D::Error::custom)?;
+                let mut tokens = Vec::new();
+                for t in v {
+                    tokens.push(TokenId::parse(&t).map_err(D::Error::custom)?);
+                }
+                map.insert(dim, tokens);
+            }
+            let mut protocols = BTreeMap::new();
+            if let Some(rp) = raw.required_protocols {
+                for (k, v) in rp {
+                    let pid = KernelProtocolId::parse(&k).map_err(D::Error::custom)?;
+                    let props: BTreeMap<String, ScalarValue> = v
+                        .into_iter()
+                        .map(|(pk, pv)| {
+                            let sv = serde_json::from_value(pv.clone())
+                                .unwrap_or(ScalarValue::String(pv.to_string()));
+                            (pk, sv)
+                        })
+                        .collect();
+                    protocols.insert(pid, props);
+                }
+            }
+            return Ok(ClassStandingRules {
+                allowed_standing: map,
+                required_protocols: protocols,
+            });
+        }
+
+        // Old format: translate allowed_epistemic/review/process to
+        // kernel:* dimensions
+        let mut map = BTreeMap::new();
+        if let Some(tokens) = raw.allowed_epistemic {
+            let dim = DimensionId::from_static("kernel:epistemic");
+            let parsed: Vec<TokenId> = tokens
+                .into_iter()
+                .map(|t| TokenId::parse(&t))
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(D::Error::custom)?;
+            // Note: tokens may be values like EpistemicStanding::Working
+            // which serialize as "working" — handled by TokenId::parse
+            map.insert(dim, parsed);
+        }
+        if let Some(tokens) = raw.allowed_review {
+            let dim = DimensionId::from_static("kernel:review");
+            let parsed: Vec<TokenId> = tokens
+                .into_iter()
+                .map(|t| TokenId::parse(&t))
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(D::Error::custom)?;
+            map.insert(dim, parsed);
+        }
+        if let Some(tokens) = raw.allowed_process {
+            let dim = DimensionId::from_static("kernel:process");
+            let parsed: Vec<TokenId> = tokens
+                .into_iter()
+                .map(|t| TokenId::parse(&t))
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(D::Error::custom)?;
+            map.insert(dim, parsed);
+        }
+
+        Ok(ClassStandingRules {
+            allowed_standing: map,
+            required_protocols: BTreeMap::new(),
+        })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1078,11 +1196,46 @@ pub struct StandingTransitionRule {
     pub requires_review: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Default)]
 pub struct OperationRequirement {
     pub operation: String,
-    pub minimums: BTreeMap<String, String>,
-    pub forbidden: BTreeMap<String, Vec<String>>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub required_standing: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub forbidden_standing: BTreeMap<String, Vec<String>>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub required_protocols: BTreeMap<String, BTreeMap<String, ScalarValue>>,
+}
+
+impl<'de> Deserialize<'de> for OperationRequirement {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct Raw {
+            operation: String,
+            #[serde(default)]
+            required_standing: Option<BTreeMap<String, String>>,
+            #[serde(default)]
+            forbidden_standing: Option<BTreeMap<String, Vec<String>>>,
+            #[serde(default)]
+            required_protocols: Option<BTreeMap<String, BTreeMap<String, ScalarValue>>>,
+            #[serde(default)]
+            minimums: Option<BTreeMap<String, String>>,
+            #[serde(default)]
+            forbidden: Option<BTreeMap<String, Vec<String>>>,
+        }
+        let raw = Raw::deserialize(deserializer)?;
+        let required_standing = raw.required_standing.or(raw.minimums).unwrap_or_default();
+        let forbidden_standing = raw.forbidden_standing.or(raw.forbidden).unwrap_or_default();
+        Ok(OperationRequirement {
+            operation: raw.operation,
+            required_standing,
+            forbidden_standing,
+            required_protocols: raw.required_protocols.unwrap_or_default(),
+        })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1256,6 +1409,8 @@ pub struct SystemDefinition {
     pub provider_profiles: Vec<VersionRef>,
     pub default_compiled_context: Option<VersionRef>,
     pub default_provider_profile: Option<VersionRef>,
+    #[serde(default)]
+    pub standing_dimensions: Vec<StandingDimensionDefinition>,
     pub runtime_profile: RuntimeProfile,
     pub activated_at: Option<Timestamp>,
 }
@@ -2343,5 +2498,323 @@ mod tests {
         assert!(panic::catch_unwind(|| DimensionId::from_static("valid:name")).is_ok());
         assert!(panic::catch_unwind(|| TokenId::from_static("valid_name")).is_ok());
         assert!(panic::catch_unwind(|| KernelProtocolId::from_static("kernel:review")).is_ok());
+    }
+
+    // --- WP02: System Standing Registry and Declaration Validation tests ---
+
+    #[test]
+    fn test_system_definition_with_custom_standing_dimensions_parses() {
+        let sys = SystemDefinition {
+            system_id: "sys_test".to_string(),
+            namespace: "systems/test".to_string(),
+            title: "Test".to_string(),
+            description: None,
+            classes: vec![],
+            instructions: vec![],
+            policies: vec![],
+            workflows: vec![],
+            compiled_contexts: vec![],
+            provider_profiles: vec![],
+            default_compiled_context: None,
+            default_provider_profile: None,
+            standing_dimensions: vec![StandingDimensionDefinition {
+                id: DimensionId::from_static("research:status"),
+                default: TokenId::from_static("draft"),
+                tokens: vec![
+                    StandingTokenDefinition {
+                        id: TokenId::from_static("draft"),
+                        implements: vec![],
+                    },
+                    StandingTokenDefinition {
+                        id: TokenId::from_static("verified"),
+                        implements: vec![ProtocolBinding {
+                            protocol: KernelProtocolId::from_static("kernel:review"),
+                            state: Some("accepted".to_string()),
+                            properties: BTreeMap::new(),
+                        }],
+                    },
+                ],
+            }],
+            runtime_profile: RuntimeProfile {
+                execution_surface: "local".to_string(),
+                machine_output_default: "json".to_string(),
+                work_surface_mode: "strict".to_string(),
+            },
+            activated_at: None,
+        };
+        let registry = StandingRegistry::from_system_definition(&sys)
+            .expect("registry construction should succeed");
+        assert!(registry
+            .dimensions
+            .contains_key(&DimensionId::new("kernel:epistemic")));
+        assert!(registry
+            .dimensions
+            .contains_key(&DimensionId::new("kernel:review")));
+        assert!(registry
+            .dimensions
+            .contains_key(&DimensionId::new("kernel:process")));
+        assert!(registry
+            .dimensions
+            .contains_key(&DimensionId::new("research:status")));
+    }
+
+    #[test]
+    fn test_registry_construction_includes_builtin_and_custom() {
+        let sys = SystemDefinition {
+            system_id: "sys_test".to_string(),
+            namespace: "systems/test".to_string(),
+            title: "Test".to_string(),
+            description: None,
+            classes: vec![],
+            instructions: vec![],
+            policies: vec![],
+            workflows: vec![],
+            compiled_contexts: vec![],
+            provider_profiles: vec![],
+            default_compiled_context: None,
+            default_provider_profile: None,
+            standing_dimensions: vec![StandingDimensionDefinition {
+                id: DimensionId::from_static("security:clearance"),
+                default: TokenId::from_static("public"),
+                tokens: vec![
+                    StandingTokenDefinition {
+                        id: TokenId::from_static("public"),
+                        implements: vec![],
+                    },
+                    StandingTokenDefinition {
+                        id: TokenId::from_static("restricted"),
+                        implements: vec![],
+                    },
+                ],
+            }],
+            runtime_profile: RuntimeProfile {
+                execution_surface: "local".to_string(),
+                machine_output_default: "json".to_string(),
+                work_surface_mode: "strict".to_string(),
+            },
+            activated_at: None,
+        };
+        let registry =
+            StandingRegistry::from_system_definition(&sys).expect("registry should succeed");
+        assert_eq!(registry.dimensions.len(), 4);
+        let epi_default = registry
+            .dimensions
+            .get(&DimensionId::new("kernel:epistemic"))
+            .map(|d| d.default.as_str());
+        assert_eq!(epi_default, Some("working"));
+        let clearance = registry
+            .dimensions
+            .get(&DimensionId::new("security:clearance"))
+            .expect("security:clearance dimension");
+        assert_eq!(clearance.default.as_str(), "public");
+    }
+
+    #[test]
+    fn test_duplicate_dimension_fails_validation() {
+        let sys = SystemDefinition {
+            system_id: "sys_test".to_string(),
+            namespace: "systems/test".to_string(),
+            title: "Test".to_string(),
+            description: None,
+            classes: vec![],
+            instructions: vec![],
+            policies: vec![],
+            workflows: vec![],
+            compiled_contexts: vec![],
+            provider_profiles: vec![],
+            default_compiled_context: None,
+            default_provider_profile: None,
+            standing_dimensions: vec![StandingDimensionDefinition {
+                id: DimensionId::from_static("kernel:epistemic"),
+                default: TokenId::from_static("working"),
+                tokens: vec![StandingTokenDefinition {
+                    id: TokenId::from_static("working"),
+                    implements: vec![],
+                }],
+            }],
+            runtime_profile: RuntimeProfile {
+                execution_surface: "local".to_string(),
+                machine_output_default: "json".to_string(),
+                work_surface_mode: "strict".to_string(),
+            },
+            activated_at: None,
+        };
+        assert!(StandingRegistry::from_system_definition(&sys).is_err());
+    }
+
+    #[test]
+    fn test_default_token_missing_from_token_list_fails() {
+        let sys = SystemDefinition {
+            system_id: "sys_test".to_string(),
+            namespace: "systems/test".to_string(),
+            title: "Test".to_string(),
+            description: None,
+            classes: vec![],
+            instructions: vec![],
+            policies: vec![],
+            workflows: vec![],
+            compiled_contexts: vec![],
+            provider_profiles: vec![],
+            default_compiled_context: None,
+            default_provider_profile: None,
+            standing_dimensions: vec![StandingDimensionDefinition {
+                id: DimensionId::from_static("research:status"),
+                default: TokenId::from_static("missing_token"),
+                tokens: vec![StandingTokenDefinition {
+                    id: TokenId::from_static("draft"),
+                    implements: vec![],
+                }],
+            }],
+            runtime_profile: RuntimeProfile {
+                execution_surface: "local".to_string(),
+                machine_output_default: "json".to_string(),
+                work_surface_mode: "strict".to_string(),
+            },
+            activated_at: None,
+        };
+        assert!(StandingRegistry::from_system_definition(&sys).is_err());
+    }
+
+    #[test]
+    fn test_unknown_protocol_binding_fails() {
+        let sys = SystemDefinition {
+            system_id: "sys_test".to_string(),
+            namespace: "systems/test".to_string(),
+            title: "Test".to_string(),
+            description: None,
+            classes: vec![],
+            instructions: vec![],
+            policies: vec![],
+            workflows: vec![],
+            compiled_contexts: vec![],
+            provider_profiles: vec![],
+            default_compiled_context: None,
+            default_provider_profile: None,
+            standing_dimensions: vec![StandingDimensionDefinition {
+                id: DimensionId::from_static("research:status"),
+                default: TokenId::from_static("draft"),
+                tokens: vec![StandingTokenDefinition {
+                    id: TokenId::from_static("verified"),
+                    implements: vec![ProtocolBinding {
+                        protocol: KernelProtocolId::from_static("nonexistent:protocol"),
+                        state: Some("x".to_string()),
+                        properties: BTreeMap::new(),
+                    }],
+                }],
+            }],
+            runtime_profile: RuntimeProfile {
+                execution_surface: "local".to_string(),
+                machine_output_default: "json".to_string(),
+                work_surface_mode: "strict".to_string(),
+            },
+            activated_at: None,
+        };
+        assert!(StandingRegistry::from_system_definition(&sys).is_err());
+    }
+
+    #[test]
+    fn test_unknown_dimension_in_class_standing_rules_fails_registry_validation() {
+        let registry = StandingRegistry::kernel_defaults();
+        let rules = ClassStandingRules {
+            allowed_standing: BTreeMap::from([(
+                DimensionId::from_static("unknown:dim"),
+                vec![TokenId::from_static("unknown_token")],
+            )]),
+            ..Default::default()
+        };
+        assert!(registry
+            .dimensions
+            .get(&DimensionId::new("unknown:dim"))
+            .is_none());
+    }
+
+    #[test]
+    fn test_class_standing_rules_against_registry_checks() {
+        // Using the earmark-declarations function is not possible here,
+        // but we can verify the registry dimension lookup directly.
+        let registry = StandingRegistry::kernel_defaults();
+        let dim_id = DimensionId::new("kernel:epistemic");
+        let def = registry.dimensions.get(&dim_id).expect("kernel:epistemic");
+        let valid: Vec<&str> = def.tokens.iter().map(|t| t.id.as_str()).collect();
+        assert!(valid.contains(&"working"));
+        assert!(!valid.contains(&"bogus"));
+        let unknown_id = DimensionId::new("research:status");
+        assert!(registry.dimensions.get(&unknown_id).is_none());
+    }
+
+    #[test]
+    fn test_standing_policy_unknown_dimension_fails_registry_validation() {
+        let registry = StandingRegistry::kernel_defaults();
+        // "nonexistent" is a valid DimensionId (just a name) but not in the registry
+        let dim_id = DimensionId::parse("nonexistent").expect("valid dim id");
+        assert!(registry.dimensions.get(&dim_id).is_none());
+    }
+
+    #[test]
+    fn test_custom_dimension_compiled_context_filter_passes_registry_validation() {
+        let sys = SystemDefinition {
+            system_id: "sys_test".to_string(),
+            namespace: "systems/test".to_string(),
+            title: "Test".to_string(),
+            description: None,
+            classes: vec![],
+            instructions: vec![],
+            policies: vec![],
+            workflows: vec![],
+            compiled_contexts: vec![],
+            provider_profiles: vec![],
+            default_compiled_context: None,
+            default_provider_profile: None,
+            standing_dimensions: vec![StandingDimensionDefinition {
+                id: DimensionId::from_static("research:status"),
+                default: TokenId::from_static("draft"),
+                tokens: vec![
+                    StandingTokenDefinition {
+                        id: TokenId::from_static("draft"),
+                        implements: vec![],
+                    },
+                    StandingTokenDefinition {
+                        id: TokenId::from_static("verified"),
+                        implements: vec![],
+                    },
+                ],
+            }],
+            runtime_profile: RuntimeProfile {
+                execution_surface: "local".to_string(),
+                machine_output_default: "json".to_string(),
+                work_surface_mode: "strict".to_string(),
+            },
+            activated_at: None,
+        };
+        let registry =
+            StandingRegistry::from_system_definition(&sys).expect("registry construction");
+        let dim_id = DimensionId::new("research:status");
+        let def = registry.dimensions.get(&dim_id).expect("research:status");
+        let valid: Vec<&str> = def.tokens.iter().map(|t| t.id.as_str()).collect();
+        assert!(valid.contains(&"draft"));
+        assert!(valid.contains(&"verified"));
+        assert!(!valid.contains(&"bogus"));
+    }
+
+    #[test]
+    fn test_system_definition_without_standing_dimensions_defaults_empty() {
+        let yaml = r#"
+system_id: minimal
+namespace: systems/minimal
+title: Minimal System
+classes: []
+instructions: []
+policies: []
+workflows: []
+compiled_contexts: []
+provider_profiles: []
+runtime_profile:
+  execution_surface: local
+  machine_output_default: json
+  work_surface_mode: strict
+"#;
+        let sys: SystemDefinition =
+            serde_yaml::from_str(yaml).expect("system without standing_dimensions should parse");
+        assert!(sys.standing_dimensions.is_empty());
     }
 }

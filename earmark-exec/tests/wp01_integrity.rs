@@ -259,6 +259,7 @@ fn test_live_transition_indexing() {
         provider_profiles: vec![],
         default_compiled_context: None,
         default_provider_profile: None,
+        standing_dimensions: vec![],
         runtime_profile: earmark_core::RuntimeProfile {
             execution_surface: "test".to_string(),
             machine_output_default: "test".to_string(),
