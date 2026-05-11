@@ -439,7 +439,154 @@ pub fn validate_provider_profile(value: &ProviderProfile) -> Result<(), DeriveEr
         earmark_core::validate_env_var_name(endpoint_env)
             .map_err(|e| DeriveError::Validation(e.to_string()))?;
     }
+
+    if value.provider == "http_generation" {
+        let http = value.http.as_ref().ok_or_else(|| {
+            DeriveError::Validation(
+                "provider profile with provider 'http_generation' requires an 'http' block"
+                    .to_string(),
+            )
+        })?;
+
+        if http.url_template.trim().is_empty() {
+            return Err(DeriveError::Validation(
+                "http url_template must be non-empty".to_string(),
+            ));
+        }
+        validate_http_template(&http.url_template)?;
+        validate_rendered_url(&http.url_template)?;
+
+        if let Some(method) = &http.method {
+            if method != "POST" {
+                return Err(DeriveError::Validation(format!(
+                    "unsupported http method '{}'; only POST is supported",
+                    method
+                )));
+            }
+        }
+
+        match http.auth.kind {
+            earmark_core::HttpAuthKind::None => {}
+            earmark_core::HttpAuthKind::Header => {
+                if http
+                    .auth
+                    .header_name
+                    .as_ref()
+                    .map_or(true, |s| s.trim().is_empty())
+                {
+                    return Err(DeriveError::Validation(
+                        "http auth kind 'header' requires a header_name".to_string(),
+                    ));
+                }
+                let env = http.auth.env.as_ref().or(value.auth_env.as_ref()).ok_or_else(|| {
+                    DeriveError::Validation(
+                        "http auth kind 'header' requires an 'env' variable name or top-level 'auth_env'".to_string(),
+                    )
+                })?;
+                earmark_core::validate_env_var_name(env)
+                    .map_err(|e| DeriveError::Validation(e.to_string()))?;
+            }
+            earmark_core::HttpAuthKind::Bearer => {
+                let env = http.auth.env.as_ref().or(value.auth_env.as_ref()).ok_or_else(|| {
+                    DeriveError::Validation(
+                        "http auth kind 'bearer' requires an 'env' variable name or top-level 'auth_env'".to_string(),
+                    )
+                })?;
+                earmark_core::validate_env_var_name(env)
+                    .map_err(|e| DeriveError::Validation(e.to_string()))?;
+            }
+            earmark_core::HttpAuthKind::QueryParameter => {
+                if http
+                    .auth
+                    .param_name
+                    .as_ref()
+                    .map_or(true, |s| s.trim().is_empty())
+                {
+                    return Err(DeriveError::Validation(
+                        "http auth kind 'query_parameter' requires a param_name".to_string(),
+                    ));
+                }
+                let env = http.auth.env.as_ref().or(value.auth_env.as_ref()).ok_or_else(|| {
+                    DeriveError::Validation(
+                        "http auth kind 'query_parameter' requires an 'env' variable name or top-level 'auth_env'".to_string(),
+                    )
+                })?;
+                earmark_core::validate_env_var_name(env)
+                    .map_err(|e| DeriveError::Validation(e.to_string()))?;
+            }
+        }
+
+        if http.response.text_path.trim().is_empty() {
+            return Err(DeriveError::Validation(
+                "http response text_path must be non-empty".to_string(),
+            ));
+        }
+
+        if !http.request.body.is_object() && !http.request.body.is_array() {
+            return Err(DeriveError::Validation(
+                "http request body must be a JSON object or array".to_string(),
+            ));
+        }
+        validate_json_value_templates(&http.request.body)?;
+    }
+
     Ok(())
+}
+
+fn validate_http_template(template: &str) -> Result<(), DeriveError> {
+    let allowlist = [
+        "model",
+        "input_text",
+        "instruction_text",
+        "system_text",
+        "context_text",
+        "max_output_tokens",
+    ];
+    let mut rest = template;
+    while let Some(start) = rest.find("{{") {
+        let end_rel = rest[start..].find("}}").ok_or_else(|| {
+            DeriveError::Validation(format!("malformed template variable in '{}'", template))
+        })?;
+        let var = &rest[start + 2..start + end_rel];
+        if !allowlist.contains(&var.trim()) {
+            return Err(DeriveError::Validation(format!(
+                "unsupported template variable '{{{{{}}}}}' in '{}'; allowed: {:?}",
+                var, template, allowlist
+            )));
+        }
+        rest = &rest[start + end_rel + 2..];
+    }
+    Ok(())
+}
+
+fn validate_rendered_url(template: &str) -> Result<(), DeriveError> {
+    let rendered = template.replace("{{model}}", "test-model");
+    if !rendered.starts_with("http://") && !rendered.starts_with("https://") {
+        return Err(DeriveError::Validation(format!(
+            "invalid http url_template '{}'; must start with http:// or https://",
+            template
+        )));
+    }
+    Ok(())
+}
+
+fn validate_json_value_templates(value: &serde_json::Value) -> Result<(), DeriveError> {
+    match value {
+        serde_json::Value::String(s) => validate_http_template(s),
+        serde_json::Value::Array(arr) => {
+            for v in arr {
+                validate_json_value_templates(v)?;
+            }
+            Ok(())
+        }
+        serde_json::Value::Object(obj) => {
+            for v in obj.values() {
+                validate_json_value_templates(v)?;
+            }
+            Ok(())
+        }
+        _ => Ok(()),
+    }
 }
 
 pub fn validate_system_definition<S: CanonicalStore>(

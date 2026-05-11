@@ -233,6 +233,7 @@ fn profile(provider: &str, model: &str) -> ProviderProfile {
             must_return_candidate_only: true,
             must_include_lineage: true,
         },
+        http: None,
     }
 }
 
@@ -247,6 +248,8 @@ fn request_with_provider_profile(provider_profile: VersionRef) -> ProviderReques
         work_packet: ObjectRef::new(ObjectId::new(), VersionId::new(), Kind::WorkPacket, None),
         provider_profile,
         instruction_text: "Do the thing".to_string(),
+        context_text: None,
+        input_text: "Do the thing".to_string(),
         work_surface_manifest: None,
         inputs: vec![],
         response_contract: ProviderResponseContract {

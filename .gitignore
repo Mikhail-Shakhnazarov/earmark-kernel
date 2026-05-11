@@ -8,5 +8,8 @@
 /PRODUCTIZATION_ROADMAP.md
 /GUI_WORKBENCH_CONCEPT.md
 
+.env
+.env.local
+
 # Local workspace state
 /.earmark/
