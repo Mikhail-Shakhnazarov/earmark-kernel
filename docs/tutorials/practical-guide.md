@@ -108,9 +108,7 @@ The process becomes visible enough to govern.
 
 ## Trying the Demo
 
-The demo currently runs from source with the CLI. To run it locally, use the CLI from a Rust development environment.
-
-From the repository root:
+Build the CLI from the repository root, then run the demo in a fresh workspace:
 
 ```bash
 cargo build -p earmark-cli

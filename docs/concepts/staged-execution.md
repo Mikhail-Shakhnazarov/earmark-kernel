@@ -53,14 +53,14 @@ The point of staging is **continuation without ambient memory**.
 In a chat-based system, Stage 2 continues because the conversation history contains Stage 1's output. In Earmark, Stage 2 continues because it reads a handoff manifest that explicitly defines what it's allowed to see.
 
 That means:
-- Stage 2 can run in a different runtime, a different session, or a different model.
+- Stage 2 can run in a different session or a later run can consume the same handoff.
 - Stage 2 doesn't inherit Stage 1's internal reasoning or side effects.
 - You can re-run Stage 2 multiple times from the same Stage 1 handoff.
 
 ## Why It Matters
 
 - **Auditability**: every object traces to the assignment and run that created it.
-- **Resilience**: if Stage 2 fails, Stage 1's handoff is still there. Resume or retry without re-running everything.
+- **Resilience**: if Stage 2 fails, Stage 1's handoff is still there. Continue from the handoff without re-running Stage 1.
 - **Human review**: insert a review gate between any two stages by requiring standing changes before the handoff is accepted.
 
 ## See Also

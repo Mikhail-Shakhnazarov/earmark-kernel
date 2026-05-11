@@ -1,13 +1,13 @@
 #![cfg(feature = "http-provider")]
 
+use earmark_connected_context::{WorkSurfaceManifest, WorkSurfaceObject};
 use earmark_core::{
-    HttpAuthConfig, HttpAuthKind, HttpGenerationProfile, HttpRequestTemplate, HttpResponseExtraction,
-    Kind, ObjectRef, ProviderProfile, VersionRef, ScalarValue, ObjectId, VersionId,
+    HttpAuthConfig, HttpAuthKind, HttpGenerationProfile, HttpRequestTemplate,
+    HttpResponseExtraction, Kind, ObjectId, ObjectRef, ProviderProfile, VersionId, VersionRef,
 };
 use earmark_exec::{HttpGenerationAdapter, ProviderRegistry, ProviderService};
-use earmark_store::{CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload};
-use earmark_connected_context::{WorkSurfaceManifest, WorkSurfaceObject};
 use earmark_index::DerivedIndex;
+use earmark_store::{CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload};
 use httpmock::MockServer;
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -123,15 +123,24 @@ fn test_http_provider_e2e_content_rendering() {
         &store,
         &instruction,
         None,
-        &[input_ref.clone()],
+        std::slice::from_ref(&input_ref),
         &profile,
-    ).unwrap();
+    )
+    .unwrap();
 
     let request = earmark_core::ProviderRequest {
         request_id: "req_e2e".to_string(),
         run_id: "run_e2e".to_string(),
-        work_packet: ObjectRef::new(earmark_core::ObjectId::new(), earmark_core::VersionId::new(), Kind::WorkPacket, None),
-        provider_profile: VersionRef::new(earmark_core::ObjectId::new(), earmark_core::VersionId::new()),
+        work_packet: ObjectRef::new(
+            earmark_core::ObjectId::new(),
+            earmark_core::VersionId::new(),
+            Kind::WorkPacket,
+            None,
+        ),
+        provider_profile: VersionRef::new(
+            earmark_core::ObjectId::new(),
+            earmark_core::VersionId::new(),
+        ),
         instruction_text: instruction.body.as_str().to_string(),
         context_text: None,
         input_text: rendered_input,
@@ -168,19 +177,32 @@ fn test_http_provider_rendering_with_manifest() {
         vec![],
     );
     let input_v = store.write_object(&stored_input).unwrap();
-    let input_ref = ObjectRef::new(stored_input.envelope.id.clone(), input_v.version_id, Kind::Object, None);
+    let input_ref = ObjectRef::new(
+        stored_input.envelope.id.clone(),
+        input_v.version_id,
+        Kind::Object,
+        None,
+    );
 
     let stored_manifest_obj = StoredObject::new(
         Kind::Object,
         None,
         earmark_core::Standing::default(),
         earmark_core::Provenance::direct_input("user"),
-        BTreeMap::from([("title".to_string(), earmark_core::HeaderValue::String("Manifest Doc".to_string()))]),
+        BTreeMap::from([(
+            "title".to_string(),
+            earmark_core::HeaderValue::String("Manifest Doc".to_string()),
+        )]),
         StoredPayload::from_markdown("Manifest-only content"),
         vec![],
     );
     let manifest_v = store.write_object(&stored_manifest_obj).unwrap();
-    let manifest_ref = ObjectRef::new(stored_manifest_obj.envelope.id.clone(), manifest_v.version_id, Kind::Object, None);
+    let manifest_ref = ObjectRef::new(
+        stored_manifest_obj.envelope.id.clone(),
+        manifest_v.version_id,
+        Kind::Object,
+        None,
+    );
 
     // 2. Manifest
     let manifest = WorkSurfaceManifest {
@@ -188,15 +210,13 @@ fn test_http_provider_rendering_with_manifest() {
         compiled_context: VersionRef::new(ObjectId::new(), VersionId::new()),
         work_packet: None,
         generated_at: chrono::Utc::now(),
-        objects: vec![
-            WorkSurfaceObject {
-                object: manifest_ref.clone(),
-                title: Some("Manifest Doc".to_string()),
-                path: "doc.md".to_string(),
-                excerpt_range: None,
-                lineage: vec![],
-            }
-        ],
+        objects: vec![WorkSurfaceObject {
+            object: manifest_ref.clone(),
+            title: Some("Manifest Doc".to_string()),
+            path: "doc.md".to_string(),
+            excerpt_range: None,
+            lineage: vec![],
+        }],
         boundary_relations: vec![],
         constraints: BTreeMap::new(),
         warnings: vec![],
@@ -245,9 +265,10 @@ fn test_http_provider_rendering_with_manifest() {
         &store,
         &instruction,
         Some(&manifest),
-        &[input_ref.clone()],
+        std::slice::from_ref(&input_ref),
         &profile,
-    ).unwrap();
+    )
+    .unwrap();
 
     // Must contain both:
     // - manifest-only object
@@ -275,7 +296,12 @@ fn test_http_provider_exposure_structured_hiding() {
         vec![],
     );
     let v = store.write_object(&stored_workflow).unwrap();
-    let workflow_ref = ObjectRef::new(stored_workflow.envelope.id.clone(), v.version_id, Kind::Workflow, None);
+    let workflow_ref = ObjectRef::new(
+        stored_workflow.envelope.id.clone(),
+        v.version_id,
+        Kind::Workflow,
+        None,
+    );
 
     // Profile with allow_structured_declarations = false
     let profile = ProviderProfile {
@@ -321,7 +347,8 @@ fn test_http_provider_exposure_structured_hiding() {
         None,
         &[workflow_ref],
         &profile,
-    ).unwrap();
+    )
+    .unwrap();
 
     assert!(!rendered.contains("SECRET_WORKFLOW_STEPS"));
     assert!(rendered.contains("Structured declarations hidden by exposure policy"));
@@ -339,12 +366,20 @@ fn test_http_provider_exposure_prose_hiding() {
         None,
         earmark_core::Standing::default(),
         earmark_core::Provenance::direct_input("user"),
-        BTreeMap::from([("title".to_string(), earmark_core::HeaderValue::String("Private Doc".to_string()))]),
+        BTreeMap::from([(
+            "title".to_string(),
+            earmark_core::HeaderValue::String("Private Doc".to_string()),
+        )]),
         StoredPayload::from_markdown("PRIVATE_PROSE_CONTENT"),
         vec![],
     );
     let v = store.write_object(&stored_input).unwrap();
-    let input_ref = ObjectRef::new(stored_input.envelope.id.clone(), v.version_id, Kind::Object, None);
+    let input_ref = ObjectRef::new(
+        stored_input.envelope.id.clone(),
+        v.version_id,
+        Kind::Object,
+        None,
+    );
 
     // Profile with allow_prose_objects = false
     let profile = ProviderProfile {
@@ -390,7 +425,8 @@ fn test_http_provider_exposure_prose_hiding() {
         None,
         &[input_ref],
         &profile,
-    ).unwrap();
+    )
+    .unwrap();
 
     assert!(!rendered.contains("PRIVATE_PROSE_CONTENT"));
     assert!(rendered.contains("Payload content hidden by exposure policy"));
@@ -409,12 +445,20 @@ fn test_http_provider_exposure_class_definition_hiding() {
         Some("class_definition".to_string()),
         earmark_core::Standing::default(),
         earmark_core::Provenance::direct_input("user"),
-        BTreeMap::from([("title".to_string(), earmark_core::HeaderValue::String("My Class".to_string()))]),
+        BTreeMap::from([(
+            "title".to_string(),
+            earmark_core::HeaderValue::String("My Class".to_string()),
+        )]),
         StoredPayload::from_markdown("SECRET_CLASS_SCHEMA"),
         vec![],
     );
     let v = store.write_object(&stored_class).unwrap();
-    let class_ref = ObjectRef::new(stored_class.envelope.id.clone(), v.version_id, Kind::Object, Some("class_definition".to_string()));
+    let class_ref = ObjectRef::new(
+        stored_class.envelope.id.clone(),
+        v.version_id,
+        Kind::Object,
+        Some("class_definition".to_string()),
+    );
 
     // Profile with allow_prose_objects = true, allow_structured_declarations = false
     let profile = ProviderProfile {
@@ -460,7 +504,8 @@ fn test_http_provider_exposure_class_definition_hiding() {
         None,
         &[class_ref],
         &profile,
-    ).unwrap();
+    )
+    .unwrap();
 
     assert!(!rendered.contains("SECRET_CLASS_SCHEMA"));
     assert!(rendered.contains("Structured declarations hidden by exposure policy"));

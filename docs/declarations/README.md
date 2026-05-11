@@ -83,8 +83,24 @@ Key examples:
 
 ## Schemas
 
-JSON Schema files for active declaration kinds are published in:
+JSON Schema files for the seven declaration kinds are published in:
 
 ```text
 docs/declarations/schema/
 ```
+
+CLI and Rust validation are authoritative. JSON Schema files are useful authoring aids but may not capture every semantic check enforced by the validator.
+
+### Validation Coverage
+
+CLI and Rust validation is active across all seven declaration kinds.
+
+| Kind | Current validation coverage |
+|---|---|
+| `class` | Class name, non-empty version, `kind` value, standing-rule tokens, relation type tokens, counterparty class tokens, relation direction, authorizing endpoint, and dead direction/authority combinations |
+| `instruction` | Instruction name, non-empty version, non-empty purpose, non-empty body, input class tokens, and output class tokens |
+| `standing-policy` | Policy name, non-empty version, transition-rule dimensions and standing tokens, operation requirement dimensions/tokens, and non-empty escalation trigger/message |
+| `workflow` | Workflow name, operation id tokens and uniqueness, operation kind, required `compiled_context` for `compile_context` operations, required instruction for `transform` operations, one output contract for transform operations, input/output class tokens, guard id tokens and uniqueness, edge endpoints, and guard references |
+| `compiled-context` | Template name, non-empty version, selected class tokens, non-empty render mode, standing dimensions/tokens, and relation type tokens |
+| `provider-profile` | Profile name, non-empty version, provider/model presence, response format, non-negative budget, auth/endpoint environment variable names, and HTTP provider template/auth/body constraints when `provider: http_generation` is used |
+| `system` | System id, namespace, referenced object existence, referenced kind/class where required, referenced payload decodability, title, and non-empty runtime profile fields |
