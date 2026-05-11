@@ -551,6 +551,106 @@ mod tests {
     }
 
     #[test]
+    fn test_matches_standing_unknown_dimension_returns_false() {
+        let row = earmark_index::ObjectSummary {
+            object_id: "o1".to_string(),
+            version_id: "v1".to_string(),
+            kind: "Object".to_string(),
+            class: None,
+            title: None,
+            summary: None,
+            standing_review: "accepted".to_string(),
+            standing_process: "active".to_string(),
+            standing_epistemic: "confirmed".to_string(),
+            system_id: None,
+            namespace: None,
+            standing: BTreeMap::new(),
+        };
+        let mut filters = BTreeMap::new();
+        filters.insert("research:status".to_string(), vec!["verified".to_string()]);
+        assert!(
+            !object_summary_matches_standing(&row, &filters),
+            "unknown dimension not in row.standing must return false"
+        );
+    }
+
+    #[test]
+    fn test_matches_standing_legacy_fallback_still_works() {
+        let row = earmark_index::ObjectSummary {
+            object_id: "o1".to_string(),
+            version_id: "v1".to_string(),
+            kind: "Object".to_string(),
+            class: None,
+            title: None,
+            summary: None,
+            standing_review: "accepted".to_string(),
+            standing_process: "active".to_string(),
+            standing_epistemic: "confirmed".to_string(),
+            system_id: None,
+            namespace: None,
+            standing: BTreeMap::new(),
+        };
+        // Legacy short name still falls back to standing_review column
+        let filters = BTreeMap::from([("kernel:review".to_string(), vec!["accepted".to_string()])]);
+        assert!(object_summary_matches_standing(&row, &filters));
+        // Long name also works
+        let filters = BTreeMap::from([("kernel:review".to_string(), vec!["rejected".to_string()])]);
+        assert!(!object_summary_matches_standing(&row, &filters));
+    }
+
+    #[test]
+    fn test_matches_standing_empty_allowed_tokens_is_unconstrained() {
+        let row = earmark_index::ObjectSummary {
+            object_id: "o1".to_string(),
+            version_id: "v1".to_string(),
+            kind: "Object".to_string(),
+            class: None,
+            title: None,
+            summary: None,
+            standing_review: "accepted".to_string(),
+            standing_process: "active".to_string(),
+            standing_epistemic: "confirmed".to_string(),
+            system_id: None,
+            namespace: None,
+            standing: BTreeMap::from([("research:status".to_string(), "verified".to_string())]),
+        };
+        let mut filters = BTreeMap::new();
+        filters.insert("research:status".to_string(), vec![]);
+        assert!(
+            object_summary_matches_standing(&row, &filters),
+            "empty allowed-token list must be unconstrained"
+        );
+    }
+
+    #[test]
+    fn test_matches_standing_custom_dimension_through_standing_map() {
+        let row = earmark_index::ObjectSummary {
+            object_id: "o1".to_string(),
+            version_id: "v1".to_string(),
+            kind: "Object".to_string(),
+            class: None,
+            title: None,
+            summary: None,
+            standing_review: "unreviewed".to_string(),
+            standing_process: "active".to_string(),
+            standing_epistemic: "working".to_string(),
+            system_id: None,
+            namespace: None,
+            standing: BTreeMap::from([("research:status".to_string(), "demonstrated".to_string())]),
+        };
+        // Match via row.standing
+        let filters = BTreeMap::from([(
+            "research:status".to_string(),
+            vec!["demonstrated".to_string()],
+        )]);
+        assert!(object_summary_matches_standing(&row, &filters));
+        // Non-matching token
+        let filters =
+            BTreeMap::from([("research:status".to_string(), vec!["verified".to_string()])]);
+        assert!(!object_summary_matches_standing(&row, &filters));
+    }
+
+    #[test]
     fn test_cli_summary() {
         let manifest = WorkSurfaceManifest {
             surface_id: "test".to_string(),
