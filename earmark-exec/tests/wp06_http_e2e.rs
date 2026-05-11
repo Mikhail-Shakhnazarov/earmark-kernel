@@ -1,13 +1,14 @@
 use earmark_core::{
     HttpAuthConfig, HttpAuthKind, HttpGenerationProfile, HttpRequestTemplate, HttpResponseExtraction,
-    Kind, ObjectRef, ProviderProfile, VersionRef,
+    Kind, ObjectRef, ProviderProfile, VersionRef, ScalarValue, ObjectId, VersionId,
 };
 use earmark_exec::{HttpGenerationAdapter, ProviderRegistry, ProviderService};
 use earmark_store::{CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload};
+use earmark_connected_context::{WorkSurfaceManifest, WorkSurfaceObject};
 use earmark_index::DerivedIndex;
 use httpmock::MockServer;
-use std::sync::Arc;
 use std::collections::BTreeMap;
+use std::sync::Arc;
 use tempfile::tempdir;
 
 #[test]
@@ -15,7 +16,7 @@ use tempfile::tempdir;
 fn test_http_provider_e2e_content_rendering() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let _index = DerivedIndex::open(dir.path()).unwrap();
 
     // 1. Create an input object with real payload
     let input_payload = "This is the source evidence text.";
@@ -146,4 +147,250 @@ fn test_http_provider_e2e_content_rendering() {
     let response = outcome.response.unwrap();
     assert_eq!(response.candidate_payload, "Summary: doc is about X");
     assert_eq!(response.usage.unwrap().input_tokens, Some(50));
+}
+
+#[test]
+#[cfg(feature = "http-provider")]
+fn test_http_provider_rendering_with_manifest() {
+    let dir = tempdir().unwrap();
+    let store = GitCanonicalStore::new(dir.path());
+
+    // 1. Objects
+    let stored_input = StoredObject::new(
+        Kind::Object,
+        None,
+        earmark_core::Standing::default(),
+        earmark_core::Provenance::direct_input("user"),
+        BTreeMap::new(),
+        StoredPayload::from_markdown("Active input content"),
+        vec![],
+    );
+    let input_v = store.write_object(&stored_input).unwrap();
+    let input_ref = ObjectRef::new(stored_input.envelope.id.clone(), input_v.version_id, Kind::Object, None);
+
+    let stored_manifest_obj = StoredObject::new(
+        Kind::Object,
+        None,
+        earmark_core::Standing::default(),
+        earmark_core::Provenance::direct_input("user"),
+        BTreeMap::from([("title".to_string(), earmark_core::HeaderValue::String("Manifest Doc".to_string()))]),
+        StoredPayload::from_markdown("Manifest-only content"),
+        vec![],
+    );
+    let manifest_v = store.write_object(&stored_manifest_obj).unwrap();
+    let manifest_ref = ObjectRef::new(stored_manifest_obj.envelope.id.clone(), manifest_v.version_id, Kind::Object, None);
+
+    // 2. Manifest
+    let manifest = WorkSurfaceManifest {
+        surface_id: "surf1".to_string(),
+        compiled_context: VersionRef::new(ObjectId::new(), VersionId::new()),
+        work_packet: None,
+        generated_at: chrono::Utc::now(),
+        objects: vec![
+            WorkSurfaceObject {
+                object: manifest_ref.clone(),
+                title: Some("Manifest Doc".to_string()),
+                path: "doc.md".to_string(),
+                excerpt_range: None,
+                lineage: vec![],
+            }
+        ],
+        boundary_relations: vec![],
+        constraints: BTreeMap::new(),
+        warnings: vec![],
+    };
+
+    // 3. Profile
+    let profile = ProviderProfile {
+        name: "test".to_string(),
+        version: "1".to_string(),
+        description: None,
+        provider: "http_generation".to_string(),
+        model: "m".to_string(),
+        endpoint_env: None,
+        auth_env: None,
+        budget: earmark_core::ProviderBudget::default(),
+        allowed_operations: vec!["transform".to_string()],
+        exposure: earmark_core::ProviderExposure {
+            allow_prose_objects: true,
+            allow_structured_declarations: false,
+            allow_work_surface_only: false,
+            allow_export_requests: false,
+        },
+        response_contract: earmark_core::ProviderResponseContract {
+            format: "markdown".to_string(),
+            must_return_candidate_only: true,
+            must_include_lineage: false,
+        },
+        http: None,
+    };
+
+    let instruction = earmark_core::InstructionPayload {
+        name: "test".to_string(),
+        version: "1.0.0".to_string(),
+        purpose: "testing".to_string(),
+        input_classes: vec![],
+        output_classes: vec![],
+        body: earmark_core::MarkdownBody::new("hi".to_string()),
+        execution_policy: "delegated".to_string(),
+        provider_profile: None,
+        trace_policy: "none".to_string(),
+        register: "none".to_string(),
+    };
+
+    // 4. Render
+    let rendered = earmark_exec::helpers::render_provider_input(
+        &store,
+        &instruction,
+        Some(&manifest),
+        &[input_ref.clone()],
+        &profile,
+    ).unwrap();
+
+    // Must contain both:
+    // - manifest-only object
+    // - active input (because allow_work_surface_only is false)
+    assert!(rendered.contains("Active input content"));
+    assert!(rendered.contains("Manifest-only content"));
+    assert!(rendered.contains("Manifest Doc"));
+    assert!(rendered.contains("[Active Input]"));
+}
+
+#[test]
+#[cfg(feature = "http-provider")]
+fn test_http_provider_exposure_structured_hiding() {
+    let dir = tempdir().unwrap();
+    let store = GitCanonicalStore::new(dir.path());
+
+    // Structured object (Workflow)
+    let stored_workflow = StoredObject::new(
+        Kind::Workflow,
+        None,
+        earmark_core::Standing::default(),
+        earmark_core::Provenance::direct_input("user"),
+        BTreeMap::new(),
+        StoredPayload::from_markdown("SECRET_WORKFLOW_STEPS"),
+        vec![],
+    );
+    let v = store.write_object(&stored_workflow).unwrap();
+    let workflow_ref = ObjectRef::new(stored_workflow.envelope.id.clone(), v.version_id, Kind::Workflow, None);
+
+    // Profile with allow_structured_declarations = false
+    let profile = ProviderProfile {
+        name: "test".to_string(),
+        version: "1".to_string(),
+        description: None,
+        provider: "http_generation".to_string(),
+        model: "m".to_string(),
+        endpoint_env: None,
+        auth_env: None,
+        budget: earmark_core::ProviderBudget::default(),
+        allowed_operations: vec!["transform".to_string()],
+        exposure: earmark_core::ProviderExposure {
+            allow_prose_objects: true,
+            allow_structured_declarations: false,
+            allow_work_surface_only: false,
+            allow_export_requests: false,
+        },
+        response_contract: earmark_core::ProviderResponseContract {
+            format: "markdown".to_string(),
+            must_return_candidate_only: true,
+            must_include_lineage: false,
+        },
+        http: None,
+    };
+
+    let instruction = earmark_core::InstructionPayload {
+        name: "test".to_string(),
+        version: "1.0.0".to_string(),
+        purpose: "testing".to_string(),
+        input_classes: vec![],
+        output_classes: vec![],
+        body: earmark_core::MarkdownBody::new("hi".to_string()),
+        execution_policy: "delegated".to_string(),
+        provider_profile: None,
+        trace_policy: "none".to_string(),
+        register: "none".to_string(),
+    };
+
+    let rendered = earmark_exec::helpers::render_provider_input(
+        &store,
+        &instruction,
+        None,
+        &[workflow_ref],
+        &profile,
+    ).unwrap();
+
+    assert!(!rendered.contains("SECRET_WORKFLOW_STEPS"));
+    assert!(rendered.contains("Structured declarations hidden by exposure policy"));
+    assert!(rendered.contains("Kind: workflow"));
+}
+
+#[test]
+#[cfg(feature = "http-provider")]
+fn test_http_provider_exposure_prose_hiding() {
+    let dir = tempdir().unwrap();
+    let store = GitCanonicalStore::new(dir.path());
+
+    let stored_input = StoredObject::new(
+        Kind::Object,
+        None,
+        earmark_core::Standing::default(),
+        earmark_core::Provenance::direct_input("user"),
+        BTreeMap::from([("title".to_string(), earmark_core::HeaderValue::String("Private Doc".to_string()))]),
+        StoredPayload::from_markdown("PRIVATE_PROSE_CONTENT"),
+        vec![],
+    );
+    let v = store.write_object(&stored_input).unwrap();
+    let input_ref = ObjectRef::new(stored_input.envelope.id.clone(), v.version_id, Kind::Object, None);
+
+    // Profile with allow_prose_objects = false
+    let profile = ProviderProfile {
+        name: "test".to_string(),
+        version: "1".to_string(),
+        description: None,
+        provider: "http_generation".to_string(),
+        model: "m".to_string(),
+        endpoint_env: None,
+        auth_env: None,
+        budget: earmark_core::ProviderBudget::default(),
+        allowed_operations: vec!["transform".to_string()],
+        exposure: earmark_core::ProviderExposure {
+            allow_prose_objects: false,
+            allow_structured_declarations: true,
+            allow_work_surface_only: false,
+            allow_export_requests: false,
+        },
+        response_contract: earmark_core::ProviderResponseContract {
+            format: "markdown".to_string(),
+            must_return_candidate_only: true,
+            must_include_lineage: false,
+        },
+        http: None,
+    };
+
+    let instruction = earmark_core::InstructionPayload {
+        name: "test".to_string(),
+        version: "1.0.0".to_string(),
+        purpose: "testing".to_string(),
+        input_classes: vec![],
+        output_classes: vec![],
+        body: earmark_core::MarkdownBody::new("hi".to_string()),
+        execution_policy: "delegated".to_string(),
+        provider_profile: None,
+        trace_policy: "none".to_string(),
+        register: "none".to_string(),
+    };
+
+    let rendered = earmark_exec::helpers::render_provider_input(
+        &store,
+        &instruction,
+        None,
+        &[input_ref],
+        &profile,
+    ).unwrap();
+
+    assert!(!rendered.contains("PRIVATE_PROSE_CONTENT"));
+    assert!(rendered.contains("Payload content hidden by exposure policy"));
+    assert!(rendered.contains("Private Doc")); // Metadata remains
 }

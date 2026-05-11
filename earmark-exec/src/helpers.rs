@@ -263,18 +263,29 @@ pub fn render_provider_input<S: CanonicalStore>(
         rendered.push_str(&render_provider_context(m));
     }
 
-    // 3. Inputs
+    // 3. Inputs / Evidence
     rendered.push_str("### Input Evidence\n\n");
-    let manifest_ids: BTreeSet<earmark_core::ObjectId> = manifest
-        .map(|m| m.objects.iter().map(|o| o.object.id.clone()).collect())
-        .unwrap_or_default();
 
-    for (i, obj_ref) in inputs.iter().enumerate() {
-        // If allow_work_surface_only is true, skip objects not in manifest
-        if profile.exposure.allow_work_surface_only && !manifest_ids.contains(&obj_ref.id) {
-            continue;
+    // Build the evidence set: manifest objects if present, otherwise active inputs.
+    // Deduplicate by (id, version_id).
+    let mut to_render_refs: Vec<ObjectRef> = if let Some(m) = manifest {
+        m.objects.iter().map(|o| o.object.clone()).collect()
+    } else {
+        inputs.to_vec()
+    };
+
+    // If allow_work_surface_only is false, ensure all active inputs are also included
+    if !profile.exposure.allow_work_surface_only {
+        for input in inputs {
+            if !to_render_refs.iter().any(|r| r.id == input.id && r.version_id == input.version_id) {
+                to_render_refs.push(input.clone());
+            }
         }
+    }
 
+    let active_ids: BTreeSet<earmark_core::ObjectId> = inputs.iter().map(|o| o.id.clone()).collect();
+
+    for (i, obj_ref) in to_render_refs.iter().enumerate() {
         let obj = store.read_version(&obj_ref.version_ref()).map_err(|e| {
             ExecError::IncompleteExecution(format!(
                 "failed to read input object {}: {}",
@@ -282,8 +293,12 @@ pub fn render_provider_input<S: CanonicalStore>(
             ))
         })?;
 
-        rendered.push_str(&format!("#### Evidence [{}]\n", i + 1));
+        let is_active = active_ids.contains(&obj_ref.id);
+        let active_marker = if is_active { " [Active Input]" } else { "" };
+
+        rendered.push_str(&format!("#### Evidence [{}]{}\n", i + 1, active_marker));
         rendered.push_str(&format!("ID: {}\n", obj_ref.id));
+        rendered.push_str(&format!("Kind: {}\n", obj_ref.kind.as_str()));
         rendered.push_str(&format!(
             "Class: {}\n",
             obj_ref.class.as_deref().unwrap_or("unknown")
@@ -293,8 +308,24 @@ pub fn render_provider_input<S: CanonicalStore>(
             rendered.push_str(&format!("Title: {:?}\n", title));
         }
 
-        // Only inline payload if exposure policy allows prose objects
-        if profile.exposure.allow_prose_objects {
+        // Determine if this is a structured declaration
+        let is_structured = match obj_ref.kind {
+            Kind::Instruction
+            | Kind::Policy
+            | Kind::Workflow
+            | Kind::CompiledContextTemplate
+            | Kind::ProviderProfile
+            | Kind::SystemDefinition => true,
+            _ => false,
+        };
+
+        let can_inline = if is_structured {
+            profile.exposure.allow_structured_declarations
+        } else {
+            profile.exposure.allow_prose_objects
+        };
+
+        if can_inline {
             if let Ok(payload_str) = String::from_utf8(obj.payload.bytes.clone()) {
                 rendered.push_str("\nPayload:\n---\n");
                 rendered.push_str(&payload_str);
@@ -303,7 +334,12 @@ pub fn render_provider_input<S: CanonicalStore>(
                 rendered.push_str("\n(Binary payload not displayed)\n");
             }
         } else {
-            rendered.push_str("\n(Payload content hidden by exposure policy)\n");
+            let reason = if is_structured {
+                "Structured declarations hidden by exposure policy"
+            } else {
+                "Payload content hidden by exposure policy"
+            };
+            rendered.push_str(&format!("\n({})\n", reason));
         }
         rendered.push_str("\n");
     }
