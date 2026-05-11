@@ -83,8 +83,22 @@ Key examples:
 
 ## Schemas
 
-JSON Schema files for active declaration kinds are published in:
+JSON Schema files for the seven declaration kinds are published in:
 
 ```text
 docs/declarations/schema/
 ```
+
+CLI and Rust validation is authoritative. Schema files may lag behind the Rust validator for some edge cases. When the CLI rejects a declaration, rely on the CLI error message rather than the schema file alone.
+
+### Validation Coverage
+
+Validation is active across all seven declaration kinds:
+
+- **Class**: validates kind, name, relations (source/target class references, direction, authorizing endpoint), and payload constraints.
+- **Instruction**: validates metadata fields (title, class tokens, standing constraints) and YAML frontmatter structure.
+- **Standing Policy**: validates transition references, allowed epistemic/review/process standings, and escalation targets.
+- **Workflow**: validates operation kinds, edges, entry/terminal transitions, guards (standing checks), and compiled context references.
+- **Compiled Context**: validates class/standing/relation/render constraints and template structure.
+- **Provider Profile**: validates required fields (`provider`, `model`, `auth_env`), response contract format, and budget constraints.
+- **System Manifest**: validates declaration reference resolution, required declaration coverage, and manifest completeness.

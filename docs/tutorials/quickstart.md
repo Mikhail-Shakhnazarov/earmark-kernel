@@ -58,7 +58,7 @@ Expected output for registration:
 }
 ```
 
-Object and version IDs will differ on each run. This registers the research synthesis domain — three object classes (`source_note`, `finding`, `summary`), two instructions, and one two-stage workflow.
+Object and version IDs will differ on each run. This registers the research synthesis domain — three object classes (`source_note`, `finding`, `summary`), two instructions, and one extraction-and-synthesis workflow.
 
 ## Deposit some data
 
@@ -117,19 +117,19 @@ Pick an object ID from the output and run the workflow:
 em workflow run research_synthesis --system-id sys_research_synthesis --with <object_id>
 ```
 
-Expected output:
+Expected output (fields and counts will differ):
 
 ```json
 {
   "ok": true,
   "run_id": "run_...",
-  "summary": "workflow run completed",
   "status": "completed",
   "created_assignments": ["obj_...", "obj_...", "obj_...", "obj_..."],
   "created_change_sets": ["obj_...", "obj_...", "obj_...", "obj_..."],
   "created_failures": [],
   "created_handoffs": ["obj_...", "obj_...", "obj_...", "obj_..."],
   "event_count": 5,
+  "governance_event_count": 2,
   "output_count": 2,
   "packet_count": 4
 }
@@ -169,13 +169,13 @@ Related Artifacts:
 
 ## What just happened?
 
-You ran a two-stage workflow:
+You ran an extraction-and-synthesis workflow in one invocation:
 
 1. **Extraction**: Earmark compiled a bounded work surface containing your source notes, then extracted findings. Each finding was linked to its source through a `derived_from` relation.
 
-2. **Synthesis**: Earmark emitted a handoff from Stage 1 containing only the findings — not the original source notes. Stage 2 produced a summary from that bounded input.
+2. **Synthesis**: Earmark emitted a handoff from the extraction stage containing only the findings — not the original source notes. The synthesis stage produced a summary from that bounded input.
 
-The key thing: Stage 2 never saw the raw source notes. It worked from the handoff. That's bounded continuation.
+The key thing: the synthesis stage never saw the raw source notes. It worked from the handoff. That's bounded continuation.
 
 ## Next steps
 

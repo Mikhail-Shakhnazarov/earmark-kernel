@@ -108,7 +108,7 @@ See the [Quickstart Tutorial](docs/tutorials/quickstart.md) for a complete walkt
 | **[Staged Execution](docs/concepts/staged-execution.md)** | How transitions, assignments, and handoffs work |
 | **[Context Compilation](docs/concepts/context-compilation.md)** | How Earmark bounds what a runtime sees |
 | **[Relation Authorization](docs/concepts/relation-authorization.md)** | How relation creation records the rule that authorized it |
-| **[Research Synthesis Demo](docs/tutorials/research-synthesis-demo.md)** | Walk through a complete two-stage workflow |
+| **[Research Synthesis Demo](docs/tutorials/research-synthesis-demo.md)** | Run and inspect a complete research synthesis workflow |
 | **[Build a Domain](docs/tutorials/build-a-domain-definition.md)** | Define your own classes, workflows, and system |
 | **[CLI Reference](docs/reference/cli.md)** | Command lookup |
 | **[Runtime Integration](docs/reference/runtime-integration-guide.md)** | Using Earmark from Rust or any language |
@@ -117,7 +117,7 @@ See the [Quickstart Tutorial](docs/tutorials/quickstart.md) for a complete walkt
 
 ## Current Status
 
-Workspace verification is exposed through the CI workflow, which runs formatting, workspace checks, tests, and Clippy. It is not yet a packaged application.
+Workspace verification is exposed through the CI workflow, which runs formatting, workspace checks, tests, and Clippy. Build from source with Cargo. Binary packaging is a later release step.
 
 What works:
 - Declaration, validation, and scaffolding of domain definitions
