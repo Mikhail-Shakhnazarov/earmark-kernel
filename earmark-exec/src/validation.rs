@@ -2,8 +2,8 @@ use crate::relation_logic::{
     RelationAuthorizationDecision, RelationAuthorizationResolver, RelationEndpointFacts,
 };
 use earmark_core::{
-    ChangeSetDraft, ChangeSetValidationResult, ClassDefinition, Kind, ObjectId, ObjectRef,
-    Standing, SystemDefinition, WorkflowGuard,
+    ChangeSetDraft, ChangeSetValidationResult, ClassDefinition, DimensionId, Kind, ObjectId,
+    ObjectRef, Standing, SystemDefinition, TokenId, WorkflowGuard,
 };
 use earmark_index::DerivedIndex;
 use earmark_store::{CanonicalStore, StoredObject};
@@ -361,6 +361,52 @@ pub fn validate_transition_change_set<S: CanonicalStore>(
     Ok((result, all_standing_requests))
 }
 
+fn get_standing_value(standing: &Standing, dim_key: &str) -> String {
+    let dim_id = match dim_key {
+        "epistemic" => DimensionId::new("kernel:epistemic"),
+        "review" => DimensionId::new("kernel:review"),
+        "process" => DimensionId::new("kernel:process"),
+        _ => DimensionId::new(dim_key),
+    };
+    standing
+        .get(&dim_id)
+        .map(TokenId::as_str)
+        .unwrap_or("unknown")
+        .to_string()
+}
+
+fn check_dimension(
+    target_object_id: &ObjectId,
+    standing: &Standing,
+    class: &str,
+    dim_key: &str,
+    allowed_strs: &[&str],
+    failures: &mut Vec<String>,
+    requests: &mut Vec<earmark_core::StandingTransitionRequest>,
+) {
+    if allowed_strs.is_empty() {
+        return;
+    }
+    let actual = get_standing_value(standing, dim_key);
+    if allowed_strs.contains(&actual.as_str()) {
+        return;
+    }
+    failures.push(format!(
+        "created object class {} uses disallowed {} standing {}",
+        class, dim_key, actual
+    ));
+    if let Some(first) = allowed_strs.first() {
+        requests.push(earmark_core::StandingTransitionRequest {
+            target_object_id: target_object_id.clone(),
+            dimension: dim_key.to_string(),
+            from_value: actual,
+            to_value: first.to_string(),
+            rationale: Some("standing rule violation".to_string()),
+            status: earmark_core::StandingRequestStatus::Proposed,
+        });
+    }
+}
+
 pub fn validate_standing_rules(
     target_object_id: &ObjectId,
     standing: &Standing,
@@ -370,60 +416,38 @@ pub fn validate_standing_rules(
 ) -> Vec<earmark_core::StandingTransitionRequest> {
     let mut requests = Vec::new();
 
-    if !rules.allowed_epistemic.is_empty() && !rules.allowed_epistemic.contains(&standing.epistemic)
-    {
-        let actual = standing.epistemic.as_str().to_string();
-        failures.push(format!(
-            "created object class {} uses disallowed epistemic standing {}",
-            class, actual
-        ));
-        if let Some(first) = rules.allowed_epistemic.first() {
-            requests.push(earmark_core::StandingTransitionRequest {
-                target_object_id: target_object_id.clone(),
-                dimension: "epistemic".to_string(),
-                from_value: actual,
-                to_value: first.as_str().to_string(),
-                rationale: Some("standing rule violation".to_string()),
-                status: earmark_core::StandingRequestStatus::Proposed,
-            });
-        }
-    }
+    let epi_allowed: Vec<&str> = rules.allowed_epistemic.iter().map(|e| e.as_str()).collect();
+    check_dimension(
+        target_object_id,
+        standing,
+        class,
+        "epistemic",
+        &epi_allowed,
+        failures,
+        &mut requests,
+    );
 
-    if !rules.allowed_review.is_empty() && !rules.allowed_review.contains(&standing.review) {
-        let actual = standing.review.as_str().to_string();
-        failures.push(format!(
-            "created object class {} uses disallowed review standing {}",
-            class, actual
-        ));
-        if let Some(first) = rules.allowed_review.first() {
-            requests.push(earmark_core::StandingTransitionRequest {
-                target_object_id: target_object_id.clone(),
-                dimension: "review".to_string(),
-                from_value: actual,
-                to_value: first.as_str().to_string(),
-                rationale: Some("standing rule violation".to_string()),
-                status: earmark_core::StandingRequestStatus::Proposed,
-            });
-        }
-    }
+    let rev_allowed: Vec<&str> = rules.allowed_review.iter().map(|e| e.as_str()).collect();
+    check_dimension(
+        target_object_id,
+        standing,
+        class,
+        "review",
+        &rev_allowed,
+        failures,
+        &mut requests,
+    );
 
-    if !rules.allowed_process.is_empty() && !rules.allowed_process.contains(&standing.process) {
-        let actual = standing.process.as_str().to_string();
-        failures.push(format!(
-            "created object class {} uses disallowed process standing {}",
-            class, actual
-        ));
-        if let Some(first) = rules.allowed_process.first() {
-            requests.push(earmark_core::StandingTransitionRequest {
-                target_object_id: target_object_id.clone(),
-                dimension: "process".to_string(),
-                from_value: actual,
-                to_value: first.as_str().to_string(),
-                rationale: Some("standing rule violation".to_string()),
-                status: earmark_core::StandingRequestStatus::Proposed,
-            });
-        }
-    }
+    let proc_allowed: Vec<&str> = rules.allowed_process.iter().map(|e| e.as_str()).collect();
+    check_dimension(
+        target_object_id,
+        standing,
+        class,
+        "process",
+        &proc_allowed,
+        failures,
+        &mut requests,
+    );
 
     requests
 }

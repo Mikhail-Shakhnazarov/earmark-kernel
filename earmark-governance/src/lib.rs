@@ -2,8 +2,8 @@ use std::collections::BTreeMap;
 
 use chrono::Utc;
 use earmark_core::{
-    HeaderValue, Kind, ObjectRef, ProcessStanding, Provenance, ReviewStanding, Standing,
-    StandingDimension, StandingPolicy, Timestamp,
+    DimensionId, HeaderValue, Kind, ObjectRef, Provenance, Standing, StandingDimension,
+    StandingPolicy, Timestamp, TokenId,
 };
 use earmark_store::{StoredObject, StoredPayload};
 use serde::{Deserialize, Serialize};
@@ -85,11 +85,14 @@ impl GovernanceService {
 
     pub fn apply_review_outcome(current: &Standing, accepted: bool) -> Standing {
         let mut next = current.clone();
-        next.review = if accepted {
-            ReviewStanding::Accepted
-        } else {
-            ReviewStanding::Rejected
-        };
+        next.values.insert(
+            DimensionId::new("kernel:review"),
+            if accepted {
+                TokenId::new("accepted")
+            } else {
+                TokenId::new("rejected")
+            },
+        );
         next
     }
 }
@@ -99,19 +102,34 @@ pub struct StandingTransitionResult {
     pub requires_review: bool,
 }
 
+fn dim_value(standing: &Standing, dim: StandingDimension) -> Option<&str> {
+    let dim_id = match dim {
+        StandingDimension::Epistemic => DimensionId::new("kernel:epistemic"),
+        StandingDimension::Review => DimensionId::new("kernel:review"),
+        StandingDimension::Process => DimensionId::new("kernel:process"),
+    };
+    standing.get(&dim_id).map(TokenId::as_str)
+}
+
 pub fn validate_standing_transition(
     policy: &StandingPolicy,
     current: &Standing,
     requested: &Standing,
 ) -> Result<StandingTransitionResult, GovernanceError> {
     let mut changed = Vec::new();
-    if current.epistemic != requested.epistemic {
+    if dim_value(current, StandingDimension::Epistemic)
+        != dim_value(requested, StandingDimension::Epistemic)
+    {
         changed.push(StandingDimension::Epistemic);
     }
-    if current.review != requested.review {
+    if dim_value(current, StandingDimension::Review)
+        != dim_value(requested, StandingDimension::Review)
+    {
         changed.push(StandingDimension::Review);
     }
-    if current.process != requested.process {
+    if dim_value(current, StandingDimension::Process)
+        != dim_value(requested, StandingDimension::Process)
+    {
         changed.push(StandingDimension::Process);
     }
 
@@ -128,11 +146,8 @@ pub fn validate_standing_transition(
     }
 
     let dim = changed[0];
-    let (from, to) = match dim {
-        StandingDimension::Epistemic => (current.epistemic.as_str(), requested.epistemic.as_str()),
-        StandingDimension::Review => (current.review.as_str(), requested.review.as_str()),
-        StandingDimension::Process => (current.process.as_str(), requested.process.as_str()),
-    };
+    let from = dim_value(current, dim).unwrap_or("unknown");
+    let to = dim_value(requested, dim).unwrap_or("unknown");
 
     for rule in &policy.transition_rules {
         if let Ok(rule_dim) = StandingDimension::parse(&rule.dimension) {
@@ -155,18 +170,26 @@ pub fn validate_standing_transition(
     )))
 }
 
+fn get_dim_value<'a>(standing: &'a Standing, dim_str: &'a str) -> Result<&'a str, GovernanceError> {
+    let dim = StandingDimension::parse(dim_str)
+        .map_err(|e| GovernanceError::IllegalTransition(e.to_string()))?;
+    let dim_id = match dim {
+        StandingDimension::Epistemic => DimensionId::new("kernel:epistemic"),
+        StandingDimension::Review => DimensionId::new("kernel:review"),
+        StandingDimension::Process => DimensionId::new("kernel:process"),
+    };
+    Ok(standing
+        .get(&dim_id)
+        .map(TokenId::as_str)
+        .unwrap_or("unknown"))
+}
+
 pub fn export_allowed(policy: &StandingPolicy, standing: &Standing) -> Result<(), GovernanceError> {
     for requirement in &policy.operation_requirements {
         if requirement.operation == "export" {
             // Check minimums
             for (dim_str, required_value) in &requirement.minimums {
-                let dim = StandingDimension::parse(dim_str)
-                    .map_err(|e| GovernanceError::IllegalTransition(e.to_string()))?;
-                let actual_value = match dim {
-                    StandingDimension::Epistemic => standing.epistemic.as_str(),
-                    StandingDimension::Review => standing.review.as_str(),
-                    StandingDimension::Process => standing.process.as_str(),
-                };
+                let actual_value = get_dim_value(standing, dim_str)?;
                 if actual_value != required_value {
                     return Err(GovernanceError::ExportBlocked(format!(
                         "export blocked: {} dimension '{}' does not match required value '{}'",
@@ -177,13 +200,7 @@ pub fn export_allowed(policy: &StandingPolicy, standing: &Standing) -> Result<()
 
             // Check forbidden
             for (dim_str, forbidden_values) in &requirement.forbidden {
-                let dim = StandingDimension::parse(dim_str)
-                    .map_err(|e| GovernanceError::IllegalTransition(e.to_string()))?;
-                let actual_value = match dim {
-                    StandingDimension::Epistemic => standing.epistemic.as_str(),
-                    StandingDimension::Review => standing.review.as_str(),
-                    StandingDimension::Process => standing.process.as_str(),
-                };
+                let actual_value = get_dim_value(standing, dim_str)?;
                 if forbidden_values.iter().any(|v| v == actual_value) {
                     return Err(GovernanceError::ExportBlocked(format!(
                         "export blocked: {} dimension '{}' is forbidden",
@@ -215,10 +232,16 @@ pub fn escalation_for_trigger(
 }
 
 pub fn status_class_for_standing(standing: &Standing) -> &'static str {
-    match (&standing.review, &standing.process) {
-        (ReviewStanding::Rejected, _) => "attention_required",
-        (_, ProcessStanding::Blocked) => "blocked",
-        (ReviewStanding::Accepted, ProcessStanding::Completed) => "complete",
+    let review = standing
+        .get(&DimensionId::new("kernel:review"))
+        .map(TokenId::as_str);
+    let process = standing
+        .get(&DimensionId::new("kernel:process"))
+        .map(TokenId::as_str);
+    match (review, process) {
+        (Some("rejected"), _) => "attention_required",
+        (_, Some("blocked")) => "blocked",
+        (Some("accepted"), Some("completed")) => "complete",
         _ => "active",
     }
 }
@@ -239,17 +262,38 @@ pub enum GovernanceError {
 mod tests {
     use super::*;
     use earmark_core::{
-        OperationRequirement, ProcessStanding, ReviewStanding, Standing, StandingPolicy,
-        StandingTransitionRule,
+        DimensionId, OperationRequirement, Standing, StandingPolicy, StandingTransitionRule,
+        TokenId,
     };
+
+    fn make_standing(review: &str, process: &str, epistemic: &str) -> Standing {
+        let mut s = Standing::default();
+        s.values
+            .insert(DimensionId::new("kernel:review"), TokenId::new(review));
+        s.values
+            .insert(DimensionId::new("kernel:process"), TokenId::new(process));
+        s.values.insert(
+            DimensionId::new("kernel:epistemic"),
+            TokenId::new(epistemic),
+        );
+        s
+    }
 
     #[test]
     fn test_apply_review_outcome() {
         let standing = Standing::default();
         let next = GovernanceService::apply_review_outcome(&standing, true);
-        assert_eq!(next.review, ReviewStanding::Accepted);
+        assert_eq!(
+            next.get(&DimensionId::new("kernel:review"))
+                .map(TokenId::as_str),
+            Some("accepted")
+        );
         let next = GovernanceService::apply_review_outcome(&standing, false);
-        assert_eq!(next.review, ReviewStanding::Rejected);
+        assert_eq!(
+            next.get(&DimensionId::new("kernel:review"))
+                .map(TokenId::as_str),
+            Some("rejected")
+        );
     }
 
     #[test]
@@ -257,14 +301,23 @@ mod tests {
         let mut standing = Standing::default();
         assert_eq!(status_class_for_standing(&standing), "active");
 
-        standing.review = ReviewStanding::Rejected;
+        standing
+            .values
+            .insert(DimensionId::new("kernel:review"), TokenId::new("rejected"));
         assert_eq!(status_class_for_standing(&standing), "attention_required");
 
-        standing.review = ReviewStanding::Accepted;
-        standing.process = ProcessStanding::Completed;
+        standing
+            .values
+            .insert(DimensionId::new("kernel:review"), TokenId::new("accepted"));
+        standing.values.insert(
+            DimensionId::new("kernel:process"),
+            TokenId::new("completed"),
+        );
         assert_eq!(status_class_for_standing(&standing), "complete");
 
-        standing.process = ProcessStanding::Blocked;
+        standing
+            .values
+            .insert(DimensionId::new("kernel:process"), TokenId::new("blocked"));
         assert_eq!(status_class_for_standing(&standing), "blocked");
     }
 
@@ -286,18 +339,12 @@ mod tests {
         };
 
         let current = Standing::default();
-        let requested = Standing {
-            review: ReviewStanding::Accepted,
-            ..Standing::default()
-        };
+        let requested = make_standing("accepted", "active", "working");
 
         let res = validate_standing_transition(&policy, &current, &requested).unwrap();
         assert!(!res.requires_review);
 
-        let requested_rejected = Standing {
-            review: ReviewStanding::Rejected,
-            ..Standing::default()
-        };
+        let requested_rejected = make_standing("rejected", "active", "working");
         assert!(validate_standing_transition(&policy, &current, &requested_rejected).is_err());
     }
 
@@ -327,11 +374,7 @@ mod tests {
         };
 
         let current = Standing::default();
-        let requested = Standing {
-            review: ReviewStanding::Accepted,
-            process: ProcessStanding::Completed,
-            ..Standing::default()
-        };
+        let requested = make_standing("accepted", "completed", "working");
 
         // Multi-dimension should fail
         assert!(validate_standing_transition(&policy, &current, &requested).is_err());
@@ -356,19 +399,19 @@ mod tests {
             rationale: None,
         };
 
-        let mut standing = Standing::default();
+        let standing = make_standing("unreviewed", "active", "working");
         // Fails because review is unreviewed and epistemic is working
         assert!(export_allowed(&policy, &standing).is_err());
 
-        standing.review = ReviewStanding::Accepted;
+        let standing = make_standing("accepted", "active", "working");
         // Still fails because epistemic is working
         assert!(export_allowed(&policy, &standing).is_err());
 
-        standing.epistemic = earmark_core::EpistemicStanding::Supported;
+        let standing = make_standing("accepted", "active", "supported");
         // Should pass now
         assert!(export_allowed(&policy, &standing).is_ok());
 
-        standing.process = ProcessStanding::Blocked;
+        let standing = make_standing("accepted", "blocked", "supported");
         // Fails because process is blocked (forbidden)
         assert!(export_allowed(&policy, &standing).is_err());
     }

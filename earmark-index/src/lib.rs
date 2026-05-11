@@ -2,9 +2,9 @@ use std::path::{Path, PathBuf};
 
 use chrono::Utc;
 use earmark_core::{
-    parse_json, parse_yaml, ClassDefinition, CompiledContextTemplate, InstructionPayload, Kind,
-    ObjectId, ProviderProfile, RelationPayload, StandingPolicy, SystemDefinition, VersionRef,
-    WorkflowDefinition,
+    parse_json, parse_yaml, ClassDefinition, CompiledContextTemplate, DimensionId,
+    InstructionPayload, Kind, ObjectId, ProviderProfile, RelationPayload, StandingPolicy,
+    SystemDefinition, TokenId, VersionRef, WorkflowDefinition,
 };
 use earmark_store::CanonicalStore;
 use rusqlite::{params, Connection, OptionalExtension};
@@ -325,9 +325,24 @@ impl DerivedIndex {
             let object_id = envelope.id.as_str().to_string();
             let kind = envelope.kind.as_str().to_string();
             let class = envelope.class.clone();
-            let standing_epistemic = format!("{:?}", envelope.standing.epistemic).to_lowercase();
-            let standing_review = format!("{:?}", envelope.standing.review).to_lowercase();
-            let standing_process = format!("{:?}", envelope.standing.process).to_lowercase();
+            let standing_epistemic = envelope
+                .standing
+                .get(&DimensionId::new("kernel:epistemic"))
+                .map(TokenId::as_str)
+                .unwrap_or("unresolved")
+                .to_string();
+            let standing_review = envelope
+                .standing
+                .get(&DimensionId::new("kernel:review"))
+                .map(TokenId::as_str)
+                .unwrap_or("unreviewed")
+                .to_string();
+            let standing_process = envelope
+                .standing
+                .get(&DimensionId::new("kernel:process"))
+                .map(TokenId::as_str)
+                .unwrap_or("active")
+                .to_string();
             let payload_ref = envelope.payload_ref.0.clone();
             let created_at = envelope.created_at.to_rfc3339();
             let updated_at = envelope.updated_at.to_rfc3339();
@@ -511,9 +526,21 @@ impl DerivedIndex {
                 envelope.class.clone(),
                 title,
                 summary,
-                envelope.standing.epistemic.as_str(),
-                envelope.standing.review.as_str(),
-                envelope.standing.process.as_str(),
+                envelope
+                    .standing
+                    .get(&DimensionId::new("kernel:epistemic"))
+                    .map(TokenId::as_str)
+                    .unwrap_or("unresolved"),
+                envelope
+                    .standing
+                    .get(&DimensionId::new("kernel:review"))
+                    .map(TokenId::as_str)
+                    .unwrap_or("unreviewed"),
+                envelope
+                    .standing
+                    .get(&DimensionId::new("kernel:process"))
+                    .map(TokenId::as_str)
+                    .unwrap_or("active"),
                 envelope.payload_ref.0.clone(),
                 envelope.created_at.to_rfc3339(),
                 envelope.updated_at.to_rfc3339(),
