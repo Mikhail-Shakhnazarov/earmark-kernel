@@ -1937,6 +1937,7 @@ fn assemble_system_definition_from_manifest<S: CanonicalStore>(
         provider_profiles,
         default_compiled_context,
         default_provider_profile,
+        standing_dimensions: vec![],
         runtime_profile: manifest.runtime_profile.clone(),
         activated_at: None,
     })

@@ -213,6 +213,7 @@ guards: []
         provider_profiles: vec![],
         default_compiled_context: None,
         default_provider_profile: None,
+        standing_dimensions: vec![],
         runtime_profile: RuntimeProfile {
             execution_surface: "runtime".to_string(),
             machine_output_default: "json".to_string(),

@@ -108,6 +108,7 @@ fn active_system_definition_activation() {
         provider_profiles: vec![],
         default_compiled_context: None,
         default_provider_profile: None,
+        standing_dimensions: vec![],
         runtime_profile: RuntimeProfile {
             execution_surface: "runtime_over_folder".to_string(),
             machine_output_default: "json".to_string(),
@@ -295,6 +296,7 @@ fn test_rebuild_preserves_active_systems() {
         provider_profiles: vec![],
         default_compiled_context: None,
         default_provider_profile: None,
+        standing_dimensions: vec![],
         runtime_profile: RuntimeProfile {
             execution_surface: "local".to_string(),
             machine_output_default: "json".to_string(),

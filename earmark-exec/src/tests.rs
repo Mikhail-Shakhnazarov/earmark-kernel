@@ -530,6 +530,7 @@ fn test_delegated_outcome_with_none_response_returns_error_instead_of_panicking(
             provider_profiles: vec![prof_ref],
             default_compiled_context: None,
             default_provider_profile: None,
+            standing_dimensions: vec![],
             activated_at: None,
         },
         &ir,
@@ -629,6 +630,7 @@ fn test_privileged_relation_creation_and_validation() {
         provider_profiles: vec![],
         default_compiled_context: None,
         default_provider_profile: None,
+        standing_dimensions: vec![],
         activated_at: None,
     };
 

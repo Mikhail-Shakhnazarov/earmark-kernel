@@ -4,9 +4,9 @@ use chrono::Utc;
 use earmark_core::{
     to_yaml, ChangeSet, ClassDefinition, ClassStandingRules, CompiledContextExpansion,
     CompiledContextRender, CompiledContextSelect, CompiledContextTemplate,
-    CompiledContextVisibility, EpistemicStanding, HandoffManifest, HeaderValue, InstructionPayload,
-    JsonSchemaRef, Kind, MarkdownBody, Provenance, RuntimeProfile, Standing, SystemDefinition,
-    TransformationFailure, TransitionAssignment, VersionRef,
+    CompiledContextVisibility, DimensionId, EpistemicStanding, HandoffManifest, HeaderValue,
+    InstructionPayload, JsonSchemaRef, Kind, MarkdownBody, Provenance, RuntimeProfile, Standing,
+    SystemDefinition, TokenId, TransformationFailure, TransitionAssignment, VersionRef,
 };
 use earmark_exec::{ExecError, ExecutionEngine, ProviderRegistry, WorkflowRunRequest};
 use earmark_index::DerivedIndex;
@@ -83,6 +83,7 @@ guards: []
         provider_profiles: vec![],
         default_compiled_context: None,
         default_provider_profile: None,
+        standing_dimensions: vec![],
         runtime_profile: RuntimeProfile {
             execution_surface: "runtime_over_folder".to_string(),
             machine_output_default: "json".to_string(),
@@ -293,6 +294,7 @@ guards: []
         provider_profiles: vec![],
         default_compiled_context: None,
         default_provider_profile: None,
+        standing_dimensions: vec![],
         runtime_profile: RuntimeProfile {
             execution_surface: "runtime_over_folder".to_string(),
             machine_output_default: "json".to_string(),
@@ -565,6 +567,7 @@ guards: []
         provider_profiles: vec![],
         default_compiled_context: None,
         default_provider_profile: None,
+        standing_dimensions: vec![],
         runtime_profile: RuntimeProfile {
             execution_surface: "runtime_over_folder".to_string(),
             machine_output_default: "json".to_string(),
@@ -1096,6 +1099,7 @@ guards: []
         provider_profiles: vec![],
         default_compiled_context: None,
         default_provider_profile: None,
+        standing_dimensions: vec![],
         runtime_profile: RuntimeProfile {
             execution_surface: "runtime_over_folder".to_string(),
             machine_output_default: "json".to_string(),
@@ -1290,7 +1294,10 @@ fn workflow_run_fails_when_output_standing_violates_class_rules() {
         required_headers: vec![],
         payload_schema: JsonSchemaRef("inline:any".to_string()),
         standing_rules: ClassStandingRules {
-            allowed_epistemic: vec![EpistemicStanding::Supported],
+            allowed_standing: BTreeMap::from([(
+                DimensionId::new("kernel:epistemic"),
+                vec![TokenId::new("supported")],
+            )]),
             ..ClassStandingRules::default()
         },
         relation_rules: vec![],
@@ -1383,6 +1390,7 @@ guards: []
         provider_profiles: vec![],
         default_compiled_context: None,
         default_provider_profile: None,
+        standing_dimensions: vec![],
         runtime_profile: RuntimeProfile {
             execution_surface: "runtime_over_folder".to_string(),
             machine_output_default: "json".to_string(),
@@ -1426,7 +1434,7 @@ guards: []
 
     match error {
         ExecError::IncompleteExecution(message) => {
-            assert!(message.contains("disallowed epistemic standing"));
+            assert!(message.contains("disallowed kernel:epistemic standing"));
         }
         other => panic!("unexpected error: {other:?}"),
     }
@@ -1624,6 +1632,7 @@ guards: []
         provider_profiles: vec![],
         default_compiled_context: None,
         default_provider_profile: None,
+        standing_dimensions: vec![],
         runtime_profile: RuntimeProfile {
             execution_surface: "runtime_over_folder".to_string(),
             machine_output_default: "json".to_string(),
@@ -1995,6 +2004,7 @@ guards: []
         provider_profiles: vec![],
         default_compiled_context: None,
         default_provider_profile: None,
+        standing_dimensions: vec![],
         runtime_profile: RuntimeProfile {
             execution_surface: "local".to_string(),
             machine_output_default: "json".to_string(),
@@ -2385,9 +2395,11 @@ fn test_transform_emits_standing_request() {
         required_headers: vec![],
         payload_schema: JsonSchemaRef("inline:any".to_string()),
         standing_rules: ClassStandingRules {
-            allowed_epistemic: vec![EpistemicStanding::Supported],
-            allowed_review: vec![],
-            allowed_process: vec![],
+            allowed_standing: BTreeMap::from([(
+                DimensionId::new("kernel:epistemic"),
+                vec![TokenId::new("supported")],
+            )]),
+            ..ClassStandingRules::default()
         },
         relation_rules: vec![],
         validators: vec![],
@@ -2463,6 +2475,7 @@ fn test_transform_emits_standing_request() {
         provider_profiles: vec![],
         default_compiled_context: None,
         default_provider_profile: None,
+        standing_dimensions: vec![],
         runtime_profile: RuntimeProfile {
             execution_surface: "local".to_string(),
             machine_output_default: "json".to_string(),
@@ -2621,6 +2634,6 @@ guards: []
     let request: earmark_core::StandingTransitionRequest =
         serde_json::from_slice(&request_obj.payload.bytes).unwrap();
 
-    assert_eq!(request.dimension, "epistemic");
+    assert_eq!(request.dimension, "kernel:epistemic");
     assert_eq!(request.to_value, "supported");
 }

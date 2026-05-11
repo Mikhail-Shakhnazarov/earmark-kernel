@@ -2,15 +2,17 @@ use std::collections::BTreeMap;
 
 use earmark_core::{
     ClassDefinition, ClassStandingRules, CompiledContextExpansion, CompiledContextRender,
-    CompiledContextSelect, CompiledContextTemplate, CompiledContextVisibility, EscalationRule,
-    InstructionPayload, JsonSchemaRef, MarkdownBody, OperationRequirement, ProviderBudget,
-    ProviderExposure, ProviderProfile, ProviderResponseContract, StandingPolicy,
-    StandingTransitionRule, WorkflowDefinition, WorkflowEdge, WorkflowGuard, WorkflowOperation,
+    CompiledContextSelect, CompiledContextTemplate, CompiledContextVisibility, DimensionId,
+    EscalationRule, InstructionPayload, JsonSchemaRef, MarkdownBody, OperationRequirement,
+    ProviderBudget, ProviderExposure, ProviderProfile, ProviderResponseContract, StandingPolicy,
+    StandingRegistry, StandingTransitionRule, TokenId, WorkflowDefinition, WorkflowEdge,
+    WorkflowGuard, WorkflowOperation,
 };
 use earmark_declarations::{
-    validate_class_definition, validate_compiled_context_template, validate_instruction,
-    validate_provider_profile, validate_standing_policy, validate_system_definition,
-    validate_workflow_definition,
+    validate_class_definition, validate_compiled_context_template,
+    validate_compiled_context_template_against_registry, validate_instruction,
+    validate_provider_profile, validate_standing_policy, validate_standing_policy_against_registry,
+    validate_system_definition, validate_workflow_definition,
 };
 use earmark_store::{CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload};
 use tempfile::tempdir;
@@ -89,7 +91,8 @@ fn class_rejects_invalid_relation_type() {
 }
 
 #[test]
-fn compiled_context_rejects_unknown_standing_dimension() {
+fn compiled_context_rejects_unknown_standing_dimension_with_registry() {
+    let registry = StandingRegistry::kernel_defaults();
     let template = CompiledContextTemplate {
         name: "ctx_ok".to_string(),
         version: "1.0.0".to_string(),
@@ -113,7 +116,12 @@ fn compiled_context_rejects_unknown_standing_dimension() {
             include_provenance: true,
         },
     };
-    assert!(validate_compiled_context_template(&template).is_err());
+    assert!(
+        earmark_declarations::validate_compiled_context_template_against_registry(
+            &template, &registry
+        )
+        .is_err()
+    );
 }
 
 #[test]
@@ -177,6 +185,7 @@ fn system_validation_rejects_wrong_kind_reference() {
         provider_profiles: vec![],
         default_compiled_context: None,
         default_provider_profile: None,
+        standing_dimensions: vec![],
         runtime_profile: earmark_core::RuntimeProfile {
             execution_surface: "runtime_over_folder".to_string(),
             machine_output_default: "json".to_string(),
@@ -191,7 +200,8 @@ fn system_validation_rejects_wrong_kind_reference() {
 }
 
 #[test]
-fn standing_policy_rejects_invalid_transition_dimension_and_tokens() {
+fn standing_policy_rejects_invalid_transition_dimension_with_registry() {
+    let registry = StandingRegistry::kernel_defaults();
     let policy = StandingPolicy {
         name: "policy_ok".to_string(),
         version: "1.0.0".to_string(),
@@ -206,11 +216,15 @@ fn standing_policy_rejects_invalid_transition_dimension_and_tokens() {
         escalations: vec![],
         rationale: None,
     };
-    assert!(earmark_declarations::validate_standing_policy(&policy).is_err());
+    assert!(
+        earmark_declarations::validate_standing_policy_against_registry(&policy, &registry)
+            .is_err()
+    );
 }
 
 #[test]
-fn standing_policy_rejects_invalid_minimums_and_forbidden_tokens() {
+fn standing_policy_rejects_invalid_minimums_and_forbidden_tokens_with_registry() {
+    let registry = StandingRegistry::kernel_defaults();
     let policy = StandingPolicy {
         name: "policy_ok".to_string(),
         version: "1.0.0".to_string(),
@@ -223,13 +237,17 @@ fn standing_policy_rejects_invalid_minimums_and_forbidden_tokens() {
         }],
         operation_requirements: vec![OperationRequirement {
             operation: "export".to_string(),
-            minimums: BTreeMap::from([("review".to_string(), "invalid".to_string())]),
-            forbidden: BTreeMap::from([("process".to_string(), vec!["bad".to_string()])]),
+            required_standing: BTreeMap::from([("review".to_string(), "invalid".to_string())]),
+            forbidden_standing: BTreeMap::from([("process".to_string(), vec!["bad".to_string()])]),
+            ..Default::default()
         }],
         escalations: vec![],
         rationale: None,
     };
-    assert!(earmark_declarations::validate_standing_policy(&policy).is_err());
+    assert!(
+        earmark_declarations::validate_standing_policy_against_registry(&policy, &registry)
+            .is_err()
+    );
 }
 
 #[test]
@@ -275,6 +293,7 @@ fn system_validation_rejects_wrong_class_marker_for_class_reference() {
         provider_profiles: vec![],
         default_compiled_context: None,
         default_provider_profile: None,
+        standing_dimensions: vec![],
         runtime_profile: earmark_core::RuntimeProfile {
             execution_surface: "runtime_over_folder".to_string(),
             machine_output_default: "json".to_string(),
@@ -406,11 +425,14 @@ fn class_rejects_invalid_epistemic_token_in_standing_rules() {
         required_headers: vec![],
         payload_schema: JsonSchemaRef("inline:any".to_string()),
         standing_rules: ClassStandingRules {
-            allowed_epistemic: vec![
-                earmark_core::EpistemicStanding::Unresolved,
-                earmark_core::EpistemicStanding::Working,
-                earmark_core::EpistemicStanding::Superseded,
-            ],
+            allowed_standing: BTreeMap::from([(
+                DimensionId::new("kernel:epistemic"),
+                vec![
+                    TokenId::new("unresolved"),
+                    TokenId::new("working"),
+                    TokenId::new("superseded"),
+                ],
+            )]),
             ..Default::default()
         },
         relation_rules: vec![],
@@ -579,7 +601,41 @@ fn compiled_context_rejects_invalid_standing_token() {
             include_provenance: true,
         },
     };
-    assert!(validate_compiled_context_template(&template).is_err());
+    assert!(validate_compiled_context_template(&template).is_ok());
+}
+
+#[test]
+fn compiled_context_rejects_invalid_standing_token_with_registry() {
+    let registry = StandingRegistry::kernel_defaults();
+    let template = CompiledContextTemplate {
+        name: "ctx_ok".to_string(),
+        version: "1.0.0".to_string(),
+        description: None,
+        select: CompiledContextSelect {
+            classes: vec!["finding".to_string()],
+            standing: BTreeMap::from([("review".to_string(), vec!["bad_token".to_string()])]),
+            relations: vec![],
+            time_range: None,
+            expansion: CompiledContextExpansion::default(),
+        },
+        group_by: vec![],
+        render: CompiledContextRender {
+            mode: "manifest".to_string(),
+            manifest_format: None,
+            prose_template: None,
+        },
+        visibility: CompiledContextVisibility {
+            include_lineage: true,
+            include_constraints: true,
+            include_provenance: true,
+        },
+    };
+    assert!(
+        earmark_declarations::validate_compiled_context_template_against_registry(
+            &template, &registry
+        )
+        .is_err()
+    );
 }
 
 #[test]
@@ -684,15 +740,21 @@ fn valid_class_examples_pass() {
             required_headers: vec!["title".to_string()],
             payload_schema: JsonSchemaRef("inline:any".to_string()),
             standing_rules: ClassStandingRules {
-                allowed_epistemic: vec![
-                    earmark_core::EpistemicStanding::Working,
-                    earmark_core::EpistemicStanding::Supported,
-                ],
-                allowed_review: vec![
-                    earmark_core::ReviewStanding::Unreviewed,
-                    earmark_core::ReviewStanding::Accepted,
-                ],
-                allowed_process: vec![earmark_core::ProcessStanding::Completed],
+                allowed_standing: BTreeMap::from([
+                    (
+                        DimensionId::new("kernel:epistemic"),
+                        vec![TokenId::new("working"), TokenId::new("supported")],
+                    ),
+                    (
+                        DimensionId::new("kernel:review"),
+                        vec![TokenId::new("unreviewed"), TokenId::new("accepted")],
+                    ),
+                    (
+                        DimensionId::new("kernel:process"),
+                        vec![TokenId::new("completed")],
+                    ),
+                ]),
+                ..Default::default()
             },
             relation_rules: vec![earmark_core::RelationRule {
                 relation_type: "derived_from".to_string(),
@@ -709,9 +771,21 @@ fn valid_class_examples_pass() {
             required_headers: vec!["title".to_string()],
             payload_schema: JsonSchemaRef("inline:any".to_string()),
             standing_rules: ClassStandingRules {
-                allowed_epistemic: vec![earmark_core::EpistemicStanding::Working],
-                allowed_review: vec![earmark_core::ReviewStanding::Unreviewed],
-                allowed_process: vec![earmark_core::ProcessStanding::Completed],
+                allowed_standing: BTreeMap::from([
+                    (
+                        DimensionId::new("kernel:epistemic"),
+                        vec![TokenId::new("working")],
+                    ),
+                    (
+                        DimensionId::new("kernel:review"),
+                        vec![TokenId::new("unreviewed")],
+                    ),
+                    (
+                        DimensionId::new("kernel:process"),
+                        vec![TokenId::new("completed")],
+                    ),
+                ]),
+                ..Default::default()
             },
             relation_rules: vec![],
             validators: vec![],
@@ -844,8 +918,12 @@ fn valid_standing_policy_passes() {
         }],
         operation_requirements: vec![OperationRequirement {
             operation: "export".to_string(),
-            minimums: BTreeMap::from([("review".to_string(), "accepted".to_string())]),
-            forbidden: BTreeMap::from([("epistemic".to_string(), vec!["unresolved".to_string()])]),
+            required_standing: BTreeMap::from([("review".to_string(), "accepted".to_string())]),
+            forbidden_standing: BTreeMap::from([(
+                "epistemic".to_string(),
+                vec!["unresolved".to_string()],
+            )]),
+            ..Default::default()
         }],
         escalations: vec![EscalationRule {
             trigger: "some_trigger".to_string(),

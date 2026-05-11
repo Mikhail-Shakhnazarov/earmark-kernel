@@ -248,11 +248,7 @@ fn test_transition_enforces_honest_work_packet_defaults() {
         kind: "class".to_string(),
         required_headers: vec![],
         payload_schema: earmark_core::JsonSchemaRef("{}".to_string()),
-        standing_rules: earmark_core::ClassStandingRules {
-            allowed_epistemic: vec![],
-            allowed_review: vec![],
-            allowed_process: vec![],
-        },
+        standing_rules: earmark_core::ClassStandingRules::default(),
         relation_rules: vec![],
         validators: vec![],
     };
@@ -281,6 +277,7 @@ fn test_transition_enforces_honest_work_packet_defaults() {
         provider_profiles: vec![],
         default_compiled_context: None,
         default_provider_profile: None,
+        standing_dimensions: vec![],
         runtime_profile: RuntimeProfile {
             execution_surface: "test".to_string(),
             machine_output_default: "json".to_string(),
@@ -469,11 +466,7 @@ fn test_transition_preserves_provider_record_warnings() {
         kind: "class".to_string(),
         required_headers: vec![],
         payload_schema: earmark_core::JsonSchemaRef("{}".to_string()),
-        standing_rules: earmark_core::ClassStandingRules {
-            allowed_epistemic: vec![],
-            allowed_review: vec![],
-            allowed_process: vec![],
-        },
+        standing_rules: earmark_core::ClassStandingRules::default(),
         relation_rules: vec![],
         validators: vec![],
     };
@@ -502,6 +495,7 @@ fn test_transition_preserves_provider_record_warnings() {
         provider_profiles: vec![],
         default_compiled_context: None,
         default_provider_profile: None,
+        standing_dimensions: vec![],
         runtime_profile: RuntimeProfile {
             execution_surface: "test".to_string(),
             machine_output_default: "json".to_string(),

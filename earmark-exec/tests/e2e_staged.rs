@@ -1,7 +1,7 @@
 use earmark_core::{
     to_yaml, ClassDefinition, ClassStandingRules, CompiledContextExpansion, CompiledContextRender,
-    CompiledContextSelect, CompiledContextTemplate, CompiledContextVisibility, JsonSchemaRef, Kind,
-    Provenance, RuntimeProfile, Standing, SystemDefinition,
+    CompiledContextSelect, CompiledContextTemplate, CompiledContextVisibility, DimensionId,
+    JsonSchemaRef, Kind, Provenance, RuntimeProfile, Standing, SystemDefinition, TokenId,
 };
 use earmark_exec::{ExecutionEngine, ProviderRegistry, WorkflowRunRequest};
 use earmark_index::DerivedIndex;
@@ -47,7 +47,10 @@ fn test_neutral_staged_fixture_source_note_to_summary() {
         required_headers: vec!["title".to_string()],
         payload_schema: JsonSchemaRef("inline:any".to_string()),
         standing_rules: ClassStandingRules {
-            allowed_epistemic: vec![earmark_core::EpistemicStanding::Working],
+            allowed_standing: BTreeMap::from([(
+                DimensionId::new("kernel:epistemic"),
+                vec![TokenId::new("working")],
+            )]),
             ..ClassStandingRules::default()
         },
         relation_rules: vec![earmark_core::RelationRule {
@@ -277,6 +280,7 @@ guards: []
         provider_profiles: vec![],
         default_compiled_context: None,
         default_provider_profile: None,
+        standing_dimensions: vec![],
         runtime_profile: RuntimeProfile {
             execution_surface: "local".to_string(),
             machine_output_default: "json".to_string(),

@@ -1126,6 +1126,7 @@ fn register_system_definition(
         provider_profiles: vec![],
         default_compiled_context: None,
         default_provider_profile: None,
+        standing_dimensions: vec![],
         runtime_profile: earmark_core::RuntimeProfile {
             execution_surface: "local".to_string(),
             machine_output_default: "json".to_string(),

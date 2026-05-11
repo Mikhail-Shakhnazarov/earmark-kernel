@@ -191,7 +191,7 @@ fn test_handoff_standing_exclusion() {
         allowed_output_classes: vec![],
         allowed_relation_types: vec!["linked".to_string()],
         standing_constraints: vec![StandingConstraint {
-            constraint_type: "allowed_review".to_string(),
+            constraint_type: "kernel:review".to_string(),
             requirements: vec!["accepted".to_string()],
         }],
         unresolved_ambiguities: vec![],

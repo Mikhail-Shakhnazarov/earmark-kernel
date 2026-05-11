@@ -30,6 +30,7 @@ fn guarded_edge_blocking() {
         provider_profiles: vec![],
         default_compiled_context: None,
         default_provider_profile: None,
+        standing_dimensions: vec![],
         runtime_profile: RuntimeProfile {
             execution_surface: "runtime_over_folder".to_string(),
             machine_output_default: "json".to_string(),
@@ -171,6 +172,7 @@ fn branching_execution() {
         provider_profiles: vec![],
         default_compiled_context: None,
         default_provider_profile: None,
+        standing_dimensions: vec![],
         runtime_profile: RuntimeProfile {
             execution_surface: "runtime_over_folder".to_string(),
             machine_output_default: "json".to_string(),
@@ -493,6 +495,7 @@ fn parallel_transform_leak_bug() {
         provider_profiles: vec![],
         default_compiled_context: None,
         default_provider_profile: None,
+        standing_dimensions: vec![],
         runtime_profile: RuntimeProfile {
             execution_surface: "r".to_string(),
             machine_output_default: "j".to_string(),
@@ -631,6 +634,7 @@ fn execution_error_persists_failed_delta() {
         provider_profiles: vec![],
         default_compiled_context: None,
         default_provider_profile: None,
+        standing_dimensions: vec![],
         runtime_profile: RuntimeProfile {
             execution_surface: "r".to_string(),
             machine_output_default: "j".to_string(),

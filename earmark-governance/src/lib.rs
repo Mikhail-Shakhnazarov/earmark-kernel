@@ -188,7 +188,7 @@ pub fn export_allowed(policy: &StandingPolicy, standing: &Standing) -> Result<()
     for requirement in &policy.operation_requirements {
         if requirement.operation == "export" {
             // Check minimums
-            for (dim_str, required_value) in &requirement.minimums {
+            for (dim_str, required_value) in &requirement.required_standing {
                 let actual_value = get_dim_value(standing, dim_str)?;
                 if actual_value != required_value {
                     return Err(GovernanceError::ExportBlocked(format!(
@@ -199,7 +199,7 @@ pub fn export_allowed(policy: &StandingPolicy, standing: &Standing) -> Result<()
             }
 
             // Check forbidden
-            for (dim_str, forbidden_values) in &requirement.forbidden {
+            for (dim_str, forbidden_values) in &requirement.forbidden_standing {
                 let actual_value = get_dim_value(standing, dim_str)?;
                 if forbidden_values.iter().any(|v| v == actual_value) {
                     return Err(GovernanceError::ExportBlocked(format!(
@@ -389,11 +389,15 @@ mod tests {
             transition_rules: vec![],
             operation_requirements: vec![OperationRequirement {
                 operation: "export".to_string(),
-                minimums: BTreeMap::from([
+                required_standing: BTreeMap::from([
                     ("review".to_string(), "accepted".to_string()),
                     ("epistemic".to_string(), "supported".to_string()),
                 ]),
-                forbidden: BTreeMap::from([("process".to_string(), vec!["blocked".to_string()])]),
+                forbidden_standing: BTreeMap::from([(
+                    "process".to_string(),
+                    vec!["blocked".to_string()],
+                )]),
+                ..Default::default()
             }],
             escalations: vec![],
             rationale: None,
