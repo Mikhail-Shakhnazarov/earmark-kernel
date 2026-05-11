@@ -75,33 +75,42 @@ pub(crate) fn derive_successor_handoff<S: CanonicalStore>(
                 if &class.name != contract {
                     continue;
                 }
-                standing_constraints.push(StandingConstraint {
-                    constraint_type: "allowed_epistemic".to_string(),
-                    requirements: class
-                        .standing_rules
-                        .allowed_epistemic
-                        .iter()
-                        .map(|e| e.as_str().to_string())
-                        .collect(),
-                });
-                standing_constraints.push(StandingConstraint {
-                    constraint_type: "allowed_review".to_string(),
-                    requirements: class
-                        .standing_rules
-                        .allowed_review
-                        .iter()
-                        .map(|r| r.as_str().to_string())
-                        .collect(),
-                });
-                standing_constraints.push(StandingConstraint {
-                    constraint_type: "allowed_process".to_string(),
-                    requirements: class
-                        .standing_rules
-                        .allowed_process
-                        .iter()
-                        .map(|p| p.as_str().to_string())
-                        .collect(),
-                });
+                let epi_reqs: Vec<String> = class
+                    .standing_rules
+                    .allowed_epistemic
+                    .iter()
+                    .map(|e| e.as_str().to_string())
+                    .collect();
+                if !epi_reqs.is_empty() {
+                    standing_constraints.push(StandingConstraint {
+                        constraint_type: "allowed_epistemic".to_string(),
+                        requirements: epi_reqs,
+                    });
+                }
+                let rev_reqs: Vec<String> = class
+                    .standing_rules
+                    .allowed_review
+                    .iter()
+                    .map(|r| r.as_str().to_string())
+                    .collect();
+                if !rev_reqs.is_empty() {
+                    standing_constraints.push(StandingConstraint {
+                        constraint_type: "allowed_review".to_string(),
+                        requirements: rev_reqs,
+                    });
+                }
+                let proc_reqs: Vec<String> = class
+                    .standing_rules
+                    .allowed_process
+                    .iter()
+                    .map(|p| p.as_str().to_string())
+                    .collect();
+                if !proc_reqs.is_empty() {
+                    standing_constraints.push(StandingConstraint {
+                        constraint_type: "allowed_process".to_string(),
+                        requirements: proc_reqs,
+                    });
+                }
                 for rule in &class.relation_rules {
                     allowed_relation_types.push(rule.relation_type.clone());
                 }

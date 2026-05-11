@@ -66,6 +66,8 @@ pub enum ExecError {
     GovernanceOperation(String),
     #[error("handoff reconstruction error: {0}")]
     HandoffReconstruction(String),
+    #[error("handoff continuation error: {0}")]
+    HandoffContinuation(String),
     #[error("governance error: {0}")]
     Governance(#[from] earmark_governance::GovernanceError),
     #[error("core error: {0}")]
