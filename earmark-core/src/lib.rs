@@ -168,8 +168,16 @@ impl std::fmt::Display for SymbolicName {
 pub struct DimensionId(String);
 
 impl DimensionId {
+    /// Unchecked constructor for trusted constants only.
+    /// Prefer `parse()` for any user- or declaration-derived input.
     pub fn new(s: impl Into<String>) -> Self {
         Self(s.into())
+    }
+
+    /// Trusted static constructor for built-in kernel dimensions and test constants.
+    /// Panics if the input is not a valid dimension ID.
+    pub fn from_static(s: &'static str) -> Self {
+        Self::parse(s).expect("invalid static dimension ID")
     }
 
     pub fn parse(s: impl Into<String>) -> Result<Self, CoreError> {
@@ -204,8 +212,16 @@ impl std::fmt::Display for DimensionId {
 pub struct TokenId(String);
 
 impl TokenId {
+    /// Unchecked constructor for trusted constants only.
+    /// Prefer `parse()` for any user- or declaration-derived input.
     pub fn new(s: impl Into<String>) -> Self {
         Self(s.into())
+    }
+
+    /// Trusted static constructor for built-in kernel tokens and test constants.
+    /// Panics if the input is not a valid token ID.
+    pub fn from_static(s: &'static str) -> Self {
+        Self::parse(s).expect("invalid static token ID")
     }
 
     pub fn parse(s: impl Into<String>) -> Result<Self, CoreError> {
@@ -242,8 +258,16 @@ impl std::fmt::Display for TokenId {
 pub struct KernelProtocolId(String);
 
 impl KernelProtocolId {
+    /// Unchecked constructor for trusted constants only.
+    /// Prefer `parse()` for any user- or declaration-derived input.
     pub fn new(s: impl Into<String>) -> Self {
         Self(s.into())
+    }
+
+    /// Trusted static constructor for built-in kernel protocols and test constants.
+    /// Panics if the input is not a valid protocol ID.
+    pub fn from_static(s: &'static str) -> Self {
+        Self::parse(s).expect("invalid static protocol ID")
     }
 
     pub fn parse(s: impl Into<String>) -> Result<Self, CoreError> {
@@ -557,14 +581,17 @@ impl Standing {
     pub fn kernel_defaults() -> Self {
         let mut values = BTreeMap::new();
         values.insert(
-            DimensionId::new("kernel:epistemic"),
-            TokenId::new("working"),
+            DimensionId::from_static("kernel:epistemic"),
+            TokenId::from_static("working"),
         );
         values.insert(
-            DimensionId::new("kernel:review"),
-            TokenId::new("unreviewed"),
+            DimensionId::from_static("kernel:review"),
+            TokenId::from_static("unreviewed"),
         );
-        values.insert(DimensionId::new("kernel:process"), TokenId::new("active"));
+        values.insert(
+            DimensionId::from_static("kernel:process"),
+            TokenId::from_static("active"),
+        );
         Self { values }
     }
 
@@ -599,19 +626,20 @@ impl Serialize for Standing {
 
 impl<'de> Deserialize<'de> for Standing {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        use serde::de::Error;
         let raw: BTreeMap<String, String> = BTreeMap::deserialize(deserializer)?;
-        let values = raw
-            .into_iter()
-            .map(|(k, v)| {
-                let dim = match k.as_str() {
-                    "epistemic" => DimensionId::new("kernel:epistemic"),
-                    "review" => DimensionId::new("kernel:review"),
-                    "process" => DimensionId::new("kernel:process"),
-                    _ => DimensionId::new(k),
-                };
-                (dim, TokenId::new(v))
-            })
-            .collect();
+        let mut values = BTreeMap::new();
+        for (k, v) in raw {
+            let norm_key = match k.as_str() {
+                "epistemic" => "kernel:epistemic",
+                "review" => "kernel:review",
+                "process" => "kernel:process",
+                other => other,
+            };
+            let dim = DimensionId::parse(norm_key).map_err(D::Error::custom)?;
+            let token = TokenId::parse(&v).map_err(D::Error::custom)?;
+            values.insert(dim, token);
+        }
         Ok(Standing { values })
     }
 }
@@ -756,6 +784,53 @@ pub struct StandingRegistry {
 }
 
 impl StandingRegistry {
+    /// Validate internal coherence of the registry.
+    ///
+    /// Checks:
+    /// - All dimension IDs are valid identifiers.
+    /// - Each dimension has a default token present in its token list.
+    /// - Tokens within a dimension have valid IDs and are unique.
+    /// - Protocol IDs in bindings are valid identifiers.
+    pub fn validate(&self) -> Result<(), CoreError> {
+        for (dim_id, def) in &self.dimensions {
+            // Dimension ID must be valid (re-parse to validate)
+            DimensionId::parse(dim_id.as_str())?;
+
+            // Default token must be non-empty and exist in token list
+            if def.default.as_str().is_empty() {
+                return Err(CoreError::InvalidIdentifier(format!(
+                    "dimension '{}' has empty default token",
+                    dim_id.as_str(),
+                )));
+            }
+            let token_ids: Vec<&str> = def.tokens.iter().map(|t| t.id.as_str()).collect();
+            if !token_ids.contains(&def.default.as_str()) {
+                return Err(CoreError::InvalidIdentifier(format!(
+                    "default token '{}' for dimension '{}' not found in its token list",
+                    def.default.as_str(),
+                    dim_id.as_str(),
+                )));
+            }
+
+            // Validate each token
+            let mut seen_tokens = std::collections::BTreeSet::new();
+            for token in &def.tokens {
+                TokenId::parse(token.id.as_str())?;
+                if !seen_tokens.insert(token.id.as_str()) {
+                    return Err(CoreError::InvalidIdentifier(format!(
+                        "duplicate token '{}' in dimension '{}'",
+                        token.id.as_str(),
+                        dim_id.as_str(),
+                    )));
+                }
+                for binding in &token.implements {
+                    KernelProtocolId::parse(binding.protocol.as_str())?;
+                }
+            }
+        }
+        Ok(())
+    }
+
     pub fn kernel_defaults() -> Self {
         let mut dimensions = BTreeMap::new();
 
@@ -787,37 +862,45 @@ impl StandingRegistry {
         };
         dimensions.insert(epistemic.id.clone(), epistemic);
 
+        fn review_binding(state: &str) -> ProtocolBinding {
+            ProtocolBinding {
+                protocol: KernelProtocolId::from_static("kernel:review"),
+                state: Some(state.to_string()),
+                properties: BTreeMap::new(),
+            }
+        }
+
         let review = StandingDimensionDefinition {
             id: DimensionId::new("kernel:review"),
             default: TokenId::new("unreviewed"),
             tokens: vec![
                 StandingTokenDefinition {
                     id: TokenId::new("unreviewed"),
-                    implements: vec![],
+                    implements: vec![review_binding("unreviewed")],
                 },
                 StandingTokenDefinition {
                     id: TokenId::new("pending"),
-                    implements: vec![],
+                    implements: vec![review_binding("pending")],
                 },
                 StandingTokenDefinition {
                     id: TokenId::new("accepted"),
-                    implements: vec![ProtocolBinding {
-                        protocol: KernelProtocolId::new("kernel:review"),
-                        state: Some("accepted".to_string()),
-                        properties: BTreeMap::new(),
-                    }],
+                    implements: vec![review_binding("accepted")],
                 },
                 StandingTokenDefinition {
                     id: TokenId::new("rejected"),
-                    implements: vec![ProtocolBinding {
-                        protocol: KernelProtocolId::new("kernel:review"),
-                        state: Some("rejected".to_string()),
-                        properties: BTreeMap::new(),
-                    }],
+                    implements: vec![review_binding("rejected")],
                 },
             ],
         };
         dimensions.insert(review.id.clone(), review);
+
+        fn process_binding(state: &str) -> ProtocolBinding {
+            ProtocolBinding {
+                protocol: KernelProtocolId::from_static("kernel:process"),
+                state: Some(state.to_string()),
+                properties: BTreeMap::new(),
+            }
+        }
 
         let process = StandingDimensionDefinition {
             id: DimensionId::new("kernel:process"),
@@ -825,19 +908,19 @@ impl StandingRegistry {
             tokens: vec![
                 StandingTokenDefinition {
                     id: TokenId::new("active"),
-                    implements: vec![],
+                    implements: vec![process_binding("active")],
                 },
                 StandingTokenDefinition {
                     id: TokenId::new("blocked"),
-                    implements: vec![],
+                    implements: vec![process_binding("blocked")],
                 },
                 StandingTokenDefinition {
                     id: TokenId::new("completed"),
-                    implements: vec![],
+                    implements: vec![process_binding("completed")],
                 },
                 StandingTokenDefinition {
                     id: TokenId::new("archived"),
-                    implements: vec![],
+                    implements: vec![process_binding("archived")],
                 },
             ],
         };
@@ -848,26 +931,52 @@ impl StandingRegistry {
 }
 
 /// Materialize defaults from a registry, filling omitted dimensions with their declared defaults.
+///
+/// Returns an error if:
+/// - any supplied dimension is not present in the registry;
+/// - any supplied token is not valid for its dimension;
+/// - a registry default token is not in its own dimension's token list.
 pub fn materialize_defaults(
     registry: &StandingRegistry,
     supplied: BTreeMap<DimensionId, TokenId>,
 ) -> Result<Standing, CoreError> {
-    let mut values = supplied;
+    let mut values = BTreeMap::new();
+
+    // Validate supplied dimensions/tokens, rejecting unknown dimensions
+    for (dim_id, token) in &supplied {
+        let def = registry.dimensions.get(dim_id).ok_or_else(|| {
+            CoreError::InvalidIdentifier(format!(
+                "unknown dimension '{}' in supplied standing",
+                dim_id.as_str()
+            ))
+        })?;
+        let valid_tokens: Vec<&str> = def.tokens.iter().map(|t| t.id.as_str()).collect();
+        if !valid_tokens.contains(&token.as_str()) {
+            return Err(CoreError::InvalidIdentifier(format!(
+                "unknown token '{}' for dimension '{}'",
+                token.as_str(),
+                dim_id.as_str(),
+            )));
+        }
+        values.insert(dim_id.clone(), token.clone());
+    }
+
+    // Fill omitted registry dimensions with declared defaults
     for (dim_id, def) in &registry.dimensions {
         if !values.contains_key(dim_id) {
-            values.insert(dim_id.clone(), def.default.clone());
-        } else {
-            let token = &values[dim_id];
+            let default_token = &def.default;
             let valid_tokens: Vec<&str> = def.tokens.iter().map(|t| t.id.as_str()).collect();
-            if !valid_tokens.contains(&token.as_str()) {
+            if !valid_tokens.contains(&default_token.as_str()) {
                 return Err(CoreError::InvalidIdentifier(format!(
-                    "unknown token '{}' for dimension '{}'",
-                    token.as_str(),
+                    "default token '{}' for dimension '{}' is not in its own token list",
+                    default_token.as_str(),
                     dim_id.as_str(),
                 )));
             }
+            values.insert(dim_id.clone(), default_token.clone());
         }
     }
+
     Ok(Standing { values })
 }
 
@@ -2088,5 +2197,151 @@ mod tests {
         standing.values.clear();
         assert!(standing.is_empty());
         assert_eq!(standing.len(), 0);
+    }
+
+    // --- WP01A: Foundation repair tests ---
+
+    #[test]
+    fn test_kernel_protocol_id_parse_rejects_invalid() {
+        assert!(KernelProtocolId::parse("").is_err());
+        assert!(KernelProtocolId::parse(&"a".repeat(129)).is_err());
+        assert!(KernelProtocolId::parse("UPPERCASE").is_err());
+        assert!(KernelProtocolId::parse("has space").is_err());
+        assert!(KernelProtocolId::parse("kernel:review").is_ok());
+        assert!(KernelProtocolId::parse("kernel:visibility").is_ok());
+    }
+
+    #[test]
+    fn test_standing_deserialize_rejects_invalid_dimension() {
+        let bad = r#"{"UPPERCASE_DIM": "value"}"#;
+        assert!(serde_json::from_str::<Standing>(bad).is_err());
+        let bad = r#"{"": "value"}"#;
+        assert!(serde_json::from_str::<Standing>(bad).is_err());
+    }
+
+    #[test]
+    fn test_standing_deserialize_rejects_invalid_token() {
+        let bad = r#"{"kernel:epistemic": "UPPERCASE_TOKEN"}"#;
+        assert!(serde_json::from_str::<Standing>(bad).is_err());
+        let bad = r#"{"kernel:epistemic": ""}"#;
+        assert!(serde_json::from_str::<Standing>(bad).is_err());
+    }
+
+    #[test]
+    fn test_materialize_defaults_rejects_unknown_dimension() {
+        let registry = StandingRegistry::kernel_defaults();
+        let mut supplied = BTreeMap::new();
+        supplied.insert(DimensionId::new("unknown:dimension"), TokenId::new("value"));
+        let result = materialize_defaults(&registry, supplied);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("unknown dimension"),
+            "error should mention unknown dimension"
+        );
+    }
+
+    #[test]
+    fn test_materialize_defaults_rejects_unknown_dimension_token() {
+        let registry = StandingRegistry::kernel_defaults();
+        let mut supplied = BTreeMap::new();
+        supplied.insert(
+            DimensionId::new("kernel:epistemic"),
+            TokenId::new("nonexistent"),
+        );
+        let result = materialize_defaults(&registry, supplied);
+        assert!(result.is_err());
+        assert!(
+            result.unwrap_err().to_string().contains("unknown token"),
+            "error should mention unknown token"
+        );
+    }
+
+    #[test]
+    fn test_builtin_registry_validates_successfully() {
+        let registry = StandingRegistry::kernel_defaults();
+        assert!(registry.validate().is_ok());
+    }
+
+    #[test]
+    fn test_kernel_review_tokens_all_bind_to_kernel_review() {
+        let registry = StandingRegistry::kernel_defaults();
+        let review = registry
+            .dimensions
+            .get(&DimensionId::new("kernel:review"))
+            .expect("kernel:review dimension");
+        for token in &review.tokens {
+            let has_review_binding = token.implements.iter().any(|b| {
+                b.protocol.as_str() == "kernel:review"
+                    && b.state.as_deref() == Some(token.id.as_str())
+            });
+            assert!(
+                has_review_binding,
+                "token '{}' should bind to kernel:review state '{}'",
+                token.id.as_str(),
+                token.id.as_str()
+            );
+        }
+    }
+
+    #[test]
+    fn test_kernel_process_tokens_all_bind_to_kernel_process() {
+        let registry = StandingRegistry::kernel_defaults();
+        let process = registry
+            .dimensions
+            .get(&DimensionId::new("kernel:process"))
+            .expect("kernel:process dimension");
+        for token in &process.tokens {
+            let has_process_binding = token.implements.iter().any(|b| {
+                b.protocol.as_str() == "kernel:process"
+                    && b.state.as_deref() == Some(token.id.as_str())
+            });
+            assert!(
+                has_process_binding,
+                "token '{}' should bind to kernel:process state '{}'",
+                token.id.as_str(),
+                token.id.as_str()
+            );
+        }
+    }
+
+    #[test]
+    fn test_kernel_epistemic_default_is_working_not_unresolved() {
+        // Standing::kernel_defaults() uses working
+        let standing = Standing::kernel_defaults();
+        assert_eq!(
+            standing
+                .get(&DimensionId::new("kernel:epistemic"))
+                .map(TokenId::as_str),
+            Some("working")
+        );
+        // Standing::default() delegates to kernel_defaults()
+        let standing = Standing::default();
+        assert_eq!(
+            standing
+                .get(&DimensionId::new("kernel:epistemic"))
+                .map(TokenId::as_str),
+            Some("working")
+        );
+        // Registry default is also working
+        let registry = StandingRegistry::kernel_defaults();
+        let epi = registry
+            .dimensions
+            .get(&DimensionId::new("kernel:epistemic"))
+            .expect("kernel:epistemic dimension");
+        assert_eq!(epi.default.as_str(), "working");
+    }
+
+    #[test]
+    fn test_from_static_panics_on_invalid_input() {
+        use std::panic;
+        assert!(panic::catch_unwind(|| DimensionId::from_static("")).is_err());
+        assert!(panic::catch_unwind(|| TokenId::from_static("UPPER")).is_err());
+        assert!(panic::catch_unwind(|| KernelProtocolId::from_static("")).is_err());
+        assert!(panic::catch_unwind(|| DimensionId::from_static("valid:name")).is_ok());
+        assert!(panic::catch_unwind(|| TokenId::from_static("valid_name")).is_ok());
+        assert!(panic::catch_unwind(|| KernelProtocolId::from_static("kernel:review")).is_ok());
     }
 }

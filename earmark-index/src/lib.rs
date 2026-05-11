@@ -329,7 +329,7 @@ impl DerivedIndex {
                 .standing
                 .get(&DimensionId::new("kernel:epistemic"))
                 .map(TokenId::as_str)
-                .unwrap_or("unresolved")
+                .unwrap_or("working")
                 .to_string();
             let standing_review = envelope
                 .standing
@@ -530,7 +530,7 @@ impl DerivedIndex {
                     .standing
                     .get(&DimensionId::new("kernel:epistemic"))
                     .map(TokenId::as_str)
-                    .unwrap_or("unresolved"),
+                    .unwrap_or("working"),
                 envelope
                     .standing
                     .get(&DimensionId::new("kernel:review"))
