@@ -5,6 +5,9 @@ pub fn object_summary_matches_standing(
     row: &ObjectSummary,
     standing_filters: &BTreeMap<String, Vec<String>>,
 ) -> bool {
+    if standing_filters.is_empty() {
+        return true;
+    }
     standing_filters.iter().all(|(dimension, allowed)| {
         if allowed.is_empty() {
             return true;
@@ -27,7 +30,7 @@ pub fn object_summary_matches_standing(
                 .unwrap_or(&row.standing_process),
             other => match row.standing.get(other) {
                 Some(v) => v.as_str(),
-                None => return true, // Unknown dimension passes through
+                None => return false,
             },
         };
         allowed.iter().any(|candidate| candidate == current)
