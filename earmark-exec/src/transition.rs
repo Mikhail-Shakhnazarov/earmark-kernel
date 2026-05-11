@@ -132,7 +132,10 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                     template_ref,
                     Kind::CompiledContextTemplate,
                 )?;
-                let manifest = context_compiler.compile(store, index, &resolved_template, None)?;
+                let registry = earmark_core::StandingRegistry::from_system_definition(system)
+                    .map_err(|e| ExecError::Core(e))?;
+                let manifest =
+                    context_compiler.compile(store, index, &resolved_template, None, &registry)?;
                 let work_packet = work_packet_from_compiled_context(
                     request,
                     transition,
@@ -228,12 +231,16 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                             .compiled_context
                             .as_ref()
                             .map(crate::helpers::render_provider_context);
+                        let registry =
+                            earmark_core::StandingRegistry::from_system_definition(system)
+                                .map_err(|e| ExecError::Core(e))?;
                         let input_text = crate::helpers::render_provider_input(
                             store,
                             &instruction,
                             state.compiled_context.as_ref(),
                             &filtered_inputs,
                             &profile,
+                            &registry,
                         )?;
 
                         let provider_request = ProviderRequest {

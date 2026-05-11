@@ -22,7 +22,14 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
         context_compiler: &C,
         compiled_context_ref: &VersionRef,
     ) -> Result<WorkSurfaceManifest, RuntimeToolError> {
-        Ok(context_compiler.compile(self.store, self.index, compiled_context_ref, None)?)
+        let registry = earmark_core::StandingRegistry::kernel_defaults();
+        Ok(context_compiler.compile(
+            self.store,
+            self.index,
+            compiled_context_ref,
+            None,
+            &registry,
+        )?)
     }
 
     pub fn compile_connected_context(
