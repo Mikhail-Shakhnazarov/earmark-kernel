@@ -691,7 +691,7 @@ where
     F: Fn(&str) -> Result<(), earmark_core::CoreError>,
 {
     for reference in refs {
-        let to_read = if reference.version_id.as_str() == "ver_00000000000000000000000000000000" {
+        let to_read = if reference.version_id.is_latest_sentinel() {
             store
                 .read_head_ref(&reference.id)
                 .map_err(DeriveError::Store)?

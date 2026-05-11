@@ -159,12 +159,6 @@ impl ProviderRegistry {
 
         #[cfg(feature = "http-provider")]
         self.register(Arc::new(crate::HttpGenerationAdapter));
-
-        #[cfg(feature = "gemini")]
-        self.register(Arc::new(crate::GeminiAdapter::new(
-            "gemini-1.5-pro".to_string(),
-            "GOOGLE_API_KEY".to_string(),
-        )));
     }
 
     pub fn capabilities(&self) -> Vec<ProviderCapability> {
@@ -202,19 +196,6 @@ pub fn compiled_provider_capabilities() -> Vec<ProviderCapability> {
         required_env: vec![],
         missing_env: vec![],
         message: Some("provider requires the http-provider cargo feature".to_string()),
-    });
-
-    #[cfg(not(feature = "gemini"))]
-    capabilities.push(ProviderCapability {
-        provider: "google_gemini".to_string(),
-        status: ProviderCapabilityStatus::CompileDisabled,
-        feature: Some("gemini".to_string()),
-        required_env: vec!["GOOGLE_API_KEY".to_string()],
-        missing_env: vec![],
-        message: Some(
-            "provider requires the gemini cargo feature (deprecated in favor of http_generation)"
-                .to_string(),
-        ),
     });
 
     capabilities.sort_by(|a, b| {

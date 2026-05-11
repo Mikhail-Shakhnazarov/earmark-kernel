@@ -1,8 +1,29 @@
 name: google_gemini
 version: 0.1.0
-description: Google Gemini provider profile.
-provider: google_gemini
+description: Google Gemini provider profile using the generic HTTP generation provider.
+provider: http_generation
 model: gemini-1.5-pro
+auth_env: GEMINI_API_KEY
+http:
+  method: POST
+  url_template: "https://generativelanguage.googleapis.com/v1beta/models/{{model}}:generateContent"
+  auth:
+    kind: header
+    header_name: x-goog-api-key
+    env: GEMINI_API_KEY
+  request:
+    content_type: application/json
+    body:
+      contents:
+        - role: user
+          parts:
+            - text: "{{input_text}}"
+      generationConfig:
+        responseMimeType: application/json
+  response:
+    text_path: "$.candidates[0].content.parts[0].text"
+    input_tokens_path: "$.usageMetadata.promptTokenCount"
+    output_tokens_path: "$.usageMetadata.candidatesTokenCount"
 budget:
   max_output_tokens: 2048
   max_latency_ms: 30000

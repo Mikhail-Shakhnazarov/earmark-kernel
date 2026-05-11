@@ -128,7 +128,6 @@ What works:
 - CLI inspection, explanation, and HTML report generation
 - Registry-based custom provider extension through `ProviderRegistry` and `ProviderService`
 - Additive async provider traits through `AsyncProviderService` and `AsyncProviderAdapter`
-- Optional Google Gemini provider adapter (requires `gemini` feature)
 - Versioned JSON CLI contracts at 0.2.0
 
 What doesn't exist yet:

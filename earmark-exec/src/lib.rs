@@ -35,10 +35,6 @@ pub use relation_logic::{
 };
 
 // Specialized adapters
-#[cfg(feature = "gemini")]
-pub mod gemini;
-#[cfg(feature = "gemini")]
-pub use gemini::GeminiAdapter;
 #[cfg(feature = "http-provider")]
 pub use http_generation::HttpGenerationAdapter;
 
