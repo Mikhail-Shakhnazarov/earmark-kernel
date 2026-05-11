@@ -1,6 +1,6 @@
 use earmark_core::{
-    DimensionId, Kind, ReviewStanding, Standing, StandingPolicy, StandingRequestStatus,
-    StandingTransitionRule, TokenId, VersionId,
+    DimensionId, Kind, Standing, StandingPolicy, StandingRequestStatus,
+    StandingRegistry, StandingTransitionRule, TokenId, VersionId,
 };
 use earmark_exec::governance_ops::{apply_standing_request, approve_standing_request};
 use earmark_exec::persistence_helpers::write_object_and_index;
@@ -79,12 +79,14 @@ fn test_standing_request_lifecycle() {
     let request_ref = write_object_and_index(&store, &index, &stored_request).unwrap();
 
     // 4. Try to apply Proposed request (should fail)
+    let registry = StandingRegistry::kernel_defaults();
     let res = apply_standing_request(
         &store,
         &index,
         &request_ref,
         Some(policy_ref.id.as_str()),
         None,
+        &registry,
     );
     assert!(res.is_err(), "should fail to apply proposed request");
 
@@ -100,6 +102,7 @@ fn test_standing_request_lifecycle() {
         &approved_ref,
         Some(policy_ref.id.as_str()),
         None,
+        &registry,
     );
     assert!(res.is_err(), "should fail to apply without review evidence");
 
@@ -134,6 +137,7 @@ fn test_standing_request_lifecycle() {
         &approved_ref,
         Some(policy_ref.id.as_str()),
         Some(apply_reason.clone()),
+        &registry,
     )
     .unwrap();
 
@@ -232,12 +236,14 @@ fn test_standing_request_drift_failure() {
         vec![],
     );
     let policy_ref = write_object_and_index(&store, &index, &stored_policy).unwrap();
+    let registry = StandingRegistry::kernel_defaults();
     let res = apply_standing_request(
         &store,
         &index,
         &approved_ref,
         Some(policy_ref.id.as_str()),
         None,
+        &registry,
     );
     assert!(res.is_err());
     let err = res.unwrap_err().to_string();
@@ -320,12 +326,14 @@ fn test_standing_request_noop_apply() {
     let policy_ref = write_object_and_index(&store, &index, &stored_policy).unwrap();
 
     // 3. Apply request (should be no-op for target but Applied for request)
+    let registry = StandingRegistry::kernel_defaults();
     let (final_target_ref, final_request_ref) = apply_standing_request(
         &store,
         &index,
         &approved_ref,
         Some(policy_ref.id.as_str()),
         Some("No-op reason".to_string()),
+        &registry,
     )
     .unwrap();
 
@@ -439,12 +447,14 @@ fn test_standing_request_version_specific_review() {
     write_object_and_index(&store, &index, &stored_review).unwrap();
 
     // 6. Try to apply request to V2 (should fail because review is for V1)
+    let registry = StandingRegistry::kernel_defaults();
     let res = apply_standing_request(
         &store,
         &index,
         &approved_ref,
         Some(policy_ref.id.as_str()),
         None,
+        &registry,
     );
     assert!(res.is_err());
     assert!(res

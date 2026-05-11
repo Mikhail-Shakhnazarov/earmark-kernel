@@ -132,8 +132,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                     template_ref,
                     Kind::CompiledContextTemplate,
                 )?;
-                let registry = earmark_core::StandingRegistry::from_system_definition(system)
-                    .map_err(|e| ExecError::Core(e))?;
+                let registry = load_registry(system)?;
                 let manifest =
                     context_compiler.compile(store, index, &resolved_template, None, &registry)?;
                 let work_packet = work_packet_from_compiled_context(
@@ -231,9 +230,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                             .compiled_context
                             .as_ref()
                             .map(crate::helpers::render_provider_context);
-                        let registry =
-                            earmark_core::StandingRegistry::from_system_definition(system)
-                                .map_err(|e| ExecError::Core(e))?;
+                        let registry = load_registry(system)?;
                         let input_text = crate::helpers::render_provider_input(
                             store,
                             &instruction,
@@ -434,7 +431,8 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                     ExecError::MissingInput("export requires an active object".to_string())
                 })?;
                 let target_object = store.read_version(&target.version_ref())?;
-                match export_allowed(&policy, &target_object.envelope.standing) {
+                let registry = load_registry(system)?;
+                match export_allowed(&policy, &registry, &target_object.envelope.standing) {
                     Ok(()) => {
                         record_transition(
                             record,
@@ -705,4 +703,9 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
 
         Ok(())
     }
+}
+
+fn load_registry(system: &earmark_core::SystemDefinition) -> Result<earmark_core::StandingRegistry, ExecError> {
+    earmark_core::StandingRegistry::from_system_definition(system)
+        .map_err(|e| ExecError::Core(e))
 }

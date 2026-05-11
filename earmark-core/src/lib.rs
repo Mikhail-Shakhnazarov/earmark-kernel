@@ -1207,6 +1207,8 @@ pub struct OperationRequirement {
     pub forbidden_standing: BTreeMap<String, Vec<String>>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub required_protocols: BTreeMap<String, BTreeMap<String, ScalarValue>>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub forbidden_protocols: BTreeMap<String, BTreeMap<String, ScalarValue>>,
 }
 
 impl<'de> Deserialize<'de> for OperationRequirement {
@@ -1224,6 +1226,8 @@ impl<'de> Deserialize<'de> for OperationRequirement {
             #[serde(default)]
             required_protocols: Option<BTreeMap<String, BTreeMap<String, ScalarValue>>>,
             #[serde(default)]
+            forbidden_protocols: Option<BTreeMap<String, BTreeMap<String, ScalarValue>>>,
+            #[serde(default)]
             minimums: Option<BTreeMap<String, String>>,
             #[serde(default)]
             forbidden: Option<BTreeMap<String, Vec<String>>>,
@@ -1236,6 +1240,7 @@ impl<'de> Deserialize<'de> for OperationRequirement {
             required_standing,
             forbidden_standing,
             required_protocols: raw.required_protocols.unwrap_or_default(),
+            forbidden_protocols: raw.forbidden_protocols.unwrap_or_default(),
         })
     }
 }
@@ -1835,7 +1840,7 @@ pub struct ChangeSetDraft {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct StandingTransitionRequest {
     pub target_object_id: ObjectId,
-    pub dimension: String, // "epistemic", "review", or "process"
+    pub dimension: String, // arbitrary dimension from the standing registry
     pub from_value: String,
     pub to_value: String,
     pub rationale: Option<String>,
