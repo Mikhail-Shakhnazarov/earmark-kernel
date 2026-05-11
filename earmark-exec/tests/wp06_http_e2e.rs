@@ -394,3 +394,74 @@ fn test_http_provider_exposure_prose_hiding() {
     assert!(rendered.contains("Payload content hidden by exposure policy"));
     assert!(rendered.contains("Private Doc")); // Metadata remains
 }
+
+#[test]
+#[cfg(feature = "http-provider")]
+fn test_http_provider_exposure_class_definition_hiding() {
+    let dir = tempdir().unwrap();
+    let store = GitCanonicalStore::new(dir.path());
+
+    // Class definition object (Kind::Object, class="class_definition")
+    let stored_class = StoredObject::new(
+        Kind::Object,
+        Some("class_definition".to_string()),
+        earmark_core::Standing::default(),
+        earmark_core::Provenance::direct_input("user"),
+        BTreeMap::from([("title".to_string(), earmark_core::HeaderValue::String("My Class".to_string()))]),
+        StoredPayload::from_markdown("SECRET_CLASS_SCHEMA"),
+        vec![],
+    );
+    let v = store.write_object(&stored_class).unwrap();
+    let class_ref = ObjectRef::new(stored_class.envelope.id.clone(), v.version_id, Kind::Object, Some("class_definition".to_string()));
+
+    // Profile with allow_prose_objects = true, allow_structured_declarations = false
+    let profile = ProviderProfile {
+        name: "test".to_string(),
+        version: "1".to_string(),
+        description: None,
+        provider: "http_generation".to_string(),
+        model: "m".to_string(),
+        endpoint_env: None,
+        auth_env: None,
+        budget: earmark_core::ProviderBudget::default(),
+        allowed_operations: vec!["transform".to_string()],
+        exposure: earmark_core::ProviderExposure {
+            allow_prose_objects: true,
+            allow_structured_declarations: false,
+            allow_work_surface_only: false,
+            allow_export_requests: false,
+        },
+        response_contract: earmark_core::ProviderResponseContract {
+            format: "markdown".to_string(),
+            must_return_candidate_only: true,
+            must_include_lineage: false,
+        },
+        http: None,
+    };
+
+    let instruction = earmark_core::InstructionPayload {
+        name: "test".to_string(),
+        version: "1.0.0".to_string(),
+        purpose: "testing".to_string(),
+        input_classes: vec![],
+        output_classes: vec![],
+        body: earmark_core::MarkdownBody::new("hi".to_string()),
+        execution_policy: "delegated".to_string(),
+        provider_profile: None,
+        trace_policy: "none".to_string(),
+        register: "none".to_string(),
+    };
+
+    let rendered = earmark_exec::helpers::render_provider_input(
+        &store,
+        &instruction,
+        None,
+        &[class_ref],
+        &profile,
+    ).unwrap();
+
+    assert!(!rendered.contains("SECRET_CLASS_SCHEMA"));
+    assert!(rendered.contains("Structured declarations hidden by exposure policy"));
+    assert!(rendered.contains("My Class")); // Metadata remains
+    assert!(rendered.contains("Class: class_definition"));
+}

@@ -283,7 +283,8 @@ pub fn render_provider_input<S: CanonicalStore>(
         }
     }
 
-    let active_ids: BTreeSet<earmark_core::ObjectId> = inputs.iter().map(|o| o.id.clone()).collect();
+    let active_refs: BTreeSet<(earmark_core::ObjectId, earmark_core::VersionId)> =
+        inputs.iter().map(|o| (o.id.clone(), o.version_id.clone())).collect();
 
     for (i, obj_ref) in to_render_refs.iter().enumerate() {
         let obj = store.read_version(&obj_ref.version_ref()).map_err(|e| {
@@ -293,7 +294,7 @@ pub fn render_provider_input<S: CanonicalStore>(
             ))
         })?;
 
-        let is_active = active_ids.contains(&obj_ref.id);
+        let is_active = active_refs.contains(&(obj_ref.id.clone(), obj_ref.version_id.clone()));
         let active_marker = if is_active { " [Active Input]" } else { "" };
 
         rendered.push_str(&format!("#### Evidence [{}]{}\n", i + 1, active_marker));
@@ -316,6 +317,7 @@ pub fn render_provider_input<S: CanonicalStore>(
             | Kind::CompiledContextTemplate
             | Kind::ProviderProfile
             | Kind::SystemDefinition => true,
+            Kind::Object if obj_ref.class.as_deref() == Some("class_definition") => true,
             _ => false,
         };
 
