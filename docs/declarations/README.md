@@ -79,7 +79,7 @@ Key examples:
 - `class`: [Finding](examples/classes/finding.yaml)
 - `instruction`: [Source to Finding](examples/instructions/source_to_finding.md)
 - `workflow`: [Source to Finding](examples/workflows/source_to_finding.yaml)
-- `provider-profile`: [Google Gemini](examples/provider_profiles/google_gemini.yaml), [Local Mock](examples/provider_profiles/local_mock.yaml)
+- `provider-profile`: [Google Gemini (HTTP)](examples/provider_profiles/google_gemini.yaml), [Local Mock](examples/provider_profiles/local_mock.yaml)
 
 ## Schemas
 

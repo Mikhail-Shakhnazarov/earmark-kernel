@@ -8,7 +8,7 @@ Earmark doesn't run agents directly. It provides bounded context through work pa
 
 1. Compile context from the kernel.
 2. Receive a work packet for a transition.
-3. Dispatch to a provider (e.g., Gemini).
+3. Dispatch to a provider through the registry.
 4. Deposit the result back into the kernel.
 5. Continue to the next transition using the handoff manifest.
 
@@ -50,7 +50,7 @@ let surface = RuntimeToolSurface {
 };
 ```
 
-The provider registry is the current extension seam for custom provider integration. The bundled `HttpGenerationAdapter` handles most REST-based LLM providers (Gemini, OpenAI, Anthropic) through declarative profiles. For standalone or legacy integrations, you can still register custom `ProviderAdapter` implementations.
+The provider registry is the current extension seam for custom provider integration. The bundled `HttpGenerationAdapter` handles most REST-based LLM providers (OpenAI, Anthropic, Gemini, etc.) through declarative profiles. For standalone or legacy integrations, you can still register custom `ProviderAdapter` implementations.
 
 ### Running a Workflow
 
@@ -120,7 +120,7 @@ print(f"Run completed: {run_resp['data']['run_id']}")
 
 A provider profile connects a transition to a specific LLM provider.
 
-### Declarative Gemini Example
+### Declarative HTTP Provider Example
 
 ```yaml
 name: gemini_3_1_flash

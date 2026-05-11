@@ -1,3 +1,18 @@
+/// Async preparation seam for provider dispatch and execution.
+///
+/// This module documents the known blocking boundaries in the current synchronous
+/// execution path and provides a recommended migration sequence toward async
+/// provider dispatch. It is a forward-looking integration seam: the types and
+/// functions here are intended to guide incremental async adoption without
+/// requiring a full runtime migration now.
+///
+/// At present, all provider dispatch and workflow execution is synchronous. These
+/// boundaries are catalogued so that future work can isolate each blocking call
+/// site and introduce async dispatch incrementally, starting with the provider
+/// adapter boundary (`ProviderService` / `AsyncProviderService`).
+///
+/// This module is public but production code does not call it. It exists for
+/// documentation, planning, and seam testing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BlockingBoundaryKind {
     ExternalIo,
@@ -25,10 +40,10 @@ pub fn blocking_boundaries() -> Vec<BlockingBoundary> {
         },
         BlockingBoundary {
             id: "provider_http_client",
-            location: "earmark-exec/src/gemini.rs",
+            location: "earmark-exec/src/http_generation.rs",
             kind: BlockingBoundaryKind::ExternalIo,
             future_async_candidate: true,
-            rationale: "Gemini adapter currently uses reqwest blocking client and synchronous response decode.",
+            rationale: "HTTP generation adapter uses reqwest blocking client and synchronous response decode.",
         },
         BlockingBoundary {
             id: "store_index_access",

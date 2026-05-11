@@ -1,6 +1,9 @@
-use earmark_exec::provider::{
-    compiled_provider_capabilities, default_provider_registry, ProviderCapabilityStatus,
-};
+use earmark_exec::provider::compiled_provider_capabilities;
+
+#[cfg(feature = "http-provider")]
+use earmark_exec::provider::default_provider_registry;
+
+use earmark_exec::provider::ProviderCapabilityStatus;
 
 #[test]
 fn test_default_registry_includes_http_generation_with_feature() {

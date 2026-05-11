@@ -104,6 +104,14 @@ impl VersionId {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    /// Returns `true` if this `VersionId` is the "latest" sentinel value
+    /// (`ver_00000000000000000000000000000000`). This sentinel is used in
+    /// version references to indicate "resolve to the current head" without
+    /// requiring a specific version lookup.
+    pub fn is_latest_sentinel(&self) -> bool {
+        self.0 == "ver_00000000000000000000000000000000"
+    }
 }
 
 impl Default for VersionId {

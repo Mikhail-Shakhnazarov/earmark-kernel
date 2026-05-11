@@ -550,59 +550,6 @@ fn test_delegated_outcome_with_none_response_returns_error_instead_of_panicking(
 }
 
 #[test]
-fn test_default_registry_does_not_register_gemini_without_feature() {
-    let registry = crate::provider::default_provider_registry();
-    assert!(registry.get("mock").is_some());
-
-    #[cfg(not(feature = "gemini"))]
-    assert!(registry.get("google_gemini").is_none());
-}
-
-#[test]
-fn test_compiled_capabilities_report_gemini_as_compile_disabled_without_feature() {
-    #[cfg(not(feature = "gemini"))]
-    {
-        let capabilities = crate::provider::compiled_provider_capabilities();
-        let gemini = capabilities
-            .iter()
-            .find(|capability| capability.provider == "google_gemini")
-            .expect("gemini capability row should exist");
-        assert_eq!(
-            gemini.status,
-            crate::provider::ProviderCapabilityStatus::CompileDisabled
-        );
-        assert_eq!(gemini.feature.as_deref(), Some("gemini"));
-    }
-}
-
-#[cfg(feature = "gemini")]
-#[test]
-fn test_default_registry_registers_gemini_with_feature() {
-    let registry = crate::provider::default_provider_registry();
-    assert!(registry.get("google_gemini").is_some());
-}
-
-#[cfg(feature = "gemini")]
-#[test]
-fn test_gemini_capability_reports_missing_api_key() {
-    let old_key = std::env::var("GOOGLE_API_KEY");
-    std::env::remove_var("GOOGLE_API_KEY");
-    let registry = crate::provider::default_provider_registry();
-    let capabilities = registry.capabilities();
-    let gemini = capabilities
-        .iter()
-        .find(|capability| capability.provider == "google_gemini")
-        .expect("gemini should be registered with feature");
-    assert_eq!(
-        gemini.status,
-        crate::provider::ProviderCapabilityStatus::MissingConfiguration
-    );
-    assert!(gemini.missing_env.contains(&"GOOGLE_API_KEY".to_string()));
-    if let Ok(val) = old_key {
-        std::env::set_var("GOOGLE_API_KEY", val);
-    }
-}
-#[test]
 fn test_privileged_relation_creation_and_validation() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
