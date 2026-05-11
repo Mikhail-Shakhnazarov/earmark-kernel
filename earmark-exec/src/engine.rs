@@ -148,10 +148,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                     );
 
                     let mut ancestors = BTreeSet::new();
-                    let mut stack: Vec<String> = incoming
-                        .get(&target_id)
-                        .map(|edges| edges.iter().map(|e| e.from.clone()).collect())
-                        .unwrap_or_default();
+                    let mut stack = vec![handoff.from_transition_id.clone()];
                     while let Some(ancestor_id) = stack.pop() {
                         if ancestors.insert(ancestor_id.clone()) {
                             if let Some(preds) = incoming.get(&ancestor_id) {
