@@ -1,3 +1,5 @@
+#![cfg(feature = "http-provider")]
+
 use earmark_core::{
     HttpAuthConfig, HttpAuthKind, HttpGenerationProfile, HttpRequestTemplate, HttpResponseExtraction,
     Kind, ObjectRef, ProviderProfile, VersionRef, ScalarValue, ObjectId, VersionId,
