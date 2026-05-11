@@ -143,11 +143,14 @@ pub(crate) fn object_allowed(
         .unwrap_or(true);
     let standing_ok = standing_filter
         .map(|filter| {
-            filter.allowed_epistemic.is_empty()
-                || filter
-                    .allowed_epistemic
-                    .iter()
-                    .any(|allowed| allowed == &object.envelope.standing.epistemic)
+            filter.allowed.is_empty()
+                || filter.allowed.iter().all(|(dim_id, allowed_tokens)| {
+                    let actual = object.envelope.standing.get(dim_id);
+                    allowed_tokens.is_empty()
+                        || actual
+                            .map(|t| allowed_tokens.iter().any(|a| a == t))
+                            .unwrap_or(false)
+                })
         })
         .unwrap_or(true);
     class_ok && standing_ok

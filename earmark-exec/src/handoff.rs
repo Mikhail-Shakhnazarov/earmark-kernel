@@ -249,11 +249,27 @@ fn handoff_object_admissible(
     // 3. Standing check
     for constraint in &handoff.standing_constraints {
         let actual_value = match constraint.constraint_type.as_str() {
-            "allowed_epistemic" => {
-                format!("{:?}", object.envelope.standing.epistemic).to_lowercase()
-            }
-            "allowed_review" => format!("{:?}", object.envelope.standing.review).to_lowercase(),
-            "allowed_process" => format!("{:?}", object.envelope.standing.process).to_lowercase(),
+            "allowed_epistemic" => object
+                .envelope
+                .standing
+                .get(&earmark_core::DimensionId::new("kernel:epistemic"))
+                .map(earmark_core::TokenId::as_str)
+                .unwrap_or("unknown")
+                .to_string(),
+            "allowed_review" => object
+                .envelope
+                .standing
+                .get(&earmark_core::DimensionId::new("kernel:review"))
+                .map(earmark_core::TokenId::as_str)
+                .unwrap_or("unknown")
+                .to_string(),
+            "allowed_process" => object
+                .envelope
+                .standing
+                .get(&earmark_core::DimensionId::new("kernel:process"))
+                .map(earmark_core::TokenId::as_str)
+                .unwrap_or("unknown")
+                .to_string(),
             unknown => {
                 return Err(ExecError::HandoffReconstruction(format!(
                     "unknown standing constraint type: {}",

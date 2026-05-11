@@ -1,7 +1,7 @@
 use chrono::Utc;
 use earmark_core::{
-    ChangeSetId, HandoffManifest, Kind, ObjectId, ReviewStanding, Standing, StandingConstraint,
-    WorkflowDefinition, WorkflowOperation,
+    ChangeSetId, DimensionId, HandoffManifest, Kind, ObjectId, ReviewStanding, Standing,
+    StandingConstraint, TokenId, WorkflowDefinition, WorkflowOperation,
 };
 use earmark_exec::handoff::reconstruct_successor_inputs_from_handoff;
 use earmark_exec::persistence_helpers::{write_batch_and_index, write_object_and_index};
@@ -113,10 +113,10 @@ fn test_handoff_standing_exclusion() {
     let index = DerivedIndex::open(root).unwrap();
 
     // 1. Create a root object (Accepted)
-    let standing_accepted = Standing {
-        review: ReviewStanding::Accepted,
-        ..Default::default()
-    };
+    let mut standing_accepted = Standing::default();
+    standing_accepted
+        .values
+        .insert(DimensionId::new("kernel:review"), TokenId::new("accepted"));
     let root_obj = StoredObject::new(
         Kind::Object,
         Some("finding".to_string()),
@@ -129,10 +129,10 @@ fn test_handoff_standing_exclusion() {
     let root_ref = write_object_and_index(&store, &index, &root_obj).unwrap();
 
     // 2. Create a related object (Rejected)
-    let standing_rejected = Standing {
-        review: ReviewStanding::Rejected,
-        ..Default::default()
-    };
+    let mut standing_rejected = Standing::default();
+    standing_rejected
+        .values
+        .insert(DimensionId::new("kernel:review"), TokenId::new("rejected"));
     let rejected_obj = StoredObject::new(
         Kind::Object,
         Some("finding".to_string()),

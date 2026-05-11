@@ -3,8 +3,8 @@ use crate::persistence_helpers::write_object_and_index;
 use crate::resolution::load_standing_policy;
 use chrono::Utc;
 use earmark_core::{
-    HeaderValue, Kind, ObjectId, Provenance, Standing, StandingRequestStatus,
-    StandingTransitionRequest, VersionRef,
+    DimensionId, HeaderValue, Kind, ObjectId, Provenance, Standing, StandingRequestStatus,
+    StandingTransitionRequest, TokenId, VersionRef,
 };
 use earmark_governance::{validate_standing_transition, ReviewPayload};
 use earmark_index::DerivedIndex;
@@ -85,9 +85,21 @@ pub fn apply_standing_request<S: CanonicalStore>(
 
     // 1b. Drift Check: verify current standing matches request.from_value
     let current_value = match request.dimension.as_str() {
-        "epistemic" => format!("{:?}", current_standing.epistemic).to_lowercase(),
-        "review" => format!("{:?}", current_standing.review).to_lowercase(),
-        "process" => format!("{:?}", current_standing.process).to_lowercase(),
+        "epistemic" => current_standing
+            .get(&DimensionId::new("kernel:epistemic"))
+            .map(TokenId::as_str)
+            .unwrap_or("unknown")
+            .to_string(),
+        "review" => current_standing
+            .get(&DimensionId::new("kernel:review"))
+            .map(TokenId::as_str)
+            .unwrap_or("unknown")
+            .to_string(),
+        "process" => current_standing
+            .get(&DimensionId::new("kernel:process"))
+            .map(TokenId::as_str)
+            .unwrap_or("unknown")
+            .to_string(),
         _ => {
             return Err(ExecError::GovernanceOperation(format!(
                 "invalid dimension {}",
@@ -124,16 +136,22 @@ pub fn apply_standing_request<S: CanonicalStore>(
     let mut next_standing = target_head.envelope.standing.clone();
     match request.dimension.as_str() {
         "epistemic" => {
-            next_standing.epistemic =
-                serde_json::from_value(serde_json::Value::String(request.to_value.clone()))?;
+            next_standing.values.insert(
+                DimensionId::new("kernel:epistemic"),
+                TokenId::new(&request.to_value),
+            );
         }
         "review" => {
-            next_standing.review =
-                serde_json::from_value(serde_json::Value::String(request.to_value.clone()))?;
+            next_standing.values.insert(
+                DimensionId::new("kernel:review"),
+                TokenId::new(&request.to_value),
+            );
         }
         "process" => {
-            next_standing.process =
-                serde_json::from_value(serde_json::Value::String(request.to_value.clone()))?;
+            next_standing.values.insert(
+                DimensionId::new("kernel:process"),
+                TokenId::new(&request.to_value),
+            );
         }
         _ => {
             return Err(ExecError::GovernanceOperation(format!(

@@ -1,8 +1,10 @@
-use earmark_core::{ClassFilter, RelationFilter, StandingFilter};
+use std::collections::BTreeMap;
+
+use earmark_core::{ClassFilter, DimensionId, RelationFilter, StandingFilter, TokenId};
 use earmark_runtime_tools::RuntimeToolSurface;
 use earmark_store::GitCanonicalStore;
 
-use crate::app::{emit, parse_epistemic, CliError};
+use crate::app::{emit, CliError};
 use crate::cli::{ContextAction, ContextCommand};
 
 pub fn handle(
@@ -15,13 +17,15 @@ pub fn handle(
             let standing_filter = if args.epistemic.is_empty() {
                 None
             } else {
-                Some(StandingFilter {
-                    allowed_epistemic: args
-                        .epistemic
+                let mut allowed = BTreeMap::new();
+                allowed.insert(
+                    DimensionId::new("kernel:epistemic"),
+                    args.epistemic
                         .iter()
-                        .map(|value| parse_epistemic(value))
-                        .collect::<Result<Vec<_>, _>>()?,
-                })
+                        .map(|value| TokenId::new(value.as_str()))
+                        .collect(),
+                );
+                Some(StandingFilter { allowed })
             };
             let roots = args
                 .roots

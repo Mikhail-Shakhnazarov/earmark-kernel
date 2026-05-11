@@ -1,6 +1,6 @@
 use earmark_core::{
-    Kind, ReviewStanding, Standing, StandingPolicy, StandingRequestStatus, StandingTransitionRule,
-    VersionId,
+    DimensionId, Kind, ReviewStanding, Standing, StandingPolicy, StandingRequestStatus,
+    StandingTransitionRule, TokenId, VersionId,
 };
 use earmark_exec::governance_ops::{apply_standing_request, approve_standing_request};
 use earmark_exec::persistence_helpers::write_object_and_index;
@@ -140,8 +140,12 @@ fn test_standing_request_lifecycle() {
     // 9. Verify results
     let updated_target = store.read_version(&new_target_ref).unwrap();
     assert_eq!(
-        updated_target.envelope.standing.review,
-        ReviewStanding::Accepted
+        updated_target
+            .envelope
+            .standing
+            .get(&DimensionId::new("kernel:review"))
+            .map(TokenId::as_str),
+        Some("accepted")
     );
     assert_eq!(updated_target.envelope.parents, vec![target_ref]);
 
@@ -195,7 +199,11 @@ fn test_standing_request_drift_failure() {
 
     // 3. Drift: Update target object standing externally (e.g. to "flagged")
     let mut target_head = store.read_version(&target_ref).unwrap();
-    target_head.envelope.standing.review = ReviewStanding::Rejected;
+    target_head
+        .envelope
+        .standing
+        .values
+        .insert(DimensionId::new("kernel:review"), TokenId::new("rejected"));
     target_head.envelope.version_id = VersionId::new();
     write_object_and_index(&store, &index, &target_head).unwrap();
 
@@ -249,10 +257,10 @@ fn test_standing_request_noop_apply() {
     let index = DerivedIndex::open(root).unwrap();
 
     // 1. Create a target object already in "accepted" review state
-    let standing = Standing {
-        review: ReviewStanding::Accepted,
-        ..Default::default()
-    };
+    let mut standing = Standing::default();
+    standing
+        .values
+        .insert(DimensionId::new("kernel:review"), TokenId::new("accepted"));
     let target = StoredObject::new(
         Kind::Object,
         Some("artifact".to_string()),

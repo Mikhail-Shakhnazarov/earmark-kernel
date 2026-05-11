@@ -516,8 +516,8 @@ mod tests {
     use super::*;
     use crate::filter::object_summary_matches_standing;
     use earmark_core::{
-        CompiledContextExpansion, EpistemicStanding, ExpansionObjectFilter, Kind, ProcessStanding,
-        Provenance, ReviewStanding, Standing,
+        CompiledContextExpansion, DimensionId, EpistemicStanding, ExpansionObjectFilter, Kind,
+        ProcessStanding, Provenance, ReviewStanding, Standing, TokenId,
     };
     use earmark_store::{CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload};
     use tempfile::tempdir;
@@ -582,6 +582,19 @@ mod tests {
             CompiledContextService::cli_summary(&manifest),
             "surface test with 1 object(s)"
         );
+    }
+
+    fn standing_kernel(epistemic: &str, review: &str, process: &str) -> Standing {
+        let mut s = Standing::default();
+        s.values.insert(
+            DimensionId::new("kernel:epistemic"),
+            TokenId::new(epistemic),
+        );
+        s.values
+            .insert(DimensionId::new("kernel:review"), TokenId::new(review));
+        s.values
+            .insert(DimensionId::new("kernel:process"), TokenId::new(process));
+        s
     }
 
     fn object(title: &str, standing: Standing) -> StoredObject {
@@ -752,22 +765,8 @@ mod tests {
         let store = GitCanonicalStore::new(dir.path());
         let index = DerivedIndex::open(dir.path()).unwrap();
 
-        let accepted = object(
-            "accepted",
-            Standing {
-                epistemic: EpistemicStanding::Working,
-                review: ReviewStanding::Accepted,
-                process: ProcessStanding::Active,
-            },
-        );
-        let rejected = object(
-            "rejected",
-            Standing {
-                epistemic: EpistemicStanding::Working,
-                review: ReviewStanding::Rejected,
-                process: ProcessStanding::Active,
-            },
-        );
+        let accepted = object("accepted", standing_kernel("working", "accepted", "active"));
+        let rejected = object("rejected", standing_kernel("working", "rejected", "active"));
         store.write_object(&accepted).unwrap();
         store.write_object(&rejected).unwrap();
         store
@@ -843,22 +842,8 @@ mod tests {
         let store = GitCanonicalStore::new(dir.path());
         let index = DerivedIndex::open(dir.path()).unwrap();
 
-        let accepted = object(
-            "accepted",
-            Standing {
-                epistemic: EpistemicStanding::Working,
-                review: ReviewStanding::Accepted,
-                process: ProcessStanding::Active,
-            },
-        );
-        let rejected = object(
-            "rejected",
-            Standing {
-                epistemic: EpistemicStanding::Working,
-                review: ReviewStanding::Rejected,
-                process: ProcessStanding::Active,
-            },
-        );
+        let accepted = object("accepted", standing_kernel("working", "accepted", "active"));
+        let rejected = object("rejected", standing_kernel("working", "rejected", "active"));
         store.write_object(&accepted).unwrap();
         store.write_object(&rejected).unwrap();
         store
@@ -894,22 +879,8 @@ mod tests {
         let store = GitCanonicalStore::new(dir.path());
         let index = DerivedIndex::open(dir.path()).unwrap();
 
-        let accepted = object(
-            "accepted",
-            Standing {
-                epistemic: EpistemicStanding::Working,
-                review: ReviewStanding::Accepted,
-                process: ProcessStanding::Active,
-            },
-        );
-        let rejected = object(
-            "rejected",
-            Standing {
-                epistemic: EpistemicStanding::Working,
-                review: ReviewStanding::Rejected,
-                process: ProcessStanding::Active,
-            },
-        );
+        let accepted = object("accepted", standing_kernel("working", "accepted", "active"));
+        let rejected = object("rejected", standing_kernel("working", "rejected", "active"));
         store.write_object(&accepted).unwrap();
         store.write_object(&rejected).unwrap();
         store
@@ -947,30 +918,12 @@ mod tests {
         let store = GitCanonicalStore::new(dir.path());
         let index = DerivedIndex::open(dir.path()).unwrap();
 
-        let accepted = object(
-            "accepted",
-            Standing {
-                epistemic: EpistemicStanding::Working,
-                review: ReviewStanding::Accepted,
-                process: ProcessStanding::Active,
-            },
-        );
-        let rejected = object(
-            "rejected",
-            Standing {
-                epistemic: EpistemicStanding::Working,
-                review: ReviewStanding::Rejected,
-                process: ProcessStanding::Active,
-            },
-        );
+        let accepted = object("accepted", standing_kernel("working", "accepted", "active"));
+        let rejected = object("rejected", standing_kernel("working", "rejected", "active"));
         let hidden_parent = StoredObject::new(
             Kind::Object,
             Some("source_note".to_string()),
-            Standing {
-                epistemic: EpistemicStanding::Working,
-                review: ReviewStanding::Accepted,
-                process: ProcessStanding::Active,
-            },
+            standing_kernel("working", "accepted", "active"),
             Provenance::direct_input("operator"),
             BTreeMap::new(),
             StoredPayload::from_markdown("hidden_parent"),
@@ -1192,22 +1145,8 @@ mod tests {
         let store = GitCanonicalStore::new(dir.path());
         let index = DerivedIndex::open(dir.path()).unwrap();
 
-        let accepted = object(
-            "accepted",
-            Standing {
-                epistemic: EpistemicStanding::Working,
-                review: ReviewStanding::Accepted,
-                process: ProcessStanding::Active,
-            },
-        );
-        let rejected = object(
-            "rejected",
-            Standing {
-                epistemic: EpistemicStanding::Working,
-                review: ReviewStanding::Rejected,
-                process: ProcessStanding::Active,
-            },
-        );
+        let accepted = object("accepted", standing_kernel("working", "accepted", "active"));
+        let rejected = object("rejected", standing_kernel("working", "rejected", "active"));
         let second_hop = object("second_hop", Standing::default());
 
         store.write_object(&accepted).unwrap();

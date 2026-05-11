@@ -13,6 +13,9 @@ pub fn object_summary_matches_standing(
             "epistemic" => &row.standing_epistemic,
             "review" => &row.standing_review,
             "process" => &row.standing_process,
+            "kernel:epistemic" => &row.standing_epistemic,
+            "kernel:review" => &row.standing_review,
+            "kernel:process" => &row.standing_process,
             _ => return true, // Unknown dimensions pass for forward compatibility
         };
         allowed.iter().any(|candidate| candidate == current)

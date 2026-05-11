@@ -165,6 +165,116 @@ impl std::fmt::Display for SymbolicName {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct DimensionId(String);
+
+impl DimensionId {
+    pub fn new(s: impl Into<String>) -> Self {
+        Self(s.into())
+    }
+
+    pub fn parse(s: impl Into<String>) -> Result<Self, CoreError> {
+        let s = s.into();
+        if s.is_empty() || s.len() > 128 {
+            return Err(CoreError::InvalidIdentifier(
+                "dimension ID must be 1..=128 characters".to_string(),
+            ));
+        }
+        if !s.chars().all(|c| {
+            c.is_ascii_lowercase() || c.is_ascii_digit() || c == ':' || c == '_' || c == '-'
+        }) {
+            return Err(CoreError::InvalidIdentifier(
+                "dimension ID can only contain lowercase letters, digits, colons, underscores, and hyphens".to_string(),
+            ));
+        }
+        Ok(Self(s))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for DimensionId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct TokenId(String);
+
+impl TokenId {
+    pub fn new(s: impl Into<String>) -> Self {
+        Self(s.into())
+    }
+
+    pub fn parse(s: impl Into<String>) -> Result<Self, CoreError> {
+        let s = s.into();
+        if s.is_empty() || s.len() > 64 {
+            return Err(CoreError::InvalidIdentifier(
+                "token ID must be 1..=64 characters".to_string(),
+            ));
+        }
+        if !s
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '-')
+        {
+            return Err(CoreError::InvalidIdentifier(
+                "token ID can only contain lowercase letters, digits, underscores, and hyphens"
+                    .to_string(),
+            ));
+        }
+        Ok(Self(s))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for TokenId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct KernelProtocolId(String);
+
+impl KernelProtocolId {
+    pub fn new(s: impl Into<String>) -> Self {
+        Self(s.into())
+    }
+
+    pub fn parse(s: impl Into<String>) -> Result<Self, CoreError> {
+        let s = s.into();
+        if s.is_empty() || s.len() > 128 {
+            return Err(CoreError::InvalidIdentifier(
+                "protocol ID must be 1..=128 characters".to_string(),
+            ));
+        }
+        if !s.chars().all(|c| {
+            c.is_ascii_lowercase() || c.is_ascii_digit() || c == ':' || c == '_' || c == '-'
+        }) {
+            return Err(CoreError::InvalidIdentifier(
+                "protocol ID can only contain lowercase letters, digits, colons, underscores, and hyphens".to_string(),
+            ));
+        }
+        Ok(Self(s))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for KernelProtocolId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct PayloadRef(pub String);
 
 impl PayloadRef {
@@ -438,21 +548,82 @@ impl StandingDimension {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Standing {
-    pub epistemic: EpistemicStanding,
-    pub review: ReviewStanding,
-    pub process: ProcessStanding,
+    pub values: BTreeMap<DimensionId, TokenId>,
+}
+
+impl Standing {
+    pub fn kernel_defaults() -> Self {
+        let mut values = BTreeMap::new();
+        values.insert(
+            DimensionId::new("kernel:epistemic"),
+            TokenId::new("working"),
+        );
+        values.insert(
+            DimensionId::new("kernel:review"),
+            TokenId::new("unreviewed"),
+        );
+        values.insert(DimensionId::new("kernel:process"), TokenId::new("active"));
+        Self { values }
+    }
+
+    pub fn get(&self, dim: &DimensionId) -> Option<&TokenId> {
+        self.values.get(dim)
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.values.is_empty()
+    }
+
+    pub fn len(&self) -> usize {
+        self.values.len()
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&DimensionId, &TokenId)> {
+        self.values.iter()
+    }
 }
 
 impl Default for Standing {
     fn default() -> Self {
-        Self {
-            epistemic: EpistemicStanding::Working,
-            review: ReviewStanding::Unreviewed,
-            process: ProcessStanding::Active,
-        }
+        Self::kernel_defaults()
     }
+}
+
+impl Serialize for Standing {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.values.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Standing {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let raw: BTreeMap<String, String> = BTreeMap::deserialize(deserializer)?;
+        let values = raw
+            .into_iter()
+            .map(|(k, v)| {
+                let dim = match k.as_str() {
+                    "epistemic" => DimensionId::new("kernel:epistemic"),
+                    "review" => DimensionId::new("kernel:review"),
+                    "process" => DimensionId::new("kernel:process"),
+                    _ => DimensionId::new(k),
+                };
+                (dim, TokenId::new(v))
+            })
+            .collect();
+        Ok(Standing { values })
+    }
+}
+
+/// Legacy compatibility helper for deserializing old three-axis standing format.
+/// This must not become a second live standing model.
+#[allow(dead_code)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct LegacyStanding {
+    epistemic: EpistemicStanding,
+    review: ReviewStanding,
+    process: ProcessStanding,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -551,6 +722,156 @@ pub struct RelationPayload {
     pub qualifiers: BTreeMap<String, ScalarValue>,
     pub scope: Option<String>,
 }
+
+// ---------------------------------------------------------------------------
+// Standing declaration and registry data structures (v0.3 protocol-based)
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct StandingDimensionDefinition {
+    pub id: DimensionId,
+    pub default: TokenId,
+    pub tokens: Vec<StandingTokenDefinition>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct StandingTokenDefinition {
+    pub id: TokenId,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub implements: Vec<ProtocolBinding>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProtocolBinding {
+    pub protocol: KernelProtocolId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub state: Option<String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub properties: BTreeMap<String, ScalarValue>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct StandingRegistry {
+    pub dimensions: BTreeMap<DimensionId, StandingDimensionDefinition>,
+}
+
+impl StandingRegistry {
+    pub fn kernel_defaults() -> Self {
+        let mut dimensions = BTreeMap::new();
+
+        let epistemic = StandingDimensionDefinition {
+            id: DimensionId::new("kernel:epistemic"),
+            default: TokenId::new("working"),
+            tokens: vec![
+                StandingTokenDefinition {
+                    id: TokenId::new("unresolved"),
+                    implements: vec![],
+                },
+                StandingTokenDefinition {
+                    id: TokenId::new("working"),
+                    implements: vec![],
+                },
+                StandingTokenDefinition {
+                    id: TokenId::new("supported"),
+                    implements: vec![],
+                },
+                StandingTokenDefinition {
+                    id: TokenId::new("contested"),
+                    implements: vec![],
+                },
+                StandingTokenDefinition {
+                    id: TokenId::new("superseded"),
+                    implements: vec![],
+                },
+            ],
+        };
+        dimensions.insert(epistemic.id.clone(), epistemic);
+
+        let review = StandingDimensionDefinition {
+            id: DimensionId::new("kernel:review"),
+            default: TokenId::new("unreviewed"),
+            tokens: vec![
+                StandingTokenDefinition {
+                    id: TokenId::new("unreviewed"),
+                    implements: vec![],
+                },
+                StandingTokenDefinition {
+                    id: TokenId::new("pending"),
+                    implements: vec![],
+                },
+                StandingTokenDefinition {
+                    id: TokenId::new("accepted"),
+                    implements: vec![ProtocolBinding {
+                        protocol: KernelProtocolId::new("kernel:review"),
+                        state: Some("accepted".to_string()),
+                        properties: BTreeMap::new(),
+                    }],
+                },
+                StandingTokenDefinition {
+                    id: TokenId::new("rejected"),
+                    implements: vec![ProtocolBinding {
+                        protocol: KernelProtocolId::new("kernel:review"),
+                        state: Some("rejected".to_string()),
+                        properties: BTreeMap::new(),
+                    }],
+                },
+            ],
+        };
+        dimensions.insert(review.id.clone(), review);
+
+        let process = StandingDimensionDefinition {
+            id: DimensionId::new("kernel:process"),
+            default: TokenId::new("active"),
+            tokens: vec![
+                StandingTokenDefinition {
+                    id: TokenId::new("active"),
+                    implements: vec![],
+                },
+                StandingTokenDefinition {
+                    id: TokenId::new("blocked"),
+                    implements: vec![],
+                },
+                StandingTokenDefinition {
+                    id: TokenId::new("completed"),
+                    implements: vec![],
+                },
+                StandingTokenDefinition {
+                    id: TokenId::new("archived"),
+                    implements: vec![],
+                },
+            ],
+        };
+        dimensions.insert(process.id.clone(), process);
+
+        Self { dimensions }
+    }
+}
+
+/// Materialize defaults from a registry, filling omitted dimensions with their declared defaults.
+pub fn materialize_defaults(
+    registry: &StandingRegistry,
+    supplied: BTreeMap<DimensionId, TokenId>,
+) -> Result<Standing, CoreError> {
+    let mut values = supplied;
+    for (dim_id, def) in &registry.dimensions {
+        if !values.contains_key(dim_id) {
+            values.insert(dim_id.clone(), def.default.clone());
+        } else {
+            let token = &values[dim_id];
+            let valid_tokens: Vec<&str> = def.tokens.iter().map(|t| t.id.as_str()).collect();
+            if !valid_tokens.contains(&token.as_str()) {
+                return Err(CoreError::InvalidIdentifier(format!(
+                    "unknown token '{}' for dimension '{}'",
+                    token.as_str(),
+                    dim_id.as_str(),
+                )));
+            }
+        }
+    }
+    Ok(Standing { values })
+}
+
+// ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct ClassStandingRules {
@@ -1266,9 +1587,8 @@ pub enum StandingRequestStatus {
 }
 
 pub fn validate_standing_request(request: &StandingTransitionRequest) -> Result<(), String> {
-    let allowed_dimensions = ["epistemic", "review", "process"];
-    if !allowed_dimensions.contains(&request.dimension.as_str()) {
-        return Err(format!("invalid dimension: {}", request.dimension));
+    if request.dimension.is_empty() {
+        return Err("dimension must be non-empty".to_string());
     }
     if request.from_value.is_empty() || request.to_value.is_empty() {
         return Err("from_value and to_value must be non-empty".to_string());
@@ -1291,7 +1611,8 @@ pub struct ClassFilter {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct StandingFilter {
-    pub allowed_epistemic: Vec<EpistemicStanding>,
+    #[serde(default)]
+    pub allowed: BTreeMap<DimensionId, Vec<TokenId>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1601,5 +1922,171 @@ mod tests {
         assert!(SymbolicName::parse("Uppercase").is_err());
         assert!(SymbolicName::parse("contains space").is_err());
         assert!(SymbolicName::parse("").is_err());
+    }
+
+    // --- WP01: New Standing model tests ---
+
+    #[test]
+    fn test_standing_serializes_as_clean_map() {
+        let standing = Standing::kernel_defaults();
+        let json = serde_json::to_string(&standing).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        let map = parsed.as_object().unwrap();
+        assert!(map.contains_key("kernel:epistemic"));
+        assert!(map.contains_key("kernel:review"));
+        assert!(map.contains_key("kernel:process"));
+        assert_eq!(map["kernel:epistemic"], "working");
+        assert_eq!(map["kernel:review"], "unreviewed");
+        assert_eq!(map["kernel:process"], "active");
+        assert!(
+            !json.contains("epistemic_standing"),
+            "should not contain old type names"
+        );
+    }
+
+    #[test]
+    fn test_standing_old_format_deserializes() {
+        let old_json = r#"{"epistemic": "working", "review": "unreviewed", "process": "active"}"#;
+        let standing: Standing = serde_json::from_str(old_json).unwrap();
+        assert_eq!(
+            standing
+                .get(&DimensionId::new("kernel:epistemic"))
+                .map(TokenId::as_str),
+            Some("working")
+        );
+        assert_eq!(
+            standing
+                .get(&DimensionId::new("kernel:review"))
+                .map(TokenId::as_str),
+            Some("unreviewed")
+        );
+        assert_eq!(
+            standing
+                .get(&DimensionId::new("kernel:process"))
+                .map(TokenId::as_str),
+            Some("active")
+        );
+    }
+
+    #[test]
+    fn test_standing_new_format_deserializes() {
+        let new_json = r#"{"kernel:epistemic": "supported", "kernel:review": "accepted", "kernel:process": "completed"}"#;
+        let standing: Standing = serde_json::from_str(new_json).unwrap();
+        assert_eq!(
+            standing
+                .get(&DimensionId::new("kernel:epistemic"))
+                .map(TokenId::as_str),
+            Some("supported")
+        );
+        assert_eq!(
+            standing
+                .get(&DimensionId::new("kernel:review"))
+                .map(TokenId::as_str),
+            Some("accepted")
+        );
+        assert_eq!(
+            standing
+                .get(&DimensionId::new("kernel:process"))
+                .map(TokenId::as_str),
+            Some("completed")
+        );
+    }
+
+    #[test]
+    fn test_kernel_registry_contains_builtin_dimensions() {
+        let registry = StandingRegistry::kernel_defaults();
+        assert!(registry
+            .dimensions
+            .contains_key(&DimensionId::new("kernel:epistemic")));
+        assert!(registry
+            .dimensions
+            .contains_key(&DimensionId::new("kernel:review")));
+        assert!(registry
+            .dimensions
+            .contains_key(&DimensionId::new("kernel:process")));
+    }
+
+    #[test]
+    fn test_materialize_defaults_fills_omitted_dimensions() {
+        let registry = StandingRegistry::kernel_defaults();
+        let supplied = BTreeMap::new();
+        let standing = materialize_defaults(&registry, supplied).unwrap();
+        assert_eq!(
+            standing
+                .get(&DimensionId::new("kernel:epistemic"))
+                .map(TokenId::as_str),
+            Some("working")
+        );
+        assert_eq!(
+            standing
+                .get(&DimensionId::new("kernel:review"))
+                .map(TokenId::as_str),
+            Some("unreviewed")
+        );
+        assert_eq!(
+            standing
+                .get(&DimensionId::new("kernel:process"))
+                .map(TokenId::as_str),
+            Some("active")
+        );
+    }
+
+    #[test]
+    fn test_invalid_dimension_id_fails_parse() {
+        assert!(DimensionId::parse("").is_err());
+        assert!(DimensionId::parse(&"a".repeat(129)).is_err());
+        assert!(DimensionId::parse("UPPERCASE").is_err());
+        assert!(DimensionId::parse("has space").is_err());
+        assert!(DimensionId::parse("valid:name").is_ok());
+    }
+
+    #[test]
+    fn test_invalid_token_id_fails_parse() {
+        assert!(TokenId::parse("").is_err());
+        assert!(TokenId::parse(&"a".repeat(65)).is_err());
+        assert!(TokenId::parse("UPPERCASE").is_err());
+        assert!(TokenId::parse("has space").is_err());
+        assert!(TokenId::parse("valid_token").is_ok());
+        assert!(TokenId::parse("draft").is_ok());
+    }
+
+    #[test]
+    fn test_new_writes_do_not_emit_old_shape() {
+        let standing = Standing::kernel_defaults();
+        let yaml = serde_yaml::to_string(&standing).unwrap();
+        // New format uses kernel: prefixes
+        assert!(yaml.contains("kernel:epistemic"));
+        // Old format would have had "epistemic: working" as a flat field
+        // The new format should NOT contain old-style single-word keys as top-level map entries
+        let value: serde_yaml::Value = serde_yaml::from_str(&yaml).unwrap();
+        let map = value.as_mapping().unwrap();
+        for key in map.keys() {
+            let ks = key.as_str().unwrap();
+            assert!(
+                ks.contains(':'),
+                "new standing serialization should use namespaced keys, got: {}",
+                ks
+            );
+        }
+    }
+
+    #[test]
+    fn test_materialize_defaults_rejects_unknown_token() {
+        let registry = StandingRegistry::kernel_defaults();
+        let mut supplied = BTreeMap::new();
+        supplied.insert(
+            DimensionId::new("kernel:epistemic"),
+            TokenId::new("nonexistent"),
+        );
+        assert!(materialize_defaults(&registry, supplied).is_err());
+    }
+
+    #[test]
+    fn test_standing_is_empty_after_clear() {
+        let mut standing = Standing::default();
+        assert!(!standing.is_empty());
+        standing.values.clear();
+        assert!(standing.is_empty());
+        assert_eq!(standing.len(), 0);
     }
 }
