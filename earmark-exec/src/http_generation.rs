@@ -33,26 +33,29 @@ impl ProviderAdapter for HttpGenerationAdapter {
             )
         })?;
 
-        // 1. Prepare variables
-        let input_text = if let Some(path) = &request.work_surface_manifest {
-            format!(
-                "Work surface manifest: {}\n\nPlease process according to instructions.",
-                path
-            )
-        } else {
-            format!(
-                "Inputs: {:?}\n\nPlease process according to instructions.",
-                request.inputs
-            )
-        };
+        // 0. Runtime method check
+        let method = http.method.as_deref().unwrap_or("POST");
+        if method != "POST" {
+            return Err(ProviderFailure::new(
+                ProviderFailureKind::ProviderUnavailable,
+                format!(
+                    "http_generation adapter currently only supports POST, got {}",
+                    method
+                ),
+            ));
+        }
 
+        // 1. Prepare variables
         let mut vars = BTreeMap::new();
         vars.insert("model".to_string(), profile.model.clone());
-        vars.insert("input_text".to_string(), input_text);
+        vars.insert("input_text".to_string(), request.input_text.clone());
         vars.insert(
             "instruction_text".to_string(),
             request.instruction_text.clone(),
         );
+        if let Some(context) = &request.context_text {
+            vars.insert("context_text".to_string(), context.clone());
+        }
         vars.insert(
             "max_output_tokens".to_string(),
             profile.budget.max_output_tokens.unwrap_or(256).to_string(),
@@ -200,14 +203,17 @@ impl ProviderAdapter for HttpGenerationAdapter {
         })?;
 
         let mut usage = ProviderUsage::default();
+        let mut has_usage = false;
         if let Some(path) = &http.response.input_tokens_path {
             if let Some(val) = extract_path(&resp_json, path).and_then(|v| v.parse::<u32>().ok()) {
                 usage.input_tokens = Some(val);
+                has_usage = true;
             }
         }
         if let Some(path) = &http.response.output_tokens_path {
             if let Some(val) = extract_path(&resp_json, path).and_then(|v| v.parse::<u32>().ok()) {
                 usage.output_tokens = Some(val);
+                has_usage = true;
             }
         }
 
@@ -219,7 +225,7 @@ impl ProviderAdapter for HttpGenerationAdapter {
             candidate_payload: text,
             metadata: BTreeMap::new(),
             advisory_warnings: vec![],
-            usage: Some(usage),
+            usage: if has_usage { Some(usage) } else { None },
             received_at: chrono::Utc::now(),
         })
     }
@@ -339,7 +345,7 @@ mod tests {
                 .header("x-api-key", "secret")
                 .json_body(json!({
                     "model": "test-model",
-                    "prompt": "Inputs: []\n\nPlease process according to instructions."
+                    "prompt": "hi"
                 }));
             then.status(200).json_body(json!({
                 "output": "EARMARK_OK",
@@ -415,6 +421,8 @@ mod tests {
                 earmark_core::VersionId::new(),
             ),
             instruction_text: "hi".to_string(),
+            context_text: None,
+            input_text: "hi".to_string(),
             work_surface_manifest: None,
             inputs: vec![],
             response_contract: profile.response_contract.clone(),
@@ -492,6 +500,8 @@ mod tests {
                 earmark_core::VersionId::new(),
             ),
             instruction_text: "Return exactly: EARMARK_GEMINI_SMOKE_OK".to_string(),
+            context_text: None,
+            input_text: "Return exactly: EARMARK_GEMINI_SMOKE_OK".to_string(),
             work_surface_manifest: None,
             inputs: vec![],
             response_contract: profile.response_contract.clone(),
@@ -582,6 +592,8 @@ mod tests {
                 earmark_core::VersionId::new(),
             ),
             instruction_text: "hi".to_string(),
+            context_text: None,
+            input_text: "hi".to_string(),
             work_surface_manifest: None,
             inputs: vec![],
             response_contract: profile.response_contract.clone(),

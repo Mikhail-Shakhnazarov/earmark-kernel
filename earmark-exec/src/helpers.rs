@@ -234,3 +234,79 @@ pub(crate) fn dedupe_strings(values: Vec<String>) -> Vec<String> {
 pub(crate) fn uuid_like() -> String {
     format!("{}", Utc::now().timestamp_nanos_opt().unwrap_or_default())
 }
+
+pub fn render_provider_context(manifest: &WorkSurfaceManifest) -> String {
+    let mut rendered = String::new();
+    rendered.push_str("### Work Surface Context\n\n");
+    rendered.push_str(&format!("Surface ID: {}\n", manifest.surface_id));
+    rendered.push_str(&format!("Object Count: {}\n", manifest.objects.len()));
+    rendered.push_str("\n");
+    rendered
+}
+
+pub fn render_provider_input<S: CanonicalStore>(
+    store: &S,
+    instruction: &earmark_core::InstructionPayload,
+    manifest: Option<&WorkSurfaceManifest>,
+    inputs: &[ObjectRef],
+    profile: &earmark_core::ProviderProfile,
+) -> Result<String, ExecError> {
+    let mut rendered = String::new();
+
+    // 1. Instruction
+    rendered.push_str("### Instruction\n\n");
+    rendered.push_str(instruction.body.as_str());
+    rendered.push_str("\n\n");
+
+    // 2. Context
+    if let Some(m) = manifest {
+        rendered.push_str(&render_provider_context(m));
+    }
+
+    // 3. Inputs
+    rendered.push_str("### Input Evidence\n\n");
+    let manifest_ids: BTreeSet<earmark_core::ObjectId> = manifest
+        .map(|m| m.objects.iter().map(|o| o.object.id.clone()).collect())
+        .unwrap_or_default();
+
+    for (i, obj_ref) in inputs.iter().enumerate() {
+        // If allow_work_surface_only is true, skip objects not in manifest
+        if profile.exposure.allow_work_surface_only && !manifest_ids.contains(&obj_ref.id) {
+            continue;
+        }
+
+        let obj = store.read_version(&obj_ref.version_ref()).map_err(|e| {
+            ExecError::IncompleteExecution(format!(
+                "failed to read input object {}: {}",
+                obj_ref.id, e
+            ))
+        })?;
+
+        rendered.push_str(&format!("#### Evidence [{}]\n", i + 1));
+        rendered.push_str(&format!("ID: {}\n", obj_ref.id));
+        rendered.push_str(&format!(
+            "Class: {}\n",
+            obj_ref.class.as_deref().unwrap_or("unknown")
+        ));
+
+        if let Some(title) = obj.envelope.headers.get("title") {
+            rendered.push_str(&format!("Title: {:?}\n", title));
+        }
+
+        // Only inline payload if exposure policy allows prose objects
+        if profile.exposure.allow_prose_objects {
+            if let Ok(payload_str) = String::from_utf8(obj.payload.bytes.clone()) {
+                rendered.push_str("\nPayload:\n---\n");
+                rendered.push_str(&payload_str);
+                rendered.push_str("\n---\n");
+            } else {
+                rendered.push_str("\n(Binary payload not displayed)\n");
+            }
+        } else {
+            rendered.push_str("\n(Payload content hidden by exposure policy)\n");
+        }
+        rendered.push_str("\n");
+    }
+
+    Ok(rendered)
+}

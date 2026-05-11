@@ -922,6 +922,8 @@ pub struct ProviderRequest {
     pub work_packet: ObjectRef,
     pub provider_profile: VersionRef,
     pub instruction_text: String,
+    pub context_text: Option<String>,
+    pub input_text: String,
     pub work_surface_manifest: Option<String>,
     pub inputs: Vec<ObjectRef>,
     pub response_contract: ProviderResponseContract,

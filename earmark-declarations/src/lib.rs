@@ -454,6 +454,7 @@ pub fn validate_provider_profile(value: &ProviderProfile) -> Result<(), DeriveEr
             ));
         }
         validate_http_template(&http.url_template)?;
+        validate_rendered_url(&http.url_template)?;
 
         if let Some(method) = &http.method {
             if method != "POST" {
@@ -477,18 +478,18 @@ pub fn validate_provider_profile(value: &ProviderProfile) -> Result<(), DeriveEr
                         "http auth kind 'header' requires a header_name".to_string(),
                     ));
                 }
-                let env = http.auth.env.as_ref().ok_or_else(|| {
+                let env = http.auth.env.as_ref().or(value.auth_env.as_ref()).ok_or_else(|| {
                     DeriveError::Validation(
-                        "http auth kind 'header' requires an 'env' variable name".to_string(),
+                        "http auth kind 'header' requires an 'env' variable name or top-level 'auth_env'".to_string(),
                     )
                 })?;
                 earmark_core::validate_env_var_name(env)
                     .map_err(|e| DeriveError::Validation(e.to_string()))?;
             }
             earmark_core::HttpAuthKind::Bearer => {
-                let env = http.auth.env.as_ref().ok_or_else(|| {
+                let env = http.auth.env.as_ref().or(value.auth_env.as_ref()).ok_or_else(|| {
                     DeriveError::Validation(
-                        "http auth kind 'bearer' requires an 'env' variable name".to_string(),
+                        "http auth kind 'bearer' requires an 'env' variable name or top-level 'auth_env'".to_string(),
                     )
                 })?;
                 earmark_core::validate_env_var_name(env)
@@ -505,10 +506,9 @@ pub fn validate_provider_profile(value: &ProviderProfile) -> Result<(), DeriveEr
                         "http auth kind 'query_parameter' requires a param_name".to_string(),
                     ));
                 }
-                let env = http.auth.env.as_ref().ok_or_else(|| {
+                let env = http.auth.env.as_ref().or(value.auth_env.as_ref()).ok_or_else(|| {
                     DeriveError::Validation(
-                        "http auth kind 'query_parameter' requires an 'env' variable name"
-                            .to_string(),
+                        "http auth kind 'query_parameter' requires an 'env' variable name or top-level 'auth_env'".to_string(),
                     )
                 })?;
                 earmark_core::validate_env_var_name(env)
@@ -522,6 +522,11 @@ pub fn validate_provider_profile(value: &ProviderProfile) -> Result<(), DeriveEr
             ));
         }
 
+        if !http.request.body.is_object() && !http.request.body.is_array() {
+            return Err(DeriveError::Validation(
+                "http request body must be a JSON object or array".to_string(),
+            ));
+        }
         validate_json_value_templates(&http.request.body)?;
     }
 
@@ -534,6 +539,7 @@ fn validate_http_template(template: &str) -> Result<(), DeriveError> {
         "input_text",
         "instruction_text",
         "system_text",
+        "context_text",
         "max_output_tokens",
     ];
     let mut rest = template;
@@ -549,6 +555,17 @@ fn validate_http_template(template: &str) -> Result<(), DeriveError> {
             )));
         }
         rest = &rest[start + end_rel + 2..];
+    }
+    Ok(())
+}
+
+fn validate_rendered_url(template: &str) -> Result<(), DeriveError> {
+    let rendered = template.replace("{{model}}", "test-model");
+    if !rendered.starts_with("http://") && !rendered.starts_with("https://") {
+        return Err(DeriveError::Validation(format!(
+            "invalid http url_template '{}'; must start with http:// or https://",
+            template
+        )));
     }
     Ok(())
 }

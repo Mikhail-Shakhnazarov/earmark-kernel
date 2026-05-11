@@ -224,12 +224,26 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                     }
                     ProviderMode::Delegated(profile_ref) => {
                         let profile = load_provider_profile(store, index, &profile_ref)?;
+                        let context_text = state
+                            .compiled_context
+                            .as_ref()
+                            .map(crate::helpers::render_provider_context);
+                        let input_text = crate::helpers::render_provider_input(
+                            store,
+                            &instruction,
+                            state.compiled_context.as_ref(),
+                            &filtered_inputs,
+                            &profile,
+                        )?;
+
                         let provider_request = ProviderRequest {
                             request_id: format!("req_{}", uuid_like()),
                             run_id: record.run_id.clone(),
                             work_packet: work_packet_ref.clone(),
                             provider_profile: profile_ref.clone(),
                             instruction_text: instruction.body.as_str().to_string(),
+                            context_text,
+                            input_text,
                             work_surface_manifest: state
                                 .compiled_context
                                 .as_ref()

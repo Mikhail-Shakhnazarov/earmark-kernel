@@ -147,6 +147,8 @@ fn mock_adapter_provide_sets_synthetic_metadata() {
         ),
         provider_profile: VersionRef::new(ObjectId::new(), VersionId::new()),
         instruction_text: "do work".to_string(),
+        context_text: None,
+        input_text: "do work".to_string(),
         work_surface_manifest: None,
         inputs: vec![],
         response_contract: ProviderResponseContract {
@@ -212,6 +214,8 @@ fn provider_record_from_response_preserves_synthetic_metadata() {
         ),
         provider_profile: VersionRef::new(ObjectId::new(), VersionId::new()),
         instruction_text: "do work".to_string(),
+        context_text: None,
+        input_text: "do work".to_string(),
         work_surface_manifest: None,
         inputs: vec![],
         response_contract: ProviderResponseContract {

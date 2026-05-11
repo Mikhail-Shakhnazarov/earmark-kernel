@@ -62,6 +62,8 @@ fn mock_request() -> ProviderRequest {
         work_packet: ObjectRef::new(ObjectId::new(), VersionId::new(), Kind::WorkPacket, None),
         provider_profile: VersionRef::new(ObjectId::new(), VersionId::new()),
         instruction_text: "Do something".to_string(),
+        context_text: None,
+        input_text: "Do something".to_string(),
         work_surface_manifest: None,
         inputs: vec![],
         response_contract: ProviderResponseContract {
