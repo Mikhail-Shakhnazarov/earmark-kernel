@@ -157,6 +157,9 @@ impl ProviderRegistry {
     pub fn register_default_adapters(&mut self) {
         self.register(Arc::new(MockAdapter));
 
+        #[cfg(feature = "http-provider")]
+        self.register(Arc::new(crate::HttpGenerationAdapter));
+
         #[cfg(feature = "gemini")]
         self.register(Arc::new(crate::GeminiAdapter::new(
             "gemini-1.5-pro".to_string(),
@@ -190,6 +193,16 @@ pub fn default_provider_registry() -> ProviderRegistry {
 
 pub fn compiled_provider_capabilities() -> Vec<ProviderCapability> {
     let mut capabilities = ProviderRegistry::with_defaults().capabilities();
+
+    #[cfg(not(feature = "http-provider"))]
+    capabilities.push(ProviderCapability {
+        provider: "http_generation".to_string(),
+        status: ProviderCapabilityStatus::CompileDisabled,
+        feature: Some("http-provider".to_string()),
+        required_env: vec![],
+        missing_env: vec![],
+        message: Some("provider requires the http-provider cargo feature".to_string()),
+    });
 
     #[cfg(not(feature = "gemini"))]
     capabilities.push(ProviderCapability {

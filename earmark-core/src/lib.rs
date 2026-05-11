@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use serde_json;
 
 use chrono::{DateTime, Utc};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -715,6 +716,61 @@ pub struct CompiledContextVisibility {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HttpAuthKind {
+    None,
+    Header,
+    Bearer,
+    QueryParameter,
+}
+
+impl Default for HttpAuthKind {
+    fn default() -> Self {
+        Self::None
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct HttpAuthConfig {
+    pub kind: HttpAuthKind,
+    pub header_name: Option<String>,
+    pub param_name: Option<String>,
+    pub env: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct HttpRequestTemplate {
+    pub content_type: Option<String>,
+    pub body: serde_json::Value,
+}
+
+impl Default for HttpRequestTemplate {
+    fn default() -> Self {
+        Self {
+            content_type: None,
+            body: serde_json::Value::Null,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct HttpResponseExtraction {
+    pub text_path: String,
+    pub finish_reason_path: Option<String>,
+    pub input_tokens_path: Option<String>,
+    pub output_tokens_path: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct HttpGenerationProfile {
+    pub method: Option<String>,
+    pub url_template: String,
+    pub auth: HttpAuthConfig,
+    pub request: HttpRequestTemplate,
+    pub response: HttpResponseExtraction,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ProviderProfile {
     pub name: String,
     pub version: String,
@@ -727,9 +783,11 @@ pub struct ProviderProfile {
     pub allowed_operations: Vec<String>,
     pub exposure: ProviderExposure,
     pub response_contract: ProviderResponseContract,
+    #[serde(default)]
+    pub http: Option<HttpGenerationProfile>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct ProviderBudget {
     pub max_input_tokens: Option<u32>,
     pub max_output_tokens: Option<u32>,
@@ -883,7 +941,7 @@ pub struct ProviderResponse {
     pub received_at: Timestamp,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct ProviderUsage {
     pub input_tokens: Option<u32>,
     pub output_tokens: Option<u32>,

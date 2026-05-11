@@ -28,3 +28,8 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 assert_cmd.workspace = true
 predicates.workspace = true
 tempfile.workspace = true
+
+[features]
+default = ["gemini"]
+http-provider = ["earmark-exec/http-provider"]
+gemini = ["earmark-exec/gemini"]

@@ -178,6 +178,7 @@ fn mock_adapter_provide_sets_synthetic_metadata() {
             allow_export_requests: false,
         },
         response_contract: request.response_contract.clone(),
+        http: None,
     };
 
     let response = adapter
@@ -242,6 +243,7 @@ fn provider_record_from_response_preserves_synthetic_metadata() {
             allow_export_requests: false,
         },
         response_contract: request.response_contract.clone(),
+        http: None,
     };
     let response = earmark_core::ProviderResponse {
         request_id: request.request_id.clone(),
@@ -386,6 +388,7 @@ fn test_delegated_outcome_with_none_response_returns_error_instead_of_panicking(
             must_return_candidate_only: true,
             must_include_lineage: true,
         },
+        http: None,
     };
     let prof_obj = StoredObject::new(
         earmark_core::Kind::ProviderProfile,

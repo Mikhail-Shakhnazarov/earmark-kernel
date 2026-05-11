@@ -14,6 +14,7 @@ pub(crate) mod resolution;
 pub mod state;
 pub(crate) mod transition;
 pub mod validation;
+pub mod http_generation;
 
 // Intended public surface
 pub use engine::ExecutionEngine;
@@ -36,6 +37,7 @@ pub use relation_logic::{
 // Specialized adapters
 pub mod gemini;
 pub use gemini::GeminiAdapter;
+pub use http_generation::HttpGenerationAdapter;
 
 #[cfg(test)]
 mod tests;
