@@ -10,13 +10,25 @@ pub fn object_summary_matches_standing(
             return true;
         }
         let current = match dimension.as_str() {
-            "epistemic" => &row.standing_epistemic,
-            "review" => &row.standing_review,
-            "process" => &row.standing_process,
-            "kernel:epistemic" => &row.standing_epistemic,
-            "kernel:review" => &row.standing_review,
-            "kernel:process" => &row.standing_process,
-            _ => return true, // Unknown dimensions pass for forward compatibility
+            "epistemic" | "kernel:epistemic" => row
+                .standing
+                .get("kernel:epistemic")
+                .map(String::as_str)
+                .unwrap_or(&row.standing_epistemic),
+            "review" | "kernel:review" => row
+                .standing
+                .get("kernel:review")
+                .map(String::as_str)
+                .unwrap_or(&row.standing_review),
+            "process" | "kernel:process" => row
+                .standing
+                .get("kernel:process")
+                .map(String::as_str)
+                .unwrap_or(&row.standing_process),
+            other => match row.standing.get(other) {
+                Some(v) => v.as_str(),
+                None => return true, // Unknown dimension passes through
+            },
         };
         allowed.iter().any(|candidate| candidate == current)
     })

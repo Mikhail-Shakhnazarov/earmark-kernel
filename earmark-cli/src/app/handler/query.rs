@@ -9,6 +9,7 @@ pub fn handle(index: &DerivedIndex, as_json: bool, args: QueryArgs) -> Result<()
         kind: args.kind,
         text: args.text,
         object_id: args.object_id,
+        ..Default::default()
     })?;
     emit(as_json, serde_json::to_value(rows)?);
     Ok(())

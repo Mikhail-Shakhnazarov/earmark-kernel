@@ -536,6 +536,7 @@ mod tests {
             standing_epistemic: "confirmed".to_string(),
             system_id: None,
             namespace: None,
+            standing: BTreeMap::new(),
         };
 
         let mut filters = BTreeMap::new();
