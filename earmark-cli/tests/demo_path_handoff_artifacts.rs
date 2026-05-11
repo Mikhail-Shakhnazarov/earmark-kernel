@@ -10,8 +10,10 @@ fn run_artifacts_exposes_handoffs_for_demo_path() {
     let root = dir.path();
     let repo_root = workspace_root();
 
-    let system_manifest = repo_root.join("examples/research-synthesis/declarations/systems/system.yaml");
-    let seed_note = repo_root.join("examples/research-synthesis/data/seed_notes/note_1_benefits.md");
+    let system_manifest =
+        repo_root.join("examples/research-synthesis/declarations/systems/system.yaml");
+    let seed_note =
+        repo_root.join("examples/research-synthesis/data/seed_notes/note_1_benefits.md");
 
     Command::cargo_bin("earmark-cli")
         .unwrap()

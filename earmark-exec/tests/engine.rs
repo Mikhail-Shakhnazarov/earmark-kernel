@@ -1767,6 +1767,478 @@ fn test_mixed_source_rejection_no_side_effects() {
 }
 
 #[test]
+fn within_workflow_handoff_continuation_runs_successor_not_predecessor() {
+    let dir = tempdir().unwrap();
+    let store = GitCanonicalStore::new(dir.path());
+    store.init_layout().unwrap();
+    let index = DerivedIndex::open(dir.path()).unwrap();
+
+    // Define classes
+    let source_note_class = ClassDefinition {
+        name: "source_note".to_string(),
+        version: "1.0.0".to_string(),
+        kind: "object".to_string(),
+        required_headers: vec!["title".to_string()],
+        payload_schema: JsonSchemaRef("inline:any".to_string()),
+        standing_rules: ClassStandingRules::default(),
+        relation_rules: vec![],
+        validators: vec![],
+    };
+    let sn_ref = store
+        .write_object(&StoredObject::new(
+            Kind::Object,
+            Some("class_definition".to_string()),
+            Standing::default(),
+            Provenance::direct_input("operator"),
+            BTreeMap::new(),
+            StoredPayload::from_yaml(to_yaml(&source_note_class).unwrap()),
+            vec![],
+        ))
+        .unwrap();
+
+    let finding_class = ClassDefinition {
+        name: "finding".to_string(),
+        version: "1.0.0".to_string(),
+        kind: "object".to_string(),
+        required_headers: vec!["title".to_string()],
+        payload_schema: JsonSchemaRef("inline:any".to_string()),
+        standing_rules: ClassStandingRules::default(),
+        relation_rules: vec![],
+        validators: vec![],
+    };
+    let finding_ref = store
+        .write_object(&StoredObject::new(
+            Kind::Object,
+            Some("class_definition".to_string()),
+            Standing::default(),
+            Provenance::direct_input("operator"),
+            BTreeMap::new(),
+            StoredPayload::from_yaml(to_yaml(&finding_class).unwrap()),
+            vec![],
+        ))
+        .unwrap();
+
+    let summary_class = ClassDefinition {
+        name: "summary".to_string(),
+        version: "1.0.0".to_string(),
+        kind: "object".to_string(),
+        required_headers: vec!["title".to_string()],
+        payload_schema: JsonSchemaRef("inline:any".to_string()),
+        standing_rules: ClassStandingRules::default(),
+        relation_rules: vec![],
+        validators: vec![],
+    };
+    let summary_ref = store
+        .write_object(&StoredObject::new(
+            Kind::Object,
+            Some("class_definition".to_string()),
+            Standing::default(),
+            Provenance::direct_input("operator"),
+            BTreeMap::new(),
+            StoredPayload::from_yaml(to_yaml(&summary_class).unwrap()),
+            vec![],
+        ))
+        .unwrap();
+
+    // Define instructions
+    let instr_extract = earmark_core::InstructionPayload {
+        name: "extract_findings".to_string(),
+        version: "1.0.0".to_string(),
+        purpose: "Extract findings from source".to_string(),
+        input_classes: vec!["source_note".to_string()],
+        output_classes: vec!["finding".to_string()],
+        execution_policy: "local".to_string(),
+        provider_profile: None,
+        trace_policy: "staged".to_string(),
+        register: "findings".to_string(),
+        body: earmark_core::MarkdownBody::new("extract".to_string()),
+    };
+    let instr_extract_ref = store
+        .write_object(&StoredObject::new(
+            Kind::Instruction,
+            None,
+            Standing::default(),
+            Provenance::direct_input("operator"),
+            BTreeMap::new(),
+            StoredPayload::from_markdown(instr_extract.to_markdown().unwrap()),
+            vec![],
+        ))
+        .unwrap();
+
+    let instr_summarize = earmark_core::InstructionPayload {
+        name: "summarize_findings".to_string(),
+        version: "1.0.0".to_string(),
+        purpose: "Summarize findings".to_string(),
+        input_classes: vec!["finding".to_string()],
+        output_classes: vec!["summary".to_string()],
+        execution_policy: "local".to_string(),
+        provider_profile: None,
+        trace_policy: "staged".to_string(),
+        register: "summaries".to_string(),
+        body: earmark_core::MarkdownBody::new("summarize".to_string()),
+    };
+    let instr_summarize_ref = store
+        .write_object(&StoredObject::new(
+            Kind::Instruction,
+            None,
+            Standing::default(),
+            Provenance::direct_input("operator"),
+            BTreeMap::new(),
+            StoredPayload::from_markdown(instr_summarize.to_markdown().unwrap()),
+            vec![],
+        ))
+        .unwrap();
+
+    // Compiled context template (needed by transforms)
+    let compiled_context_template = CompiledContextTemplate {
+        name: "test_surface".to_string(),
+        version: "1".to_string(),
+        description: None,
+        select: CompiledContextSelect {
+            classes: vec!["source_note".to_string(), "finding".to_string()],
+            standing: BTreeMap::new(),
+            relations: vec!["derived_from".to_string()],
+            time_range: None,
+            expansion: CompiledContextExpansion::default(),
+        },
+        group_by: vec![],
+        render: CompiledContextRender {
+            mode: "staged".to_string(),
+            manifest_format: None,
+            prose_template: None,
+        },
+        visibility: CompiledContextVisibility {
+            include_lineage: true,
+            include_constraints: true,
+            include_provenance: true,
+        },
+    };
+    let template_ref = store
+        .write_object(&StoredObject::new(
+            Kind::CompiledContextTemplate,
+            None,
+            Standing::default(),
+            Provenance::direct_input("operator"),
+            BTreeMap::new(),
+            StoredPayload::from_json_bytes(serde_json::to_vec(&compiled_context_template).unwrap()),
+            vec![],
+        ))
+        .unwrap();
+
+    // Workflow with 3 transitions:
+    // op_proj (compile_context) -> op_extract (transform) -> op_summarize (transform)
+    // op_summarize declares compiled_context explicitly so the handoff from
+    // op_extract carries it, allowing continuation to rebuild the work surface.
+    let workflow_yaml = format!(
+        r#"name: proj_extract_summarize
+version: "1"
+operations:
+  - id: op_proj
+    kind: compile_context
+    input_contracts: []
+    output_contracts: [ws]
+    compiled_context:
+      id: {}
+      version_id: latest
+  - id: op_extract
+    kind: transform
+    input_contracts: [source_note]
+    output_contracts: [finding]
+    instruction:
+      id: {}
+      version_id: latest
+  - id: op_summarize
+    kind: transform
+    input_contracts: [finding]
+    output_contracts: [summary]
+    instruction:
+      id: {}
+      version_id: latest
+    compiled_context:
+      id: {}
+      version_id: latest
+edges:
+  - from: op_proj
+    to: op_extract
+  - from: op_extract
+    to: op_summarize
+guards: []
+"#,
+        template_ref.id.as_str(),
+        instr_extract_ref.id.as_str(),
+        instr_summarize_ref.id.as_str(),
+        template_ref.id.as_str(),
+    );
+    let workflow_ref = store
+        .write_object(&StoredObject::new(
+            Kind::Workflow,
+            Some("composition_workflow".to_string()),
+            Standing::default(),
+            Provenance::direct_input("operator"),
+            BTreeMap::new(),
+            StoredPayload::from_yaml(workflow_yaml),
+            vec![],
+        ))
+        .unwrap();
+
+    // System referencing all classes, instructions, and the template
+    let system = SystemDefinition {
+        system_id: "test-system".to_string(),
+        namespace: "test".to_string(),
+        title: "Test".to_string(),
+        description: None,
+        classes: vec![sn_ref, finding_ref, summary_ref],
+        instructions: vec![instr_extract_ref, instr_summarize_ref],
+        policies: vec![],
+        workflows: vec![workflow_ref.clone()],
+        compiled_contexts: vec![template_ref],
+        provider_profiles: vec![],
+        default_compiled_context: None,
+        default_provider_profile: None,
+        runtime_profile: RuntimeProfile {
+            execution_surface: "local".to_string(),
+            machine_output_default: "json".to_string(),
+            work_surface_mode: "staged".to_string(),
+        },
+        activated_at: None,
+    };
+    let system_ref = store
+        .write_object(&StoredObject::new(
+            Kind::SystemDefinition,
+            None,
+            Standing::default(),
+            Provenance::direct_input("operator"),
+            BTreeMap::new(),
+            StoredPayload::from_yaml(to_yaml(&system).unwrap()),
+            vec![],
+        ))
+        .unwrap();
+
+    // Deposit source note
+    let source_note = StoredObject::new(
+        Kind::Object,
+        Some("source_note".to_string()),
+        Standing::default(),
+        Provenance::direct_input("operator"),
+        BTreeMap::from([(
+            "title".to_string(),
+            earmark_core::HeaderValue::String("Source 1".to_string()),
+        )]),
+        StoredPayload::from_markdown("Source body"),
+        vec![],
+    );
+    store.write_object(&source_note).unwrap();
+
+    index.rebuild_from_store(&store).unwrap();
+    let registry = ProviderRegistry::default();
+    let engine = ExecutionEngine {
+        store: &store,
+        index: &index,
+        provider_service: &registry,
+    };
+
+    // Run 1: from direct inputs
+    let first_outcome = engine
+        .run_workflow(WorkflowRunRequest {
+            run_id: "run_first".to_string(),
+            system_definition: system_ref.clone(),
+            workflow: workflow_ref.clone(),
+            inputs: vec![source_note.object_ref()],
+            handoff_manifest: None,
+            transition_assignment: None,
+            operator_approved: true,
+        })
+        .unwrap();
+
+    assert_eq!(
+        first_outcome.record.status,
+        earmark_core::RunStatus::Completed
+    );
+
+    // Find handoff from op_extract (should have to_transition_id = Some("op_summarize"))
+    let objects = store.scan_objects().unwrap();
+    let handoff_obj = objects
+        .iter()
+        .filter(|o| o.envelope.kind == Kind::HandoffManifest)
+        .map(|o| serde_json::from_slice::<HandoffManifest>(&o.payload.bytes).unwrap())
+        .find(|h| h.from_transition_id == "op_extract")
+        .expect("handoff from op_extract not found");
+
+    assert_eq!(
+        handoff_obj.to_transition_id.as_deref(),
+        Some("op_summarize"),
+        "handoff should target op_summarize"
+    );
+
+    // Record how many findings were created in Run 1
+    let first_finding_count = objects
+        .iter()
+        .filter(|o| o.envelope.class.as_deref() == Some("finding"))
+        .count();
+    assert!(
+        first_finding_count > 0,
+        "op_extract should have produced findings"
+    );
+
+    // Run 2: from handoff — should only run op_summarize, not re-run op_proj or op_extract
+    let second_outcome = engine
+        .run_workflow(WorkflowRunRequest {
+            run_id: "run_second".to_string(),
+            system_definition: system_ref,
+            workflow: workflow_ref,
+            inputs: vec![],
+            handoff_manifest: Some(handoff_obj.id),
+            transition_assignment: None,
+            operator_approved: true,
+        })
+        .unwrap();
+
+    assert_eq!(
+        second_outcome.record.status,
+        earmark_core::RunStatus::Completed
+    );
+
+    // Verify continuation event was recorded
+    let continuation_events: Vec<_> = second_outcome
+        .record
+        .events
+        .iter()
+        .filter(|e| e.event_type == "continuation")
+        .collect();
+    assert_eq!(
+        continuation_events.len(),
+        1,
+        "should have exactly one continuation event"
+    );
+    assert_eq!(continuation_events[0].transition, "op_summarize");
+    assert!(continuation_events[0]
+        .message
+        .as_deref()
+        .unwrap_or("")
+        .contains("continued from handoff"));
+
+    // Verify op_summarize executed (should have events with that transition)
+    let summarize_events: Vec<_> = second_outcome
+        .record
+        .events
+        .iter()
+        .filter(|e| e.transition == "op_summarize")
+        .collect();
+    assert!(
+        !summarize_events.is_empty(),
+        "op_summarize should have execution events"
+    );
+
+    // Verify op_proj and op_extract did NOT execute (no events with those transition ids)
+    let proj_events: Vec<_> = second_outcome
+        .record
+        .events
+        .iter()
+        .filter(|e| e.transition == "op_proj")
+        .collect();
+    assert!(
+        proj_events.is_empty(),
+        "op_proj should have no events in handoff run (got {})",
+        proj_events.len()
+    );
+    let extract_events: Vec<_> = second_outcome
+        .record
+        .events
+        .iter()
+        .filter(|e| e.transition == "op_extract")
+        .collect();
+    assert!(
+        extract_events.is_empty(),
+        "op_extract should have no events in handoff run (got {})",
+        extract_events.len()
+    );
+
+    // Verify no misleading partial_execution event for intentionally skipped ancestors
+    let partial_events: Vec<_> = second_outcome
+        .record
+        .events
+        .iter()
+        .filter(|e| e.event_type == "partial_execution")
+        .collect();
+    assert!(
+        partial_events.is_empty(),
+        "should not report partial_execution for intentionally skipped upstream ancestors"
+    );
+
+    // Verify no new findings were created by the handoff continuation run
+    let final_objects = store.scan_objects().unwrap();
+    let final_finding_count = final_objects
+        .iter()
+        .filter(|o| o.envelope.class.as_deref() == Some("finding"))
+        .count();
+    assert_eq!(
+        final_finding_count, first_finding_count,
+        "handoff continuation should not create new findings (predecessor skipped)"
+    );
+}
+
+#[test]
+fn handoff_continuation_with_invalid_target_fails() {
+    let dir = tempdir().unwrap();
+    let store = GitCanonicalStore::new(dir.path());
+    store.init_layout().unwrap();
+    let index = DerivedIndex::open(dir.path()).unwrap();
+
+    let (system_ref, workflow_ref) = review_only_fixture(&store, "note");
+
+    // Create a handoff with to_transition_id pointing to a non-existent transition
+    let handoff = HandoffManifest {
+        id: earmark_core::HandoffManifestId::new(),
+        run_id: "dummy_run".to_string(),
+        from_transition_id: "op_prev".to_string(),
+        to_transition_id: Some("op_nonexistent".to_string()),
+        source_change_set_id: earmark_core::ChangeSetId::new(),
+        source_assignment_id: None,
+        root_object_ids: vec![],
+        inherited_input_object_ids: vec![],
+        newly_created_object_ids: vec![],
+        newly_created_relation_ids: vec![],
+        allowed_input_classes: vec![],
+        allowed_output_classes: vec![],
+        allowed_relation_types: vec![],
+        standing_constraints: vec![],
+        unresolved_ambiguities: vec![],
+        blocked_conditions: vec![],
+        required_checks: vec![],
+        compiled_context_template_id: None,
+        created_at: Utc::now(),
+    };
+    persist_handoff_manifest(&store, &handoff);
+
+    index.rebuild_from_store(&store).unwrap();
+    let registry = ProviderRegistry::default();
+    let engine = ExecutionEngine {
+        store: &store,
+        index: &index,
+        provider_service: &registry,
+    };
+
+    let result = engine.run_workflow(WorkflowRunRequest {
+        run_id: "invalid_target_run".to_string(),
+        system_definition: system_ref,
+        workflow: workflow_ref,
+        inputs: vec![],
+        handoff_manifest: Some(handoff.id),
+        transition_assignment: None,
+        operator_approved: true,
+    });
+
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    let err_msg = err.to_string();
+    assert!(
+        err_msg.contains("op_nonexistent") && err_msg.contains("not present"),
+        "error should mention the missing transition, got: {}",
+        err_msg
+    );
+}
+
+#[test]
 fn test_transformation_failure_recorded_on_error() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
