@@ -64,8 +64,28 @@ em handoff explain <handoff_id>
 Continue work from a handoff:
 
 ```bash
-em workflow run <workflow_id> --handoff <handoff_id>
+em workflow run <workflow_id> --system-id <system_id> --handoff <handoff_id>
 ```
+
+### Handoff Continuation
+
+A handoff supports two styles of continuation:
+
+**Cross-workflow continuation.** When the handoff was produced by a terminal transition (no outgoing edges), its `to_transition_id` is `None`. Running with `--handoff` in this case feeds the handoff's bounded objects into the target workflow's entry transitions. This is useful for chaining independent workflows.
+
+**Within-workflow continuation.** When the handoff names a successor transition via `to_transition_id`, the engine starts execution directly from that transition instead of restarting at the workflow's entry transitions. Predecessor transitions are not re-executed. The run produces a `continuation` timeline event recording the handoff origin.
+
+```bash
+# Continue from a handoff within the same workflow
+em workflow run <workflow_id> --system-id <system_id> --handoff <handoff_id>
+```
+
+The continuation run:
+- Validates that the handoff's target transition exists in the selected workflow
+- Seeds the ready queue at the target transition (not at entry transitions)
+- Pre-populates predecessor transitions as already executed
+- Rebuilds the compiled work surface from the handoff's template reference
+- Uses the bounded input objects reconstructed from the handoff manifest
 
 You can re-run from the same handoff multiple times — with a different model, different parameters, or after fixing the instruction.
 
