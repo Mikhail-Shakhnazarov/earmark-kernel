@@ -2,11 +2,12 @@ use crate::error::ExecError;
 use crate::persistence_helpers::write_object_and_index;
 use crate::resolution::load_standing_policy;
 use chrono::Utc;
+use earmark_core::projection::project;
 use earmark_core::{
-    DimensionId, HeaderValue, Kind, ObjectId, Provenance, Standing, StandingRequestStatus,
-    StandingTransitionRequest, TokenId, VersionRef,
+    DimensionId, HeaderValue, Kind, ObjectId, Provenance, Standing, StandingRegistry,
+    StandingRequestStatus, StandingTransitionRequest, TokenId, VersionRef,
 };
-use earmark_governance::{validate_standing_transition, ReviewPayload};
+use earmark_governance::{check_immutability, validate_standing_transition, ReviewPayload};
 use earmark_index::DerivedIndex;
 use earmark_store::{CanonicalStore, StoredObject, StoredPayload};
 use std::collections::BTreeMap;
@@ -65,6 +66,7 @@ pub fn apply_standing_request<S: CanonicalStore>(
     request_ref: &VersionRef,
     policy_id: Option<&str>,
     reason: Option<String>,
+    registry: &StandingRegistry,
 ) -> Result<(VersionRef, VersionRef), ExecError> {
     let mut request = load_standing_request(store, request_ref)?;
 
@@ -83,30 +85,20 @@ pub fn apply_standing_request<S: CanonicalStore>(
     let target_head = store.read_version(&target_head_ref)?;
     let current_standing = &target_head.envelope.standing;
 
-    // 1b. Drift Check: verify current standing matches request.from_value
-    let current_value = match request.dimension.as_str() {
-        "epistemic" => current_standing
-            .get(&DimensionId::new("kernel:epistemic"))
-            .map(TokenId::as_str)
-            .unwrap_or("unknown")
-            .to_string(),
-        "review" => current_standing
-            .get(&DimensionId::new("kernel:review"))
-            .map(TokenId::as_str)
-            .unwrap_or("unknown")
-            .to_string(),
-        "process" => current_standing
-            .get(&DimensionId::new("kernel:process"))
-            .map(TokenId::as_str)
-            .unwrap_or("unknown")
-            .to_string(),
-        _ => {
-            return Err(ExecError::GovernanceOperation(format!(
-                "invalid dimension {}",
-                request.dimension
-            )))
-        }
-    };
+    // 1b. Enforce immutability: reject if sealed
+    check_immutability(registry, current_standing)
+        .map_err(|e| ExecError::GovernanceOperation(e.to_string()))?;
+
+    // 1c. Drift Check: verify current standing matches request.from_value
+    let dim_name = normalize_dim_name(&request.dimension);
+    let dim_id =
+        DimensionId::parse(&dim_name)
+            .map_err(|e| ExecError::GovernanceOperation(format!("invalid dimension: {}", e)))?;
+    let current_value = current_standing
+        .get(&dim_id)
+        .map(TokenId::as_str)
+        .unwrap_or("unknown")
+        .to_string();
 
     if current_value != request.from_value.to_lowercase() {
         return Err(ExecError::GovernanceOperation(format!(
@@ -122,9 +114,12 @@ pub fn apply_standing_request<S: CanonicalStore>(
     let policy_ref = if let Some(pid) = policy_id {
         index
             .get_head(
-                &ObjectId::parse(pid).map_err(|e| ExecError::GovernanceOperation(e.to_string()))?,
+                &ObjectId::parse(pid)
+                    .map_err(|e| ExecError::GovernanceOperation(e.to_string()))?,
             )?
-            .ok_or_else(|| ExecError::GovernanceOperation(format!("policy {} not found", pid)))?
+            .ok_or_else(|| {
+                ExecError::GovernanceOperation(format!("policy {} not found", pid))
+            })?
     } else {
         return Err(ExecError::GovernanceOperation(
             "policy required for application".to_string(),
@@ -134,32 +129,9 @@ pub fn apply_standing_request<S: CanonicalStore>(
 
     // 3. Construct requested standing
     let mut next_standing = target_head.envelope.standing.clone();
-    match request.dimension.as_str() {
-        "epistemic" => {
-            next_standing.values.insert(
-                DimensionId::new("kernel:epistemic"),
-                TokenId::new(&request.to_value),
-            );
-        }
-        "review" => {
-            next_standing.values.insert(
-                DimensionId::new("kernel:review"),
-                TokenId::new(&request.to_value),
-            );
-        }
-        "process" => {
-            next_standing.values.insert(
-                DimensionId::new("kernel:process"),
-                TokenId::new(&request.to_value),
-            );
-        }
-        _ => {
-            return Err(ExecError::GovernanceOperation(format!(
-                "invalid dimension {}",
-                request.dimension
-            )))
-        }
-    }
+    next_standing
+        .values
+        .insert(dim_id.clone(), TokenId::new(&request.to_value));
 
     // 3b. No-op Protection: skip version creation if already at next_standing
     if next_standing == *current_standing {
@@ -172,14 +144,37 @@ pub fn apply_standing_request<S: CanonicalStore>(
     }
 
     // 4. Validate transition
-    let transition_res =
-        validate_standing_transition(&policy, &target_head.envelope.standing, &next_standing)?;
+    let transition_res = validate_standing_transition(
+        &policy,
+        registry,
+        &target_head.envelope.standing,
+        &next_standing,
+    )?;
 
-    // 5. Enforce review if required (transition-specific matching)
-    if transition_res.requires_review && !has_accepted_review(store, index, &target_head_ref)? {
+    // 5. Enforce review if required by policy rule
+    if transition_res.requires_review
+        && !has_accepted_review(store, index, &target_head_ref)?
+    {
         return Err(ExecError::GovernanceOperation(
             "transition requires accepted review evidence for the current version".to_string(),
         ));
+    }
+
+    // 5b. Enforce same-change-set review authorization for transitions into accepted projection
+    let requested_projection = project(&next_standing, registry)
+        .map_err(|e| ExecError::GovernanceOperation(format!("projection error: {}", e)))?;
+    if requested_projection.review
+        == Some(earmark_core::projection::ReviewProjection::Accepted)
+    {
+        let actor = target_head.envelope.provenance.actor.as_str();
+        if !earmark_governance::is_trusted_actor(actor)
+            && !has_accepted_review(store, index, &target_head_ref)?
+        {
+            return Err(ExecError::GovernanceOperation(
+                "transition into accepted review projection requires same-change-set review evidence"
+                    .to_string(),
+            ));
+        }
     }
 
     // 6. Create new target version
@@ -253,4 +248,13 @@ fn has_accepted_review<S: CanonicalStore>(
         }
     }
     Ok(false)
+}
+
+fn normalize_dim_name(name: &str) -> String {
+    match name {
+        "epistemic" => "kernel:epistemic".to_string(),
+        "review" => "kernel:review".to_string(),
+        "process" => "kernel:process".to_string(),
+        other => other.to_string(),
+    }
 }

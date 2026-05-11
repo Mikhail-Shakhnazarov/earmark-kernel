@@ -3,7 +3,7 @@ use crate::relation_logic::{
 };
 use earmark_core::{
     ChangeSetDraft, ChangeSetValidationResult, ClassDefinition, Kind, ObjectId, ObjectRef,
-    Standing, SystemDefinition, WorkflowGuard,
+    Standing, SystemDefinition, VersionId, WorkflowGuard,
 };
 use earmark_index::DerivedIndex;
 use earmark_store::{CanonicalStore, StoredObject};
@@ -248,6 +248,9 @@ pub fn validate_transition_change_set<S: CanonicalStore>(
     ),
     ExecError,
 > {
+    let registry = earmark_core::StandingRegistry::from_system_definition(system)
+        .map_err(|e| ExecError::Core(e))?;
+
     let declared_classes = system
         .classes
         .iter()
@@ -262,6 +265,20 @@ pub fn validate_transition_change_set<S: CanonicalStore>(
     let mut info = Vec::new();
     let mut created_output_classes = Vec::new();
     let mut all_standing_requests = Vec::new();
+
+    // Pre-scan review objects in the change set for initial-accepted checking
+    let mut review_targets: Vec<(ObjectId, VersionId)> = Vec::new();
+    for object_id in &change_set_draft.created_objects {
+        if let Ok(Some(stored)) = store.read_head(object_id) {
+            if stored.envelope.kind == Kind::Review {
+                if let Ok(payload) = serde_json::from_slice::<earmark_governance::ReviewPayload>(
+                    &stored.payload.bytes,
+                ) {
+                    review_targets.push((payload.target.id, payload.target.version_id));
+                }
+            }
+        }
+    }
 
     for object_id in &change_set_draft.created_objects {
         let stored = store.read_head(object_id)?.ok_or_else(|| {
@@ -291,6 +308,29 @@ pub fn validate_transition_change_set<S: CanonicalStore>(
                         &mut failures,
                     );
                     all_standing_requests.extend(reqs);
+                }
+
+                // Initial accepted standing check
+                if let Ok(projection) = earmark_core::projection::project(
+                    &stored.envelope.standing,
+                    &registry,
+                ) {
+                    if projection.review
+                        == Some(earmark_core::projection::ReviewProjection::Accepted)
+                    {
+                        let actor = stored.envelope.provenance.actor.as_str();
+                        if !is_trusted_actor(actor)
+                            && !review_targets.iter().any(|(id, vid)| {
+                                id == &stored.envelope.id
+                                    && vid == &stored.envelope.version_id
+                            })
+                        {
+                            failures.push(format!(
+                                "created object {} projects accepted review but has no same-change-set review evidence and no trusted provenance",
+                                object_id.as_str()
+                            ));
+                        }
+                    }
                 }
             }
             Kind::Relation => validate_relation_object(
