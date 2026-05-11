@@ -89,16 +89,18 @@ JSON Schema files for the seven declaration kinds are published in:
 docs/declarations/schema/
 ```
 
-CLI and Rust validation is authoritative. Schema files may lag behind the Rust validator for some edge cases. When the CLI rejects a declaration, rely on the CLI error message rather than the schema file alone.
+CLI and Rust validation are authoritative. JSON Schema files are useful authoring aids but may not capture every semantic check enforced by the validator.
 
 ### Validation Coverage
 
-Validation is active across all seven declaration kinds:
+CLI and Rust validation is active across all seven declaration kinds.
 
-- **Class**: validates kind, name, relations (source/target class references, direction, authorizing endpoint), and payload constraints.
-- **Instruction**: validates metadata fields (title, class tokens, standing constraints) and YAML frontmatter structure.
-- **Standing Policy**: validates transition references, allowed epistemic/review/process standings, and escalation targets.
-- **Workflow**: validates operation kinds, edges, entry/terminal transitions, guards (standing checks), and compiled context references.
-- **Compiled Context**: validates class/standing/relation/render constraints and template structure.
-- **Provider Profile**: validates required fields (`provider`, `model`, `auth_env`), response contract format, and budget constraints.
-- **System Manifest**: validates declaration reference resolution, required declaration coverage, and manifest completeness.
+| Kind | Current validation coverage |
+|---|---|
+| `class` | Class name, non-empty version, `kind` value, standing-rule tokens, relation type tokens, counterparty class tokens, relation direction, authorizing endpoint, and dead direction/authority combinations |
+| `instruction` | Instruction name, non-empty version, non-empty purpose, non-empty body, input class tokens, and output class tokens |
+| `standing-policy` | Policy name, non-empty version, transition-rule dimensions and standing tokens, operation requirement dimensions/tokens, and non-empty escalation trigger/message |
+| `workflow` | Workflow name, operation id tokens and uniqueness, operation kind, required `compiled_context` for `compile_context` operations, required instruction for `transform` operations, one output contract for transform operations, input/output class tokens, guard id tokens and uniqueness, edge endpoints, and guard references |
+| `compiled-context` | Template name, non-empty version, selected class tokens, non-empty render mode, standing dimensions/tokens, and relation type tokens |
+| `provider-profile` | Profile name, non-empty version, provider/model presence, response format, non-negative budget, auth/endpoint environment variable names, and HTTP provider template/auth/body constraints when `provider: http_generation` is used |
+| `system` | System id, namespace, referenced object existence, referenced kind/class where required, referenced payload decodability, title, and non-empty runtime profile fields |

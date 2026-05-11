@@ -240,7 +240,7 @@ pub fn render_provider_context(manifest: &WorkSurfaceManifest) -> String {
     rendered.push_str("### Work Surface Context\n\n");
     rendered.push_str(&format!("Surface ID: {}\n", manifest.surface_id));
     rendered.push_str(&format!("Object Count: {}\n", manifest.objects.len()));
-    rendered.push_str("\n");
+    rendered.push('\n');
     rendered
 }
 
@@ -348,7 +348,7 @@ pub fn render_provider_input<S: CanonicalStore>(
             };
             rendered.push_str(&format!("\n({})\n", reason));
         }
-        rendered.push_str("\n");
+        rendered.push('\n');
     }
 
     Ok(rendered)

@@ -3,8 +3,7 @@
 use earmark_connected_context::{WorkSurfaceManifest, WorkSurfaceObject};
 use earmark_core::{
     HttpAuthConfig, HttpAuthKind, HttpGenerationProfile, HttpRequestTemplate,
-    HttpResponseExtraction, Kind, ObjectId, ObjectRef, ProviderProfile, ScalarValue, VersionId,
-    VersionRef,
+    HttpResponseExtraction, Kind, ObjectId, ObjectRef, ProviderProfile, VersionId, VersionRef,
 };
 use earmark_exec::{HttpGenerationAdapter, ProviderRegistry, ProviderService};
 use earmark_index::DerivedIndex;
@@ -124,7 +123,7 @@ fn test_http_provider_e2e_content_rendering() {
         &store,
         &instruction,
         None,
-        &[input_ref.clone()],
+        std::slice::from_ref(&input_ref),
         &profile,
     )
     .unwrap();
@@ -266,7 +265,7 @@ fn test_http_provider_rendering_with_manifest() {
         &store,
         &instruction,
         Some(&manifest),
-        &[input_ref.clone()],
+        std::slice::from_ref(&input_ref),
         &profile,
     )
     .unwrap();
