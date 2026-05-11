@@ -1126,26 +1126,44 @@ fn demo_path_research_synthesis_full_workflow() {
         .clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
     assert_eq!(parsed["data"]["ok"], true);
-    let handoffs = parsed["data"]["artifact"]["handoff_ids"].as_array();
-    if let Some(handoffs) = handoffs {
-        if let Some(first_handoff) = handoffs.first().and_then(|v| v.as_str()) {
-            let output = Command::cargo_bin("earmark-cli")
-                .unwrap()
-                .arg("--root")
-                .arg(root)
-                .arg("--json")
-                .arg("handoff")
-                .arg("explain")
-                .arg(first_handoff)
-                .assert()
-                .success()
-                .get_output()
-                .stdout
-                .clone();
-            let parsed: Value = serde_json::from_slice(&output).unwrap();
-            assert_eq!(parsed["data"]["ok"], true);
-        }
-    }
+    let handoffs = parsed["data"]["artifact"]["handoffs"]
+        .as_array()
+        .expect("run artifacts should contain a non-empty handoffs array");
+    assert!(
+        !handoffs.is_empty(),
+        "demo workflow should create at least one handoff"
+    );
+    let first_handoff = handoffs[0]
+        .as_str()
+        .expect("handoff entries should be handoff IDs");
+    let output = Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(root)
+        .arg("--json")
+        .arg("handoff")
+        .arg("explain")
+        .arg(first_handoff)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(parsed["data"]["ok"], true);
+    assert!(
+        parsed["data"]["kind"]
+            .as_str()
+            .is_some_and(|k| k.contains("handoff")),
+        "handoff explain response should identify a handoff, got {:?}",
+        parsed["data"]["kind"]
+    );
+    assert!(
+        parsed["data"]["summary"]
+            .as_str()
+            .is_some_and(|s| s.contains(first_handoff)),
+        "handoff explain summary should reference the handoff id"
+    );
 
     // 13. run graph
     let output = Command::cargo_bin("earmark-cli")

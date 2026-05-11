@@ -486,8 +486,20 @@ pub fn validate_relation_object<S: CanonicalStore>(
         return Ok(());
     }
 
-    let source_stored = source_stored.unwrap();
-    let target_stored = target_stored.unwrap();
+    let Some(source_stored) = source_stored else {
+        failures.push(format!(
+            "relation {} source endpoint missing after load attempt",
+            object_id.as_str()
+        ));
+        return Ok(());
+    };
+    let Some(target_stored) = target_stored else {
+        failures.push(format!(
+            "relation {} target endpoint missing after load attempt",
+            object_id.as_str()
+        ));
+        return Ok(());
+    };
 
     // Step 4: Construct facts
     let source_facts = RelationEndpointFacts {

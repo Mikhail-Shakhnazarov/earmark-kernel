@@ -35,11 +35,6 @@ pub(crate) fn resolve_version_for_kind<S: CanonicalStore>(
     if let Ok(resolved) = resolve_version(store, version) {
         return Ok(resolved);
     }
-    if version.version_id.as_str() != "ver_00000000000000000000000000000000"
-        && version.version_id.as_str() != "latest"
-    {
-        return resolve_version(store, version);
-    }
 
     let symbolic = version.id.as_str();
     let resolved = match expected_kind {
