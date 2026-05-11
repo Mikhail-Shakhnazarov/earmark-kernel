@@ -361,9 +361,7 @@ pub(crate) fn persist_run_record<S: CanonicalStore>(
         StoredPayload::from_json_bytes(earmark_core::to_json_pretty(record)?.into_bytes()),
         vec![],
     );
-    // RunRecord indexing?
-    // Let's check if RunRecord should be indexed.
-    // Usually yes, so we can list runs.
+    // Run records are indexed so run list/show/latest inspection can discover them.
     write_object_and_index(store, index, &stored)?;
     Ok(())
 }
