@@ -32,4 +32,3 @@ tempfile.workspace = true
 [features]
 default = ["http-provider"]
 http-provider = ["earmark-exec/http-provider"]
-gemini = ["earmark-exec/gemini"]

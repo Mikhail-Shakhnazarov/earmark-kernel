@@ -1,10 +1,30 @@
 name: gemini_research
 version: 0.2.0
-description: Google Gemini provider profile for research synthesis.
-provider: google_gemini
+description: Google Gemini provider profile using the generic HTTP generation provider.
+provider: http_generation
 model: gemini-2.5-flash
 endpoint_env: null
-auth_env: GOOGLE_API_KEY
+auth_env: GEMINI_API_KEY
+http:
+  method: POST
+  url_template: "https://generativelanguage.googleapis.com/v1beta/models/{{model}}:generateContent"
+  auth:
+    kind: header
+    header_name: x-goog-api-key
+    env: GEMINI_API_KEY
+  request:
+    content_type: application/json
+    body:
+      contents:
+        - role: user
+          parts:
+            - text: "{{input_text}}"
+      generationConfig:
+        responseMimeType: application/json
+  response:
+    text_path: "$.candidates[0].content.parts[0].text"
+    input_tokens_path: "$.usageMetadata.promptTokenCount"
+    output_tokens_path: "$.usageMetadata.candidatesTokenCount"
 budget:
   max_input_tokens: 8000
   max_output_tokens: 4000

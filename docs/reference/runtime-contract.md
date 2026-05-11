@@ -24,7 +24,7 @@ During workflow execution, the engine emits a `WorkPacket` containing inputs, co
 
 ### Step 3: Produce Candidate
 
-The runtime (or a provider adapter like Gemini) processes the packet and produces a `ProviderResponse` with a `candidate_payload`.
+The runtime (or a registered provider adapter) processes the packet through the provider registry and produces a `ProviderResponse` with a `candidate_payload`.
 
 ### Step 4: Deposit Output
 

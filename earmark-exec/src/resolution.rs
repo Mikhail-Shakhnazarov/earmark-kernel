@@ -12,9 +12,7 @@ pub(crate) fn resolve_version<S: CanonicalStore>(
     store: &S,
     version: &VersionRef,
 ) -> Result<VersionRef, ExecError> {
-    if version.version_id.as_str() == "ver_00000000000000000000000000000000"
-        || version.version_id.as_str() == "latest"
-    {
+    if version.version_id.is_latest_sentinel() || version.version_id.as_str() == "latest" {
         store.read_head_ref(&version.id)?.ok_or_else(|| {
             ExecError::IncompleteExecution(format!(
                 "latest version not found for object {}",

@@ -20,6 +20,15 @@ pub fn write_object_and_index<S: CanonicalStore>(
     Ok(version_ref)
 }
 
+/// Batch-write objects to the store and update the derived index for each.
+///
+/// This is part of the execution persistence API: batch writes ensure store/index
+/// coherence across multiple object writes in a single lock acquisition. It remains
+/// public because integration tests and external consumers legitimately need
+/// transactional batch-write semantics when setting up or extending store content.
+///
+/// If a future refactor consolidates index updates into the store write path,
+/// this function may become an internal detail.
 pub fn write_batch_and_index<S: CanonicalStore>(
     store: &S,
     index: &DerivedIndex,
