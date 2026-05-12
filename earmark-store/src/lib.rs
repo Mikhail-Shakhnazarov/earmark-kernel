@@ -121,11 +121,33 @@ impl StoredObject {
         payload: StoredPayload,
         parents: Vec<VersionRef>,
     ) -> Self {
+        Self::new_with_id(
+            ObjectId::new(),
+            kind,
+            class,
+            standing,
+            provenance,
+            headers,
+            payload,
+            parents,
+        )
+    }
+
+    pub fn new_with_id(
+        id: ObjectId,
+        kind: Kind,
+        class: Option<String>,
+        standing: Standing,
+        provenance: Provenance,
+        headers: BTreeMap<String, HeaderValue>,
+        payload: StoredPayload,
+        parents: Vec<VersionRef>,
+    ) -> Self {
         let now = Utc::now();
         let payload_ref = payload.payload_ref();
         Self {
             envelope: Envelope {
-                id: ObjectId::new(),
+                id,
                 version_id: VersionId::new(),
                 kind,
                 class,

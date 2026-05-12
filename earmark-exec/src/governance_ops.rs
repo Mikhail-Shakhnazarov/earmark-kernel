@@ -205,7 +205,8 @@ fn persist_request_update<S: CanonicalStore>(
     parent_ref: &VersionRef,
     request: &StandingTransitionRequest,
 ) -> Result<VersionRef, ExecError> {
-    let mut stored = StoredObject::new(
+    let stored = StoredObject::new_with_id(
+        parent_ref.id.clone(),
         Kind::Object,
         Some("standing_transition_request".to_string()),
         Standing::default(),
@@ -220,7 +221,6 @@ fn persist_request_update<S: CanonicalStore>(
         StoredPayload::from_json_bytes(serde_json::to_vec_pretty(request)?),
         vec![parent_ref.clone()],
     );
-    stored.envelope.id = parent_ref.id.clone();
 
     write_object_and_index(store, index, &stored)
 }
