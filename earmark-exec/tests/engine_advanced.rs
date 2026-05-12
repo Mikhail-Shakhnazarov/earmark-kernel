@@ -344,11 +344,11 @@ fn parallel_transform_leak_bug() {
         version: "1".to_string(),
         purpose: "p1".to_string(),
         input_classes: vec!["start_class".to_string()],
-        output_classes: vec!["c1".to_string()],
+        output_classes: vec!["out1".to_string()],
         execution_policy: "local".to_string(),
         provider_profile: None,
         trace_policy: "t".to_string(),
-        register: "r".to_string(),
+        register: "out1".to_string(),
         body: earmark_core::MarkdownBody::new("b1".to_string()),
     };
     let instr1_ref = store
@@ -368,11 +368,11 @@ fn parallel_transform_leak_bug() {
         version: "1".to_string(),
         purpose: "p2".to_string(),
         input_classes: vec!["start_class".to_string()],
-        output_classes: vec!["c2".to_string()],
+        output_classes: vec!["out2".to_string()],
         execution_policy: "local".to_string(),
         provider_profile: None,
         trace_policy: "t".to_string(),
-        register: "r".to_string(),
+        register: "out2".to_string(),
         body: earmark_core::MarkdownBody::new("b2".to_string()),
     };
     let instr2_ref = store
