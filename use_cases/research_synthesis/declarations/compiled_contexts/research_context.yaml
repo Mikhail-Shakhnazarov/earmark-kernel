@@ -1,0 +1,21 @@
+name: research_context
+version: 1.0.0
+description: Collects all interview notes for synthesis.
+select:
+  classes:
+    - interview_note
+  standing: {}
+  relations: []
+  time_range: null
+  expansion:
+    object_filter: inherit
+    include_boundary_relations: false
+group_by: []
+render:
+  mode: prose
+  manifest_format: null
+  prose_template: null
+visibility:
+  include_lineage: true
+  include_constraints: true
+  include_provenance: true
