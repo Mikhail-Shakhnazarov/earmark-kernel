@@ -1,21 +1,26 @@
 use std::fs;
-
 use earmark_core::{Kind, VersionRef};
 use earmark_runtime_tools::RuntimeToolSurface;
-use earmark_store::{CanonicalStore, GitCanonicalStore};
+use earmark_store::CanonicalStore;
 use serde_json::json;
-
-use crate::app::{emit, mirror_surface, CliError};
+use crate::app::common::{CommandContext, CliError};
+use crate::app::{emit, mirror_surface};
 use crate::cli::DepositArgs;
-use crate::config::{resolve_system_id, CliConfig};
+use crate::config::resolve_system_id;
 
-pub fn handle(
-    store: &GitCanonicalStore,
-    runtime_surface: &RuntimeToolSurface<'_, GitCanonicalStore>,
-    config: &CliConfig,
-    as_json: bool,
-    args: DepositArgs,
-) -> Result<(), CliError> {
+pub fn handle(ctx: &CommandContext, args: &DepositArgs) -> Result<(), CliError> {
+    let store = ctx.store;
+    let index = ctx.index.as_ref().expect("index required for deposit");
+    let provider_registry = ctx.provider_registry;
+    let config = ctx.config;
+    let as_json = ctx.as_json;
+
+    let runtime_surface = RuntimeToolSurface {
+        store,
+        index,
+        provider_service: provider_registry,
+    };
+
     let mut validation_context = earmark_runtime_tools::DepositValidationContext::default();
 
     if let Some(system_id) = resolve_system_id(None, config) {
