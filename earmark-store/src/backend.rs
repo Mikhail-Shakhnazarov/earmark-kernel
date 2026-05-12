@@ -153,7 +153,8 @@ impl GitBackend for GixBackend {
     }
 
     fn commit_paths(&self, root: &Path, message: &str) -> Result<(), StoreError> {
-        let repo = gix::open(root).map_err(|e| StoreError::GitBackend(e.to_string()))?;
+        let repo = gix::open_opts(root, gix::open::Options::isolated())
+            .map_err(|e| StoreError::GitBackend(e.to_string()))?;
         
         // Ensure we haven't discovered the workspace root through upward traversal
         let git_dir = repo.git_dir().canonicalize().map_err(|e| StoreError::GitBackend(e.to_string()))?;

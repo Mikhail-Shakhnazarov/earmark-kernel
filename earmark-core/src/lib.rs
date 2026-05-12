@@ -997,9 +997,29 @@ pub struct WorkflowDefinition {
     pub name: String,
     pub version: String,
     pub description: Option<String>,
+    #[serde(default)]
     pub operations: Vec<WorkflowOperation>,
+    #[serde(default)]
     pub edges: Vec<WorkflowEdge>,
+    #[serde(default)]
     pub guards: Vec<WorkflowGuard>,
+    #[serde(default)]
+    pub output_contracts: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WorkflowDeclaration {
+    pub name: String,
+    pub version: String,
+    pub description: Option<String>,
+    #[serde(default)]
+    pub operations: Vec<WorkflowDeclarationOperation>,
+    #[serde(default)]
+    pub edges: Vec<WorkflowEdge>,
+    #[serde(default)]
+    pub guards: Vec<WorkflowGuard>,
+    #[serde(default)]
+    pub output_contracts: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1011,6 +1031,20 @@ pub enum FlexibleVersionRef {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WorkflowOperation {
+    pub id: String,
+    pub kind: String,
+    #[serde(default)]
+    pub input_contracts: Vec<String>,
+    #[serde(default)]
+    pub output_contracts: Vec<String>,
+    pub instruction: Option<VersionRef>,
+    pub compiled_context: Option<VersionRef>,
+    pub policy: Option<VersionRef>,
+    pub provider_profile: Option<VersionRef>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WorkflowDeclarationOperation {
     pub id: String,
     pub kind: String,
     #[serde(default)]
