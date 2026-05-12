@@ -1,24 +1,24 @@
+use crate::app::common::{CliError, CommandContext};
+use crate::app::{emit, register_declaration_file};
+use crate::cli::{DeclarationKind, SystemAction, SystemCommand};
+use crate::config::resolve_system_id;
 use earmark_declarations::activate_system_definition;
-use earmark_index::DerivedIndex;
-use earmark_store::GitCanonicalStore;
 use serde_json::json;
 
-use crate::app::{emit, register_declaration_file, CliError};
-use crate::cli::{DeclarationKind, SystemAction, SystemCommand};
-use crate::config::{resolve_system_id, CliConfig};
+pub fn handle(ctx: &CommandContext, command: &SystemCommand) -> Result<(), CliError> {
+    let store = ctx.store;
+    let index = ctx
+        .index
+        .as_ref()
+        .expect("index required for system commands");
+    let config = ctx.config;
+    let as_json = ctx.as_json;
 
-pub fn handle(
-    store: &GitCanonicalStore,
-    index: &DerivedIndex,
-    config: &CliConfig,
-    as_json: bool,
-    command: SystemCommand,
-) -> Result<(), CliError> {
-    match command.action {
+    match &command.action {
         SystemAction::Register { manifest } => {
             tracing::info!(manifest = %manifest.display(), "registering system declaration");
             let version_ref =
-                register_declaration_file(store, None, DeclarationKind::System, &manifest, None)?;
+                register_declaration_file(store, None, DeclarationKind::System, manifest, None)?;
             index.rebuild_from_store(store)?;
             emit(
                 as_json,

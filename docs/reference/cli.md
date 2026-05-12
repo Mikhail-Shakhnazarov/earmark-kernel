@@ -1,6 +1,6 @@
 # CLI Reference
 
-The Earmark CLI (`em`) is the primary interface for operators and developers. Most commands support `--json` for machine-readable output wrapped in a versioned envelope. Output-special commands such as `completions` and `run explain` (text-format inspection) bypass the JSON envelope.
+The Earmark CLI (`em`) is the primary interface for operators and developers. Most commands support `--json` for machine-readable output wrapped in a versioned envelope. For technical details on the JSON structure, see the [CLI Contracts Reference](cli-contracts.md). Output-special commands such as `completions` bypass the JSON envelope.
 
 ## Global Flags
 
@@ -184,6 +184,28 @@ Explain a relation: type, endpoints, and authorization trace.
 ### `em relation list [--source-id <id>] [--target-id <id>] [--relation-type <type>]`
 
 List relations, optionally filtered by source, target, or type.
+
+## Standing Requests
+
+### `em standing-request list [--status <status>] [--target <object_id>]`
+
+List proposed/applied/rejected standing requests.
+
+### `em standing-request show <request_id>`
+
+Show one standing request.
+
+### `em standing-request approve <request_id> [--reason <text>]`
+
+Approve a proposed standing request.
+
+### `em standing-request reject <request_id> [--reason <text>]`
+
+Reject a proposed standing request.
+
+### `em standing-request apply <request_id> [--policy <policy>] [--reason <text>]`
+
+Apply an approved standing request, optionally through a named policy.
 
 ## Audit and Providers
 

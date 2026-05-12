@@ -1,18 +1,23 @@
-use std::collections::BTreeMap;
-
+use crate::app::common::{CliError, CommandContext};
+use crate::app::emit;
+use crate::cli::{ContextAction, ContextCommand};
 use earmark_core::{ClassFilter, DimensionId, RelationFilter, StandingFilter, TokenId};
 use earmark_runtime_tools::RuntimeToolSurface;
-use earmark_store::GitCanonicalStore;
+use std::collections::BTreeMap;
 
-use crate::app::{emit, CliError};
-use crate::cli::{ContextAction, ContextCommand};
+pub fn handle(ctx: &CommandContext, command: &ContextCommand) -> Result<(), CliError> {
+    let store = ctx.store;
+    let index = ctx.index.as_ref().expect("index required for context");
+    let provider_registry = ctx.provider_registry;
+    let as_json = ctx.as_json;
 
-pub fn handle(
-    runtime_surface: &RuntimeToolSurface<'_, GitCanonicalStore>,
-    as_json: bool,
-    command: ContextCommand,
-) -> Result<(), CliError> {
-    match command.action {
+    let runtime_surface = RuntimeToolSurface {
+        store,
+        index,
+        provider_service: provider_registry,
+    };
+
+    match &command.action {
         ContextAction::Compile(args) => {
             let standing_filter = if args.epistemic.is_empty() {
                 None
@@ -29,6 +34,7 @@ pub fn handle(
             };
             let roots = args
                 .roots
+                .clone()
                 .into_iter()
                 .map(earmark_core::ObjectId::parse)
                 .collect::<Result<Vec<_>, _>>()?;
@@ -36,10 +42,10 @@ pub fn handle(
                 roots,
                 args.depth,
                 Some(RelationFilter {
-                    allowed_types: args.relation_types,
+                    allowed_types: args.relation_types.clone(),
                 }),
                 Some(ClassFilter {
-                    allowed_classes: args.classes,
+                    allowed_classes: args.classes.clone(),
                 }),
                 standing_filter,
             )?;
