@@ -376,7 +376,7 @@ impl GitCanonicalStore {
             fs::write(self.manifest_path(), to_json_pretty(&manifest)?)?;
         }
 
-        self.backend.ensure_repo(&self.root)?;
+        self.backend.ensure_repo(&self.canonical_dir())?;
         Ok(())
     }
 }
@@ -474,7 +474,7 @@ impl CanonicalStore for GitCanonicalStore {
                 }
                 written.push(object.envelope.version_ref());
             }
-            self.backend.commit_paths(&self.root, &batch.message)?;
+            self.backend.commit_paths(&self.canonical_dir(), &batch.message)?;
             Ok(())
         })();
         if let Err(err) = write_result {
