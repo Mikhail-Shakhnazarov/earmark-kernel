@@ -1,8 +1,0 @@
-# LEGACY COMPATIBILITY: v0.2 object Standing format
-# This format remains readable through compatibility normalization.
-# The epistemic / review / process fields are translated to
-# kernel:epistemic / kernel:review / kernel:process during deserialization.
-standing:
-  epistemic: working
-  review: unreviewed
-  process: active

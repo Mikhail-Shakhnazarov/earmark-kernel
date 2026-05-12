@@ -60,32 +60,9 @@ The derived index can be rebuilt from canonical state:
 
 Rebuilding does not destroy active system registrations or active assignment claims.
 
-## Migration Note: v0.3 Protocol-Based Standing
+## Index Rebuild
 
-v0.3 replaces the legacy three-field Standing object with declared standing dimensions.
-
-Legacy standing:
-
-```yaml
-standing:
-  epistemic: working
-  review: unreviewed
-  process: active
-```
-
-Current standing:
-
-```yaml
-standing:
-  kernel:epistemic: working
-  kernel:review: unreviewed
-  kernel:process: active
-  research:status: draft
-```
-
-Legacy objects remain readable through compatibility normalization. New writes use the map format.
-
-After upgrading, rebuild the derived index so the `object_standing` table is populated. Currently, `em system register` triggers a full rebuild, or you can rebuild programmatically with `index.rebuild_from_store(&store)`.
+If the `object_standing` table needs repopulation (e.g., after schema changes), rebuild the derived index. Currently, `em system register` triggers a full rebuild, or you can rebuild programmatically with `index.rebuild_from_store(&store)`.
 
 ## Key Rules
 

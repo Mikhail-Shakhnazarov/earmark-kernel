@@ -43,7 +43,7 @@ fn test_transition_into_accepted_projection_fails_without_review_evidence() {
         version: "1".to_string(),
         description: None,
         transition_rules: vec![StandingTransitionRule {
-            dimension: "review".to_string(),
+            dimension: "kernel:review".to_string(),
             from: vec!["unreviewed".to_string()],
             to: vec!["accepted".to_string()],
             requires_review: true,
@@ -65,7 +65,7 @@ fn test_transition_into_accepted_projection_fails_without_review_evidence() {
 
     let request = earmark_core::StandingTransitionRequest {
         target_object_id: target_ref.id.clone(),
-        dimension: "review".to_string(),
+        dimension: "kernel:review".to_string(),
         from_value: "unreviewed".to_string(),
         to_value: "accepted".to_string(),
         rationale: None,

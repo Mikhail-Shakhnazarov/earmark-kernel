@@ -484,103 +484,6 @@ impl std::str::FromStr for Kind {
     }
 }
 
-/// Legacy v0.2 enum — retained for compatibility deserialization only.
-/// New code uses the v0.3 `Standing` map with `DimensionId`/`TokenId`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum EpistemicStanding {
-    Unresolved,
-    Working,
-    Supported,
-    Contested,
-    Superseded,
-}
-
-impl EpistemicStanding {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Unresolved => "unresolved",
-            Self::Working => "working",
-            Self::Supported => "supported",
-            Self::Contested => "contested",
-            Self::Superseded => "superseded",
-        }
-    }
-}
-
-/// Legacy v0.2 enum — retained for compatibility deserialization only.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ReviewStanding {
-    Unreviewed,
-    Pending,
-    Accepted,
-    Rejected,
-}
-
-impl ReviewStanding {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Unreviewed => "unreviewed",
-            Self::Pending => "pending",
-            Self::Accepted => "accepted",
-            Self::Rejected => "rejected",
-        }
-    }
-}
-
-/// Legacy v0.2 enum — retained for compatibility deserialization only.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ProcessStanding {
-    Active,
-    Blocked,
-    Completed,
-    Archived,
-}
-
-impl ProcessStanding {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Active => "active",
-            Self::Blocked => "blocked",
-            Self::Completed => "completed",
-            Self::Archived => "archived",
-        }
-    }
-}
-
-/// Legacy v0.2 dimension enum — retained for CLI parsing compatibility only.
-/// New code uses `DimensionId` with `kernel:*` prefixed strings.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum StandingDimension {
-    Epistemic,
-    Review,
-    Process,
-}
-
-impl StandingDimension {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Epistemic => "epistemic",
-            Self::Review => "review",
-            Self::Process => "process",
-        }
-    }
-
-    pub fn parse(value: &str) -> Result<Self, CoreError> {
-        match value {
-            "epistemic" => Ok(Self::Epistemic),
-            "review" => Ok(Self::Review),
-            "process" => Ok(Self::Process),
-            _ => Err(CoreError::InvalidIdentifier(format!(
-                "invalid standing dimension '{}': expected epistemic, review, or process",
-                value
-            ))),
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Standing {
     pub values: BTreeMap<DimensionId, TokenId>,
@@ -639,28 +542,12 @@ impl<'de> Deserialize<'de> for Standing {
         let raw: BTreeMap<String, String> = BTreeMap::deserialize(deserializer)?;
         let mut values = BTreeMap::new();
         for (k, v) in raw {
-            let norm_key = match k.as_str() {
-                "epistemic" => "kernel:epistemic",
-                "review" => "kernel:review",
-                "process" => "kernel:process",
-                other => other,
-            };
-            let dim = DimensionId::parse(norm_key).map_err(D::Error::custom)?;
+            let dim = DimensionId::parse(&k).map_err(D::Error::custom)?;
             let token = TokenId::parse(&v).map_err(D::Error::custom)?;
             values.insert(dim, token);
         }
         Ok(Standing { values })
     }
-}
-
-/// Legacy compatibility helper for deserializing old three-axis standing format.
-/// This must not become a second live standing model.
-#[allow(dead_code)]
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-struct LegacyStanding {
-    epistemic: EpistemicStanding,
-    review: ReviewStanding,
-    process: ProcessStanding,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1033,19 +920,12 @@ impl<'de> Deserialize<'de> for ClassStandingRules {
             allowed_standing: Option<Map<String, Vec<String>>>,
             #[serde(default)]
             required_protocols: Option<Map<String, Map<String, serde_json::Value>>>,
-            #[serde(default)]
-            allowed_epistemic: Option<Vec<String>>,
-            #[serde(default)]
-            allowed_review: Option<Vec<String>>,
-            #[serde(default)]
-            allowed_process: Option<Vec<String>>,
         }
 
         let raw = Raw::deserialize(deserializer)?;
 
+        let mut map = BTreeMap::new();
         if let Some(allowed_standing) = raw.allowed_standing {
-            // New format
-            let mut map = BTreeMap::new();
             for (k, v) in allowed_standing {
                 let dim = DimensionId::parse(&k).map_err(D::Error::custom)?;
                 let mut tokens = Vec::new();
@@ -1054,63 +934,26 @@ impl<'de> Deserialize<'de> for ClassStandingRules {
                 }
                 map.insert(dim, tokens);
             }
-            let mut protocols = BTreeMap::new();
-            if let Some(rp) = raw.required_protocols {
-                for (k, v) in rp {
-                    let pid = KernelProtocolId::parse(&k).map_err(D::Error::custom)?;
-                    let props: BTreeMap<String, ScalarValue> = v
-                        .into_iter()
-                        .map(|(pk, pv)| {
-                            let sv = serde_json::from_value(pv.clone())
-                                .unwrap_or(ScalarValue::String(pv.to_string()));
-                            (pk, sv)
-                        })
-                        .collect();
-                    protocols.insert(pid, props);
-                }
+        }
+        let mut protocols = BTreeMap::new();
+        if let Some(rp) = raw.required_protocols {
+            for (k, v) in rp {
+                let pid = KernelProtocolId::parse(&k).map_err(D::Error::custom)?;
+                let props: BTreeMap<String, ScalarValue> = v
+                    .into_iter()
+                    .map(|(pk, pv)| {
+                        let sv = serde_json::from_value(pv.clone())
+                            .unwrap_or(ScalarValue::String(pv.to_string()));
+                        (pk, sv)
+                    })
+                    .collect();
+                protocols.insert(pid, props);
             }
-            return Ok(ClassStandingRules {
-                allowed_standing: map,
-                required_protocols: protocols,
-            });
-        }
-
-        // Old format: translate allowed_epistemic/review/process to
-        // kernel:* dimensions
-        let mut map = BTreeMap::new();
-        if let Some(tokens) = raw.allowed_epistemic {
-            let dim = DimensionId::from_static("kernel:epistemic");
-            let parsed: Vec<TokenId> = tokens
-                .into_iter()
-                .map(|t| TokenId::parse(&t))
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(D::Error::custom)?;
-            // Note: tokens may be values like EpistemicStanding::Working
-            // which serialize as "working" — handled by TokenId::parse
-            map.insert(dim, parsed);
-        }
-        if let Some(tokens) = raw.allowed_review {
-            let dim = DimensionId::from_static("kernel:review");
-            let parsed: Vec<TokenId> = tokens
-                .into_iter()
-                .map(|t| TokenId::parse(&t))
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(D::Error::custom)?;
-            map.insert(dim, parsed);
-        }
-        if let Some(tokens) = raw.allowed_process {
-            let dim = DimensionId::from_static("kernel:process");
-            let parsed: Vec<TokenId> = tokens
-                .into_iter()
-                .map(|t| TokenId::parse(&t))
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(D::Error::custom)?;
-            map.insert(dim, parsed);
         }
 
         Ok(ClassStandingRules {
             allowed_standing: map,
-            required_protocols: BTreeMap::new(),
+            required_protocols: protocols,
         })
     }
 }
@@ -2222,26 +2065,18 @@ mod tests {
     }
 
     #[test]
-    fn test_standing_old_format_deserializes() {
+    fn test_standing_old_format_no_longer_normalizes() {
+        // Legacy keys now deserialize as bare dimension IDs (not kernel:*).
         let old_json = r#"{"epistemic": "working", "review": "unreviewed", "process": "active"}"#;
         let standing: Standing = serde_json::from_str(old_json).unwrap();
         assert_eq!(
-            standing
-                .get(&DimensionId::new("kernel:epistemic"))
-                .map(TokenId::as_str),
-            Some("working")
+            standing.get(&DimensionId::new("epistemic")),
+            Some(&TokenId::new("working"))
         );
         assert_eq!(
-            standing
-                .get(&DimensionId::new("kernel:review"))
-                .map(TokenId::as_str),
-            Some("unreviewed")
-        );
-        assert_eq!(
-            standing
-                .get(&DimensionId::new("kernel:process"))
-                .map(TokenId::as_str),
-            Some("active")
+            standing.get(&DimensionId::new("kernel:epistemic")),
+            None,
+            "bare 'epistemic' must not normalize to 'kernel:epistemic'"
         );
     }
 

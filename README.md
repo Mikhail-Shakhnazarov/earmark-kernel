@@ -18,7 +18,7 @@ standing:
 
 Dimensions and tokens are declared by the active system definition. Kernel behavior (review authorization, visibility, immutability) is projected from standing tokens through protocol bindings. The kernel enforces protocols, not token names.
 
-Legacy v0.2 objects using `epistemic` / `review` / `process` as direct fields remain readable through compatibility normalization.
+Only the v0.3 map format is supported. Legacy v0.2 objects using bare `epistemic` / `review` / `process` fields are not supported.
 
 ## The Problem
 
@@ -130,7 +130,7 @@ See the [Quickstart Tutorial](docs/tutorials/quickstart.md) for a complete walkt
 | **[Runtime Integration](docs/reference/runtime-integration-guide.md)** | Using Earmark from Rust or any language |
 | **[Provider Extension](docs/reference/provider-extension.md)** | Register custom providers through the current extension surface |
 | **[Declaration Authoring](docs/declarations/README.md)** | Examples and validation rules |
-| **[Migration Notes](docs/migrations/v0_3_protocol_based_standing.md)** | v0.3 protocol-based Standing migration |
+
 
 ## Current Status
 

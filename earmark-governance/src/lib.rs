@@ -105,18 +105,6 @@ pub struct StandingTransitionResult {
     pub requires_review: bool,
 }
 
-/// Normalize legacy v0.2 dimension names to v0.3 kernel:* prefix.
-/// This allows policy transition rules written with bare `review`, `epistemic`,
-/// or `process` to match the current standing map format.
-fn normalize_dim_name(name: &str) -> String {
-    match name {
-        "epistemic" => "kernel:epistemic".to_string(),
-        "review" => "kernel:review".to_string(),
-        "process" => "kernel:process".to_string(),
-        other => other.to_string(),
-    }
-}
-
 pub fn validate_standing_transition(
     policy: &StandingPolicy,
     registry: &StandingRegistry,
@@ -210,8 +198,7 @@ pub fn validate_standing_transition(
     }
 
     for rule in &policy.transition_rules {
-        let rule_dim = normalize_dim_name(&rule.dimension);
-        if rule_dim == changed_dim.as_str()
+        if rule.dimension == changed_dim.as_str()
             && rule.from.iter().any(|v| v == from)
             && rule.to.iter().any(|v| v == to)
         {

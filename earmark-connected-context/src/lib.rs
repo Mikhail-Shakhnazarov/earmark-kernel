@@ -564,14 +564,16 @@ mod tests {
     use super::*;
     use crate::filter::object_summary_matches_standing;
     use earmark_core::{
-        CompiledContextExpansion, DimensionId, EpistemicStanding, ExpansionObjectFilter, Kind,
-        ProcessStanding, Provenance, ReviewStanding, Standing, TokenId,
+        CompiledContextExpansion, DimensionId, ExpansionObjectFilter, Kind, Provenance, Standing,
+        TokenId,
     };
     use earmark_store::{CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload};
     use tempfile::tempdir;
 
     #[test]
     fn test_matches_standing() {
+        let mut standing = BTreeMap::new();
+        standing.insert("kernel:review".to_string(), "accepted".to_string());
         let row = earmark_index::ObjectSummary {
             object_id: "o1".to_string(),
             version_id: "v1".to_string(),
@@ -579,19 +581,16 @@ mod tests {
             class: Some("c1".to_string()),
             title: None,
             summary: None,
-            standing_review: "accepted".to_string(),
-            standing_process: "active".to_string(),
-            standing_epistemic: "confirmed".to_string(),
             system_id: None,
             namespace: None,
-            standing: BTreeMap::new(),
+            standing,
         };
 
         let mut filters = BTreeMap::new();
-        filters.insert("review".to_string(), vec!["accepted".to_string()]);
+        filters.insert("kernel:review".to_string(), vec!["accepted".to_string()]);
         assert!(object_summary_matches_standing(&row, &filters));
 
-        filters.insert("review".to_string(), vec!["rejected".to_string()]);
+        filters.insert("kernel:review".to_string(), vec!["rejected".to_string()]);
         assert!(!object_summary_matches_standing(&row, &filters));
 
         let empty_filters = BTreeMap::new();
@@ -607,9 +606,6 @@ mod tests {
             class: None,
             title: None,
             summary: None,
-            standing_review: "accepted".to_string(),
-            standing_process: "active".to_string(),
-            standing_epistemic: "confirmed".to_string(),
             system_id: None,
             namespace: None,
             standing: BTreeMap::new(),
@@ -623,30 +619,6 @@ mod tests {
     }
 
     #[test]
-    fn test_matches_standing_legacy_fallback_still_works() {
-        let row = earmark_index::ObjectSummary {
-            object_id: "o1".to_string(),
-            version_id: "v1".to_string(),
-            kind: "Object".to_string(),
-            class: None,
-            title: None,
-            summary: None,
-            standing_review: "accepted".to_string(),
-            standing_process: "active".to_string(),
-            standing_epistemic: "confirmed".to_string(),
-            system_id: None,
-            namespace: None,
-            standing: BTreeMap::new(),
-        };
-        // Legacy short name still falls back to standing_review column
-        let filters = BTreeMap::from([("kernel:review".to_string(), vec!["accepted".to_string()])]);
-        assert!(object_summary_matches_standing(&row, &filters));
-        // Long name also works
-        let filters = BTreeMap::from([("kernel:review".to_string(), vec!["rejected".to_string()])]);
-        assert!(!object_summary_matches_standing(&row, &filters));
-    }
-
-    #[test]
     fn test_matches_standing_empty_allowed_tokens_is_unconstrained() {
         let row = earmark_index::ObjectSummary {
             object_id: "o1".to_string(),
@@ -655,9 +627,6 @@ mod tests {
             class: None,
             title: None,
             summary: None,
-            standing_review: "accepted".to_string(),
-            standing_process: "active".to_string(),
-            standing_epistemic: "confirmed".to_string(),
             system_id: None,
             namespace: None,
             standing: BTreeMap::from([("research:status".to_string(), "verified".to_string())]),
@@ -679,9 +648,6 @@ mod tests {
             class: None,
             title: None,
             summary: None,
-            standing_review: "unreviewed".to_string(),
-            standing_process: "active".to_string(),
-            standing_epistemic: "working".to_string(),
             system_id: None,
             namespace: None,
             standing: BTreeMap::from([("research:status".to_string(), "demonstrated".to_string())]),
@@ -927,7 +893,8 @@ mod tests {
             .unwrap();
         index.rebuild_from_store(&store).unwrap();
 
-        let standing = BTreeMap::from([("review".to_string(), vec!["accepted".to_string()])]);
+        let standing =
+            BTreeMap::from([("kernel:review".to_string(), vec!["accepted".to_string()])]);
         let selected =
             collect_selected_objects(&store, &index, &template_with_standing(standing)).unwrap();
         let ids = selected
@@ -1004,7 +971,8 @@ mod tests {
             .unwrap();
         index.rebuild_from_store(&store).unwrap();
 
-        let standing = BTreeMap::from([("review".to_string(), vec!["accepted".to_string()])]);
+        let standing =
+            BTreeMap::from([("kernel:review".to_string(), vec!["accepted".to_string()])]);
         let selection = collect_selection(
             &store,
             &index,
@@ -1041,7 +1009,8 @@ mod tests {
             .unwrap();
         index.rebuild_from_store(&store).unwrap();
 
-        let standing = BTreeMap::from([("review".to_string(), vec!["accepted".to_string()])]);
+        let standing =
+            BTreeMap::from([("kernel:review".to_string(), vec!["accepted".to_string()])]);
         let selection = collect_selection(
             &store,
             &index,
@@ -1094,7 +1063,8 @@ mod tests {
             .unwrap();
         index.rebuild_from_store(&store).unwrap();
 
-        let standing = BTreeMap::from([("review".to_string(), vec!["accepted".to_string()])]);
+        let standing =
+            BTreeMap::from([("kernel:review".to_string(), vec!["accepted".to_string()])]);
         let selected =
             collect_selected_objects(&store, &index, &template_with_standing(standing)).unwrap();
         let ids = selected
@@ -1315,7 +1285,8 @@ mod tests {
             .unwrap();
         index.rebuild_from_store(&store).unwrap();
 
-        let standing = BTreeMap::from([("review".to_string(), vec!["accepted".to_string()])]);
+        let standing =
+            BTreeMap::from([("kernel:review".to_string(), vec!["accepted".to_string()])]);
         let mut template = template_with_standing(standing);
         template.select.expansion.include_boundary_relations = true;
 
