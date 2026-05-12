@@ -156,6 +156,7 @@ fn symbolic_resolution_uses_explicit_declaration_identity_not_title_or_class() {
         operations: vec![],
         edges: vec![],
         guards: vec![],
+        output_contracts: vec![],
     };
     let target_obj = StoredObject::new(
         Kind::Workflow,
@@ -178,6 +179,7 @@ fn symbolic_resolution_uses_explicit_declaration_identity_not_title_or_class() {
         operations: vec![],
         edges: vec![],
         guards: vec![],
+        output_contracts: vec![],
     };
     let collision_obj = StoredObject::new(
         Kind::Workflow,
@@ -923,7 +925,7 @@ fn test_rebuild_clears_previous_object_standing() {
             ..Default::default()
         })
         .unwrap();
-    assert!(rows.len() >= 1);
+    assert!(!rows.is_empty());
     assert!(rows
         .iter()
         .any(|r| r.standing.get("research:status").map(String::as_str) == Some("demonstrated")));

@@ -3,10 +3,10 @@ use std::collections::BTreeMap;
 use earmark_core::{
     ClassDefinition, ClassStandingRules, CompiledContextExpansion, CompiledContextRender,
     CompiledContextSelect, CompiledContextTemplate, CompiledContextVisibility, DimensionId,
-    EscalationRule, InstructionPayload, JsonSchemaRef, MarkdownBody, OperationRequirement,
-    ProviderBudget, ProviderExposure, ProviderProfile, ProviderResponseContract, StandingPolicy,
-    StandingRegistry, StandingTransitionRule, TokenId, WorkflowDefinition, WorkflowEdge,
-    WorkflowGuard, WorkflowOperation,
+    EscalationRule, FlexibleVersionRef, InstructionPayload, JsonSchemaRef, MarkdownBody,
+    OperationRequirement, ProviderBudget, ProviderExposure, ProviderProfile,
+    ProviderResponseContract, StandingPolicy, StandingRegistry, StandingTransitionRule, TokenId,
+    WorkflowDeclaration, WorkflowDeclarationOperation, WorkflowEdge, WorkflowGuard,
 };
 use earmark_declarations::{
     validate_class_definition, validate_compiled_context_template,
@@ -17,26 +17,27 @@ use earmark_declarations::{
 use earmark_store::{CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload};
 use tempfile::tempdir;
 
-fn base_workflow() -> WorkflowDefinition {
-    WorkflowDefinition {
+fn base_workflow() -> WorkflowDeclaration {
+    WorkflowDeclaration {
         name: "wf_ok".to_string(),
         version: "1.0.0".to_string(),
         description: None,
-        operations: vec![WorkflowOperation {
+        operations: vec![WorkflowDeclarationOperation {
             id: "op_a".to_string(),
             kind: "transform".to_string(),
             input_contracts: vec![],
             output_contracts: vec![],
-            instruction: Some(earmark_core::VersionRef::new(
+            instruction: Some(FlexibleVersionRef::Ref(earmark_core::VersionRef::new(
                 earmark_core::ObjectId::new(),
                 earmark_core::VersionId::new(),
-            )),
+            ))),
             compiled_context: None,
             policy: None,
             provider_profile: None,
         }],
         edges: vec![],
         guards: vec![],
+        output_contracts: vec![],
     }
 }
 
@@ -464,10 +465,11 @@ fn workflow_compile_context_requires_compiled_context() {
     assert!(validate_workflow_definition(&wf).is_err());
 
     // With compiled_context it should pass
-    wf.operations[0].compiled_context = Some(earmark_core::VersionRef::new(
-        earmark_core::ObjectId::new(),
-        earmark_core::VersionId::new(),
-    ));
+    wf.operations[0].compiled_context =
+        Some(FlexibleVersionRef::Ref(earmark_core::VersionRef::new(
+            earmark_core::ObjectId::new(),
+            earmark_core::VersionId::new(),
+        )));
     assert!(validate_workflow_definition(&wf).is_ok());
 }
 
@@ -801,33 +803,33 @@ fn valid_class_examples_pass() {
 
 #[test]
 fn valid_workflow_example_passes() {
-    let wf = WorkflowDefinition {
+    let wf = WorkflowDeclaration {
         name: "source_to_finding".to_string(),
         version: "1.0.0".to_string(),
         description: Some("test".to_string()),
         operations: vec![
-            WorkflowOperation {
+            WorkflowDeclarationOperation {
                 id: "compile_context".to_string(),
                 kind: "compile_context".to_string(),
                 input_contracts: vec!["source_note".to_string()],
                 output_contracts: vec!["work_surface".to_string()],
                 instruction: None,
-                compiled_context: Some(earmark_core::VersionRef::new(
+                compiled_context: Some(FlexibleVersionRef::Ref(earmark_core::VersionRef::new(
                     earmark_core::ObjectId::new(),
                     earmark_core::VersionId::new(),
-                )),
+                ))),
                 policy: None,
                 provider_profile: None,
             },
-            WorkflowOperation {
+            WorkflowDeclarationOperation {
                 id: "transform".to_string(),
                 kind: "transform".to_string(),
                 input_contracts: vec!["source_note".to_string()],
                 output_contracts: vec!["finding".to_string()],
-                instruction: Some(earmark_core::VersionRef::new(
+                instruction: Some(FlexibleVersionRef::Ref(earmark_core::VersionRef::new(
                     earmark_core::ObjectId::new(),
                     earmark_core::VersionId::new(),
-                )),
+                ))),
                 compiled_context: None,
                 policy: None,
                 provider_profile: None,
@@ -839,6 +841,7 @@ fn valid_workflow_example_passes() {
             condition: None,
         }],
         guards: vec![],
+        output_contracts: vec![],
     };
     assert!(validate_workflow_definition(&wf).is_ok());
 }

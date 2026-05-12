@@ -2231,7 +2231,7 @@ mod tests {
     #[test]
     fn test_invalid_dimension_id_fails_parse() {
         assert!(DimensionId::parse("").is_err());
-        assert!(DimensionId::parse(&"a".repeat(129)).is_err());
+        assert!(DimensionId::parse("a".repeat(129)).is_err());
         assert!(DimensionId::parse("UPPERCASE").is_err());
         assert!(DimensionId::parse("has space").is_err());
         assert!(DimensionId::parse("valid:name").is_ok());
@@ -2240,7 +2240,7 @@ mod tests {
     #[test]
     fn test_invalid_token_id_fails_parse() {
         assert!(TokenId::parse("").is_err());
-        assert!(TokenId::parse(&"a".repeat(65)).is_err());
+        assert!(TokenId::parse("a".repeat(65)).is_err());
         assert!(TokenId::parse("UPPERCASE").is_err());
         assert!(TokenId::parse("has space").is_err());
         assert!(TokenId::parse("valid_token").is_ok());
@@ -2292,7 +2292,7 @@ mod tests {
     #[test]
     fn test_kernel_protocol_id_parse_rejects_invalid() {
         assert!(KernelProtocolId::parse("").is_err());
-        assert!(KernelProtocolId::parse(&"a".repeat(129)).is_err());
+        assert!(KernelProtocolId::parse("a".repeat(129)).is_err());
         assert!(KernelProtocolId::parse("UPPERCASE").is_err());
         assert!(KernelProtocolId::parse("has space").is_err());
         assert!(KernelProtocolId::parse("kernel:review").is_ok());
@@ -2648,17 +2648,16 @@ mod tests {
     #[test]
     fn test_unknown_dimension_in_class_standing_rules_fails_registry_validation() {
         let registry = StandingRegistry::kernel_defaults();
-        let rules = ClassStandingRules {
+        let _rules = ClassStandingRules {
             allowed_standing: BTreeMap::from([(
                 DimensionId::from_static("unknown:dim"),
                 vec![TokenId::from_static("unknown_token")],
             )]),
             ..Default::default()
         };
-        assert!(registry
+        assert!(!registry
             .dimensions
-            .get(&DimensionId::new("unknown:dim"))
-            .is_none());
+            .contains_key(&DimensionId::new("unknown:dim")));
     }
 
     #[test]
@@ -2672,7 +2671,7 @@ mod tests {
         assert!(valid.contains(&"working"));
         assert!(!valid.contains(&"bogus"));
         let unknown_id = DimensionId::new("research:status");
-        assert!(registry.dimensions.get(&unknown_id).is_none());
+        assert!(!registry.dimensions.contains_key(&unknown_id));
     }
 
     #[test]
@@ -2680,7 +2679,7 @@ mod tests {
         let registry = StandingRegistry::kernel_defaults();
         // "nonexistent" is a valid DimensionId (just a name) but not in the registry
         let dim_id = DimensionId::parse("nonexistent").expect("valid dim id");
-        assert!(registry.dimensions.get(&dim_id).is_none());
+        assert!(!registry.dimensions.contains_key(&dim_id));
     }
 
     #[test]

@@ -34,6 +34,7 @@ fn test_execution_ir_compilation() {
         }],
         edges: vec![],
         guards: vec![],
+        output_contracts: vec![],
     };
 
     let ir = crate::helpers::compile_workflow(&workflow).unwrap();

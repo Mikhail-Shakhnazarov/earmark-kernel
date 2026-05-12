@@ -62,7 +62,7 @@ proptest! {
 
     #[test]
     fn test_validate_workflow_operation_ids(id in "[a-z][a-z0-9_]{0,63}") {
-        let op = WorkflowOperation {
+        let op = WorkflowDeclarationOperation {
             id: id.clone(),
             kind: "nop".to_string(),
             input_contracts: vec![],
@@ -72,13 +72,14 @@ proptest! {
             policy: None,
             provider_profile: None,
         };
-        let workflow = WorkflowDefinition {
+        let workflow = WorkflowDeclaration {
             name: "test_workflow".to_string(),
             version: "1.0.0".to_string(),
             description: None,
             operations: vec![op],
             edges: vec![],
             guards: vec![],
+            output_contracts: vec![],
         };
         assert!(validate_workflow_definition(&workflow).is_ok());
     }
