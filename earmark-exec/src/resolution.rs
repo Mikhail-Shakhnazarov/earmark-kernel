@@ -30,8 +30,10 @@ pub(crate) fn resolve_version_for_kind<S: CanonicalStore>(
     version: &VersionRef,
     expected_kind: Kind,
 ) -> Result<VersionRef, ExecError> {
-    if let Ok(resolved) = resolve_version(store, version) {
-        return Ok(resolved);
+    match resolve_version(store, version) {
+        Ok(resolved) => return Ok(resolved),
+        Err(ExecError::IncompleteExecution(_)) => {} // Fall back to symbolic resolution
+        Err(e) => return Err(e),
     }
 
     let symbolic = version.id.as_str();
