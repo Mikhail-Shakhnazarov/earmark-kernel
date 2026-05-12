@@ -3,7 +3,7 @@ use earmark_connected_context::WorkSurfaceManifest;
 use earmark_core::{
     projection::project_visibility, Kind, ObjectRef, RunRecord, RunStatus, StandingRegistry,
     TokenRecord, TransitionAssignment, VersionRef, WorkPacket, WorkPacketConstraints,
-    WorkSurfaceRef, WorkflowDefinition,
+    WorkSurfaceRef, WorkflowDefinition, FlexibleVersionRef,
 };
 use earmark_store::{CanonicalStore, StoredObject, StoredPayload};
 use std::collections::{BTreeMap, BTreeSet};
@@ -25,15 +25,32 @@ pub(crate) fn compile_workflow(workflow: &WorkflowDefinition) -> Result<Executio
                     operation.id
                 )));
             }
+            let instruction = operation.instruction.as_ref().map(|f| match f {
+                FlexibleVersionRef::Ref(r) => Ok(r.clone()),
+                FlexibleVersionRef::Path(p) => Err(ExecError::InvalidWorkflow(format!("unresolved instruction path: {}", p))),
+            }).transpose()?;
+            let compiled_context = operation.compiled_context.as_ref().map(|f| match f {
+                FlexibleVersionRef::Ref(r) => Ok(r.clone()),
+                FlexibleVersionRef::Path(p) => Err(ExecError::InvalidWorkflow(format!("unresolved context path: {}", p))),
+            }).transpose()?;
+            let policy = operation.policy.as_ref().map(|f| match f {
+                FlexibleVersionRef::Ref(r) => Ok(r.clone()),
+                FlexibleVersionRef::Path(p) => Err(ExecError::InvalidWorkflow(format!("unresolved policy path: {}", p))),
+            }).transpose()?;
+            let provider_profile = operation.provider_profile.as_ref().map(|f| match f {
+                FlexibleVersionRef::Ref(r) => Ok(r.clone()),
+                FlexibleVersionRef::Path(p) => Err(ExecError::InvalidWorkflow(format!("unresolved provider profile path: {}", p))),
+            }).transpose()?;
+
             Ok(ExecutionTransition {
                 id: operation.id.clone(),
                 operation: operation.kind.clone(),
                 input_contracts: operation.input_contracts.clone(),
                 output_contracts: operation.output_contracts.clone(),
-                instruction: operation.instruction.clone(),
-                compiled_context: operation.compiled_context.clone(),
-                policy: operation.policy.clone(),
-                provider_profile: operation.provider_profile.clone(),
+                instruction,
+                compiled_context,
+                policy,
+                provider_profile,
             })
         })
         .collect::<Result<Vec<_>, ExecError>>()?;

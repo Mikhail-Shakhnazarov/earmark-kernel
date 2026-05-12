@@ -312,6 +312,10 @@ pub enum ReportAction {
         #[arg(short, long)]
         output: PathBuf,
     },
+    Trial {
+        #[arg(help = "Trial ID or 'latest'")]
+        trial_id: Option<String>,
+    },
 }
 
 #[derive(Args)]
