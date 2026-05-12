@@ -154,7 +154,9 @@ pub fn apply_standing_request<S: CanonicalStore>(
         ));
     }
 
-    // 5b. Enforce same-change-set review authorization for transitions into accepted projection
+    // 5b. Enforce existing version-matched accepted review evidence for transitions
+    //     into accepted review projection.  Uses a global index scan (not same-change-set).
+    //     See validate_transition_change_set in validation.rs for the same-change-set path.
     let requested_projection = project(&next_standing, registry)
         .map_err(|e| ExecError::GovernanceOperation(format!("projection error: {}", e)))?;
     if requested_projection.review == Some(earmark_core::projection::ReviewProjection::Accepted) {
@@ -163,7 +165,8 @@ pub fn apply_standing_request<S: CanonicalStore>(
             && !has_accepted_review(store, index, &target_head_ref)?
         {
             return Err(ExecError::GovernanceOperation(
-                "transition into accepted review projection requires same-change-set review evidence"
+                "transition into accepted review projection requires existing accepted review \
+                 evidence targeting the current object version"
                     .to_string(),
             ));
         }
@@ -223,6 +226,11 @@ fn persist_request_update<S: CanonicalStore>(
     write_object_and_index(store, index, &stored)
 }
 
+/// Scans all indexed Review objects for an accepted review targeting the exact
+/// object version.  This is a *global* scan (not restricted to a change set)
+/// and implements *existing version-matched review evidence*, not same-change-set
+/// authorization.  See `validate_transition_change_set` in validation.rs for the
+/// same-change-set path used during change-set validation.
 fn has_accepted_review<S: CanonicalStore>(
     store: &S,
     index: &DerivedIndex,
