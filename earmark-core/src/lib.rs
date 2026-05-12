@@ -1579,8 +1579,10 @@ pub struct TransitionAssignment {
     pub transition_id: String,
     pub assigned_to: String,
     pub status: AssignmentStatus,
+    #[serde(default)]
     pub input_object_ids: Vec<ObjectId>,
     pub handoff_manifest_id: Option<HandoffManifestId>,
+    #[serde(default)]
     pub event_ids: Vec<ObjectRef>,
     pub blocked_reason: Option<String>,
     pub completion_change_set_id: Option<ChangeSetId>,
@@ -1597,14 +1599,23 @@ pub struct ChangeSet {
     pub transition_id: String,
     pub assignment_id: Option<TransitionAssignmentId>,
     pub agent_id: Option<String>,
+    #[serde(default)]
     pub input_object_ids: Vec<ObjectId>,
+    #[serde(default)]
     pub created_object_ids: Vec<ObjectId>,
+    #[serde(default)]
     pub created_relation_ids: Vec<ObjectId>,
+    #[serde(default)]
     pub updated_object_ids: Vec<ObjectId>,
+    #[serde(default)]
     pub governance_event_ids: Vec<ObjectId>,
+    #[serde(default)]
     pub blocked_operations: Vec<BlockedOperation>,
+    #[serde(default)]
     pub unresolved_ambiguities: Vec<UnresolvedAmbiguity>,
+    #[serde(default)]
     pub rejected_candidates: Vec<RejectedCandidate>,
+    #[serde(default)]
     pub validation_results: Vec<ChangeSetValidationResult>,
     pub work_packet_id: Option<String>,
     pub handoff_manifest_id: Option<HandoffManifestId>,
@@ -1671,16 +1682,27 @@ pub struct HandoffManifest {
     pub to_transition_id: Option<String>,
     pub source_change_set_id: ChangeSetId,
     pub source_assignment_id: Option<TransitionAssignmentId>,
+    #[serde(default)]
     pub root_object_ids: Vec<ObjectId>,
+    #[serde(default)]
     pub inherited_input_object_ids: Vec<ObjectId>,
+    #[serde(default)]
     pub newly_created_object_ids: Vec<ObjectId>,
+    #[serde(default)]
     pub newly_created_relation_ids: Vec<ObjectId>,
+    #[serde(default)]
     pub allowed_input_classes: Vec<String>,
+    #[serde(default)]
     pub allowed_output_classes: Vec<String>,
+    #[serde(default)]
     pub allowed_relation_types: Vec<String>,
+    #[serde(default)]
     pub standing_constraints: Vec<StandingConstraint>,
+    #[serde(default)]
     pub unresolved_ambiguities: Vec<UnresolvedAmbiguity>,
+    #[serde(default)]
     pub blocked_conditions: Vec<BlockedOperation>,
+    #[serde(default)]
     pub required_checks: Vec<RequiredCheck>,
     pub compiled_context_template_id: Option<ObjectId>,
     pub created_at: DateTime<Utc>,
@@ -1688,13 +1710,21 @@ pub struct HandoffManifest {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ChangeSetDraft {
+    #[serde(default)]
     pub created_objects: Vec<ObjectId>,
+    #[serde(default)]
     pub created_relations: Vec<ObjectId>,
+    #[serde(default)]
     pub updated_objects: Vec<ObjectId>,
+    #[serde(default)]
     pub governance_events: Vec<ObjectId>,
+    #[serde(default)]
     pub standing_requests: Vec<StandingTransitionRequest>,
+    #[serde(default)]
     pub blocked_operations: Vec<BlockedOperation>,
+    #[serde(default)]
     pub unresolved_ambiguities: Vec<UnresolvedAmbiguity>,
+    #[serde(default)]
     pub rejected_candidates: Vec<RejectedCandidate>,
 }
 
