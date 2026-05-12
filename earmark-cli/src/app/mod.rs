@@ -21,7 +21,9 @@ use earmark_declarations::{
     validate_workflow_definition,
 };
 use earmark_index::DerivedIndex;
-use earmark_store::{CanonicalStore, GitCanonicalStore, PayloadEncoding, StoredObject, StoredPayload};
+use earmark_store::{
+    CanonicalStore, GitCanonicalStore, PayloadEncoding, StoredObject, StoredPayload,
+};
 use serde::Deserialize;
 use serde_json::json;
 
