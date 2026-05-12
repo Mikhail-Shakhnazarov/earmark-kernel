@@ -174,7 +174,7 @@ fn workflow_run_materializes_packet_and_run_ledger() {
         execution_policy: "runtime_permitted".to_string(),
         provider_profile: None,
         trace_policy: "summary".to_string(),
-        register: "machined".to_string(),
+        register: "status_summary".to_string(),
         body: MarkdownBody::new("Produce a bounded status summary.".to_string()),
     };
     let instruction_obj = StoredObject::new(
@@ -430,7 +430,7 @@ fn successor_run_can_reconstruct_inputs_from_handoff_manifest() {
         execution_policy: "runtime_permitted".to_string(),
         provider_profile: None,
         trace_policy: "summary".to_string(),
-        register: "machined".to_string(),
+        register: "status_summary".to_string(),
         body: MarkdownBody::new("Produce a bounded status summary.".to_string()),
     };
     let instruction_obj = StoredObject::new(
@@ -1012,6 +1012,7 @@ fn workflow_run_fails_when_transform_output_class_is_undeclared() {
         execution_policy: "runtime_permitted".to_string(),
         provider_profile: None,
         trace_policy: "summary".to_string(),
+        // Intentionally mismatched register/output contract to exercise validation failure.
         register: "machined".to_string(),
         body: MarkdownBody::new("Produce a bounded status summary.".to_string()),
     };
@@ -1273,7 +1274,7 @@ fn workflow_run_fails_when_output_standing_violates_class_rules() {
         execution_policy: "runtime_permitted".to_string(),
         provider_profile: None,
         trace_policy: "summary".to_string(),
-        register: "machined".to_string(),
+        register: "status_summary".to_string(),
         body: MarkdownBody::new("Produce a bounded status summary.".to_string()),
     };
     let instruction_obj = StoredObject::new(
@@ -1507,7 +1508,7 @@ fn workflow_run_fails_when_declared_transition_is_unreachable() {
         execution_policy: "runtime_permitted".to_string(),
         provider_profile: None,
         trace_policy: "summary".to_string(),
-        register: "machined".to_string(),
+        register: "status_summary".to_string(),
         body: MarkdownBody::new("Produce a bounded status summary.".to_string()),
     };
     let instruction_obj = StoredObject::new(
@@ -1859,7 +1860,7 @@ fn within_workflow_handoff_continuation_runs_successor_not_predecessor() {
         execution_policy: "local".to_string(),
         provider_profile: None,
         trace_policy: "staged".to_string(),
-        register: "findings".to_string(),
+        register: "finding".to_string(),
         body: earmark_core::MarkdownBody::new("extract".to_string()),
     };
     let instr_extract_ref = store
@@ -1883,7 +1884,7 @@ fn within_workflow_handoff_continuation_runs_successor_not_predecessor() {
         execution_policy: "local".to_string(),
         provider_profile: None,
         trace_policy: "staged".to_string(),
-        register: "summaries".to_string(),
+        register: "summary".to_string(),
         body: earmark_core::MarkdownBody::new("summarize".to_string()),
     };
     let instr_summarize_ref = store
@@ -2448,7 +2449,7 @@ fn test_transform_emits_standing_request() {
         execution_policy: "local".to_string(),
         provider_profile: None,
         trace_policy: "detailed".to_string(),
-        register: "test".to_string(),
+        register: "finding".to_string(),
         body: MarkdownBody::new("test".to_string()),
     };
     let stored_instr = StoredObject::new(

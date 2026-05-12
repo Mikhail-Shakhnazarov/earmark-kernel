@@ -110,7 +110,7 @@ fn test_neutral_staged_fixture_source_note_to_summary() {
         execution_policy: "local".to_string(),
         provider_profile: None,
         trace_policy: "staged".to_string(),
-        register: "findings".to_string(),
+        register: "finding".to_string(),
         body: earmark_core::MarkdownBody::new("extract finding".to_string()),
     };
     let instr1_ref = store
@@ -134,7 +134,7 @@ fn test_neutral_staged_fixture_source_note_to_summary() {
         execution_policy: "local".to_string(),
         provider_profile: None,
         trace_policy: "staged".to_string(),
-        register: "summaries".to_string(),
+        register: "summary".to_string(),
         body: earmark_core::MarkdownBody::new("summarize findings".to_string()),
     };
     let instr2_ref = store
