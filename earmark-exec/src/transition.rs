@@ -705,7 +705,8 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
     }
 }
 
-fn load_registry(system: &earmark_core::SystemDefinition) -> Result<earmark_core::StandingRegistry, ExecError> {
-    earmark_core::StandingRegistry::from_system_definition(system)
-        .map_err(|e| ExecError::Core(e))
+fn load_registry(
+    system: &earmark_core::SystemDefinition,
+) -> Result<earmark_core::StandingRegistry, ExecError> {
+    earmark_core::StandingRegistry::from_system_definition(system).map_err(|e| ExecError::Core(e))
 }

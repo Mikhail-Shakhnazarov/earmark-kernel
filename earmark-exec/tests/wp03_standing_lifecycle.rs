@@ -1,6 +1,6 @@
 use earmark_core::{
-    DimensionId, Kind, Standing, StandingPolicy, StandingRequestStatus,
-    StandingRegistry, StandingTransitionRule, TokenId, VersionId,
+    DimensionId, Kind, Standing, StandingPolicy, StandingRegistry, StandingRequestStatus,
+    StandingTransitionRule, TokenId, VersionId,
 };
 use earmark_exec::governance_ops::{apply_standing_request, approve_standing_request};
 use earmark_exec::persistence_helpers::write_object_and_index;

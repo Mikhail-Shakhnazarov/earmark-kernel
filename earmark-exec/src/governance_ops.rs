@@ -91,9 +91,8 @@ pub fn apply_standing_request<S: CanonicalStore>(
 
     // 1c. Drift Check: verify current standing matches request.from_value
     let dim_name = normalize_dim_name(&request.dimension);
-    let dim_id =
-        DimensionId::parse(&dim_name)
-            .map_err(|e| ExecError::GovernanceOperation(format!("invalid dimension: {}", e)))?;
+    let dim_id = DimensionId::parse(&dim_name)
+        .map_err(|e| ExecError::GovernanceOperation(format!("invalid dimension: {}", e)))?;
     let current_value = current_standing
         .get(&dim_id)
         .map(TokenId::as_str)
@@ -114,12 +113,9 @@ pub fn apply_standing_request<S: CanonicalStore>(
     let policy_ref = if let Some(pid) = policy_id {
         index
             .get_head(
-                &ObjectId::parse(pid)
-                    .map_err(|e| ExecError::GovernanceOperation(e.to_string()))?,
+                &ObjectId::parse(pid).map_err(|e| ExecError::GovernanceOperation(e.to_string()))?,
             )?
-            .ok_or_else(|| {
-                ExecError::GovernanceOperation(format!("policy {} not found", pid))
-            })?
+            .ok_or_else(|| ExecError::GovernanceOperation(format!("policy {} not found", pid)))?
     } else {
         return Err(ExecError::GovernanceOperation(
             "policy required for application".to_string(),
@@ -152,9 +148,7 @@ pub fn apply_standing_request<S: CanonicalStore>(
     )?;
 
     // 5. Enforce review if required by policy rule
-    if transition_res.requires_review
-        && !has_accepted_review(store, index, &target_head_ref)?
-    {
+    if transition_res.requires_review && !has_accepted_review(store, index, &target_head_ref)? {
         return Err(ExecError::GovernanceOperation(
             "transition requires accepted review evidence for the current version".to_string(),
         ));
@@ -163,9 +157,7 @@ pub fn apply_standing_request<S: CanonicalStore>(
     // 5b. Enforce same-change-set review authorization for transitions into accepted projection
     let requested_projection = project(&next_standing, registry)
         .map_err(|e| ExecError::GovernanceOperation(format!("projection error: {}", e)))?;
-    if requested_projection.review
-        == Some(earmark_core::projection::ReviewProjection::Accepted)
-    {
+    if requested_projection.review == Some(earmark_core::projection::ReviewProjection::Accepted) {
         let actor = target_head.envelope.provenance.actor.as_str();
         if !earmark_governance::is_trusted_actor(actor)
             && !has_accepted_review(store, index, &target_head_ref)?
