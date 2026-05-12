@@ -1003,15 +1003,24 @@ pub struct WorkflowDefinition {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum FlexibleVersionRef {
+    Ref(VersionRef),
+    Path(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WorkflowOperation {
     pub id: String,
     pub kind: String,
+    #[serde(default)]
     pub input_contracts: Vec<String>,
+    #[serde(default)]
     pub output_contracts: Vec<String>,
-    pub instruction: Option<VersionRef>,
-    pub compiled_context: Option<VersionRef>,
-    pub policy: Option<VersionRef>,
-    pub provider_profile: Option<VersionRef>,
+    pub instruction: Option<FlexibleVersionRef>,
+    pub compiled_context: Option<FlexibleVersionRef>,
+    pub policy: Option<FlexibleVersionRef>,
+    pub provider_profile: Option<FlexibleVersionRef>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1729,7 +1738,7 @@ pub struct ClassFilter {
     pub allowed_classes: Vec<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct StandingFilter {
     #[serde(default)]
     pub allowed: BTreeMap<DimensionId, Vec<TokenId>>,

@@ -484,7 +484,7 @@ pub fn run(cli: Cli) -> Result<(), CliError> {
                 DeclareAction::Register(args) => {
                     tracing::info!(kind = %args.kind.as_str(), path = %args.path.display(), "registering declaration");
                     let version_ref =
-                        register_declaration_file(&store, index.as_ref(), args.kind, &args.path)?;
+                        register_declaration_file(&store, index.as_ref(), args.kind, &args.path, None)?;
                     if matches!(args.kind, DeclarationKind::System) {
                         index
                             .as_ref()
@@ -841,6 +841,9 @@ pub fn run(cli: Cli) -> Result<(), CliError> {
                             "output": output.display().to_string(),
                         }),
                     );
+                }
+                ReportAction::Trial { trial_id } => {
+                    handler::report::handle(&store, as_json, ReportAction::Trial { trial_id })?
                 }
             },
             Commands::Provider(command) => match command.action {
@@ -1444,10 +1447,13 @@ fn explain_declaration_file<S: CanonicalStore>(
                     "has_compiled_context": operation.compiled_context.is_some(),
                     "has_policy": operation.policy.is_some(),
                     "has_provider_profile": operation.provider_profile.is_some(),
-                    "standing_implications": operation.policy.as_ref().map(|policy| vec![format!(
-                        "policy-bound: {}@{}",
-                        policy.id.as_str(), policy.version_id.as_str()
-                    )]).unwrap_or_default(),
+                    "standing_implications": operation.policy.as_ref().map(|f| match f {
+                        earmark_core::FlexibleVersionRef::Ref(r) => vec![format!(
+                            "policy-bound: {}@{}",
+                            r.id.as_str(), r.version_id.as_str()
+                        )],
+                        earmark_core::FlexibleVersionRef::Path(p) => vec![format!("policy-bound: path({})", p)],
+                    }).unwrap_or_default(),
                 })).collect::<Vec<_>>(),
                 "edges": declaration.edges,
                 "guards": declaration.guards,
@@ -1551,6 +1557,7 @@ pub(crate) fn register_declaration_file<S: CanonicalStore>(
     index: Option<&DerivedIndex>,
     kind: DeclarationKind,
     path: &PathBuf,
+    registry: Option<&BTreeMap<PathBuf, VersionRef>>,
 ) -> Result<VersionRef, CliError> {
     let (stored_kind, name, payload, headers, explicit_symbolic_name) = match kind {
         DeclarationKind::Class => {
@@ -1593,7 +1600,46 @@ pub(crate) fn register_declaration_file<S: CanonicalStore>(
             )
         }
         DeclarationKind::Workflow => {
-            let decl = load_workflow_definition(path)?;
+            let mut decl = load_workflow_definition(path)?;
+            // Resolve operations if registry is present
+            if let Some(registry) = registry {
+                for op in &mut decl.operations {
+                    if let Some(earmark_core::FlexibleVersionRef::Path(p)) = &op.instruction {
+                        let abs_path = resolve_manifest_path(path, p);
+                        let canon_path = canonicalize_and_clean(&abs_path);
+                        if let Some(vref) = registry.get(&canon_path) {
+                            op.instruction = Some(earmark_core::FlexibleVersionRef::Ref(vref.clone()));
+                        }
+                    }
+                    if let Some(earmark_core::FlexibleVersionRef::Path(p)) = &op.provider_profile {
+                        let abs_path = resolve_manifest_path(path, p);
+                        let canon_path = canonicalize_and_clean(&abs_path);
+                        if let Some(vref) = registry.get(&canon_path) {
+                            op.provider_profile = Some(earmark_core::FlexibleVersionRef::Ref(vref.clone()));
+                        }
+                    }
+                    if let Some(earmark_core::FlexibleVersionRef::Path(p)) = &op.compiled_context {
+                        let abs_path = resolve_manifest_path(path, p);
+                        let canon_path = canonicalize_and_clean(&abs_path);
+                        if let Some(vref) = registry.get(&canon_path) {
+                            op.compiled_context = Some(earmark_core::FlexibleVersionRef::Ref(vref.clone()));
+                        }
+                    }
+                    let (pid, pvid) = if let Some(earmark_core::FlexibleVersionRef::Ref(r)) = &op.policy {
+                        (r.id.as_str(), r.version_id.as_str())
+                    } else {
+                        ("-", "-")
+                    };
+                    tracing::info!(id = %op.id, kind = %op.kind, policy_id = %pid, policy_version = %pvid, "registering workflow operation");
+                    if let Some(earmark_core::FlexibleVersionRef::Path(p)) = &op.policy {
+                        let abs_path = resolve_manifest_path(path, p);
+                        let canon_path = canonicalize_and_clean(&abs_path);
+                        if let Some(vref) = registry.get(&canon_path) {
+                            op.policy = Some(earmark_core::FlexibleVersionRef::Ref(vref.clone()));
+                        }
+                    }
+                }
+            }
             validate_workflow_definition(&decl)?;
             let mut headers = BTreeMap::new();
             headers.insert("title".to_string(), HeaderValue::String(decl.name.clone()));
@@ -1821,106 +1867,111 @@ fn validate_path_system_manifest(
     Ok(())
 }
 
+fn canonicalize_and_clean(p: impl AsRef<std::path::Path>) -> PathBuf {
+    let p = p.as_ref();
+    let canon = p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+    let s = canon.to_string_lossy();
+    if s.starts_with(r"\\?\") {
+        PathBuf::from(&s[4..])
+    } else {
+        canon
+    }
+}
+
 fn assemble_system_definition_from_manifest<S: CanonicalStore>(
     store: &S,
     path: &std::path::Path,
     manifest: &PathSystemManifest,
 ) -> Result<earmark_core::SystemDefinition, CliError> {
-    let classes = manifest
-        .classes
-        .iter()
-        .map(|rel| {
-            register_declaration_file(
-                store,
-                None,
-                DeclarationKind::Class,
-                &resolve_manifest_path(path, rel),
-            )
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    let instructions = manifest
-        .instructions
-        .iter()
-        .map(|rel| {
-            register_declaration_file(
-                store,
-                None,
-                DeclarationKind::Instruction,
-                &resolve_manifest_path(path, rel),
-            )
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    let policies = manifest
-        .standing_policies
-        .iter()
-        .map(|rel| {
-            register_declaration_file(
-                store,
-                None,
-                DeclarationKind::StandingPolicy,
-                &resolve_manifest_path(path, rel),
-            )
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    let compiled_contexts = manifest
-        .compiled_contexts
-        .iter()
-        .map(|rel| {
-            register_declaration_file(
-                store,
-                None,
-                DeclarationKind::CompiledContext,
-                &resolve_manifest_path(path, rel),
-            )
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    let provider_profiles = manifest
-        .provider_profiles
-        .iter()
-        .map(|rel| {
-            register_declaration_file(
-                store,
-                None,
-                DeclarationKind::ProviderProfile,
-                &resolve_manifest_path(path, rel),
-            )
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    let workflows = manifest
-        .workflows
-        .iter()
-        .map(|rel| {
-            register_declaration_file(
-                store,
-                None,
-                DeclarationKind::Workflow,
-                &resolve_manifest_path(path, rel),
-            )
-        })
-        .collect::<Result<Vec<_>, _>>()?;
+    let mut registry = BTreeMap::new();
+
+    // 1. Classes
+    let mut classes = Vec::new();
+    for rel in &manifest.classes {
+        let abs = resolve_manifest_path(path, rel);
+        let canon = canonicalize_and_clean(&abs);
+        let vref = register_declaration_file(store, None, DeclarationKind::Class, &abs, Some(&registry))?;
+        registry.insert(canon, vref.clone());
+        classes.push(vref);
+    }
+
+    // 2. Provider Profiles
+    let mut provider_profiles = Vec::new();
+    for rel in &manifest.provider_profiles {
+        let abs = resolve_manifest_path(path, rel);
+        let canon = canonicalize_and_clean(&abs);
+        let vref = register_declaration_file(store, None, DeclarationKind::ProviderProfile, &abs, Some(&registry))?;
+        registry.insert(canon, vref.clone());
+        provider_profiles.push(vref);
+    }
+
+    // 3. Instructions
+    let mut instructions = Vec::new();
+    for rel in &manifest.instructions {
+        let abs = resolve_manifest_path(path, rel);
+        let canon = canonicalize_and_clean(&abs);
+        let vref = register_declaration_file(store, None, DeclarationKind::Instruction, &abs, Some(&registry))?;
+        registry.insert(canon, vref.clone());
+        instructions.push(vref);
+    }
+
+    // 4. Policies
+    let mut policies = Vec::new();
+    for rel in &manifest.standing_policies {
+        let abs = resolve_manifest_path(path, rel);
+        let canon = canonicalize_and_clean(&abs);
+        let vref = register_declaration_file(store, None, DeclarationKind::StandingPolicy, &abs, Some(&registry))?;
+        registry.insert(canon, vref.clone());
+        policies.push(vref);
+    }
+
+    // 5. Compiled Contexts
+    let mut compiled_contexts = Vec::new();
+    for rel in &manifest.compiled_contexts {
+        let abs = resolve_manifest_path(path, rel);
+        let canon = canonicalize_and_clean(&abs);
+        let vref = register_declaration_file(store, None, DeclarationKind::CompiledContext, &abs, Some(&registry))?;
+        registry.insert(canon, vref.clone());
+        compiled_contexts.push(vref);
+    }
+
+    // 6. Workflows
+    let mut workflows = Vec::new();
+    for rel in &manifest.workflows {
+        let abs = resolve_manifest_path(path, rel);
+        let canon = canonicalize_and_clean(&abs);
+        let vref = register_declaration_file(store, None, DeclarationKind::Workflow, &abs, Some(&registry))?;
+        registry.insert(canon, vref.clone());
+        workflows.push(vref);
+    }
 
     let default_compiled_context = manifest
         .default_compiled_context
         .as_ref()
         .map(|rel| {
-            register_declaration_file(
-                store,
-                None,
-                DeclarationKind::CompiledContext,
-                &resolve_manifest_path(path, rel),
-            )
+            let abs = resolve_manifest_path(path, rel);
+            let canon = canonicalize_and_clean(&abs);
+            registry.get(&canon).cloned().ok_or_else(|| {
+                CliError::argument(format!(
+                    "default_compiled_context {} not found in manifest",
+                    rel
+                ))
+            })
         })
         .transpose()?;
+
     let default_provider_profile = manifest
         .default_provider_profile
         .as_ref()
         .map(|rel| {
-            register_declaration_file(
-                store,
-                None,
-                DeclarationKind::ProviderProfile,
-                &resolve_manifest_path(path, rel),
-            )
+            let abs = resolve_manifest_path(path, rel);
+            let canon = canonicalize_and_clean(&abs);
+            registry.get(&canon).cloned().ok_or_else(|| {
+                CliError::argument(format!(
+                    "default_provider_profile {} not found in manifest",
+                    rel
+                ))
+            })
         })
         .transpose()?;
 
