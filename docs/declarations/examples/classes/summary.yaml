@@ -1,3 +1,4 @@
+# v0.3 format: standing dimensions use kernel:* prefixed IDs
 name: summary
 version: 0.2.0
 kind: object
@@ -5,14 +6,15 @@ required_headers:
   - title
 payload_schema: inline:any
 standing_rules:
-  allowed_epistemic:
-    - working
-    - supported
-  allowed_review:
-    - unreviewed
-    - accepted
-  allowed_process:
-    - completed
+  allowed_standing:
+    kernel:epistemic:
+      - working
+      - supported
+    kernel:review:
+      - unreviewed
+      - accepted
+    kernel:process:
+      - completed
 relation_rules:
   - relation_type: derived_from
     counterparty_classes:

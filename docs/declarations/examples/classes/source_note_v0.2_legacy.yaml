@@ -1,0 +1,20 @@
+# LEGACY COMPATIBILITY: v0.2 class declaration format
+# This format remains readable through compatibility normalization.
+# The allowed_epistemic / allowed_review / allowed_process fields
+# are translated to kernel:* dimensions during deserialization.
+# New declarations should use the v0.3 allowed_standing format.
+name: source_note
+version: 0.2.0
+kind: object
+required_headers:
+  - title
+payload_schema: inline:any
+standing_rules:
+  allowed_epistemic:
+    - working
+  allowed_review:
+    - unreviewed
+  allowed_process:
+    - completed
+relation_rules: []
+validators: []

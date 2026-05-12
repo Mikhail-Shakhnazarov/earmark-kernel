@@ -484,6 +484,8 @@ impl std::str::FromStr for Kind {
     }
 }
 
+/// Legacy v0.2 enum — retained for compatibility deserialization only.
+/// New code uses the v0.3 `Standing` map with `DimensionId`/`TokenId`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EpistemicStanding {
@@ -506,6 +508,7 @@ impl EpistemicStanding {
     }
 }
 
+/// Legacy v0.2 enum — retained for compatibility deserialization only.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ReviewStanding {
@@ -526,6 +529,7 @@ impl ReviewStanding {
     }
 }
 
+/// Legacy v0.2 enum — retained for compatibility deserialization only.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ProcessStanding {
@@ -546,6 +550,8 @@ impl ProcessStanding {
     }
 }
 
+/// Legacy v0.2 dimension enum — retained for CLI parsing compatibility only.
+/// New code uses `DimensionId` with `kernel:*` prefixed strings.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StandingDimension {
     Epistemic,

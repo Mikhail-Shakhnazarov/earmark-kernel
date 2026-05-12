@@ -28,6 +28,8 @@ The index is always rebuildable from canonical state.
 
 ## Coherence
 
+The index also maintains an `object_standing` table with one row per (version_id, standing dimension), populated during index rebuild. This table supports query by custom standing dimension.
+
 Writes through the normal persistence path (`write_object_and_index` / `write_batch_and_index`) update both the canonical store and the derived index atomically (store write first, index update second). If the index update fails, the error is propagated and the canonical write is preserved.
 
 Some operations intentionally write to the canonical store without updating the index (e.g., sub-declarations during system manifest registration). In those cases a full `rebuild_from_store` is called afterward to bring the index up to date.
@@ -57,6 +59,33 @@ The derived index can be rebuilt from canonical state:
 - **File recreation**: a write command may recreate the SQLite file if it is missing, but that only creates an empty index. A full rebuild requires `rebuild_from_store(&store)`, currently exposed through system registration.
 
 Rebuilding does not destroy active system registrations or active assignment claims.
+
+## Migration Note: v0.3 Protocol-Based Standing
+
+v0.3 replaces the legacy three-field Standing object with declared standing dimensions.
+
+Legacy standing:
+
+```yaml
+standing:
+  epistemic: working
+  review: unreviewed
+  process: active
+```
+
+Current standing:
+
+```yaml
+standing:
+  kernel:epistemic: working
+  kernel:review: unreviewed
+  kernel:process: active
+  research:status: draft
+```
+
+Legacy objects remain readable through compatibility normalization. New writes use the map format.
+
+After upgrading, rebuild the derived index so the `object_standing` table is populated. Currently, `em system register` triggers a full rebuild, or you can rebuild programmatically with `index.rebuild_from_store(&store)`.
 
 ## Key Rules
 

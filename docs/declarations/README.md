@@ -49,6 +49,58 @@ em declare new --kind workflow research_synthesis
 em declare new --kind system research_synthesis
 ```
 
+## Standing Model
+
+Standing is stored as a map from standing dimension IDs to token IDs.
+
+```yaml
+standing:
+  kernel:epistemic: working
+  kernel:review: unreviewed
+  kernel:process: active
+  research:status: draft
+```
+
+Dimensions and tokens are declared by the active system definition. Kernel behavior is derived by projecting standing tokens through protocol bindings. The kernel enforces protocols, not token names.
+
+Legacy v0.2 objects using `epistemic` / `review` / `process` as direct fields remain readable through compatibility normalization that maps them to `kernel:*` dimensions. New declarations and objects should use the dimension/token map format.
+
+### Custom Dimension Example
+
+A system declaration can define additional standing dimensions with protocol bindings:
+
+```yaml
+standing_dimensions:
+  - id: research:status
+    default: draft
+    tokens:
+      - id: draft
+      - id: verified
+        implements:
+          - protocol: kernel:review
+            state: accepted
+          - protocol: kernel:visibility
+            properties:
+              include_in_standard_context: true
+              expose_to_provider: true
+```
+
+The token `verified` is a domain token. It is not itself a kernel token. It projects to kernel behavior because the declaration binds it to `kernel:review` and `kernel:visibility`.
+
+### Provider Exposure
+
+Provider exposure requires two gates:
+
+- The standing projection must return `expose_to_provider: true`.
+- The provider profile must permit the object/content type.
+
+`include_in_standard_context = true` does not imply provider exposure. Default visibility projection:
+
+```yaml
+include_in_standard_context: true
+expose_to_provider: false
+```
+
 ## Declaration Kinds
 
 Supported kinds:
