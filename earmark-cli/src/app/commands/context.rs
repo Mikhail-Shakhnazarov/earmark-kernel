@@ -1,9 +1,9 @@
-use std::collections::BTreeMap;
-use earmark_core::{ClassFilter, DimensionId, RelationFilter, StandingFilter, TokenId};
-use earmark_runtime_tools::RuntimeToolSurface;
-use crate::app::common::{CommandContext, CliError};
+use crate::app::common::{CliError, CommandContext};
 use crate::app::emit;
 use crate::cli::{ContextAction, ContextCommand};
+use earmark_core::{ClassFilter, DimensionId, RelationFilter, StandingFilter, TokenId};
+use earmark_runtime_tools::RuntimeToolSurface;
+use std::collections::BTreeMap;
 
 pub fn handle(ctx: &CommandContext, command: &ContextCommand) -> Result<(), CliError> {
     let store = ctx.store;

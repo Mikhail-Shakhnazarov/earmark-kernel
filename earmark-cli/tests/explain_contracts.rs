@@ -1,12 +1,12 @@
 use assert_cmd::Command;
-use earmark_core::{Kind, ObjectId, Standing, Provenance, ObjectRef, VersionId, VersionRef};
-use earmark_exec::persistence_helpers::write_object_and_index;
-use earmark_store::{GitCanonicalStore, StoredObject, StoredPayload};
-use earmark_index::DerivedIndex;
-use serde_json::Value;
-use tempfile::tempdir;
 use chrono::Utc;
+use earmark_core::{Kind, ObjectId, ObjectRef, Provenance, Standing, VersionId, VersionRef};
+use earmark_exec::persistence_helpers::write_object_and_index;
+use earmark_index::DerivedIndex;
+use earmark_store::{GitCanonicalStore, StoredObject, StoredPayload};
+use serde_json::Value;
 use std::collections::BTreeMap;
+use tempfile::tempdir;
 
 fn setup_workspace() -> tempfile::TempDir {
     let dir = tempdir().unwrap();
@@ -25,7 +25,7 @@ fn declare_explain_contracts() {
     let dir = setup_workspace();
     let class_path = dir.path().join("test_class.yaml");
     std::fs::write(&class_path, "name: test_class\nversion: 0.1.0\nkind: object\nrequired_headers: []\npayload_schema: null\nstanding_rules: {}\nrelation_rules: []\nvalidators: []").unwrap();
-    
+
     let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
     cmd.arg("--root")
         .arg(dir.path())
@@ -35,10 +35,10 @@ fn declare_explain_contracts() {
         .arg("--kind")
         .arg("class")
         .arg(class_path);
-    
+
     let output = cmd.assert().success().get_output().stdout.clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    
+
     assert_eq!(parsed["contract_version"], "0.2.0");
     assert_eq!(parsed["data"]["ok"], true);
     assert!(parsed["data"]["explanation"]["title"].is_string());
@@ -49,7 +49,7 @@ fn run_explain_contracts() {
     let dir = setup_workspace();
     let store = GitCanonicalStore::new(dir.path());
     let index = DerivedIndex::open(dir.path()).unwrap();
-    
+
     let run_record = earmark_core::RunRecord {
         run_id: "test_run".to_string(),
         system_definition: VersionRef::new(ObjectId::new(), VersionId::new()),
@@ -66,7 +66,7 @@ fn run_explain_contracts() {
         change_sets: vec![],
         manifests: vec![],
     };
-    
+
     let obj = StoredObject::new(
         Kind::RunRecord,
         None,
@@ -76,7 +76,7 @@ fn run_explain_contracts() {
         StoredPayload::from_json_bytes(serde_json::to_vec(&run_record).unwrap()),
         vec![],
     );
-    
+
     write_object_and_index(&store, &index, &obj).unwrap();
 
     let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
@@ -86,10 +86,10 @@ fn run_explain_contracts() {
         .arg("run")
         .arg("explain")
         .arg("test_run");
-    
+
     let output = cmd.assert().success().get_output().stdout.clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    
+
     assert_eq!(parsed["contract_version"], "0.2.0");
     assert_eq!(parsed["data"]["ok"], true);
     assert_eq!(parsed["data"]["kind"], "run");
@@ -102,7 +102,7 @@ fn assignment_explain_contracts() {
     let dir = setup_workspace();
     let store = GitCanonicalStore::new(dir.path());
     let index = DerivedIndex::open(dir.path()).unwrap();
-    
+
     let assignment = earmark_core::TransitionAssignment {
         id: earmark_core::TransitionAssignmentId::new(),
         run_id: "test_run".to_string(),
@@ -119,7 +119,7 @@ fn assignment_explain_contracts() {
         expires_at: None,
         completed_at: None,
     };
-    
+
     let obj = StoredObject::new(
         Kind::TransitionAssignment,
         None,
@@ -129,7 +129,7 @@ fn assignment_explain_contracts() {
         StoredPayload::from_json_bytes(serde_json::to_vec(&assignment).unwrap()),
         vec![],
     );
-    
+
     write_object_and_index(&store, &index, &obj).unwrap();
 
     let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
@@ -139,10 +139,10 @@ fn assignment_explain_contracts() {
         .arg("assignment")
         .arg("explain")
         .arg(assignment.id.as_str());
-    
+
     let output = cmd.assert().success().get_output().stdout.clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    
+
     assert_eq!(parsed["contract_version"], "0.2.0");
     assert_eq!(parsed["data"]["ok"], true);
     assert_eq!(parsed["data"]["kind"], "assignment");
@@ -155,7 +155,7 @@ fn changeset_explain_contracts() {
     let dir = setup_workspace();
     let store = GitCanonicalStore::new(dir.path());
     let index = DerivedIndex::open(dir.path()).unwrap();
-    
+
     let changeset = earmark_core::ChangeSet {
         id: earmark_core::ChangeSetId::new(),
         run_id: "test_run".to_string(),
@@ -175,7 +175,7 @@ fn changeset_explain_contracts() {
         handoff_manifest_id: None,
         created_at: Utc::now(),
     };
-    
+
     let obj = StoredObject::new(
         Kind::ChangeSet,
         None,
@@ -185,7 +185,7 @@ fn changeset_explain_contracts() {
         StoredPayload::from_json_bytes(serde_json::to_vec(&changeset).unwrap()),
         vec![],
     );
-    
+
     write_object_and_index(&store, &index, &obj).unwrap();
 
     let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
@@ -195,10 +195,10 @@ fn changeset_explain_contracts() {
         .arg("change-set")
         .arg("explain")
         .arg(changeset.id.as_str());
-    
+
     let output = cmd.assert().success().get_output().stdout.clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    
+
     assert_eq!(parsed["contract_version"], "0.2.0");
     assert_eq!(parsed["data"]["ok"], true);
     assert_eq!(parsed["data"]["kind"], "change_set");
@@ -211,7 +211,7 @@ fn handoff_explain_contracts() {
     let dir = setup_workspace();
     let store = GitCanonicalStore::new(dir.path());
     let index = DerivedIndex::open(dir.path()).unwrap();
-    
+
     let handoff = earmark_core::HandoffManifest {
         id: earmark_core::HandoffManifestId::new(),
         run_id: "test_run".to_string(),
@@ -233,7 +233,7 @@ fn handoff_explain_contracts() {
         compiled_context_template_id: None,
         created_at: Utc::now(),
     };
-    
+
     let obj = StoredObject::new(
         Kind::HandoffManifest,
         None,
@@ -243,7 +243,7 @@ fn handoff_explain_contracts() {
         StoredPayload::from_json_bytes(serde_json::to_vec(&handoff).unwrap()),
         vec![],
     );
-    
+
     write_object_and_index(&store, &index, &obj).unwrap();
 
     let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
@@ -253,10 +253,10 @@ fn handoff_explain_contracts() {
         .arg("handoff")
         .arg("explain")
         .arg(handoff.id.as_str());
-    
+
     let output = cmd.assert().success().get_output().stdout.clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    
+
     assert_eq!(parsed["contract_version"], "0.2.0");
     assert_eq!(parsed["data"]["ok"], true);
     assert_eq!(parsed["data"]["kind"], "handoff");
@@ -269,7 +269,7 @@ fn failure_explain_contracts() {
     let dir = setup_workspace();
     let store = GitCanonicalStore::new(dir.path());
     let index = DerivedIndex::open(dir.path()).unwrap();
-    
+
     let failure = earmark_core::TransformationFailure {
         run_id: "test_run".to_string(),
         transition_id: "t1".to_string(),
@@ -281,7 +281,7 @@ fn failure_explain_contracts() {
         input_object_ids: vec![],
         created_at: Utc::now(),
     };
-    
+
     let obj = StoredObject::new(
         Kind::TransformationFailure,
         None,
@@ -291,7 +291,7 @@ fn failure_explain_contracts() {
         StoredPayload::from_json_bytes(serde_json::to_vec(&failure).unwrap()),
         vec![],
     );
-    
+
     write_object_and_index(&store, &index, &obj).unwrap();
 
     let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
@@ -301,10 +301,10 @@ fn failure_explain_contracts() {
         .arg("failure")
         .arg("explain")
         .arg(obj.envelope.id.as_str());
-    
+
     let output = cmd.assert().success().get_output().stdout.clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    
+
     assert_eq!(parsed["contract_version"], "0.2.0");
     assert_eq!(parsed["data"]["ok"], true);
     assert_eq!(parsed["data"]["kind"], "failure");
@@ -317,7 +317,7 @@ fn relation_explain_contracts() {
     let dir = setup_workspace();
     let store = GitCanonicalStore::new(dir.path());
     let index = DerivedIndex::open(dir.path()).unwrap();
-    
+
     let relation = earmark_core::RelationPayload {
         source: ObjectRef::new(ObjectId::new(), VersionId::new(), Kind::Object, None),
         target: ObjectRef::new(ObjectId::new(), VersionId::new(), Kind::Object, None),
@@ -325,7 +325,7 @@ fn relation_explain_contracts() {
         qualifiers: BTreeMap::new(),
         scope: None,
     };
-    
+
     let obj = StoredObject::new(
         Kind::Relation,
         None,
@@ -335,7 +335,7 @@ fn relation_explain_contracts() {
         StoredPayload::from_json_bytes(serde_json::to_vec(&relation).unwrap()),
         vec![],
     );
-    
+
     write_object_and_index(&store, &index, &obj).unwrap();
 
     let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
@@ -345,10 +345,10 @@ fn relation_explain_contracts() {
         .arg("relation")
         .arg("explain")
         .arg(obj.envelope.id.as_str());
-    
+
     let output = cmd.assert().success().get_output().stdout.clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    
+
     assert_eq!(parsed["contract_version"], "0.2.0");
     assert_eq!(parsed["data"]["ok"], true);
     assert_eq!(parsed["data"]["kind"], "relation");

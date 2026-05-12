@@ -1,7 +1,7 @@
-use earmark_index::QueryFilter;
-use crate::app::common::{CommandContext, CliError};
+use crate::app::common::{CliError, CommandContext};
 use crate::app::emit;
 use crate::cli::QueryArgs;
+use earmark_index::QueryFilter;
 
 pub fn handle(ctx: &CommandContext, args: &QueryArgs) -> Result<(), CliError> {
     let index = ctx.index.as_ref().expect("index required for query");

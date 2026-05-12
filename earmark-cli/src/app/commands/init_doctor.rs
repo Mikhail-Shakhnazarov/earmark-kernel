@@ -1,10 +1,9 @@
-use std::path::PathBuf;
-use serde_json::json;
 use crate::app::common::CommandContext;
-use crate::app::CliError;
 use crate::app::emit;
-use earmark_store::CanonicalStore;
+use crate::app::CliError;
 use earmark_index::DerivedIndex;
+use earmark_store::CanonicalStore;
+use serde_json::json;
 
 pub(crate) fn handle_init(ctx: &CommandContext) -> Result<(), CliError> {
     let store = ctx.store;
@@ -66,38 +65,39 @@ pub(crate) fn handle_doctor(ctx: &CommandContext) -> Result<(), CliError> {
     let mut warnings: Vec<String> = Vec::new();
     let mut all_ok = store_scan_ok;
 
-    let (index_open_ok, indexed_count, indexed_head_count, counts_match) =
-        if index_exists {
-            match DerivedIndex::open_existing(store.root()) {
-                Ok(idx) => {
-                    let obj_count = idx.object_count().unwrap_or(0);
-                    let head_count = idx.head_count().unwrap_or(0);
-                    let match_ok = obj_count == canonical_count;
-                    if !match_ok {
-                        warnings.push(format!(
-                            "store/index count mismatch: {} canonical objects vs {} indexed objects",
-                            canonical_count, obj_count
-                        ));
-                    }
-                    all_ok = all_ok && match_ok;
-                    (true, obj_count, head_count, match_ok)
+    let (index_open_ok, indexed_count, indexed_head_count, counts_match) = if index_exists {
+        match DerivedIndex::open_existing(store.root()) {
+            Ok(idx) => {
+                let obj_count = idx.object_count().unwrap_or(0);
+                let head_count = idx.head_count().unwrap_or(0);
+                let match_ok = obj_count == canonical_count;
+                if !match_ok {
+                    warnings.push(format!(
+                        "store/index count mismatch: {} canonical objects vs {} indexed objects",
+                        canonical_count, obj_count
+                    ));
                 }
-                Err(e) => {
-                    warnings.push(format!("index open failed: {}", e));
-                    all_ok = false;
-                    (false, 0, 0, false)
-                }
+                all_ok = all_ok && match_ok;
+                (true, obj_count, head_count, match_ok)
             }
-        } else {
-            warnings.push("derived index is missing; run a write command or system register to rebuild it".to_string());
-            all_ok = false;
-            (false, 0, 0, false)
-        };
+            Err(e) => {
+                warnings.push(format!("index open failed: {}", e));
+                all_ok = false;
+                (false, 0, 0, false)
+            }
+        }
+    } else {
+        warnings.push(
+            "derived index is missing; run a write command or system register to rebuild it"
+                .to_string(),
+        );
+        all_ok = false;
+        (false, 0, 0, false)
+    };
 
     if !store_scan_ok {
         warnings.push(
-            "canonical store scan failed; review .earmark/canonical for corruption"
-                .to_string(),
+            "canonical store scan failed; review .earmark/canonical for corruption".to_string(),
         );
     }
 

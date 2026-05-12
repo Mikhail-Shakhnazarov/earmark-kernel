@@ -1,10 +1,10 @@
+use crate::cli::{Commands, DeclareAction, StandingRequestAction};
+use crate::config::CliConfig;
+use earmark_exec::ProviderRegistry;
+use earmark_index::DerivedIndex;
+use earmark_store::{GitCanonicalStore, WorkspaceLayoutStatus};
 use std::path::PathBuf;
 use thiserror::Error;
-use earmark_store::{GitCanonicalStore, WorkspaceLayoutStatus, CanonicalStore};
-use earmark_index::DerivedIndex;
-use earmark_exec::ProviderRegistry;
-use crate::config::CliConfig;
-use crate::cli::{Commands, DeclareAction, StandingRequestAction};
 
 #[derive(Debug, Error)]
 pub enum CliError {
@@ -36,8 +36,6 @@ pub enum CliError {
     WorkspaceNotInitialized { status: WorkspaceLayoutStatus },
     #[error("runtime error: {0}")]
     Runtime(#[from] earmark_runtime_tools::RuntimeToolError),
-    #[error("internal error: {0}")]
-    Internal(String),
 }
 
 impl CliError {
@@ -51,10 +49,6 @@ impl CliError {
 
     pub fn workspace_not_initialized(status: WorkspaceLayoutStatus) -> Self {
         Self::WorkspaceNotInitialized { status }
-    }
-
-    pub fn internal(message: impl Into<String>) -> Self {
-        Self::Internal(message.into())
     }
 }
 
