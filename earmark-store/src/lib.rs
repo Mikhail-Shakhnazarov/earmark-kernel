@@ -496,7 +496,8 @@ impl CanonicalStore for GitCanonicalStore {
                 }
                 written.push(object.envelope.version_ref());
             }
-            self.backend.commit_paths(&self.canonical_dir(), &batch.message)?;
+            self.backend
+                .commit_paths(&self.canonical_dir(), &batch.message)?;
             Ok(())
         })();
         if let Err(err) = write_result {
