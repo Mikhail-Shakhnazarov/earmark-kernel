@@ -1,0 +1,18 @@
+name: aggregate_research
+version: 1.0.0
+description: Aggregates multiple interview notes into a single synthesis report.
+operations:
+  - id: prepare
+    kind: compile_context
+    compiled_context: ../compiled_contexts/research_context.yaml
+  - id: synthesis
+    kind: transform
+    instruction: ../instructions/synthesize.md
+    input_contracts:
+      - interview_note
+    output_contracts:
+      - synthesis_report
+edges:
+  - from: prepare
+    to: synthesis
+guards: []
