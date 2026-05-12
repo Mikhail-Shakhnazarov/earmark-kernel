@@ -309,7 +309,7 @@ fn test_http_provider_rendering_with_manifest() {
         &store,
         &instruction,
         Some(&manifest),
-        &[input_ref.clone()],
+        std::slice::from_ref(&input_ref),
         &profile,
         &registry,
     )

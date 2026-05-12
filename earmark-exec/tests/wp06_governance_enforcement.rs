@@ -169,7 +169,7 @@ fn test_sealed_object_can_be_targeted_by_relation() {
     let dir = TempDir::new().unwrap();
     let (store, index) = setup_store(dir.path());
 
-    let sys = SystemDefinition {
+    let _sys = SystemDefinition {
         system_id: "test_seal_rel".to_string(),
         namespace: "test/seal_rel".to_string(),
         title: "SealRel".to_string(),
