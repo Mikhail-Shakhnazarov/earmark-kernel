@@ -34,6 +34,7 @@ fn test_execution_ir_compilation() {
         }],
         edges: vec![],
         guards: vec![],
+        output_contracts: vec![],
     };
 
     let ir = crate::helpers::compile_workflow(&workflow).unwrap();
@@ -147,6 +148,8 @@ fn mock_adapter_provide_sets_synthetic_metadata() {
         ),
         provider_profile: VersionRef::new(ObjectId::new(), VersionId::new()),
         instruction_text: "do work".to_string(),
+        context_text: None,
+        input_text: "do work".to_string(),
         work_surface_manifest: None,
         inputs: vec![],
         response_contract: ProviderResponseContract {
@@ -178,6 +181,7 @@ fn mock_adapter_provide_sets_synthetic_metadata() {
             allow_export_requests: false,
         },
         response_contract: request.response_contract.clone(),
+        http: None,
     };
 
     let response = adapter
@@ -211,6 +215,8 @@ fn provider_record_from_response_preserves_synthetic_metadata() {
         ),
         provider_profile: VersionRef::new(ObjectId::new(), VersionId::new()),
         instruction_text: "do work".to_string(),
+        context_text: None,
+        input_text: "do work".to_string(),
         work_surface_manifest: None,
         inputs: vec![],
         response_contract: ProviderResponseContract {
@@ -242,6 +248,7 @@ fn provider_record_from_response_preserves_synthetic_metadata() {
             allow_export_requests: false,
         },
         response_contract: request.response_contract.clone(),
+        http: None,
     };
     let response = earmark_core::ProviderResponse {
         request_id: request.request_id.clone(),
@@ -386,6 +393,7 @@ fn test_delegated_outcome_with_none_response_returns_error_instead_of_panicking(
             must_return_candidate_only: true,
             must_include_lineage: true,
         },
+        http: None,
     };
     let prof_obj = StoredObject::new(
         earmark_core::Kind::ProviderProfile,
@@ -523,6 +531,7 @@ fn test_delegated_outcome_with_none_response_returns_error_instead_of_panicking(
             provider_profiles: vec![prof_ref],
             default_compiled_context: None,
             default_provider_profile: None,
+            standing_dimensions: vec![],
             activated_at: None,
         },
         &ir,
@@ -542,59 +551,6 @@ fn test_delegated_outcome_with_none_response_returns_error_instead_of_panicking(
     );
 }
 
-#[test]
-fn test_default_registry_does_not_register_gemini_without_feature() {
-    let registry = crate::provider::default_provider_registry();
-    assert!(registry.get("mock").is_some());
-
-    #[cfg(not(feature = "gemini"))]
-    assert!(registry.get("google_gemini").is_none());
-}
-
-#[test]
-fn test_compiled_capabilities_report_gemini_as_compile_disabled_without_feature() {
-    #[cfg(not(feature = "gemini"))]
-    {
-        let capabilities = crate::provider::compiled_provider_capabilities();
-        let gemini = capabilities
-            .iter()
-            .find(|capability| capability.provider == "google_gemini")
-            .expect("gemini capability row should exist");
-        assert_eq!(
-            gemini.status,
-            crate::provider::ProviderCapabilityStatus::CompileDisabled
-        );
-        assert_eq!(gemini.feature.as_deref(), Some("gemini"));
-    }
-}
-
-#[cfg(feature = "gemini")]
-#[test]
-fn test_default_registry_registers_gemini_with_feature() {
-    let registry = crate::provider::default_provider_registry();
-    assert!(registry.get("google_gemini").is_some());
-}
-
-#[cfg(feature = "gemini")]
-#[test]
-fn test_gemini_capability_reports_missing_api_key() {
-    let old_key = std::env::var("GOOGLE_API_KEY");
-    std::env::remove_var("GOOGLE_API_KEY");
-    let registry = crate::provider::default_provider_registry();
-    let capabilities = registry.capabilities();
-    let gemini = capabilities
-        .iter()
-        .find(|capability| capability.provider == "google_gemini")
-        .expect("gemini should be registered with feature");
-    assert_eq!(
-        gemini.status,
-        crate::provider::ProviderCapabilityStatus::MissingConfiguration
-    );
-    assert!(gemini.missing_env.contains(&"GOOGLE_API_KEY".to_string()));
-    if let Ok(val) = old_key {
-        std::env::set_var("GOOGLE_API_KEY", val);
-    }
-}
 #[test]
 fn test_privileged_relation_creation_and_validation() {
     let dir = tempdir().unwrap();
@@ -675,6 +631,7 @@ fn test_privileged_relation_creation_and_validation() {
         provider_profiles: vec![],
         default_compiled_context: None,
         default_provider_profile: None,
+        standing_dimensions: vec![],
         activated_at: None,
     };
 
@@ -756,4 +713,37 @@ fn test_privileged_relation_enforcement_failure() {
     assert!(err
         .to_string()
         .contains("is not a privileged system relation"));
+}
+
+#[test]
+fn test_resolution_error_propagation() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+    let store = GitCanonicalStore::new(root);
+    store.init_layout().unwrap();
+    let index = DerivedIndex::open(root).unwrap();
+
+    let obj_id = ObjectId::new();
+    let head_path = store
+        .root()
+        .join(".earmark/canonical/heads")
+        .join(format!("{}.json", obj_id.as_str()));
+    std::fs::create_dir_all(head_path.parent().unwrap()).unwrap();
+    std::fs::write(&head_path, "invalid json").unwrap();
+
+    let version_ref = VersionRef::new(
+        obj_id,
+        earmark_core::VersionId::parse("ver_00000000000000000000000000000000").unwrap(),
+    ); // latest
+
+    let res =
+        crate::resolution::resolve_version_for_kind(&store, &index, &version_ref, Kind::Workflow);
+
+    assert!(res.is_err());
+    // It should NOT be IncompleteExecution (which would mean it fell back and failed),
+    // it should be a Store error (JSON parse error from reading the head ref)
+    match res.unwrap_err() {
+        crate::error::ExecError::Store(_) => {} // OK
+        e => panic!("Expected Store error, got {:?}", e),
+    }
 }

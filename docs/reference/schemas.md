@@ -18,9 +18,10 @@ required_headers:
   - title
 payload_schema: inline:any
 standing_rules:
-  allowed_epistemic: [working, supported]
-  allowed_review: [unreviewed, accepted]
-  allowed_process: [active, completed]
+  allowed_standing:
+    kernel:epistemic: [working, supported]
+    kernel:review: [unreviewed, accepted]
+    kernel:process: [active, completed]
 relation_rules:
   - relation_type: derived_from
     counterparty_classes: [source_note]
@@ -51,6 +52,31 @@ register: findings
 # Finding Extraction
 
 Extract discrete findings from the provided source notes...
+```
+
+### Standing Policy
+
+Defines review, transition, or operation requirements over standing dimensions and tokens.
+
+**Fields**: `name`, `version`, `description`, `transition_rules`, `operation_requirements`, `escalation`.
+
+```yaml
+name: research_standing_policy
+version: 0.3.0
+description: Require reviewed findings before synthesis.
+transition_rules:
+  - from:
+      kernel:review: unreviewed
+    to:
+      kernel:review: accepted
+    requires_review: true
+operation_requirements:
+  - operation: synthesize_summary
+    requires:
+      kernel:review: accepted
+escalation:
+  trigger: blocked_transition
+  message: Summary synthesis requires accepted findings.
 ```
 
 ### Workflow
@@ -85,6 +111,6 @@ Bundles declarations into a deployable domain.
 em declare validate --kind <kind> <path>
 ```
 
-Kinds: `class`, `instruction`, `workflow`, `compiled-context`, `provider-profile`, `system`.
+Kinds: `class`, `instruction`, `standing-policy`, `workflow`, `compiled-context`, `provider-profile`, `system`.
 
 The system-level validator checks cross-references: classes mentioned in instructions must exist in the system, relation targets must reference declared classes, and workflow operations must reference declared instructions or compiled contexts.

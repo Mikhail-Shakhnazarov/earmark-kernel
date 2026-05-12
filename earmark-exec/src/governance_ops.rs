@@ -2,11 +2,12 @@ use crate::error::ExecError;
 use crate::persistence_helpers::write_object_and_index;
 use crate::resolution::load_standing_policy;
 use chrono::Utc;
+use earmark_core::projection::project;
 use earmark_core::{
-    HeaderValue, Kind, ObjectId, Provenance, Standing, StandingRequestStatus,
-    StandingTransitionRequest, VersionRef,
+    DimensionId, HeaderValue, Kind, ObjectId, Provenance, Standing, StandingRegistry,
+    StandingRequestStatus, StandingTransitionRequest, TokenId, VersionRef,
 };
-use earmark_governance::{validate_standing_transition, ReviewPayload};
+use earmark_governance::{check_immutability, validate_standing_transition, ReviewPayload};
 use earmark_index::DerivedIndex;
 use earmark_store::{CanonicalStore, StoredObject, StoredPayload};
 use std::collections::BTreeMap;
@@ -65,6 +66,7 @@ pub fn apply_standing_request<S: CanonicalStore>(
     request_ref: &VersionRef,
     policy_id: Option<&str>,
     reason: Option<String>,
+    registry: &StandingRegistry,
 ) -> Result<(VersionRef, VersionRef), ExecError> {
     let mut request = load_standing_request(store, request_ref)?;
 
@@ -83,18 +85,18 @@ pub fn apply_standing_request<S: CanonicalStore>(
     let target_head = store.read_version(&target_head_ref)?;
     let current_standing = &target_head.envelope.standing;
 
-    // 1b. Drift Check: verify current standing matches request.from_value
-    let current_value = match request.dimension.as_str() {
-        "epistemic" => format!("{:?}", current_standing.epistemic).to_lowercase(),
-        "review" => format!("{:?}", current_standing.review).to_lowercase(),
-        "process" => format!("{:?}", current_standing.process).to_lowercase(),
-        _ => {
-            return Err(ExecError::GovernanceOperation(format!(
-                "invalid dimension {}",
-                request.dimension
-            )))
-        }
-    };
+    // 1b. Enforce immutability: reject if sealed
+    check_immutability(registry, current_standing)
+        .map_err(|e| ExecError::GovernanceOperation(e.to_string()))?;
+
+    // 1c. Drift Check: verify current standing matches request.from_value
+    let dim_id = DimensionId::parse(&request.dimension)
+        .map_err(|e| ExecError::GovernanceOperation(format!("invalid dimension: {}", e)))?;
+    let current_value = current_standing
+        .get(&dim_id)
+        .map(TokenId::as_str)
+        .unwrap_or("unknown")
+        .to_string();
 
     if current_value != request.from_value.to_lowercase() {
         return Err(ExecError::GovernanceOperation(format!(
@@ -122,26 +124,9 @@ pub fn apply_standing_request<S: CanonicalStore>(
 
     // 3. Construct requested standing
     let mut next_standing = target_head.envelope.standing.clone();
-    match request.dimension.as_str() {
-        "epistemic" => {
-            next_standing.epistemic =
-                serde_json::from_value(serde_json::Value::String(request.to_value.clone()))?;
-        }
-        "review" => {
-            next_standing.review =
-                serde_json::from_value(serde_json::Value::String(request.to_value.clone()))?;
-        }
-        "process" => {
-            next_standing.process =
-                serde_json::from_value(serde_json::Value::String(request.to_value.clone()))?;
-        }
-        _ => {
-            return Err(ExecError::GovernanceOperation(format!(
-                "invalid dimension {}",
-                request.dimension
-            )))
-        }
-    }
+    next_standing
+        .values
+        .insert(dim_id.clone(), TokenId::new(&request.to_value));
 
     // 3b. No-op Protection: skip version creation if already at next_standing
     if next_standing == *current_standing {
@@ -154,14 +139,36 @@ pub fn apply_standing_request<S: CanonicalStore>(
     }
 
     // 4. Validate transition
-    let transition_res =
-        validate_standing_transition(&policy, &target_head.envelope.standing, &next_standing)?;
+    let transition_res = validate_standing_transition(
+        &policy,
+        registry,
+        &target_head.envelope.standing,
+        &next_standing,
+    )?;
 
-    // 5. Enforce review if required (transition-specific matching)
+    // 5. Enforce review if required by policy rule
     if transition_res.requires_review && !has_accepted_review(store, index, &target_head_ref)? {
         return Err(ExecError::GovernanceOperation(
             "transition requires accepted review evidence for the current version".to_string(),
         ));
+    }
+
+    // 5b. Enforce existing version-matched accepted review evidence for transitions
+    //     into accepted review projection.  Uses a global index scan (not same-change-set).
+    //     See validate_transition_change_set in validation.rs for the same-change-set path.
+    let requested_projection = project(&next_standing, registry)
+        .map_err(|e| ExecError::GovernanceOperation(format!("projection error: {}", e)))?;
+    if requested_projection.review == Some(earmark_core::projection::ReviewProjection::Accepted) {
+        let actor = target_head.envelope.provenance.actor.as_str();
+        if !earmark_governance::is_trusted_actor(actor)
+            && !has_accepted_review(store, index, &target_head_ref)?
+        {
+            return Err(ExecError::GovernanceOperation(
+                "transition into accepted review projection requires existing accepted review \
+                 evidence targeting the current object version"
+                    .to_string(),
+            ));
+        }
     }
 
     // 6. Create new target version
@@ -198,7 +205,8 @@ fn persist_request_update<S: CanonicalStore>(
     parent_ref: &VersionRef,
     request: &StandingTransitionRequest,
 ) -> Result<VersionRef, ExecError> {
-    let mut stored = StoredObject::new(
+    let stored = StoredObject::new_with_id(
+        parent_ref.id.clone(),
         Kind::Object,
         Some("standing_transition_request".to_string()),
         Standing::default(),
@@ -213,11 +221,15 @@ fn persist_request_update<S: CanonicalStore>(
         StoredPayload::from_json_bytes(serde_json::to_vec_pretty(request)?),
         vec![parent_ref.clone()],
     );
-    stored.envelope.id = parent_ref.id.clone();
 
     write_object_and_index(store, index, &stored)
 }
 
+/// Scans all indexed Review objects for an accepted review targeting the exact
+/// object version.  This is a *global* scan (not restricted to a change set)
+/// and implements *existing version-matched review evidence*, not same-change-set
+/// authorization.  See `validate_transition_change_set` in validation.rs for the
+/// same-change-set path used during change-set validation.
 fn has_accepted_review<S: CanonicalStore>(
     store: &S,
     index: &DerivedIndex,

@@ -1,8 +1,9 @@
+# v0.3 format: transition dimensions and standing keys use kernel:* prefixed IDs
 name: research_standing_policy
 version: 0.2.0
 description: Minimal standing policy for research synthesis examples.
 transition_rules:
-  - dimension: review
+  - dimension: kernel:review
     from:
       - unreviewed
     to:
@@ -10,10 +11,10 @@ transition_rules:
     requires_review: true
 operation_requirements:
   - operation: export
-    minimums:
-      review: accepted
-    forbidden:
-      epistemic:
+    required_standing:
+      kernel:review: accepted
+    forbidden_standing:
+      kernel:epistemic:
         - unresolved
 escalations:
   - trigger: attempted_export_without_review

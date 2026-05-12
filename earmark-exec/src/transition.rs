@@ -3,8 +3,8 @@ use std::collections::BTreeMap;
 use chrono::Utc;
 use earmark_connected_context::CompiledContextCompiler;
 use earmark_core::{
-    AssignmentStatus, ChangeSetDraft, ChangeSetId, ChangeSetValidationResult, Kind, ObjectRef,
-    ProviderRequest, RunRecord, TransitionAssignment, TransitionAssignmentId,
+    AssignmentStatus, ChangeSetDraft, ChangeSetId, ChangeSetValidationResult, Kind, ObjectId,
+    ObjectRef, ProviderRequest, RunRecord, TransitionAssignment, TransitionAssignmentId,
     WorkPacketConstraints,
 };
 use earmark_governance::{escalation_for_trigger, export_allowed, GovernanceService};
@@ -69,14 +69,18 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
             completed_at: None,
         };
 
-        let stored_assignment = StoredObject::new(
+        let stored_assignment = StoredObject::new_with_id(
+            assignment.id.as_object_id(),
             Kind::TransitionAssignment,
             Some("transition_assignment".to_string()),
             earmark_core::Standing::default(),
             earmark_core::Provenance::direct_input("execution_engine"),
             BTreeMap::from([(
                 "title".to_string(),
-                earmark_core::HeaderValue::String(format!("Assignment {}", assignment_id.as_str())),
+                earmark_core::HeaderValue::String(format!(
+                    "TransitionAssignment {}",
+                    assignment.id.as_str()
+                )),
             )]),
             StoredPayload::from_json_bytes(serde_json::to_vec_pretty(&assignment)?),
             vec![],
@@ -132,7 +136,9 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                     template_ref,
                     Kind::CompiledContextTemplate,
                 )?;
-                let manifest = context_compiler.compile(store, index, &resolved_template, None)?;
+                let registry = load_registry(system)?;
+                let manifest =
+                    context_compiler.compile(store, index, &resolved_template, None, &registry)?;
                 let work_packet = work_packet_from_compiled_context(
                     request,
                     transition,
@@ -205,11 +211,15 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                 state.emitted_packets.push(work_packet_ref.clone());
                 record.work_packets.push(work_packet_ref.clone());
 
-                let output_class = transition
-                    .output_contracts
-                    .first()
-                    .cloned()
-                    .unwrap_or_else(|| "candidate_output".to_string());
+                let output_class = if !instruction.register.is_empty() {
+                    instruction.register.clone()
+                } else {
+                    transition
+                        .output_contracts
+                        .first()
+                        .cloned()
+                        .unwrap_or_else(|| "candidate_output".to_string())
+                };
 
                 let artifacts = match provider_mode {
                     ProviderMode::LocalExecution => {
@@ -224,12 +234,28 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                     }
                     ProviderMode::Delegated(profile_ref) => {
                         let profile = load_provider_profile(store, index, &profile_ref)?;
+                        let context_text = state
+                            .compiled_context
+                            .as_ref()
+                            .map(crate::helpers::render_provider_context);
+                        let registry = load_registry(system)?;
+                        let input_text = crate::helpers::render_provider_input(
+                            store,
+                            &instruction,
+                            state.compiled_context.as_ref(),
+                            &filtered_inputs,
+                            &profile,
+                            &registry,
+                        )?;
+
                         let provider_request = ProviderRequest {
                             request_id: format!("req_{}", uuid_like()),
                             run_id: record.run_id.clone(),
                             work_packet: work_packet_ref.clone(),
                             provider_profile: profile_ref.clone(),
                             instruction_text: instruction.body.as_str().to_string(),
+                            context_text,
+                            input_text,
                             work_surface_manifest: state
                                 .compiled_context
                                 .as_ref()
@@ -266,7 +292,8 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                                 if let Some(warning) = &synthetic_output_warning {
                                     provider_record.advisory_warnings.push(warning.clone());
                                 }
-                                let event = StoredObject::new(
+                                let event = StoredObject::new_with_id(
+                                    ObjectId::new(),
                                     Kind::Event,
                                     Some("provider_record".to_string()),
                                     earmark_core::Standing::default(),
@@ -313,7 +340,8 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                                     &profile,
                                     &failure,
                                 );
-                                let event = StoredObject::new(
+                                let event = StoredObject::new_with_id(
+                                    ObjectId::new(),
                                     Kind::Event,
                                     Some("provider_record".to_string()),
                                     earmark_core::Standing::default(),
@@ -413,7 +441,8 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                     ExecError::MissingInput("export requires an active object".to_string())
                 })?;
                 let target_object = store.read_version(&target.version_ref())?;
-                match export_allowed(&policy, &target_object.envelope.standing) {
+                let registry = load_registry(system)?;
+                match export_allowed(&policy, &registry, &target_object.envelope.standing) {
                     Ok(()) => {
                         record_transition(
                             record,
@@ -469,6 +498,23 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                 },
             )?;
 
+            let failure_error_type = match &error {
+                ExecError::Provider(_) => "provider_error",
+                ExecError::IncompleteExecution(_) => "execution_error",
+                ExecError::MissingInput(_) => "missing_input",
+                ExecError::MissingWorkSurface(_) => "missing_work_surface",
+                ExecError::UnsupportedOperation(_) => "unsupported_operation",
+                ExecError::GovernanceOperation(_) => "governance_error",
+                ExecError::HandoffReconstruction(_) => "handoff_error",
+                ExecError::Governance(_) => "governance_error",
+                ExecError::MissingTransitionAssignment(_) => "missing_assignment",
+                ExecError::InvalidTransitionAssignment(_) => "invalid_assignment",
+                ExecError::MissingHandoffManifest(_) => "missing_handoff",
+                ExecError::InvalidWorkflow(_) => "invalid_workflow",
+                ExecError::InvalidRelationMode(_) => "invalid_relation_mode",
+                ExecError::ConflictingContinuationSources(_) => "conflicting_continuation",
+                _ => "execution_error",
+            };
             let failure_ref = persist_transformation_failure(
                 store,
                 index,
@@ -476,6 +522,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                 &assignment,
                 Some(blocked_change_set_id.clone()),
                 &error,
+                failure_error_type,
             )?;
 
             assignment.status = AssignmentStatus::Blocked;
@@ -548,6 +595,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                     &assignment,
                     Some(blocked_change_set_id.clone()),
                     &error,
+                    "validation_error",
                 )?;
 
                 assignment.status = AssignmentStatus::Blocked;
@@ -558,6 +606,14 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                 ));
                 assignment.updated_at = now_end;
                 persist_assignment_update(store, index, &stored_assignment_head, &assignment)?;
+                record_transition(
+                    record,
+                    transition.id.clone(),
+                    "validation_error",
+                    vec![],
+                    vec![failure_ref],
+                    Some(error.to_string()),
+                );
                 return Err(error);
             }
             let handoff_specs = derive_successor_handoff(store, index, system, ir, transition)?;
@@ -615,7 +671,8 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                     created_at: now_end,
                 };
 
-                let stored_handoff = StoredObject::new(
+                let stored_handoff = StoredObject::new_with_id(
+                    handoff.id.as_object_id(),
                     Kind::HandoffManifest,
                     Some("handoff_manifest".to_string()),
                     earmark_core::Standing::default(),
@@ -623,7 +680,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                     BTreeMap::from([(
                         "title".to_string(),
                         earmark_core::HeaderValue::String(format!(
-                            "Handoff for {}",
+                            "HandoffManifest {}",
                             handoff.id.as_str()
                         )),
                     )]),
@@ -657,4 +714,10 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
 
         Ok(())
     }
+}
+
+fn load_registry(
+    system: &earmark_core::SystemDefinition,
+) -> Result<earmark_core::StandingRegistry, ExecError> {
+    earmark_core::StandingRegistry::from_system_definition(system).map_err(ExecError::Core)
 }

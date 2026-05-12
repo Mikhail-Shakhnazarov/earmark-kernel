@@ -1,13 +1,17 @@
 use std::{collections::BTreeMap, fs, path::PathBuf};
 
-mod handler;
+pub(crate) mod common;
+pub(crate) use common::CliError;
+mod bootstrap;
+mod commands;
+mod dispatch;
 
 use crate::cli::*;
-use crate::config::{load_config, resolve_json, resolve_root, resolve_system_id};
 use crate::output;
 use clap_complete::{generate, shells};
 use earmark_core::{
-    EpistemicStanding, HeaderValue, Kind, ObjectId, ObjectRef, Provenance, Standing, VersionRef,
+    FlexibleVersionRef, HeaderValue, Kind, ObjectRef, Provenance, Standing, VersionRef,
+    WorkflowDeclaration, WorkflowDefinition, WorkflowOperation,
 };
 use earmark_declarations::{
     load_class_definition, load_compiled_context_template, load_instruction, load_provider_profile,
@@ -16,19 +20,14 @@ use earmark_declarations::{
     validate_provider_profile, validate_standing_policy, validate_system_definition,
     validate_workflow_definition,
 };
-use earmark_exec::{default_provider_registry, ExecutionEngine, WorkflowRunRequest};
-use earmark_governance::GovernanceService;
 use earmark_index::DerivedIndex;
-use earmark_runtime_tools::RuntimeToolSurface;
 use earmark_store::{
     CanonicalStore, GitCanonicalStore, PayloadEncoding, StoredObject, StoredPayload,
-    WorkspaceLayoutStatus,
 };
 use serde::Deserialize;
 use serde_json::json;
-use thiserror::Error;
 
-pub fn run(cli: Cli) -> Result<(), CliError> {
+pub fn run(cli: Cli) -> Result<(), common::CliError> {
     if let Commands::Completions { shell } = &cli.command {
         let mut cmd = command_for_completions();
         match shell {
@@ -39,1122 +38,81 @@ pub fn run(cli: Cli) -> Result<(), CliError> {
         return Ok(());
     }
 
-    let config = load_config(&cli)?;
-    let root = resolve_root(&cli, &config);
-    let as_json = resolve_json(&cli, &config);
-    let store = GitCanonicalStore::new(&root);
-    let mode = workspace_access_mode(&cli.command);
-    match mode {
-        WorkspaceAccessMode::None => {}
-        WorkspaceAccessMode::Init | WorkspaceAccessMode::Write => store.init_layout()?,
-        WorkspaceAccessMode::ReadOnly => require_initialized_workspace(&store)?,
-    }
-    let index = match mode {
-        WorkspaceAccessMode::None => None,
-        WorkspaceAccessMode::ReadOnly => Some(DerivedIndex::open_existing(&root)?),
-        WorkspaceAccessMode::Init | WorkspaceAccessMode::Write => Some(DerivedIndex::open(&root)?),
+    let bootstrapped = bootstrap::bootstrap(&cli)?;
+    let ctx = common::CommandContext {
+        store: &bootstrapped.store,
+        index: &bootstrapped.index,
+        config: &bootstrapped.config,
+        as_json: bootstrapped.as_json,
+        provider_registry: &bootstrapped.provider_registry,
     };
-    let provider_registry = default_provider_registry();
-    let command_name = command_family_name(&cli.command);
+
+    let command_name = common::command_family_name(&cli.command);
     let started = std::time::Instant::now();
 
-    tracing::debug!(root = %root.display(), "starting command");
-    let result: Result<(), CliError> = (|| {
-        match cli.command {
-            Commands::Init => {
-                let root = store.root();
-                let canonical_dir = root.join(".earmark").join("canonical");
-                let declarations_dir = store.declarations_dir();
-                let work_surfaces_dir = root.join(".earmark").join("work_surfaces");
-                let index_path = root.join(".earmark").join("derived").join("index.sqlite");
-                emit(
-                    as_json,
-                    json!({
-                        "ok": true,
-                        "summary": "workspace initialized",
-                        "root": root.display().to_string(),
-                        "paths": {
-                            "canonical_dir": canonical_dir.display().to_string(),
-                            "declarations_dir": declarations_dir.display().to_string(),
-                            "work_surfaces_dir": work_surfaces_dir.display().to_string(),
-                            "index_path": index_path.display().to_string(),
-                        },
-                        "next_commands": [
-                            "em doctor",
-                            "em status",
-                            "em declare list-examples"
-                        ],
-                    }),
-                );
-            }
-            Commands::Doctor => {
-                let layout = store.layout_status();
-                if !layout.is_initialized() {
-                    emit(
-                        as_json,
-                        json!({
-                            "ok": false,
-                            "summary": "workspace is not initialized",
-                            "root": store.root().display().to_string(),
-                            "layout": layout,
-                            "warnings": ["workspace layout is incomplete"],
-                            "next_commands": ["em init"],
-                        }),
-                    );
-                    return Ok(());
-                }
+    tracing::debug!(root = %bootstrapped.root.display(), command = %command_name, "starting command");
 
-                let store_scan_ok = store.scan_objects().is_ok();
-                let index_exists = store
-                    .root()
-                    .join(".earmark")
-                    .join("derived")
-                    .join("index.sqlite")
-                    .exists();
-                let index_open_ok = if index_exists {
-                    DerivedIndex::open_existing(store.root()).is_ok()
-                } else {
-                    false
-                };
-                let all_ok = store_scan_ok && index_open_ok;
-                let warnings = if all_ok {
-                    vec![]
-                } else {
-                    vec![
-                        "one or more workspace health checks failed; review check results"
-                            .to_string(),
-                    ]
-                };
-                emit(
-                    as_json,
-                    json!({
-                        "ok": all_ok,
-                        "summary": if all_ok { "workspace health checks passed" } else { "workspace health checks reported issues" },
-                        "root": store.root().display().to_string(),
-                        "layout": layout,
-                        "store_scan_ok": store_scan_ok,
-                        "index_exists": index_exists,
-                        "index_open_ok": index_open_ok,
-                        "provider_capabilities": earmark_exec::compiled_provider_capabilities(),
-                        "warnings": warnings,
-                        "next_commands": if all_ok {
-                            vec!["em status", "em run list"]
-                        } else {
-                            vec!["em init", "em status"]
-                        },
-                    }),
-                );
-            }
-            Commands::System(command) => handler::system::handle(
-                &store,
-                index
-                    .as_ref()
-                    .expect("index available for workspace command"),
-                &config,
-                as_json,
-                command,
-            )?,
-            Commands::Deposit(args) => {
-                let runtime_surface = RuntimeToolSurface {
-                    store: &store,
-                    index: index
-                        .as_ref()
-                        .expect("index available for workspace command"),
-                    provider_service: &provider_registry,
-                };
-                handler::deposit::handle(&store, &runtime_surface, &config, as_json, args)?
-            }
-            Commands::Query(args) => handler::query::handle(
-                index
-                    .as_ref()
-                    .expect("index available for workspace command"),
-                as_json,
-                args,
-            )?,
-            Commands::Review(args) => {
-                let reference =
-                    resolve_version_ref(&store, &args.object_id, args.version_id.as_deref())?;
-                let target_object = store.read_version(&reference)?;
-                let review = GovernanceService::create_review_object(
-                    target_object.object_ref(),
-                    !args.reject,
-                    args.reason,
-                )?;
-                mirror_surface(&store, &review)?;
-                earmark_exec::persistence_helpers::write_object_and_index(
-                    &store,
-                    index
-                        .as_ref()
-                        .expect("index available for workspace command"),
-                    &review,
-                )?;
-                emit(
-                    as_json,
-                    json!({
-                        "ok": true,
-                        "review_object_id": review.envelope.id.as_str(),
-                        "review_version_id": review.envelope.version_id.as_str(),
-                        "target_object_id": target_object.envelope.id.as_str(),
-                        "status": if args.reject { "rejected" } else { "accepted" },
-                    }),
-                );
-            }
-            Commands::Workflow(command) => match command.action {
-                WorkflowAction::Run(args) => {
-                    let system_id = resolve_system_id(args.system_id.as_deref(), &config).ok_or_else(|| {
-                    CliError::argument(
-                        "system id required: pass --system-id, set EM_SYSTEM_ID, or set default_system_id in config"
-                            .to_string(),
-                    )
-                })?;
-                    tracing::info!(
-                        workflow_id = %args.workflow_id,
-                        system_id = %system_id,
-                        input_count = args.inputs.len(),
-                        "starting workflow run dispatch"
-                    );
-                    let workflow = resolve_workflow_version_ref(
-                        &store,
-                        index
-                            .as_ref()
-                            .expect("index available for workspace command"),
-                        &args.workflow_id,
-                        args.version_id.as_deref(),
-                    )?;
-                    let system = resolve_system_version_ref(
-                        index
-                            .as_ref()
-                            .expect("index available for workspace command"),
-                        &system_id,
-                    )?;
-                    let inputs = args
-                        .inputs
-                        .iter()
-                        .map(|object_id| resolve_object_ref(&store, object_id))
-                        .collect::<Result<Vec<_>, _>>()?;
-                    let engine = ExecutionEngine {
-                        store: &store,
-                        index: index
-                            .as_ref()
-                            .expect("index available for workspace command"),
-                        provider_service: &provider_registry,
-                    };
-                    let outcome = engine.run_workflow(WorkflowRunRequest {
-                        run_id: format!(
-                            "run_{}",
-                            chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()
-                        ),
-                        system_definition: system,
-                        workflow,
-                        inputs,
-                        handoff_manifest: args
-                            .handoff
-                            .map(earmark_core::HandoffManifestId::parse)
-                            .transpose()?,
-                        transition_assignment: args
-                            .assignment
-                            .map(earmark_core::TransitionAssignmentId::parse)
-                            .transpose()?,
-                        operator_approved: args.approve_review,
-                    })?;
-                    let assignments = list_assignments_by_run(&store, &outcome.record.run_id)?
-                        .into_iter()
-                        .map(|assignment| assignment.id.as_str().to_string())
-                        .collect::<Vec<_>>();
-                    let change_sets = list_change_sets_by_run(&store, &outcome.record.run_id)?
-                        .into_iter()
-                        .map(|change_set| change_set.id.as_str().to_string())
-                        .collect::<Vec<_>>();
-                    let handoffs = list_handoffs_by_run(&store, &outcome.record.run_id)?
-                        .into_iter()
-                        .map(|handoff| handoff.id.as_str().to_string())
-                        .collect::<Vec<_>>();
-                    let failures = list_failures_by_run(&store, &outcome.record.run_id)?
-                        .into_iter()
-                        .collect::<Vec<_>>();
-                    emit(
-                        as_json,
-                        json!({
-                            "ok": true,
-                            "run_id": outcome.record.run_id,
-                            "summary": "workflow run completed",
-                            "status": format!("{:?}", outcome.record.status).to_lowercase(),
-                            "event_count": outcome.record.events.len(),
-                            "packet_count": outcome.emitted_packets.len(),
-                            "output_count": outcome.emitted_objects.len(),
-                            "governance_event_count": outcome.governance_events.len(),
-                            "created_assignments": assignments,
-                            "created_change_sets": change_sets,
-                            "created_handoffs": handoffs,
-                            "created_failures": failures,
-                            "next_commands": next_commands_for_run(&outcome.record.run_id),
-                        }),
-                    );
-                }
-            },
-            Commands::Run(command) => match command.action {
-                RunAction::List => {
-                    let runs = list_run_records(&store)?;
-                    let summaries = runs
-                        .into_iter()
-                        .map(|run| {
-                            json!({
-                                "run_id": run.run_id,
-                                "status": format!("{:?}", run.status).to_lowercase(),
-                                "event_count": run.events.len(),
-                                "started_at": run.started_at,
-                                "ended_at": run.ended_at,
-                            })
-                        })
-                        .collect::<Vec<_>>();
-                    emit(
-                        as_json,
-                        json!({
-                            "ok": true,
-                            "summary": format!("{} runs found", summaries.len()),
-                            "runs": summaries,
-                            "next_commands": ["em run show <run_id>", "em run timeline <run_id>"],
-                        }),
-                    );
-                }
-                RunAction::Show { run_id } => {
-                    let ledger = load_run_record_by_id(&store, &run_id)?;
-                    let resolved_id = ledger.run_id.clone();
-                    emit(
-                        as_json,
-                        json!({
-                            "ok": true,
-                            "kind": "run",
-                            "id": resolved_id,
-                            "summary": format!("run {} is {}", resolved_id, format!("{:?}", ledger.status).to_lowercase()),
-                            "artifact": ledger,
-                            "related": run_related_artifacts(&store, &resolved_id)?,
-                            "next_commands": next_commands_for_run(&resolved_id),
-                        }),
-                    );
-                }
-                RunAction::Timeline { run_id } => {
-                    let mut ledger = load_run_record_by_id(&store, &run_id)?;
-                    let resolved_id = ledger.run_id.clone();
-                    ledger.events.sort_by_key(|event| event.timestamp);
-                    emit(
-                        as_json,
-                        json!({
-                            "ok": true,
-                            "kind": "run_timeline",
-                            "id": resolved_id,
-                            "summary": format!("{} events across run {}", ledger.events.len(), resolved_id),
-                            "timeline": {
-                                "status": format!("{:?}", ledger.status).to_lowercase(),
-                                "started_at": ledger.started_at,
-                                "ended_at": ledger.ended_at,
-                                "events": ledger.events,
-                                "assignments": ledger.assignments,
-                                "change_sets": ledger.change_sets,
-                                "handoffs": ledger.manifests,
-                            },
-                            "related": run_related_artifacts(&store, &resolved_id)?,
-                            "next_commands": next_commands_for_run(&resolved_id),
-                        }),
-                    );
-                }
-                RunAction::Artifacts { run_id } => {
-                    let ledger = load_run_record_by_id(&store, &run_id)?;
-                    let resolved_id = ledger.run_id.clone();
-                    emit(
-                        as_json,
-                        json!({
-                            "ok": true,
-                            "kind": "run_artifacts",
-                            "id": resolved_id,
-                            "summary": format!("artifacts for run {}", resolved_id),
-                            "artifact": run_related_artifacts(&store, &resolved_id)?,
-                            "next_commands": next_commands_for_run(&resolved_id),
-                        }),
-                    );
-                }
-                RunAction::Explain { run_id } => {
-                    let ledger = load_run_record_by_id(&store, &run_id)?;
-                    let resolved_id = ledger.run_id.clone();
-                    emit(
-                        as_json,
-                        json!({
-                            "ok": true,
-                            "kind": "run",
-                            "id": resolved_id,
-                            "summary": format!("run {} is {}", resolved_id, format!("{:?}", ledger.status).to_lowercase()),
-                            "artifact": ledger,
-                            "related": run_related_artifacts(&store, &resolved_id)?,
-                            "next_commands": next_commands_for_run(&resolved_id),
-                        }),
-                    );
-                }
-                RunAction::Graph { run_id } => {
-                    let ledger = load_run_record_by_id(&store, &run_id)?;
-                    let resolved_id = ledger.run_id.clone();
-                    emit(
-                        as_json,
-                        json!({
-                            "ok": true,
-                            "kind": "run_graph",
-                            "id": resolved_id,
-                            "summary": format!("relationship graph for run {}", resolved_id),
-                            "graph": build_run_graph(&store, &resolved_id)?,
-                            "next_commands": next_commands_for_run(&resolved_id),
-                        }),
-                    );
-                }
-            },
-            Commands::Declare(command) => match command.action {
-                DeclareAction::Validate(args) => {
-                    let summary = validate_declaration_file(&store, args.kind, &args.path)?;
-                    emit(
-                        as_json,
-                        json!({
-                            "ok": true,
-                            "action": "validate",
-                            "kind": args.kind.as_str(),
-                            "path": args.path.display().to_string(),
-                            "summary": summary,
-                        }),
-                    );
-                }
-                DeclareAction::Explain(args) => {
-                    let explanation = explain_declaration_file(&store, args.kind, &args.path)?;
-                    emit(
-                        as_json,
-                        json!({
-                            "ok": true,
-                            "action": "explain",
-                            "kind": args.kind.as_str(),
-                            "path": args.path.display().to_string(),
-                            "explanation": explanation,
-                        }),
-                    );
-                }
-                DeclareAction::New(args) => {
-                    let output_path = scaffold_declaration(
-                        store.root(),
-                        args.kind,
-                        &args.name,
-                        args.path.as_ref(),
-                        args.force,
-                    )?;
-                    emit(
-                        as_json,
-                        json!({
-                            "ok": true,
-                            "action": "new",
-                            "kind": args.kind.as_str(),
-                            "name": args.name,
-                            "path": output_path.display().to_string(),
-                            "next_commands": [
-                                format!("em declare validate --kind {} {}", args.kind.as_str(), output_path.display()),
-                                format!("em declare explain --kind {} {}", args.kind.as_str(), output_path.display()),
-                            ],
-                        }),
-                    );
-                }
-                DeclareAction::Register(args) => {
-                    tracing::info!(kind = %args.kind.as_str(), path = %args.path.display(), "registering declaration");
-                    let version_ref =
-                        register_declaration_file(&store, index.as_ref(), args.kind, &args.path)?;
-                    if matches!(args.kind, DeclarationKind::System) {
-                        index
-                            .as_ref()
-                            .expect("index available for workspace command")
-                            .rebuild_from_store(&store)?;
-                    }
-                    emit(
-                        as_json,
-                        json!({
-                            "ok": true,
-                            "action": "register",
-                            "kind": args.kind.as_str(),
-                            "path": args.path.display().to_string(),
-                            "object_id": version_ref.id.as_str(),
-                            "version_id": version_ref.version_id.as_str(),
-                        }),
-                    );
-                }
-                DeclareAction::ListExamples => {
-                    let examples_dir = store
-                        .root()
-                        .join("docs")
-                        .join("declarations")
-                        .join("examples");
-                    let mut examples = Vec::new();
-                    if examples_dir.exists() {
-                        collect_paths_with_extensions(
-                            &examples_dir,
-                            &["yaml", "yml", "md"],
-                            &mut examples,
-                        )?;
-                    }
-                    examples.sort();
-
-                    let summary = if examples.is_empty() {
-                        "No workspace-local declaration examples found under docs/declarations/examples".to_string()
-                    } else {
-                        format!("{} declaration examples found", examples.len())
-                    };
-
-                    let next_commands = if examples.is_empty() {
-                        vec![]
-                    } else {
-                        vec![
-                            "em declare validate --kind class docs/declarations/examples/classes/finding.yaml".to_string(),
-                            "em declare explain --kind workflow docs/declarations/examples/workflows/source_to_finding.yaml".to_string(),
-                        ]
-                    };
-
-                    emit(
-                        as_json,
-                        json!({
-                            "ok": true,
-                            "summary": summary,
-                            "examples_root": examples_dir.display().to_string(),
-                            "examples": examples,
-                            "next_commands": next_commands,
-                        }),
-                    );
-                }
-            },
-            Commands::Assignment(command) => match command.action {
-                AssignmentAction::Show { assignment_id } => {
-                    let assignment = load_current_assignment_by_id(&store, &assignment_id)?;
-                    emit(as_json, serde_json::to_value(assignment)?);
-                }
-                AssignmentAction::Explain { assignment_id } => {
-                    let assignment = load_current_assignment_by_id(&store, &assignment_id)?;
-                    emit(
-                        as_json,
-                        json!({
-                            "ok": true,
-                            "kind": "assignment",
-                            "id": assignment_id,
-                            "summary": format!("assignment {} in status {}", assignment.id.as_str(), format!("{:?}", assignment.status).to_lowercase()),
-                            "artifact": assignment.clone(),
-                            "related": {
-                                "run_id": assignment.run_id.clone(),
-                                "transition_id": assignment.transition_id.clone(),
-                                "completion_change_set_id": assignment.completion_change_set_id.as_ref().map(|id| id.as_str().to_string()),
-                                "handoff_manifest_id": assignment.handoff_manifest_id.as_ref().map(|id| id.as_str().to_string()),
-                            },
-                            "next_commands": next_commands_for_assignment(&assignment),
-                        }),
-                    );
-                }
-                AssignmentAction::List { run_id, status } => {
-                    let run_id = resolve_optional_run_id(&store, run_id)?;
-                    let mut assignments = Vec::new();
-                    for object in store.scan_objects()? {
-                        if object.envelope.kind != Kind::TransitionAssignment {
-                            continue;
-                        }
-                        if let Some(head_ref) = store.read_head_ref(&object.envelope.id)? {
-                            if head_ref.version_id != object.envelope.version_id {
-                                continue;
-                            }
-                        }
-                        let assignment: earmark_core::TransitionAssignment =
-                            serde_json::from_slice(&object.payload.bytes)?;
-                        if let Some(run_id) = &run_id {
-                            if &assignment.run_id != run_id {
-                                continue;
-                            }
-                        }
-                        if let Some(status_str) = &status {
-                            if format!("{:?}", assignment.status).to_lowercase()
-                                != status_str.to_lowercase()
-                            {
-                                continue;
-                            }
-                        }
-                        assignments.push(assignment);
-                    }
-                    emit(as_json, serde_json::to_value(assignments)?);
-                }
-            },
-            Commands::ChangeSet(command) => match command.action {
-                ChangeSetAction::Show { change_set_id } => {
-                    let change_set = load_change_set_by_id(&store, &change_set_id)?;
-                    emit(as_json, serde_json::to_value(change_set)?);
-                }
-                ChangeSetAction::Explain { change_set_id } => {
-                    let change_set = load_change_set_by_id(&store, &change_set_id)?;
-                    let (synthetic, synthetic_source) =
-                        change_set_synthetic_marker(&store, &change_set)?;
-                    emit(
-                        as_json,
-                        json!({
-                                "ok": true,
-                                "kind": "change_set",
-                                "id": change_set_id,
-                                "summary": format!("change set {} for transition {}", change_set.id.as_str(), change_set.transition_id),
-                                "artifact": change_set.clone(),
-                            "related": {
-                                "run_id": change_set.run_id.clone(),
-                                "assignment_id": change_set.assignment_id.as_ref().map(|id| id.as_str().to_string()),
-                                "handoff_manifest_id": change_set.handoff_manifest_id.as_ref().map(|id| id.as_str().to_string()),
-                                "validation_results": change_set.validation_results.clone(),
-                                "synthetic": synthetic,
-                                "synthetic_source": synthetic_source,
-                            },
-                            "next_commands": next_commands_for_change_set(&change_set),
-                        }),
-                    );
-                }
-                ChangeSetAction::List { run_id } => {
-                    let run_id = resolve_optional_run_id(&store, run_id)?;
-                    let mut change_sets = Vec::new();
-                    for object in store.scan_objects()? {
-                        if object.envelope.kind != Kind::ChangeSet {
-                            continue;
-                        }
-                        let change_set: earmark_core::ChangeSet =
-                            serde_json::from_slice(&object.payload.bytes)?;
-                        if let Some(run_id) = &run_id {
-                            if &change_set.run_id != run_id {
-                                continue;
-                            }
-                        }
-                        change_sets.push(change_set);
-                    }
-                    emit(as_json, serde_json::to_value(change_sets)?);
-                }
-            },
-            Commands::Handoff(command) => match command.action {
-                HandoffAction::Show { handoff_id } => {
-                    let handoff = load_handoff_by_id(&store, &handoff_id)?;
-                    emit(as_json, serde_json::to_value(handoff)?);
-                }
-                HandoffAction::Explain { handoff_id } => {
-                    let handoff = load_handoff_by_id(&store, &handoff_id)?;
-                    emit(
-                        as_json,
-                        json!({
-                            "ok": true,
-                            "kind": "handoff",
-                            "id": handoff_id,
-                            "summary": format!("handoff {} from transition {}", handoff.id.as_str(), handoff.from_transition_id),
-                            "artifact": handoff.clone(),
-                            "related": {
-                                "run_id": handoff.run_id,
-                                "source_change_set_id": handoff.source_change_set_id.as_str().to_string(),
-                                "source_assignment_id": handoff.source_assignment_id.clone().map(|id| id.as_str().to_string()),
-                                "to_transition_id": handoff.to_transition_id,
-                                "allowed_input_classes": handoff.allowed_input_classes,
-                                "allowed_output_classes": handoff.allowed_output_classes,
-                                "allowed_relation_types": handoff.allowed_relation_types,
-                                "standing_constraints": handoff.standing_constraints,
-                                "required_checks": handoff.required_checks,
-                            },
-                            "next_commands": next_commands_for_handoff(&handoff),
-                        }),
-                    );
-                }
-                HandoffAction::List { run_id } => {
-                    let run_id = resolve_optional_run_id(&store, run_id)?;
-                    let mut handoffs = Vec::new();
-                    for object in store.scan_objects()? {
-                        if object.envelope.kind != Kind::HandoffManifest {
-                            continue;
-                        }
-                        let handoff: earmark_core::HandoffManifest =
-                            serde_json::from_slice(&object.payload.bytes)?;
-                        if let Some(run_id) = &run_id {
-                            if &handoff.run_id != run_id {
-                                continue;
-                            }
-                        }
-                        handoffs.push(handoff);
-                    }
-                    emit(as_json, serde_json::to_value(handoffs)?);
-                }
-            },
-            Commands::Failure(command) => match command.action {
-                FailureAction::Show { failure_id } => {
-                    let failure = load_failure_by_id(&store, &failure_id)?;
-                    emit(as_json, serde_json::to_value(failure)?);
-                }
-                FailureAction::Explain { failure_id } => {
-                    let failure = load_failure_by_id(&store, &failure_id)?;
-                    emit(
-                        as_json,
-                        json!({
-                            "ok": true,
-                            "kind": "failure",
-                            "id": failure_id,
-                            "summary": format!("failure on transition {}", failure.transition_id),
-                            "artifact": failure.clone(),
-                            "related": {
-                                "run_id": failure.run_id,
-                                "assignment_id": failure.assignment_id.as_str().to_string(),
-                                "failed_change_set_id": failure.failed_change_set_id.clone().map(|id| id.as_str().to_string()),
-                                "error_type": failure.error_type,
-                            },
-                            "next_commands": next_commands_for_failure(&failure),
-                        }),
-                    );
-                }
-                FailureAction::List {
-                    run_id,
-                    transition_id,
-                } => {
-                    let run_id = resolve_optional_run_id(&store, run_id)?;
-                    let failures =
-                        list_failures(&store, run_id.as_deref(), transition_id.as_deref())?;
-                    emit(
-                        as_json,
-                        json!({
-                            "ok": true,
-                            "summary": format!("{} failures found", failures.len()),
-                            "failures": failures,
-                            "next_commands": ["em failure show <failure_id>", "em failure explain <failure_id>"],
-                        }),
-                    );
-                }
-            },
-            Commands::Context(command) => {
-                let runtime_surface = RuntimeToolSurface {
-                    store: &store,
-                    index: index
-                        .as_ref()
-                        .expect("index available for workspace command"),
-                    provider_service: &provider_registry,
-                };
-                handler::context::handle(&runtime_surface, as_json, command)?
-            }
-            Commands::Audit(command) => match command.action {
-                AuditAction::Failures {
-                    run_id,
-                    transition_id,
-                } => {
-                    let run_id = resolve_optional_run_id(&store, run_id)?;
-                    let mut failures = Vec::new();
-                    failures.extend(list_failures(
-                        &store,
-                        run_id.as_deref(),
-                        transition_id.as_deref(),
-                    )?);
-                    emit(as_json, json!({ "ok": true, "failures": failures }));
-                }
-                AuditAction::Show { failure_id } => {
-                    let failure = load_failure_by_id(&store, &failure_id)?;
-                    emit(as_json, serde_json::to_value(failure)?);
-                }
-            },
-            Commands::Report(command) => match command.action {
-                ReportAction::Run { target_id, output } => {
-                    let resolved_id = resolve_run_id(&store, &target_id)?;
-                    let report = generate_run_report(&store, &resolved_id)?;
-                    if let Some(parent) = output.parent() {
-                        fs::create_dir_all(parent)?;
-                    }
-                    fs::write(&output, report)?;
-                    emit(
-                        as_json,
-                        json!({
-                            "ok": true,
-                            "kind": "report_generation",
-                            "target_kind": "run",
-                            "target_id": resolved_id,
-                            "output": output.display().to_string(),
-                        }),
-                    );
-                }
-                ReportAction::Handoff { target_id, output } => {
-                    let report = generate_handoff_report(&store, &target_id)?;
-                    if let Some(parent) = output.parent() {
-                        fs::create_dir_all(parent)?;
-                    }
-                    fs::write(&output, report)?;
-                    emit(
-                        as_json,
-                        json!({
-                            "ok": true,
-                            "kind": "report_generation",
-                            "target_kind": "handoff",
-                            "target_id": target_id,
-                            "output": output.display().to_string(),
-                        }),
-                    );
-                }
-                ReportAction::System { target_id, output } => {
-                    let report = generate_system_report(
-                        &store,
-                        index
-                            .as_ref()
-                            .expect("index available for workspace command"),
-                        &target_id,
-                    )?;
-                    if let Some(parent) = output.parent() {
-                        fs::create_dir_all(parent)?;
-                    }
-                    fs::write(&output, report)?;
-                    emit(
-                        as_json,
-                        json!({
-                            "ok": true,
-                            "kind": "report_generation",
-                            "target_kind": "system",
-                            "target_id": target_id,
-                            "output": output.display().to_string(),
-                        }),
-                    );
-                }
-            },
-            Commands::Provider(command) => match command.action {
-                ProviderAction::Capabilities => {
-                    emit(
-                        as_json,
-                        json!({
-                            "ok": true,
-                            "kind": "provider_capabilities",
-                            "providers": earmark_exec::compiled_provider_capabilities(),
-                        }),
-                    );
-                }
-            },
-            Commands::Completions { .. } => {}
-            Commands::Status => {
-                let (object_count, active_system_count) = index
-                    .as_ref()
-                    .expect("index available for workspace command")
-                    .counts()?;
-                let assignments = list_assignments(&store)?;
-                let change_sets = list_change_sets(&store)?;
-                let handoffs = list_handoffs(&store)?;
-                let failures = list_failure_objects(&store)?;
-                let runs = list_run_records(&store)?;
-                let mut assignments_by_status: BTreeMap<String, usize> = BTreeMap::new();
-                for assignment in assignments {
-                    let key = format!("{:?}", assignment.status).to_lowercase();
-                    *assignments_by_status.entry(key).or_insert(0) += 1;
-                }
-                emit(
-                    as_json,
-                    json!({
-                        "ok": true,
-                        "kind": "status",
-                        "summary": "workspace status",
-                        "object_count": object_count,
-                        "active_system_count": active_system_count,
-                        "assignment_count_by_status": assignments_by_status,
-                        "change_set_count": change_sets.len(),
-                        "handoff_count": handoffs.len(),
-                        "failure_count": failures.len(),
-                        "run_count": runs.len(),
-                        "metrics": crate::metrics::snapshot(),
-                        "provider_capabilities": earmark_exec::compiled_provider_capabilities(),
-                        "root": store.root().display().to_string(),
-                        "paths": {
-                            "declarations_dir": store.declarations_dir().display().to_string(),
-                            "canonical_dir": store.root().join(".earmark").join("canonical").display().to_string(),
-                            "index_path": store.root().join(".earmark").join("derived").join("index.sqlite").display().to_string(),
-                        },
-                        "next_commands": ["em doctor", "em run list", "em audit failures"],
-                    }),
-                );
-            }
-            Commands::Relation(command) => match command.action {
-                RelationAction::Show { relation_id } => {
-                    let relation = load_relation_object_by_id(&store, &relation_id)?;
-                    emit(as_json, serde_json::to_value(relation)?);
-                }
-                RelationAction::Explain { relation_id } => {
-                    let relation = load_relation_object_by_id(&store, &relation_id)?;
-                    let payload: earmark_core::RelationPayload =
-                        serde_json::from_slice(&relation.payload.bytes)?;
-
-                    let mut related = json!({
-                        "source": payload.source,
-                        "target": payload.target,
-                        "relation_type": payload.relation_type,
-                    });
-
-                    if let Some(mode) = relation.envelope.headers.get("relation_creation_mode") {
-                        related["creation_mode"] = json!(mode);
-                    }
-
-                    let mut auth = BTreeMap::new();
-                    for key in [
-                        "relation_auth_endpoint",
-                        "relation_auth_class",
-                        "relation_auth_authority",
-                        "relation_auth_direction",
-                    ] {
-                        if let Some(val) = relation.envelope.headers.get(key) {
-                            auth.insert(key, val);
-                        }
-                    }
-                    if !auth.is_empty() {
-                        related["authorization"] = json!(auth);
-                    }
-
-                    emit(
-                        as_json,
-                        json!({
-                            "ok": true,
-                            "kind": "relation",
-                            "id": relation_id,
-                            "summary": format!("relation '{}' from {} to {}", payload.relation_type, payload.source.id, payload.target.id),
-                            "artifact": relation.clone(),
-                            "related": related,
-                            "next_commands": [
-                                format!("em relation show {}", relation_id),
-                                format!("em query --object-id {}", payload.source.id),
-                                format!("em query --object-id {}", payload.target.id),
-                            ]
-                        }),
-                    );
-                }
-                RelationAction::List {
-                    source_id,
-                    target_id,
-                    relation_type,
-                } => {
-                    let mut relations = Vec::new();
-                    for object in store.scan_objects()? {
-                        if object.envelope.kind != Kind::Relation {
-                            continue;
-                        }
-                        if let Some(head_ref) = store.read_head_ref(&object.envelope.id)? {
-                            if head_ref.version_id != object.envelope.version_id {
-                                continue;
-                            }
-                        }
-                        let payload: earmark_core::RelationPayload =
-                            serde_json::from_slice(&object.payload.bytes)?;
-                        if let Some(sid) = &source_id {
-                            if payload.source.id.as_str() != sid {
-                                continue;
-                            }
-                        }
-                        if let Some(tid) = &target_id {
-                            if payload.target.id.as_str() != tid {
-                                continue;
-                            }
-                        }
-                        if let Some(rt) = &relation_type {
-                            if &payload.relation_type != rt {
-                                continue;
-                            }
-                        }
-                        relations.push(object);
-                    }
-                    emit(as_json, serde_json::to_value(relations)?);
-                }
-            },
-            Commands::StandingRequest(command) => match command.action {
-                StandingRequestAction::List { status, target } => {
-                    let index = index.as_ref().unwrap();
-                    let mut requests = Vec::new();
-                    let objects = index.get_objects_by_kind(Kind::Object)?;
-                    for obj_ref in objects {
-                        let obj = store.read_version(&obj_ref)?;
-                        if obj.envelope.class.as_deref() == Some("standing_transition_request") {
-                            let request: earmark_core::StandingTransitionRequest =
-                                serde_json::from_slice(&obj.payload.bytes)?;
-                            if let Some(status_str) = &status {
-                                if format!("{:?}", request.status).to_lowercase()
-                                    != status_str.to_lowercase()
-                                {
-                                    continue;
-                                }
-                            }
-                            if let Some(target_id) = &target {
-                                if request.target_object_id.as_str() != target_id {
-                                    continue;
-                                }
-                            }
-                            requests.push(json!({
-                                "id": obj.envelope.id.as_str(),
-                                "version_id": obj.envelope.version_id.as_str(),
-                                "request": request
-                            }));
-                        }
-                    }
-                    emit(as_json, serde_json::to_value(requests)?);
-                }
-                StandingRequestAction::Show { request_id } => {
-                    let index = index.as_ref().unwrap();
-                    let id = ObjectId::parse(&request_id)
-                        .map_err(|e| CliError::argument(e.to_string()))?;
-                    let head_ref = index
-                        .get_head(&id)?
-                        .ok_or_else(|| CliError::not_found(format!("request {}", request_id)))?;
-                    let obj = store.read_version(&head_ref)?;
-                    let request: earmark_core::StandingTransitionRequest =
-                        serde_json::from_slice(&obj.payload.bytes)?;
-                    emit(
-                        as_json,
-                        json!({
-                            "id": obj.envelope.id.as_str(),
-                            "version_id": obj.envelope.version_id.as_str(),
-                            "request": request
-                        }),
-                    );
-                }
-                StandingRequestAction::Approve { request_id, reason } => {
-                    let index = index.as_ref().unwrap();
-                    let id = ObjectId::parse(&request_id)
-                        .map_err(|e| CliError::argument(e.to_string()))?;
-                    let head_ref = index
-                        .get_head(&id)?
-                        .ok_or_else(|| CliError::not_found(format!("request {}", request_id)))?;
-                    let new_version = earmark_exec::governance_ops::approve_standing_request(
-                        &store, index, &head_ref, reason,
-                    )?;
-                    emit(
-                        as_json,
-                        json!({
-                            "ok": true,
-                            "request_id": request_id,
-                            "new_version_id": new_version.version_id.as_str(),
-                            "status": "approved"
-                        }),
-                    );
-                }
-                StandingRequestAction::Reject { request_id, reason } => {
-                    let index = index.as_ref().unwrap();
-                    let id = ObjectId::parse(&request_id)
-                        .map_err(|e| CliError::argument(e.to_string()))?;
-                    let head_ref = index
-                        .get_head(&id)?
-                        .ok_or_else(|| CliError::not_found(format!("request {}", request_id)))?;
-                    let new_version = earmark_exec::governance_ops::reject_standing_request(
-                        &store, index, &head_ref, reason,
-                    )?;
-                    emit(
-                        as_json,
-                        json!({
-                            "ok": true,
-                            "request_id": request_id,
-                            "new_version_id": new_version.version_id.as_str(),
-                            "status": "rejected"
-                        }),
-                    );
-                }
-                StandingRequestAction::Apply {
-                    request_id,
-                    policy,
-                    reason,
-                } => {
-                    let index = index.as_ref().unwrap();
-                    let id = ObjectId::parse(&request_id)
-                        .map_err(|e| CliError::argument(e.to_string()))?;
-                    let head_ref = index
-                        .get_head(&id)?
-                        .ok_or_else(|| CliError::not_found(format!("request {}", request_id)))?;
-
-                    let (target_ref, request_ref) =
-                        earmark_exec::governance_ops::apply_standing_request(
-                            &store,
-                            index,
-                            &head_ref,
-                            policy.as_deref(),
-                            reason,
-                        )?;
-
-                    emit(
-                        as_json,
-                        json!({
-                            "ok": true,
-                            "request_id": request_id,
-                            "new_request_version_id": request_ref.version_id.as_str(),
-                            "target_id": target_ref.id.as_str(),
-                            "new_target_version_id": target_ref.version_id.as_str(),
-                            "status": "applied"
-                        }),
-                    );
-                }
-            },
-        }
-        Ok(())
-    })();
+    let result = dispatch::dispatch(&ctx, cli);
     crate::metrics::record_command_result(command_name, result.is_ok(), started.elapsed());
     result
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum WorkspaceAccessMode {
-    None,
-    ReadOnly,
-    Write,
-    Init,
+fn resolve_workflow_declaration(
+    workflow_path: &std::path::Path,
+    decl: WorkflowDeclaration,
+    registry: &BTreeMap<std::path::PathBuf, VersionRef>,
+) -> Result<WorkflowDefinition, CliError> {
+    let mut operations = Vec::new();
+    for op in decl.operations {
+        operations.push(WorkflowOperation {
+            id: op.id.clone(),
+            kind: op.kind.clone(),
+            input_contracts: op.input_contracts.clone(),
+            output_contracts: op.output_contracts.clone(),
+            instruction: resolve_flex_ref(workflow_path, op.instruction, registry)?,
+            compiled_context: resolve_flex_ref(workflow_path, op.compiled_context, registry)?,
+            policy: resolve_flex_ref(workflow_path, op.policy, registry)?,
+            provider_profile: resolve_flex_ref(workflow_path, op.provider_profile, registry)?,
+        });
+    }
+
+    Ok(WorkflowDefinition {
+        name: decl.name,
+        version: decl.version,
+        description: decl.description,
+        operations,
+        edges: decl.edges,
+        guards: decl.guards,
+        output_contracts: decl.output_contracts,
+    })
 }
 
-fn workspace_access_mode(command: &Commands) -> WorkspaceAccessMode {
-    match command {
-        Commands::Completions { .. } => WorkspaceAccessMode::None,
-        Commands::Init => WorkspaceAccessMode::Init,
-        Commands::Doctor => WorkspaceAccessMode::None,
-        Commands::Status => WorkspaceAccessMode::ReadOnly,
-        Commands::Query(_) => WorkspaceAccessMode::ReadOnly,
-        Commands::Run(_) => WorkspaceAccessMode::ReadOnly,
-        Commands::Assignment(_) => WorkspaceAccessMode::ReadOnly,
-        Commands::ChangeSet(_) => WorkspaceAccessMode::ReadOnly,
-        Commands::Handoff(_) => WorkspaceAccessMode::ReadOnly,
-        Commands::Failure(_) => WorkspaceAccessMode::ReadOnly,
-        Commands::Audit(_) => WorkspaceAccessMode::ReadOnly,
-        Commands::Declare(command) => match command.action {
-            DeclareAction::Validate(_)
-            | DeclareAction::Explain(_)
-            | DeclareAction::ListExamples => WorkspaceAccessMode::ReadOnly,
-            DeclareAction::New(_) | DeclareAction::Register(_) => WorkspaceAccessMode::Write,
-        },
-        Commands::System(_) => WorkspaceAccessMode::Write,
-        Commands::Deposit(_) => WorkspaceAccessMode::Write,
-        Commands::Review(_) => WorkspaceAccessMode::Write,
-        Commands::Workflow(_) => WorkspaceAccessMode::Write,
-        Commands::Context(_) => WorkspaceAccessMode::Write,
-        Commands::Report(_) => WorkspaceAccessMode::Write,
-        Commands::Provider(_) => WorkspaceAccessMode::None,
-        Commands::Relation(_) => WorkspaceAccessMode::ReadOnly,
-        Commands::StandingRequest(command) => match command.action {
-            StandingRequestAction::List { .. } | StandingRequestAction::Show { .. } => {
-                WorkspaceAccessMode::ReadOnly
+fn resolve_flex_ref(
+    workflow_path: &std::path::Path,
+    flex: Option<FlexibleVersionRef>,
+    registry: &BTreeMap<std::path::PathBuf, VersionRef>,
+) -> Result<Option<VersionRef>, CliError> {
+    match flex {
+        None => Ok(None),
+        Some(FlexibleVersionRef::Ref(r)) => Ok(Some(r)),
+        Some(FlexibleVersionRef::Path(p)) => {
+            let rel_path = std::path::PathBuf::from(&p);
+            let parent = workflow_path.parent().unwrap_or(workflow_path);
+            let abs_path = parent.join(&rel_path);
+
+            // Try to canonicalize for robust matching, but fall back to joined path
+            let lookup_path = abs_path.canonicalize().unwrap_or_else(|_| abs_path.clone());
+
+            if let Some(vref) = registry.get(&lookup_path) {
+                Ok(Some(vref.clone()))
+            } else {
+                Err(CliError::argument(format!(
+                    "unresolved path reference '{}' in workflow '{}'. Referenced declaration must be included in the system manifest.",
+                    p,
+                    workflow_path.display()
+                )))
             }
-            StandingRequestAction::Approve { .. }
-            | StandingRequestAction::Reject { .. }
-            | StandingRequestAction::Apply { .. } => WorkspaceAccessMode::Write,
-        },
-    }
-}
-
-fn require_initialized_workspace(store: &GitCanonicalStore) -> Result<(), CliError> {
-    let status = store.layout_status();
-    if status.is_initialized() {
-        return Ok(());
-    }
-    Err(CliError::workspace_not_initialized(status))
-}
-
-fn command_family_name(command: &Commands) -> &'static str {
-    match command {
-        Commands::Init => "init",
-        Commands::Doctor => "doctor",
-        Commands::System(_) => "system",
-        Commands::Deposit(_) => "deposit",
-        Commands::Query(_) => "query",
-        Commands::Review(_) => "review",
-        Commands::Workflow(_) => "workflow",
-        Commands::Run(_) => "run",
-        Commands::Declare(_) => "declare",
-        Commands::Assignment(_) => "assignment",
-        Commands::ChangeSet(_) => "changeset",
-        Commands::Handoff(_) => "handoff",
-        Commands::Failure(_) => "failure",
-        Commands::Context(_) => "context",
-        Commands::Audit(_) => "audit",
-        Commands::Report(_) => "report",
-        Commands::Provider(_) => "provider",
-        Commands::Completions { .. } => "completions",
-        Commands::Status => "status",
-        Commands::Relation(_) => "relation",
-        Commands::StandingRequest(_) => "standing-request",
+        }
     }
 }
 
@@ -1396,10 +354,12 @@ fn explain_declaration_file<S: CanonicalStore>(
                     "has_compiled_context": operation.compiled_context.is_some(),
                     "has_policy": operation.policy.is_some(),
                     "has_provider_profile": operation.provider_profile.is_some(),
-                    "standing_implications": operation.policy.as_ref().map(|policy| vec![format!(
-                        "policy-bound: {}@{}",
-                        policy.id.as_str(), policy.version_id.as_str()
-                    )]).unwrap_or_default(),
+                    "standing_implications": operation.policy.as_ref().map(|policy| {
+                        match policy {
+                            FlexibleVersionRef::Ref(r) => vec![format!("policy-bound: {}@{}", r.id.as_str(), r.version_id.as_str())],
+                            FlexibleVersionRef::Path(p) => vec![format!("policy-bound (path): {}", p)],
+                        }
+                    }).unwrap_or_default(),
                 })).collect::<Vec<_>>(),
                 "edges": declaration.edges,
                 "guards": declaration.guards,
@@ -1503,6 +463,7 @@ pub(crate) fn register_declaration_file<S: CanonicalStore>(
     index: Option<&DerivedIndex>,
     kind: DeclarationKind,
     path: &PathBuf,
+    registry: Option<&BTreeMap<PathBuf, VersionRef>>,
 ) -> Result<VersionRef, CliError> {
     let (stored_kind, name, payload, headers, explicit_symbolic_name) = match kind {
         DeclarationKind::Class => {
@@ -1547,14 +508,41 @@ pub(crate) fn register_declaration_file<S: CanonicalStore>(
         DeclarationKind::Workflow => {
             let decl = load_workflow_definition(path)?;
             validate_workflow_definition(&decl)?;
+
+            // Standalone registration must not contain path references
+            for op in &decl.operations {
+                let has_paths = [
+                    &op.instruction,
+                    &op.compiled_context,
+                    &op.policy,
+                    &op.provider_profile,
+                ]
+                .iter()
+                .any(|opt| matches!(opt, Some(FlexibleVersionRef::Path(_))));
+
+                if has_paths {
+                    return Err(CliError::argument(format!(
+                        "workflow path references require system-manifest registration (found in workflow '{}')",
+                        decl.name
+                    )));
+                }
+            }
+
+            // Resolve into strict WorkflowDefinition
+            let resolved =
+                resolve_workflow_declaration(path, decl, registry.unwrap_or(&BTreeMap::new()))?;
+
             let mut headers = BTreeMap::new();
-            headers.insert("title".to_string(), HeaderValue::String(decl.name.clone()));
+            headers.insert(
+                "title".to_string(),
+                HeaderValue::String(resolved.name.clone()),
+            );
             (
                 Kind::Workflow,
-                Some(decl.name.clone()),
-                StoredPayload::from_yaml(earmark_core::to_yaml(&decl)?),
+                Some(resolved.name.clone()),
+                StoredPayload::from_yaml(earmark_core::to_yaml(&resolved)?),
                 headers,
-                decl.name.clone(),
+                resolved.name.clone(),
             )
         }
         DeclarationKind::CompiledContext => {
@@ -1726,7 +714,7 @@ fn resolve_manifest_path(manifest_path: &std::path::Path, rel: &str) -> PathBuf 
 fn validate_path_system_manifest(
     path: &std::path::Path,
     manifest: &PathSystemManifest,
-) -> Result<(), CliError> {
+) -> Result<(), common::CliError> {
     for (role, refs) in [
         ("class", &manifest.classes),
         ("instruction", &manifest.instructions),
@@ -1778,66 +766,67 @@ fn assemble_system_definition_from_manifest<S: CanonicalStore>(
     path: &std::path::Path,
     manifest: &PathSystemManifest,
 ) -> Result<earmark_core::SystemDefinition, CliError> {
-    let classes = manifest
-        .classes
-        .iter()
-        .map(|rel| {
-            register_declaration_file(
-                store,
-                None,
-                DeclarationKind::Class,
-                &resolve_manifest_path(path, rel),
-            )
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    let instructions = manifest
-        .instructions
-        .iter()
-        .map(|rel| {
-            register_declaration_file(
-                store,
-                None,
-                DeclarationKind::Instruction,
-                &resolve_manifest_path(path, rel),
-            )
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    let policies = manifest
-        .standing_policies
-        .iter()
-        .map(|rel| {
-            register_declaration_file(
-                store,
-                None,
-                DeclarationKind::StandingPolicy,
-                &resolve_manifest_path(path, rel),
-            )
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    let compiled_contexts = manifest
-        .compiled_contexts
-        .iter()
-        .map(|rel| {
-            register_declaration_file(
-                store,
-                None,
-                DeclarationKind::CompiledContext,
-                &resolve_manifest_path(path, rel),
-            )
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    let provider_profiles = manifest
-        .provider_profiles
-        .iter()
-        .map(|rel| {
-            register_declaration_file(
-                store,
-                None,
-                DeclarationKind::ProviderProfile,
-                &resolve_manifest_path(path, rel),
-            )
-        })
-        .collect::<Result<Vec<_>, _>>()?;
+    let mut registry = BTreeMap::new();
+
+    let mut classes = Vec::new();
+    for rel in &manifest.classes {
+        let p = resolve_manifest_path(path, rel);
+        let vref = register_declaration_file(store, None, DeclarationKind::Class, &p, None)?;
+        classes.push(vref.clone());
+        if let Ok(abs) = p.canonicalize() {
+            registry.insert(abs, vref);
+        } else {
+            registry.insert(p, vref);
+        }
+    }
+    let mut instructions = Vec::new();
+    for rel in &manifest.instructions {
+        let p = resolve_manifest_path(path, rel);
+        let vref = register_declaration_file(store, None, DeclarationKind::Instruction, &p, None)?;
+        instructions.push(vref.clone());
+        if let Ok(abs) = p.canonicalize() {
+            registry.insert(abs, vref);
+        } else {
+            registry.insert(p, vref);
+        }
+    }
+    let mut policies = Vec::new();
+    for rel in &manifest.standing_policies {
+        let p = resolve_manifest_path(path, rel);
+        let vref =
+            register_declaration_file(store, None, DeclarationKind::StandingPolicy, &p, None)?;
+        policies.push(vref.clone());
+        if let Ok(abs) = p.canonicalize() {
+            registry.insert(abs, vref);
+        } else {
+            registry.insert(p, vref);
+        }
+    }
+    let mut compiled_contexts = Vec::new();
+    for rel in &manifest.compiled_contexts {
+        let p = resolve_manifest_path(path, rel);
+        let vref =
+            register_declaration_file(store, None, DeclarationKind::CompiledContext, &p, None)?;
+        compiled_contexts.push(vref.clone());
+        if let Ok(abs) = p.canonicalize() {
+            registry.insert(abs, vref);
+        } else {
+            registry.insert(p, vref);
+        }
+    }
+    let mut provider_profiles = Vec::new();
+    for rel in &manifest.provider_profiles {
+        let p = resolve_manifest_path(path, rel);
+        let vref =
+            register_declaration_file(store, None, DeclarationKind::ProviderProfile, &p, None)?;
+        provider_profiles.push(vref.clone());
+        if let Ok(abs) = p.canonicalize() {
+            registry.insert(abs, vref);
+        } else {
+            registry.insert(p, vref);
+        }
+    }
+
     let workflows = manifest
         .workflows
         .iter()
@@ -1847,6 +836,7 @@ fn assemble_system_definition_from_manifest<S: CanonicalStore>(
                 None,
                 DeclarationKind::Workflow,
                 &resolve_manifest_path(path, rel),
+                Some(&registry),
             )
         })
         .collect::<Result<Vec<_>, _>>()?;
@@ -1860,6 +850,7 @@ fn assemble_system_definition_from_manifest<S: CanonicalStore>(
                 None,
                 DeclarationKind::CompiledContext,
                 &resolve_manifest_path(path, rel),
+                None,
             )
         })
         .transpose()?;
@@ -1872,6 +863,7 @@ fn assemble_system_definition_from_manifest<S: CanonicalStore>(
                 None,
                 DeclarationKind::ProviderProfile,
                 &resolve_manifest_path(path, rel),
+                None,
             )
         })
         .transpose()?;
@@ -1889,6 +881,7 @@ fn assemble_system_definition_from_manifest<S: CanonicalStore>(
         provider_profiles,
         default_compiled_context,
         default_provider_profile,
+        standing_dimensions: vec![],
         runtime_profile: manifest.runtime_profile.clone(),
         activated_at: None,
     })
@@ -1957,7 +950,7 @@ fn collect_paths_with_extensions(
     root: &std::path::Path,
     extensions: &[&str],
     out: &mut Vec<String>,
-) -> Result<(), CliError> {
+) -> Result<(), common::CliError> {
     for entry in fs::read_dir(root)? {
         let entry = entry?;
         let path = entry.path();
@@ -2169,6 +1162,7 @@ fn list_failures<S: CanonicalStore>(
             "failure_id": failure_id,
             "run_id": failure.run_id,
             "transition_id": failure.transition_id,
+            "assignment_id": failure.assignment_id.as_str(),
             "error_type": failure.error_type,
             "message": failure.message,
             "created_at": failure.created_at,
@@ -2216,7 +1210,7 @@ fn run_related_artifacts<S: CanonicalStore>(
     }))
 }
 
-fn load_current_assignment_by_id<S: CanonicalStore>(
+pub(crate) fn load_current_assignment_by_id<S: CanonicalStore>(
     store: &S,
     assignment_id: &str,
 ) -> Result<earmark_core::TransitionAssignment, CliError> {
@@ -2241,7 +1235,7 @@ fn load_current_assignment_by_id<S: CanonicalStore>(
     )))
 }
 
-fn load_change_set_by_id<S: CanonicalStore>(
+pub(crate) fn load_change_set_by_id<S: CanonicalStore>(
     store: &S,
     change_set_id: &str,
 ) -> Result<earmark_core::ChangeSet, CliError> {
@@ -2260,7 +1254,7 @@ fn load_change_set_by_id<S: CanonicalStore>(
     )))
 }
 
-fn change_set_synthetic_marker<S: CanonicalStore>(
+pub(crate) fn change_set_synthetic_marker<S: CanonicalStore>(
     store: &S,
     change_set: &earmark_core::ChangeSet,
 ) -> Result<(bool, Option<String>), CliError> {
@@ -2284,7 +1278,7 @@ fn change_set_synthetic_marker<S: CanonicalStore>(
     Ok((false, None))
 }
 
-fn load_handoff_by_id<S: CanonicalStore>(
+pub(crate) fn load_handoff_by_id<S: CanonicalStore>(
     store: &S,
     handoff_id: &str,
 ) -> Result<earmark_core::HandoffManifest, CliError> {
@@ -2303,7 +1297,7 @@ fn load_handoff_by_id<S: CanonicalStore>(
     )))
 }
 
-fn load_failure_by_id<S: CanonicalStore>(
+pub(crate) fn load_failure_by_id<S: CanonicalStore>(
     store: &S,
     failure_id: &str,
 ) -> Result<earmark_core::TransformationFailure, CliError> {
@@ -2341,21 +1335,7 @@ fn load_relation_object_by_id<S: CanonicalStore>(
     Ok(found)
 }
 
-pub(crate) fn parse_epistemic(value: &str) -> Result<EpistemicStanding, CliError> {
-    match value {
-        "unresolved" => Ok(EpistemicStanding::Unresolved),
-        "working" => Ok(EpistemicStanding::Working),
-        "supported" => Ok(EpistemicStanding::Supported),
-        "contested" => Ok(EpistemicStanding::Contested),
-        "superseded" => Ok(EpistemicStanding::Superseded),
-        _ => Err(CliError::argument(format!(
-            "invalid epistemic standing: {}",
-            value
-        ))),
-    }
-}
-
-fn resolve_system_version_ref(
+pub(crate) fn resolve_system_version_ref(
     index: &DerivedIndex,
     system_id: &str,
 ) -> Result<VersionRef, CliError> {
@@ -2371,7 +1351,7 @@ fn resolve_system_version_ref(
 pub(crate) fn mirror_surface(
     store: &GitCanonicalStore,
     object: &StoredObject,
-) -> Result<(), CliError> {
+) -> Result<(), common::CliError> {
     let (dir, ext) = match &object.envelope.kind {
         Kind::Instruction => (
             store.declarations_dir().join("instructions"),
@@ -2418,7 +1398,7 @@ pub(crate) fn mirror_surface(
     Ok(())
 }
 
-fn build_run_graph<S: CanonicalStore>(
+pub(crate) fn build_run_graph<S: CanonicalStore>(
     store: &S,
     run_id: &str,
 ) -> Result<serde_json::Value, CliError> {
@@ -2509,7 +1489,7 @@ fn build_run_graph<S: CanonicalStore>(
     }))
 }
 
-fn next_commands_for_run(run_id: &str) -> Vec<String> {
+pub(crate) fn next_commands_for_run(run_id: &str) -> Vec<String> {
     vec![
         format!("em run explain {}", run_id),
         format!("em run timeline {}", run_id),
@@ -2519,7 +1499,9 @@ fn next_commands_for_run(run_id: &str) -> Vec<String> {
     ]
 }
 
-fn next_commands_for_assignment(assignment: &earmark_core::TransitionAssignment) -> Vec<String> {
+pub(crate) fn next_commands_for_assignment(
+    assignment: &earmark_core::TransitionAssignment,
+) -> Vec<String> {
     let mut commands = vec![format!("em run explain {}", assignment.run_id)];
     if let Some(hid) = &assignment.handoff_manifest_id {
         commands.push(format!("em handoff explain {}", hid.as_str()));
@@ -2531,7 +1513,7 @@ fn next_commands_for_assignment(assignment: &earmark_core::TransitionAssignment)
     commands
 }
 
-fn next_commands_for_change_set(change_set: &earmark_core::ChangeSet) -> Vec<String> {
+pub(crate) fn next_commands_for_change_set(change_set: &earmark_core::ChangeSet) -> Vec<String> {
     let mut commands = vec![format!("em run explain {}", change_set.run_id)];
     if let Some(hid) = &change_set.handoff_manifest_id {
         commands.push(format!("em handoff explain {}", hid.as_str()));
@@ -2543,16 +1525,17 @@ fn next_commands_for_change_set(change_set: &earmark_core::ChangeSet) -> Vec<Str
     commands
 }
 
-fn next_commands_for_handoff(handoff: &earmark_core::HandoffManifest) -> Vec<String> {
+pub(crate) fn next_commands_for_handoff(handoff: &earmark_core::HandoffManifest) -> Vec<String> {
     let mut commands = vec![format!("em run explain {}", handoff.run_id)];
     if let Some(transition_id) = &handoff.to_transition_id {
         commands.push(format!(
-            "em workflow run <workflow_id> --system-id <system_id> --handoff-manifest {} # successor {}",
-            handoff.id.as_str(), transition_id
+            "em workflow run <workflow_id> --system-id <system_id> --handoff {} # successor {}",
+            handoff.id.as_str(),
+            transition_id
         ));
     } else {
         commands.push(format!(
-            "em workflow run <workflow_id> --system-id <system_id> --handoff-manifest {}",
+            "em workflow run <workflow_id> --system-id <system_id> --handoff {}",
             handoff.id.as_str()
         ));
     }
@@ -2560,8 +1543,14 @@ fn next_commands_for_handoff(handoff: &earmark_core::HandoffManifest) -> Vec<Str
     commands
 }
 
-fn next_commands_for_failure(failure: &earmark_core::TransformationFailure) -> Vec<String> {
-    let mut commands = vec![format!("em run explain {}", failure.run_id)];
+pub(crate) fn next_commands_for_failure(
+    failure_id: &str,
+    failure: &earmark_core::TransformationFailure,
+) -> Vec<String> {
+    let mut commands = vec![
+        format!("em failure show {}", failure_id),
+        format!("em run explain {}", failure.run_id),
+    ];
     if let Some(delta_id) = &failure.failed_change_set_id {
         commands.push(format!("em change-set explain {}", delta_id.as_str()));
     }
@@ -2829,23 +1818,20 @@ fn render_explanation(value: &serde_json::Value) -> Option<String> {
             }
 
             if let Some(auth) = related.get("authorization") {
-                output.push_str("\nAuthorization Trace:\n");
-                if let Some(endpoint) = auth.get("relation_auth_endpoint").and_then(|v| v.as_str())
-                {
-                    output.push_str(&format!("  Authorizing Endpoint: {}\n", endpoint));
-                }
-                if let Some(class) = auth.get("relation_auth_class").and_then(|v| v.as_str()) {
-                    output.push_str(&format!("  Authorizing Class: {}\n", class));
-                }
-                if let Some(auth_type) =
-                    auth.get("relation_auth_authority").and_then(|v| v.as_str())
-                {
-                    output.push_str(&format!("  Configured Authority: {}\n", auth_type));
-                }
-                if let Some(direction) =
-                    auth.get("relation_auth_direction").and_then(|v| v.as_str())
-                {
-                    output.push_str(&format!("  Rule Direction: {}\n", direction));
+                if !auth.is_null() {
+                    output.push_str("\nAuthorization Trace:\n");
+                    if let Some(endpoint) = auth.get("endpoint").and_then(|v| v.as_str()) {
+                        output.push_str(&format!("  Authorizing Endpoint: {}\n", endpoint));
+                    }
+                    if let Some(class) = auth.get("class").and_then(|v| v.as_str()) {
+                        output.push_str(&format!("  Authorizing Class: {}\n", class));
+                    }
+                    if let Some(authority) = auth.get("authority").and_then(|v| v.as_str()) {
+                        output.push_str(&format!("  Configured Authority: {}\n", authority));
+                    }
+                    if let Some(direction) = auth.get("direction").and_then(|v| v.as_str()) {
+                        output.push_str(&format!("  Rule Direction: {}\n", direction));
+                    }
                 }
             }
         }
@@ -3192,50 +2178,4 @@ fn generate_system_report<S: CanonicalStore>(
     content.push_str("</div>");
 
     Ok(html_wrap(&format!("System {}", system_id), &content))
-}
-
-#[derive(Debug, Error)]
-pub enum CliError {
-    #[error("store error: {0}")]
-    Store(#[from] earmark_store::StoreError),
-    #[error("index error: {0}")]
-    Index(#[from] earmark_index::IndexError),
-    #[error("derive error: {0}")]
-    Derive(#[from] earmark_declarations::DeriveError),
-    #[error("execution error: {0}")]
-    Exec(#[from] earmark_exec::ExecError),
-    #[error("governance error: {0}")]
-    Governance(#[from] earmark_governance::GovernanceError),
-    #[error("core error: {0}")]
-    Core(#[from] earmark_core::CoreError),
-    #[error("serde json error: {0}")]
-    Json(#[from] serde_json::Error),
-    #[error("serde yaml error: {0}")]
-    Yaml(#[from] serde_yaml::Error),
-    #[error("toml error: {0}")]
-    Toml(#[from] toml::de::Error),
-    #[error("io error: {0}")]
-    Io(#[from] std::io::Error),
-    #[error("not found: {0}")]
-    NotFound(String),
-    #[error("argument error: {0}")]
-    Argument(String),
-    #[error("workspace is not initialized; run `em init` before using this command")]
-    WorkspaceNotInitialized { status: WorkspaceLayoutStatus },
-    #[error("runtime error: {0}")]
-    Runtime(#[from] earmark_runtime_tools::RuntimeToolError),
-}
-
-impl CliError {
-    pub fn argument(message: impl Into<String>) -> Self {
-        Self::Argument(message.into())
-    }
-
-    pub fn not_found(message: impl Into<String>) -> Self {
-        Self::NotFound(message.into())
-    }
-
-    fn workspace_not_initialized(status: WorkspaceLayoutStatus) -> Self {
-        Self::WorkspaceNotInitialized { status }
-    }
 }

@@ -35,11 +35,11 @@ rm -rf "$WORKSPACE"
 # Initialize the workspace
 em --root "$WORKSPACE" init
 
-# Register declarations for this demo
-em --root "$WORKSPACE" system register "$REPO_ROOT/examples/knowledge-briefing/declarations/systems/system.yaml"
-
 # Validate declarations
 em --root "$WORKSPACE" declare validate --kind system "$REPO_ROOT/examples/knowledge-briefing/declarations/systems/system.yaml"
+
+# Register declarations for this demo
+em --root "$WORKSPACE" system register "$REPO_ROOT/examples/knowledge-briefing/declarations/systems/system.yaml"
 
 # Activate the system
 em --root "$WORKSPACE" system activate sys_knowledge_briefing

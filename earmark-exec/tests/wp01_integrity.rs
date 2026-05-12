@@ -162,7 +162,11 @@ fn test_live_transition_indexing() {
             _: earmark_core::ProviderRequest,
             _: &str,
         ) -> Result<ProviderExecutionOutcome, earmark_exec::error::ProviderFailure> {
-            unimplemented!()
+            panic!(
+                "MockProvider::provide should never be called in this test; \
+                 provide is only invoked for 'transform' transitions with a Delegated provider mode, \
+                 but this test only exercises 'review' transitions"
+            )
         }
     }
     let engine = ExecutionEngine::new(&store, &index, &MockProvider);
@@ -255,6 +259,7 @@ fn test_live_transition_indexing() {
         provider_profiles: vec![],
         default_compiled_context: None,
         default_provider_profile: None,
+        standing_dimensions: vec![],
         runtime_profile: earmark_core::RuntimeProfile {
             execution_surface: "test".to_string(),
             machine_output_default: "test".to_string(),

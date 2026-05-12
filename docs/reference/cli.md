@@ -1,6 +1,6 @@
 # CLI Reference
 
-The Earmark CLI (`em`) is the primary interface for operators and developers. All commands support `--json` for machine-readable output.
+The Earmark CLI (`em`) is the primary interface for operators and developers. Most commands support `--json` for machine-readable output wrapped in a versioned envelope. For technical details on the JSON structure, see the [CLI Contracts Reference](cli-contracts.md). Output-special commands such as `completions` bypass the JSON envelope.
 
 ## Global Flags
 
@@ -107,11 +107,11 @@ List recent workflow runs.
 
 ### `em run show <run_id>`
 
-Show detailed data for a specific run.
+Show the raw run record for a specific run. Returns the stored ledger data directly (run_id, status, events, timestamps). Accepts `latest` for the most recent run.
 
 ### `em run explain <run_id>`
 
-Summary of a run: status, transitions, created artifacts. Use `latest` for the most recent run.
+Interpreted run context: status, transitions, related artifacts (assignments, change sets, handoffs, failures), and suggested next commands. Use `latest` for the most recent run.
 
 ### `em run timeline <run_id>`
 
@@ -163,15 +163,15 @@ List handoffs, optionally filtered by run.
 
 ### `em failure show <id>`
 
-Show raw data for a failure.
+Show the complete failure artifact as stored. Includes run id, transition id, assignment id, error type, error message, failed change set id (if any), input object ids at time of failure, and timestamp.
 
 ### `em failure explain <id>`
 
-Explain what went wrong in a transition.
+Explain what went wrong in a transition. Returns interpreted context: run id, assignment id, transition id, failed change set id, error type, and suggested next commands (`em failure show`, `em run explain`, `em change-set explain`, `em assignment explain`, `em run timeline`).
 
 ### `em failure list [--run-id <id>] [--transition-id <id>]`
 
-List failures, optionally filtered.
+List failures with summary fields (failure id, run id, transition id, assignment id, error type, message, timestamp). Filter by run id, transition id, or both.
 
 ### `em relation show <id>`
 
@@ -185,11 +185,33 @@ Explain a relation: type, endpoints, and authorization trace.
 
 List relations, optionally filtered by source, target, or type.
 
+## Standing Requests
+
+### `em standing-request list [--status <status>] [--target <object_id>]`
+
+List proposed/applied/rejected standing requests.
+
+### `em standing-request show <request_id>`
+
+Show one standing request.
+
+### `em standing-request approve <request_id> [--reason <text>]`
+
+Approve a proposed standing request.
+
+### `em standing-request reject <request_id> [--reason <text>]`
+
+Reject a proposed standing request.
+
+### `em standing-request apply <request_id> [--policy <policy>] [--reason <text>]`
+
+Apply an approved standing request, optionally through a named policy.
+
 ## Audit and Providers
 
 ### `em audit failures [--run-id <id>] [--transition-id <id>]`
 
-Audit workflow failures.
+Audit workflow failures. Returns failure count summary and suggested next commands in addition to failure details.
 
 ### `em audit show <failure_id>`
 

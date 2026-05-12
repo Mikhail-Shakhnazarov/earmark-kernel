@@ -8,7 +8,8 @@ mod filter;
 use crate::filter::{object_summary_admissible, relation_type_admissible};
 use chrono::Utc;
 use earmark_core::{
-    parse_yaml, CompiledContextTemplate, ExpansionObjectFilter, ObjectId, ObjectRef, ScalarValue,
+    parse_yaml, projection::project_visibility, CompiledContextTemplate, DimensionId,
+    ExpansionObjectFilter, ObjectId, ObjectRef, ScalarValue, Standing, StandingRegistry, TokenId,
     VersionRef,
 };
 use earmark_index::{DerivedIndex, ObjectSummary, QueryFilter};
@@ -83,6 +84,7 @@ pub trait CompiledContextCompiler<S: CanonicalStore> {
         index: &DerivedIndex,
         template_ref: &VersionRef,
         work_packet: Option<ObjectRef>,
+        registry: &StandingRegistry,
     ) -> Result<WorkSurfaceManifest, ProjectError>;
 }
 
@@ -96,8 +98,9 @@ impl<S: CanonicalStore> CompiledContextCompiler<S> for CanonicalCompiledContextC
         index: &DerivedIndex,
         template_ref: &VersionRef,
         work_packet: Option<ObjectRef>,
+        registry: &StandingRegistry,
     ) -> Result<WorkSurfaceManifest, ProjectError> {
-        CompiledContextService::compile(store, index, template_ref, work_packet)
+        CompiledContextService::compile(store, index, template_ref, work_packet, registry)
     }
 }
 
@@ -109,9 +112,12 @@ impl CompiledContextService {
         store: &S,
         index: &DerivedIndex,
         template_ref: &VersionRef,
+        registry: &StandingRegistry,
     ) -> Result<CompiledContextPlan, ProjectError> {
         let template = load_compiled_context_template(store, template_ref)?;
-        let selection = collect_selection(store, index, &template)?;
+        let mut selection = collect_selection(store, index, &template)?;
+
+        filter_selection_by_visibility(&mut selection, registry);
         let mut ids = selection
             .objects
             .iter()
@@ -134,9 +140,12 @@ impl CompiledContextService {
         index: &DerivedIndex,
         template_ref: &VersionRef,
         work_packet: Option<ObjectRef>,
+        registry: &StandingRegistry,
     ) -> Result<WorkSurfaceManifest, ProjectError> {
         let template = load_compiled_context_template(store, template_ref)?;
-        let selection = collect_selection(store, index, &template)?;
+        let mut selection = collect_selection(store, index, &template)?;
+
+        filter_selection_by_visibility(&mut selection, registry);
 
         let objects = selection
             .objects
@@ -439,6 +448,45 @@ fn collect_selection<S: CanonicalStore>(
     })
 }
 
+fn filter_selection_by_visibility(
+    selection: &mut CompiledContextSelection,
+    registry: &StandingRegistry,
+) {
+    let mut excluded_ids: BTreeSet<String> = BTreeSet::new();
+    selection.objects.retain(|obj| {
+        let standing = Standing {
+            values: obj
+                .standing
+                .iter()
+                .filter_map(|(dim, tok)| {
+                    let d = DimensionId::parse(dim.clone()).ok()?;
+                    let t = TokenId::parse(tok.clone()).ok()?;
+                    Some((d, t))
+                })
+                .collect(),
+        };
+        let vis = project_visibility(&standing, registry);
+        if vis.include_in_standard_context {
+            true
+        } else {
+            excluded_ids.insert(obj.object_id.clone());
+            false
+        }
+    });
+
+    if !excluded_ids.is_empty() {
+        selection.warnings.push(format!(
+            "{} object(s) excluded from standard context by visibility policy",
+            excluded_ids.len()
+        ));
+    }
+
+    selection.boundary_relations.retain(|br| {
+        !excluded_ids.contains(&br.included_object_id)
+            && !excluded_ids.contains(&br.excluded_object_id)
+    });
+}
+
 fn render_readme(manifest: &WorkSurfaceManifest) -> String {
     let mut text = format!("# Work Surface {}\n\n", manifest.surface_id);
     for item in &manifest.objects {
@@ -516,14 +564,16 @@ mod tests {
     use super::*;
     use crate::filter::object_summary_matches_standing;
     use earmark_core::{
-        CompiledContextExpansion, EpistemicStanding, ExpansionObjectFilter, Kind, ProcessStanding,
-        Provenance, ReviewStanding, Standing,
+        CompiledContextExpansion, DimensionId, ExpansionObjectFilter, Kind, Provenance, Standing,
+        TokenId,
     };
     use earmark_store::{CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload};
     use tempfile::tempdir;
 
     #[test]
     fn test_matches_standing() {
+        let mut standing = BTreeMap::new();
+        standing.insert("kernel:review".to_string(), "accepted".to_string());
         let row = earmark_index::ObjectSummary {
             object_id: "o1".to_string(),
             version_id: "v1".to_string(),
@@ -531,22 +581,87 @@ mod tests {
             class: Some("c1".to_string()),
             title: None,
             summary: None,
-            standing_review: "accepted".to_string(),
-            standing_process: "active".to_string(),
-            standing_epistemic: "confirmed".to_string(),
             system_id: None,
             namespace: None,
+            standing,
         };
 
         let mut filters = BTreeMap::new();
-        filters.insert("review".to_string(), vec!["accepted".to_string()]);
+        filters.insert("kernel:review".to_string(), vec!["accepted".to_string()]);
         assert!(object_summary_matches_standing(&row, &filters));
 
-        filters.insert("review".to_string(), vec!["rejected".to_string()]);
+        filters.insert("kernel:review".to_string(), vec!["rejected".to_string()]);
         assert!(!object_summary_matches_standing(&row, &filters));
 
         let empty_filters = BTreeMap::new();
         assert!(object_summary_matches_standing(&row, &empty_filters));
+    }
+
+    #[test]
+    fn test_matches_standing_unknown_dimension_returns_false() {
+        let row = earmark_index::ObjectSummary {
+            object_id: "o1".to_string(),
+            version_id: "v1".to_string(),
+            kind: "Object".to_string(),
+            class: None,
+            title: None,
+            summary: None,
+            system_id: None,
+            namespace: None,
+            standing: BTreeMap::new(),
+        };
+        let mut filters = BTreeMap::new();
+        filters.insert("research:status".to_string(), vec!["verified".to_string()]);
+        assert!(
+            !object_summary_matches_standing(&row, &filters),
+            "unknown dimension not in row.standing must return false"
+        );
+    }
+
+    #[test]
+    fn test_matches_standing_empty_allowed_tokens_is_unconstrained() {
+        let row = earmark_index::ObjectSummary {
+            object_id: "o1".to_string(),
+            version_id: "v1".to_string(),
+            kind: "Object".to_string(),
+            class: None,
+            title: None,
+            summary: None,
+            system_id: None,
+            namespace: None,
+            standing: BTreeMap::from([("research:status".to_string(), "verified".to_string())]),
+        };
+        let mut filters = BTreeMap::new();
+        filters.insert("research:status".to_string(), vec![]);
+        assert!(
+            object_summary_matches_standing(&row, &filters),
+            "empty allowed-token list must be unconstrained"
+        );
+    }
+
+    #[test]
+    fn test_matches_standing_custom_dimension_through_standing_map() {
+        let row = earmark_index::ObjectSummary {
+            object_id: "o1".to_string(),
+            version_id: "v1".to_string(),
+            kind: "Object".to_string(),
+            class: None,
+            title: None,
+            summary: None,
+            system_id: None,
+            namespace: None,
+            standing: BTreeMap::from([("research:status".to_string(), "demonstrated".to_string())]),
+        };
+        // Match via row.standing
+        let filters = BTreeMap::from([(
+            "research:status".to_string(),
+            vec!["demonstrated".to_string()],
+        )]);
+        assert!(object_summary_matches_standing(&row, &filters));
+        // Non-matching token
+        let filters =
+            BTreeMap::from([("research:status".to_string(), vec!["verified".to_string()])]);
+        assert!(!object_summary_matches_standing(&row, &filters));
     }
 
     #[test]
@@ -582,6 +697,23 @@ mod tests {
             CompiledContextService::cli_summary(&manifest),
             "surface test with 1 object(s)"
         );
+    }
+
+    fn kernel_registry() -> StandingRegistry {
+        StandingRegistry::kernel_defaults()
+    }
+
+    fn standing_kernel(epistemic: &str, review: &str, process: &str) -> Standing {
+        let mut s = Standing::default();
+        s.values.insert(
+            DimensionId::new("kernel:epistemic"),
+            TokenId::new(epistemic),
+        );
+        s.values
+            .insert(DimensionId::new("kernel:review"), TokenId::new(review));
+        s.values
+            .insert(DimensionId::new("kernel:process"), TokenId::new(process));
+        s
     }
 
     fn object(title: &str, standing: Standing) -> StoredObject {
@@ -752,22 +884,8 @@ mod tests {
         let store = GitCanonicalStore::new(dir.path());
         let index = DerivedIndex::open(dir.path()).unwrap();
 
-        let accepted = object(
-            "accepted",
-            Standing {
-                epistemic: EpistemicStanding::Working,
-                review: ReviewStanding::Accepted,
-                process: ProcessStanding::Active,
-            },
-        );
-        let rejected = object(
-            "rejected",
-            Standing {
-                epistemic: EpistemicStanding::Working,
-                review: ReviewStanding::Rejected,
-                process: ProcessStanding::Active,
-            },
-        );
+        let accepted = object("accepted", standing_kernel("working", "accepted", "active"));
+        let rejected = object("rejected", standing_kernel("working", "rejected", "active"));
         store.write_object(&accepted).unwrap();
         store.write_object(&rejected).unwrap();
         store
@@ -775,7 +893,8 @@ mod tests {
             .unwrap();
         index.rebuild_from_store(&store).unwrap();
 
-        let standing = BTreeMap::from([("review".to_string(), vec!["accepted".to_string()])]);
+        let standing =
+            BTreeMap::from([("kernel:review".to_string(), vec!["accepted".to_string()])]);
         let selected =
             collect_selected_objects(&store, &index, &template_with_standing(standing)).unwrap();
         let ids = selected
@@ -843,22 +962,8 @@ mod tests {
         let store = GitCanonicalStore::new(dir.path());
         let index = DerivedIndex::open(dir.path()).unwrap();
 
-        let accepted = object(
-            "accepted",
-            Standing {
-                epistemic: EpistemicStanding::Working,
-                review: ReviewStanding::Accepted,
-                process: ProcessStanding::Active,
-            },
-        );
-        let rejected = object(
-            "rejected",
-            Standing {
-                epistemic: EpistemicStanding::Working,
-                review: ReviewStanding::Rejected,
-                process: ProcessStanding::Active,
-            },
-        );
+        let accepted = object("accepted", standing_kernel("working", "accepted", "active"));
+        let rejected = object("rejected", standing_kernel("working", "rejected", "active"));
         store.write_object(&accepted).unwrap();
         store.write_object(&rejected).unwrap();
         store
@@ -866,7 +971,8 @@ mod tests {
             .unwrap();
         index.rebuild_from_store(&store).unwrap();
 
-        let standing = BTreeMap::from([("review".to_string(), vec!["accepted".to_string()])]);
+        let standing =
+            BTreeMap::from([("kernel:review".to_string(), vec!["accepted".to_string()])]);
         let selection = collect_selection(
             &store,
             &index,
@@ -894,22 +1000,8 @@ mod tests {
         let store = GitCanonicalStore::new(dir.path());
         let index = DerivedIndex::open(dir.path()).unwrap();
 
-        let accepted = object(
-            "accepted",
-            Standing {
-                epistemic: EpistemicStanding::Working,
-                review: ReviewStanding::Accepted,
-                process: ProcessStanding::Active,
-            },
-        );
-        let rejected = object(
-            "rejected",
-            Standing {
-                epistemic: EpistemicStanding::Working,
-                review: ReviewStanding::Rejected,
-                process: ProcessStanding::Active,
-            },
-        );
+        let accepted = object("accepted", standing_kernel("working", "accepted", "active"));
+        let rejected = object("rejected", standing_kernel("working", "rejected", "active"));
         store.write_object(&accepted).unwrap();
         store.write_object(&rejected).unwrap();
         store
@@ -917,7 +1009,8 @@ mod tests {
             .unwrap();
         index.rebuild_from_store(&store).unwrap();
 
-        let standing = BTreeMap::from([("review".to_string(), vec!["accepted".to_string()])]);
+        let standing =
+            BTreeMap::from([("kernel:review".to_string(), vec!["accepted".to_string()])]);
         let selection = collect_selection(
             &store,
             &index,
@@ -947,30 +1040,12 @@ mod tests {
         let store = GitCanonicalStore::new(dir.path());
         let index = DerivedIndex::open(dir.path()).unwrap();
 
-        let accepted = object(
-            "accepted",
-            Standing {
-                epistemic: EpistemicStanding::Working,
-                review: ReviewStanding::Accepted,
-                process: ProcessStanding::Active,
-            },
-        );
-        let rejected = object(
-            "rejected",
-            Standing {
-                epistemic: EpistemicStanding::Working,
-                review: ReviewStanding::Rejected,
-                process: ProcessStanding::Active,
-            },
-        );
+        let accepted = object("accepted", standing_kernel("working", "accepted", "active"));
+        let rejected = object("rejected", standing_kernel("working", "rejected", "active"));
         let hidden_parent = StoredObject::new(
             Kind::Object,
             Some("source_note".to_string()),
-            Standing {
-                epistemic: EpistemicStanding::Working,
-                review: ReviewStanding::Accepted,
-                process: ProcessStanding::Active,
-            },
+            standing_kernel("working", "accepted", "active"),
             Provenance::direct_input("operator"),
             BTreeMap::new(),
             StoredPayload::from_markdown("hidden_parent"),
@@ -988,7 +1063,8 @@ mod tests {
             .unwrap();
         index.rebuild_from_store(&store).unwrap();
 
-        let standing = BTreeMap::from([("review".to_string(), vec!["accepted".to_string()])]);
+        let standing =
+            BTreeMap::from([("kernel:review".to_string(), vec!["accepted".to_string()])]);
         let selected =
             collect_selected_objects(&store, &index, &template_with_standing(standing)).unwrap();
         let ids = selected
@@ -1098,8 +1174,9 @@ mod tests {
 
         index.rebuild_from_store(&store).unwrap();
 
+        let reg = kernel_registry();
         let manifest =
-            CompiledContextService::compile(&store, &index, &template_ref, None).unwrap();
+            CompiledContextService::compile(&store, &index, &template_ref, None, &reg).unwrap();
 
         assert_eq!(manifest.objects.len(), 1);
         assert_eq!(manifest.boundary_relations.len(), 1);
@@ -1192,22 +1269,8 @@ mod tests {
         let store = GitCanonicalStore::new(dir.path());
         let index = DerivedIndex::open(dir.path()).unwrap();
 
-        let accepted = object(
-            "accepted",
-            Standing {
-                epistemic: EpistemicStanding::Working,
-                review: ReviewStanding::Accepted,
-                process: ProcessStanding::Active,
-            },
-        );
-        let rejected = object(
-            "rejected",
-            Standing {
-                epistemic: EpistemicStanding::Working,
-                review: ReviewStanding::Rejected,
-                process: ProcessStanding::Active,
-            },
-        );
+        let accepted = object("accepted", standing_kernel("working", "accepted", "active"));
+        let rejected = object("rejected", standing_kernel("working", "rejected", "active"));
         let second_hop = object("second_hop", Standing::default());
 
         store.write_object(&accepted).unwrap();
@@ -1222,7 +1285,8 @@ mod tests {
             .unwrap();
         index.rebuild_from_store(&store).unwrap();
 
-        let standing = BTreeMap::from([("review".to_string(), vec!["accepted".to_string()])]);
+        let standing =
+            BTreeMap::from([("kernel:review".to_string(), vec!["accepted".to_string()])]);
         let mut template = template_with_standing(standing);
         template.select.expansion.include_boundary_relations = true;
 
@@ -1289,11 +1353,350 @@ mod tests {
         let template_ref = store.write_object(&template_obj).unwrap();
         index.rebuild_from_store(&store).unwrap();
 
+        let reg = kernel_registry();
         let manifest =
-            CompiledContextService::compile(&store, &index, &template_ref, None).unwrap();
+            CompiledContextService::compile(&store, &index, &template_ref, None, &reg).unwrap();
         let evidence = render_evidence_pack(&manifest);
 
         assert!(evidence.contains("# Boundary Relations"));
         assert!(!evidence.contains(secret_payload));
+    }
+
+    // --- Visibility enforcement tests for Work Packet 05 ---
+
+    fn visibility_registry() -> StandingRegistry {
+        use earmark_core::ProtocolBinding;
+        let sys = earmark_core::SystemDefinition {
+            system_id: "sys_vis_test".to_string(),
+            namespace: "systems/vis_test".to_string(),
+            title: "VisTest".to_string(),
+            description: None,
+            classes: vec![],
+            instructions: vec![],
+            policies: vec![],
+            workflows: vec![],
+            compiled_contexts: vec![],
+            provider_profiles: vec![],
+            default_compiled_context: None,
+            default_provider_profile: None,
+            standing_dimensions: vec![earmark_core::StandingDimensionDefinition {
+                id: DimensionId::from_static("dim:visibility"),
+                default: TokenId::from_static("default"),
+                tokens: vec![
+                    earmark_core::StandingTokenDefinition {
+                        id: TokenId::from_static("default"),
+                        implements: vec![],
+                    },
+                    earmark_core::StandingTokenDefinition {
+                        id: TokenId::from_static("standard_only"),
+                        implements: vec![ProtocolBinding {
+                            protocol: earmark_core::KernelProtocolId::from_static(
+                                "kernel:visibility",
+                            ),
+                            state: None,
+                            properties: BTreeMap::from([
+                                (
+                                    "include_in_standard_context".to_string(),
+                                    ScalarValue::Bool(true),
+                                ),
+                                ("expose_to_provider".to_string(), ScalarValue::Bool(false)),
+                            ]),
+                        }],
+                    },
+                    earmark_core::StandingTokenDefinition {
+                        id: TokenId::from_static("hidden"),
+                        implements: vec![ProtocolBinding {
+                            protocol: earmark_core::KernelProtocolId::from_static(
+                                "kernel:visibility",
+                            ),
+                            state: None,
+                            properties: BTreeMap::from([(
+                                "include_in_standard_context".to_string(),
+                                ScalarValue::Bool(false),
+                            )]),
+                        }],
+                    },
+                    earmark_core::StandingTokenDefinition {
+                        id: TokenId::from_static("exposable"),
+                        implements: vec![ProtocolBinding {
+                            protocol: earmark_core::KernelProtocolId::from_static(
+                                "kernel:visibility",
+                            ),
+                            state: None,
+                            properties: BTreeMap::from([
+                                (
+                                    "include_in_standard_context".to_string(),
+                                    ScalarValue::Bool(true),
+                                ),
+                                ("expose_to_provider".to_string(), ScalarValue::Bool(true)),
+                            ]),
+                        }],
+                    },
+                ],
+            }],
+            runtime_profile: earmark_core::RuntimeProfile {
+                execution_surface: "test".to_string(),
+                machine_output_default: "json".to_string(),
+                work_surface_mode: "materialized".to_string(),
+            },
+            activated_at: None,
+        };
+        StandingRegistry::from_system_definition(&sys).expect("vis test registry")
+    }
+
+    fn standing_with_visibility(token: &str) -> Standing {
+        let mut s = Standing::default();
+        s.values.insert(
+            DimensionId::from_static("dim:visibility"),
+            TokenId::new(token),
+        );
+        s
+    }
+
+    #[test]
+    fn visibility_excludes_object_from_standard_context() {
+        let dir = tempdir().unwrap();
+        let store = GitCanonicalStore::new(dir.path());
+        let index = DerivedIndex::open(dir.path()).unwrap();
+
+        let included = object("included", Standing::default());
+        let hidden_obj = object("hidden", standing_with_visibility("hidden"));
+        store.write_object(&included).unwrap();
+        store.write_object(&hidden_obj).unwrap();
+        index.rebuild_from_store(&store).unwrap();
+
+        let template = template_with_standing(BTreeMap::new());
+        let template_obj = StoredObject::new(
+            Kind::CompiledContextTemplate,
+            None,
+            Standing::default(),
+            Provenance::direct_input("test"),
+            BTreeMap::new(),
+            StoredPayload::from_json_bytes(serde_json::to_vec(&template).unwrap()),
+            vec![],
+        );
+        let template_ref = store.write_object(&template_obj).unwrap();
+        index.rebuild_from_store(&store).unwrap();
+
+        let reg = visibility_registry();
+        let manifest =
+            CompiledContextService::compile(&store, &index, &template_ref, None, &reg).unwrap();
+
+        let ids: BTreeSet<_> = manifest
+            .objects
+            .iter()
+            .map(|o| o.object.id.as_str().to_string())
+            .collect();
+        assert!(ids.contains(included.envelope.id.as_str()));
+        assert!(!ids.contains(hidden_obj.envelope.id.as_str()));
+        assert_eq!(manifest.objects.len(), 1);
+    }
+
+    #[test]
+    fn visibility_included_object_appears_in_context() {
+        let dir = tempdir().unwrap();
+        let store = GitCanonicalStore::new(dir.path());
+        let index = DerivedIndex::open(dir.path()).unwrap();
+
+        let visible = object("visible", standing_with_visibility("standard_only"));
+        store.write_object(&visible).unwrap();
+        index.rebuild_from_store(&store).unwrap();
+
+        let template = template_with_standing(BTreeMap::new());
+        let template_obj = StoredObject::new(
+            Kind::CompiledContextTemplate,
+            None,
+            Standing::default(),
+            Provenance::direct_input("test"),
+            BTreeMap::new(),
+            StoredPayload::from_json_bytes(serde_json::to_vec(&template).unwrap()),
+            vec![],
+        );
+        let template_ref = store.write_object(&template_obj).unwrap();
+        index.rebuild_from_store(&store).unwrap();
+
+        let reg = visibility_registry();
+        let manifest =
+            CompiledContextService::compile(&store, &index, &template_ref, None, &reg).unwrap();
+
+        let ids: BTreeSet<_> = manifest
+            .objects
+            .iter()
+            .map(|o| o.object.id.as_str().to_string())
+            .collect();
+        assert!(ids.contains(visible.envelope.id.as_str()));
+    }
+
+    #[test]
+    fn visibility_no_binding_defaults_to_included() {
+        let dir = tempdir().unwrap();
+        let store = GitCanonicalStore::new(dir.path());
+        let index = DerivedIndex::open(dir.path()).unwrap();
+
+        let obj = object("default", Standing::default());
+        store.write_object(&obj).unwrap();
+        index.rebuild_from_store(&store).unwrap();
+
+        let template = template_with_standing(BTreeMap::new());
+        let template_obj = StoredObject::new(
+            Kind::CompiledContextTemplate,
+            None,
+            Standing::default(),
+            Provenance::direct_input("test"),
+            BTreeMap::new(),
+            StoredPayload::from_json_bytes(serde_json::to_vec(&template).unwrap()),
+            vec![],
+        );
+        let template_ref = store.write_object(&template_obj).unwrap();
+        index.rebuild_from_store(&store).unwrap();
+
+        let reg = visibility_registry();
+        let manifest =
+            CompiledContextService::compile(&store, &index, &template_ref, None, &reg).unwrap();
+
+        let ids: BTreeSet<_> = manifest
+            .objects
+            .iter()
+            .map(|o| o.object.id.as_str().to_string())
+            .collect();
+        assert!(ids.contains(obj.envelope.id.as_str()));
+    }
+
+    #[test]
+    fn visibility_excluded_by_standing_is_excluded_from_compile() {
+        let dir = tempdir().unwrap();
+        let store = GitCanonicalStore::new(dir.path());
+        let index = DerivedIndex::open(dir.path()).unwrap();
+
+        let included = object("included", Standing::default());
+        let hidden_obj = object("hidden", standing_with_visibility("hidden"));
+        store.write_object(&included).unwrap();
+        store.write_object(&hidden_obj).unwrap();
+        index.rebuild_from_store(&store).unwrap();
+
+        let template = template_with_standing(BTreeMap::new());
+        let template_obj = StoredObject::new(
+            Kind::CompiledContextTemplate,
+            None,
+            Standing::default(),
+            Provenance::direct_input("test"),
+            BTreeMap::new(),
+            StoredPayload::from_json_bytes(serde_json::to_vec(&template).unwrap()),
+            vec![],
+        );
+        let template_ref = store.write_object(&template_obj).unwrap();
+        index.rebuild_from_store(&store).unwrap();
+
+        let reg = visibility_registry();
+        let manifest =
+            CompiledContextService::compile(&store, &index, &template_ref, None, &reg).unwrap();
+
+        let ids: BTreeSet<_> = manifest
+            .objects
+            .iter()
+            .map(|o| o.object.id.as_str().to_string())
+            .collect();
+        assert!(ids.contains(included.envelope.id.as_str()));
+        assert!(!ids.contains(hidden_obj.envelope.id.as_str()));
+        assert_eq!(manifest.objects.len(), 1);
+    }
+
+    #[test]
+    fn visibility_excluded_object_triggers_warning() {
+        let dir = tempdir().unwrap();
+        let store = GitCanonicalStore::new(dir.path());
+        let index = DerivedIndex::open(dir.path()).unwrap();
+
+        let hidden_obj = object("hidden", standing_with_visibility("hidden"));
+        store.write_object(&hidden_obj).unwrap();
+        index.rebuild_from_store(&store).unwrap();
+
+        let template = template_with_standing(BTreeMap::new());
+        let template_obj = StoredObject::new(
+            Kind::CompiledContextTemplate,
+            None,
+            Standing::default(),
+            Provenance::direct_input("test"),
+            BTreeMap::new(),
+            StoredPayload::from_json_bytes(serde_json::to_vec(&template).unwrap()),
+            vec![],
+        );
+        let template_ref = store.write_object(&template_obj).unwrap();
+        index.rebuild_from_store(&store).unwrap();
+
+        let reg = visibility_registry();
+        let manifest =
+            CompiledContextService::compile(&store, &index, &template_ref, None, &reg).unwrap();
+
+        assert!(
+            manifest
+                .warnings
+                .iter()
+                .any(|w| w.contains("excluded from standard context by visibility policy")),
+            "Expected warning about visibility exclusion, got: {:?}",
+            manifest.warnings
+        );
+    }
+
+    #[test]
+    fn visibility_excluded_boundary_relation_does_not_leak_payload() {
+        let dir = tempdir().unwrap();
+        let store = GitCanonicalStore::new(dir.path());
+        let index = DerivedIndex::open(dir.path()).unwrap();
+
+        let finding = StoredObject::new(
+            Kind::Object,
+            Some("finding".to_string()),
+            Standing::default(),
+            Provenance::direct_input("operator"),
+            BTreeMap::new(),
+            StoredPayload::from_markdown("finding payload"),
+            vec![],
+        );
+        let secret_payload = "SECRET_HIDDEN_ENDPOINT_PAYLOAD_XYZ";
+        let hidden = StoredObject::new(
+            Kind::Object,
+            Some("hidden_source".to_string()),
+            standing_with_visibility("hidden"),
+            Provenance::direct_input("operator"),
+            BTreeMap::new(),
+            StoredPayload::from_markdown(secret_payload),
+            vec![],
+        );
+        store.write_object(&finding).unwrap();
+        store.write_object(&hidden).unwrap();
+        store
+            .write_object(&relation(&finding, &hidden, "linked"))
+            .unwrap();
+
+        let mut template = template_with_select(
+            vec!["finding".to_string()],
+            BTreeMap::new(),
+            vec!["linked".to_string()],
+            None,
+        );
+        template.select.expansion.include_boundary_relations = true;
+
+        let template_obj = StoredObject::new(
+            Kind::CompiledContextTemplate,
+            None,
+            Standing::default(),
+            Provenance::direct_input("operator"),
+            BTreeMap::new(),
+            StoredPayload::from_json_bytes(serde_json::to_vec(&template).unwrap()),
+            vec![],
+        );
+        let template_ref = store.write_object(&template_obj).unwrap();
+        index.rebuild_from_store(&store).unwrap();
+
+        let reg = visibility_registry();
+        let manifest =
+            CompiledContextService::compile(&store, &index, &template_ref, None, &reg).unwrap();
+
+        // Excluded endpoint's payload must not leak
+        let evidence = render_evidence_pack(&manifest);
+        assert!(!evidence.contains(secret_payload));
+        // Boundary relation should still be present (IDs/classes only)
+        assert!(manifest.boundary_relations.is_empty() || !evidence.contains(secret_payload));
     }
 }

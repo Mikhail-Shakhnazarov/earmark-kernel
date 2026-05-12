@@ -9,7 +9,7 @@ output_classes:
 execution_policy: runtime_permitted
 provider_profile: null
 trace_policy: summary
-register: research_synthesis
+register: summary
 ---
 
 # Research Synthesis

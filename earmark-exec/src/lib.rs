@@ -4,6 +4,7 @@ pub mod error;
 pub mod governance_ops;
 pub mod handoff;
 pub mod helpers;
+pub mod http_generation;
 pub mod ir;
 pub(crate) mod persistence;
 pub mod persistence_helpers;
@@ -34,8 +35,8 @@ pub use relation_logic::{
 };
 
 // Specialized adapters
-pub mod gemini;
-pub use gemini::GeminiAdapter;
+#[cfg(feature = "http-provider")]
+pub use http_generation::HttpGenerationAdapter;
 
 #[cfg(test)]
 mod tests;

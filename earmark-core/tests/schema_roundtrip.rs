@@ -33,7 +33,12 @@ fn standing_and_provenance_roundtrip() {
     let standing = Standing::default();
     let json = serde_json::to_string(&standing).unwrap();
     let parsed: Standing = serde_json::from_str(&json).unwrap();
-    assert_eq!(parsed.review, ReviewStanding::Unreviewed);
+    assert_eq!(
+        parsed
+            .get(&DimensionId::new("kernel:review"))
+            .map(TokenId::as_str),
+        Some("unreviewed")
+    );
 
     let provenance = Provenance::direct_input("operator");
     let json = serde_json::to_string(&provenance).unwrap();

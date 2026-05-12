@@ -61,7 +61,8 @@ pub(crate) fn persist_change_set<S: CanonicalStore>(
         created_at: Utc::now(),
     };
 
-    let mut stored_change_set = StoredObject::new(
+    let stored_change_set = StoredObject::new_with_id(
+        change_set_id.as_object_id(),
         Kind::ChangeSet,
         Some("change_set".to_string()),
         Standing::default(),
@@ -73,7 +74,6 @@ pub(crate) fn persist_change_set<S: CanonicalStore>(
         StoredPayload::from_json_bytes(serde_json::to_vec_pretty(&change_set)?),
         vec![],
     );
-    stored_change_set.envelope.id = ObjectId::parse(change_set_id.as_str()).unwrap();
     write_object_and_index(store, index, &stored_change_set)?;
 
     // Link standing requests via Relations
@@ -153,15 +153,17 @@ pub(crate) fn persist_transformation_failure<S: CanonicalStore>(
     assignment: &TransitionAssignment,
     failed_change_set_id: Option<ChangeSetId>,
     error: &ExecError,
+    error_type: &str,
 ) -> Result<ObjectRef, ExecError> {
     let failure = TransformationFailure {
         run_id: assignment.run_id.clone(),
         transition_id: assignment.transition_id.clone(),
         assignment_id: assignment.id.clone(),
         failed_change_set_id,
-        error_type: "execution_error".to_string(),
+        error_type: error_type.to_string(),
         message: error.to_string(),
         stack_trace: None,
+        input_object_ids: assignment.input_object_ids.clone(),
         created_at: Utc::now(),
     };
 
@@ -359,9 +361,7 @@ pub(crate) fn persist_run_record<S: CanonicalStore>(
         StoredPayload::from_json_bytes(earmark_core::to_json_pretty(record)?.into_bytes()),
         vec![],
     );
-    // RunRecord indexing?
-    // Let's check if RunRecord should be indexed.
-    // Usually yes, so we can list runs.
+    // Run records are indexed so run list/show/latest inspection can discover them.
     write_object_and_index(store, index, &stored)?;
     Ok(())
 }

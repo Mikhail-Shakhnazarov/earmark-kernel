@@ -1,8 +1,10 @@
 use super::*;
 use chrono::Utc;
 use earmark_connected_context::{CompiledContextCompiler, WorkSurfaceManifest};
+
 use earmark_core::{
-    ClassFilter, Kind, Provenance, RelationFilter, Standing, StandingFilter, TransitionAssignmentId,
+    ClassFilter, DimensionId, Kind, Provenance, RelationFilter, Standing, StandingFilter, TokenId,
+    TransitionAssignmentId,
 };
 use earmark_exec::ProviderRegistry;
 use earmark_index::DerivedIndex;
@@ -91,6 +93,7 @@ impl<S: CanonicalStore> CompiledContextCompiler<S> for FakeContextCompiler {
         _index: &DerivedIndex,
         template_ref: &earmark_core::VersionRef,
         _work_packet: Option<earmark_core::ObjectRef>,
+        _registry: &earmark_core::StandingRegistry,
     ) -> Result<WorkSurfaceManifest, earmark_connected_context::ProjectError> {
         Ok(WorkSurfaceManifest {
             surface_id: "fake_surface".to_string(),
@@ -420,13 +423,15 @@ fn test_compile_connected_context_respects_standing_filters() {
         )
         .unwrap();
 
+    let mut supported_standing = Standing::default();
+    supported_standing.values.insert(
+        DimensionId::new("kernel:epistemic"),
+        TokenId::new("supported"),
+    );
     let supported = StoredObject::new(
         Kind::Object,
         Some("neighbor".to_string()),
-        Standing {
-            epistemic: earmark_core::EpistemicStanding::Supported,
-            ..Standing::default()
-        },
+        supported_standing,
         Provenance::direct_input("test"),
         BTreeMap::new(),
         StoredPayload::from_markdown("supported"),
@@ -434,13 +439,15 @@ fn test_compile_connected_context_respects_standing_filters() {
     );
     let supported_ref = store.write_object(&supported).unwrap();
 
+    let mut contested_standing = Standing::default();
+    contested_standing.values.insert(
+        DimensionId::new("kernel:epistemic"),
+        TokenId::new("contested"),
+    );
     let contested = StoredObject::new(
         Kind::Object,
         Some("neighbor".to_string()),
-        Standing {
-            epistemic: earmark_core::EpistemicStanding::Contested,
-            ..Standing::default()
-        },
+        contested_standing,
         Provenance::direct_input("test"),
         BTreeMap::new(),
         StoredPayload::from_markdown("contested"),
@@ -482,7 +489,10 @@ fn test_compile_connected_context_respects_standing_filters() {
             }),
             None,
             Some(StandingFilter {
-                allowed_epistemic: vec![earmark_core::EpistemicStanding::Supported],
+                allowed: BTreeMap::from([(
+                    DimensionId::new("kernel:epistemic"),
+                    vec![TokenId::new("supported")],
+                )]),
             }),
         )
         .unwrap();
@@ -1117,6 +1127,7 @@ fn register_system_definition(
         provider_profiles: vec![],
         default_compiled_context: None,
         default_provider_profile: None,
+        standing_dimensions: vec![],
         runtime_profile: earmark_core::RuntimeProfile {
             execution_surface: "local".to_string(),
             machine_output_default: "json".to_string(),

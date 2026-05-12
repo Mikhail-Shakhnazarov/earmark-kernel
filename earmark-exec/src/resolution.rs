@@ -12,9 +12,7 @@ pub(crate) fn resolve_version<S: CanonicalStore>(
     store: &S,
     version: &VersionRef,
 ) -> Result<VersionRef, ExecError> {
-    if version.version_id.as_str() == "ver_00000000000000000000000000000000"
-        || version.version_id.as_str() == "latest"
-    {
+    if version.version_id.is_latest_sentinel() || version.version_id.as_str() == "latest" {
         store.read_head_ref(&version.id)?.ok_or_else(|| {
             ExecError::IncompleteExecution(format!(
                 "latest version not found for object {}",
@@ -32,13 +30,10 @@ pub(crate) fn resolve_version_for_kind<S: CanonicalStore>(
     version: &VersionRef,
     expected_kind: Kind,
 ) -> Result<VersionRef, ExecError> {
-    if let Ok(resolved) = resolve_version(store, version) {
-        return Ok(resolved);
-    }
-    if version.version_id.as_str() != "ver_00000000000000000000000000000000"
-        && version.version_id.as_str() != "latest"
-    {
-        return resolve_version(store, version);
+    match resolve_version(store, version) {
+        Ok(resolved) => return Ok(resolved),
+        Err(ExecError::IncompleteExecution(_)) => {} // Fall back to symbolic resolution
+        Err(e) => return Err(e),
     }
 
     let symbolic = version.id.as_str();
