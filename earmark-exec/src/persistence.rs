@@ -61,7 +61,8 @@ pub(crate) fn persist_change_set<S: CanonicalStore>(
         created_at: Utc::now(),
     };
 
-    let mut stored_change_set = StoredObject::new(
+    let stored_change_set = StoredObject::new_with_id(
+        change_set_id.as_object_id(),
         Kind::ChangeSet,
         Some("change_set".to_string()),
         Standing::default(),
@@ -73,7 +74,6 @@ pub(crate) fn persist_change_set<S: CanonicalStore>(
         StoredPayload::from_json_bytes(serde_json::to_vec_pretty(&change_set)?),
         vec![],
     );
-    stored_change_set.envelope.id = ObjectId::parse(change_set_id.as_str()).unwrap();
     write_object_and_index(store, index, &stored_change_set)?;
 
     // Link standing requests via Relations

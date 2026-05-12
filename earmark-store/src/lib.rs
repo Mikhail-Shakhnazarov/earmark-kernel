@@ -121,11 +121,33 @@ impl StoredObject {
         payload: StoredPayload,
         parents: Vec<VersionRef>,
     ) -> Self {
+        Self::new_with_id(
+            ObjectId::new(),
+            kind,
+            class,
+            standing,
+            provenance,
+            headers,
+            payload,
+            parents,
+        )
+    }
+
+    pub fn new_with_id(
+        id: ObjectId,
+        kind: Kind,
+        class: Option<String>,
+        standing: Standing,
+        provenance: Provenance,
+        headers: BTreeMap<String, HeaderValue>,
+        payload: StoredPayload,
+        parents: Vec<VersionRef>,
+    ) -> Self {
         let now = Utc::now();
         let payload_ref = payload.payload_ref();
         Self {
             envelope: Envelope {
-                id: ObjectId::new(),
+                id,
                 version_id: VersionId::new(),
                 kind,
                 class,
@@ -376,7 +398,7 @@ impl GitCanonicalStore {
             fs::write(self.manifest_path(), to_json_pretty(&manifest)?)?;
         }
 
-        self.backend.ensure_repo(&self.root)?;
+        self.backend.ensure_repo(&self.canonical_dir())?;
         Ok(())
     }
 }
@@ -474,7 +496,7 @@ impl CanonicalStore for GitCanonicalStore {
                 }
                 written.push(object.envelope.version_ref());
             }
-            self.backend.commit_paths(&self.root, &batch.message)?;
+            self.backend.commit_paths(&self.canonical_dir(), &batch.message)?;
             Ok(())
         })();
         if let Err(err) = write_result {
