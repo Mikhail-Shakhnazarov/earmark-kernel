@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, fix/restore-clippy-baseline]
+    branches: [main, dev, refactor]
   pull_request:
 
 jobs:
