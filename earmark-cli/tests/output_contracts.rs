@@ -25,8 +25,11 @@ fn verify_envelope(stdout: &[u8]) -> Value {
 fn test_json_status() {
     let dir = setup_workspace();
     let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
-    cmd.arg("--root").arg(dir.path()).arg("--json").arg("status");
-    
+    cmd.arg("--root")
+        .arg(dir.path())
+        .arg("--json")
+        .arg("status");
+
     let output = cmd.assert().success().get_output().stdout.clone();
     let val = verify_envelope(&output);
     let data = &val["data"];
@@ -38,8 +41,12 @@ fn test_json_status() {
 fn test_json_run_list() {
     let dir = setup_workspace();
     let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
-    cmd.arg("--root").arg(dir.path()).arg("--json").arg("run").arg("list");
-    
+    cmd.arg("--root")
+        .arg(dir.path())
+        .arg("--json")
+        .arg("run")
+        .arg("list");
+
     let output = cmd.assert().success().get_output().stdout.clone();
     let val = verify_envelope(&output);
     assert!(val["data"]["runs"].is_array());
@@ -49,8 +56,12 @@ fn test_json_run_list() {
 fn test_json_provider_capabilities() {
     let dir = setup_workspace();
     let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
-    cmd.arg("--root").arg(dir.path()).arg("--json").arg("provider").arg("capabilities");
-    
+    cmd.arg("--root")
+        .arg(dir.path())
+        .arg("--json")
+        .arg("provider")
+        .arg("capabilities");
+
     let output = cmd.assert().success().get_output().stdout.clone();
     let val = verify_envelope(&output);
     assert!(val["data"]["providers"].is_array());
@@ -60,8 +71,12 @@ fn test_json_provider_capabilities() {
 fn test_json_standing_request_list() {
     let dir = setup_workspace();
     let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
-    cmd.arg("--root").arg(dir.path()).arg("--json").arg("standing-request").arg("list");
-    
+    cmd.arg("--root")
+        .arg(dir.path())
+        .arg("--json")
+        .arg("standing-request")
+        .arg("list");
+
     let output = cmd.assert().success().get_output().stdout.clone();
     let val = verify_envelope(&output);
     // Let's see what standing-request list returns

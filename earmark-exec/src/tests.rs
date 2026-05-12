@@ -724,7 +724,10 @@ fn test_resolution_error_propagation() {
     let index = DerivedIndex::open(root).unwrap();
 
     let obj_id = ObjectId::new();
-    let head_path = store.root().join(".earmark/canonical/heads").join(format!("{}.json", obj_id.as_str()));
+    let head_path = store
+        .root()
+        .join(".earmark/canonical/heads")
+        .join(format!("{}.json", obj_id.as_str()));
     std::fs::create_dir_all(head_path.parent().unwrap()).unwrap();
     std::fs::write(&head_path, "invalid json").unwrap();
 
@@ -732,11 +735,12 @@ fn test_resolution_error_propagation() {
         obj_id,
         earmark_core::VersionId::parse("ver_00000000000000000000000000000000").unwrap(),
     ); // latest
-    
-    let res = crate::resolution::resolve_version_for_kind(&store, &index, &version_ref, Kind::Workflow);
-    
+
+    let res =
+        crate::resolution::resolve_version_for_kind(&store, &index, &version_ref, Kind::Workflow);
+
     assert!(res.is_err());
-    // It should NOT be IncompleteExecution (which would mean it fell back and failed), 
+    // It should NOT be IncompleteExecution (which would mean it fell back and failed),
     // it should be a Store error (JSON parse error from reading the head ref)
     match res.unwrap_err() {
         crate::error::ExecError::Store(_) => {} // OK

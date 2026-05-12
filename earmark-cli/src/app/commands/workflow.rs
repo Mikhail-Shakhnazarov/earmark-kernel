@@ -1,9 +1,13 @@
-use earmark_exec::{ExecutionEngine, WorkflowRunRequest};
-use serde_json::json;
-use crate::app::common::{CommandContext, CliError};
-use crate::app::{emit, resolve_object_ref, resolve_workflow_version_ref, resolve_system_version_ref, list_assignments_by_run, list_change_sets_by_run, list_handoffs_by_run, list_failures_by_run};
+use crate::app::common::{CliError, CommandContext};
+use crate::app::{
+    emit, list_assignments_by_run, list_change_sets_by_run, list_failures_by_run,
+    list_handoffs_by_run, resolve_object_ref, resolve_system_version_ref,
+    resolve_workflow_version_ref,
+};
 use crate::cli::{WorkflowAction, WorkflowCommand};
 use crate::config::resolve_system_id;
+use earmark_exec::{ExecutionEngine, WorkflowRunRequest};
+use serde_json::json;
 
 pub fn handle(ctx: &CommandContext, command: &WorkflowCommand) -> Result<(), CliError> {
     let store = ctx.store;
@@ -31,18 +35,15 @@ pub fn handle(ctx: &CommandContext, command: &WorkflowCommand) -> Result<(), Cli
                 &args.workflow_id,
                 args.version_id.as_deref(),
             )?;
-            let system = resolve_system_version_ref(
-                index,
-                &system_id,
-            )?;
+            let system = resolve_system_version_ref(index, &system_id)?;
             let inputs = args
                 .inputs
                 .iter()
                 .map(|object_id| resolve_object_ref(store, object_id))
                 .collect::<Result<Vec<_>, _>>()?;
             let engine = ExecutionEngine {
-                store: store,
-                index: index,
+                store,
+                index,
                 provider_service: provider_registry,
             };
             let outcome = engine.run_workflow(WorkflowRunRequest {
@@ -94,7 +95,7 @@ pub fn handle(ctx: &CommandContext, command: &WorkflowCommand) -> Result<(), Cli
                     "created_assignments": assignments,
                     "created_change_sets": change_sets,
                     "created_handoffs": handoffs,
-                    "failures": failures,
+                    "created_failures": failures,
                     "next_commands": [
                         format!("em run timeline {}", outcome.record.run_id),
                         format!("em run artifacts {}", outcome.record.run_id),

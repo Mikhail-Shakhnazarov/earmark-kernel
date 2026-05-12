@@ -1,12 +1,12 @@
-use std::fs;
+use crate::app::common::{CliError, CommandContext};
+use crate::app::{emit, mirror_surface};
+use crate::cli::DepositArgs;
+use crate::config::resolve_system_id;
 use earmark_core::{Kind, VersionRef};
 use earmark_runtime_tools::RuntimeToolSurface;
 use earmark_store::CanonicalStore;
 use serde_json::json;
-use crate::app::common::{CommandContext, CliError};
-use crate::app::{emit, mirror_surface};
-use crate::cli::DepositArgs;
-use crate::config::resolve_system_id;
+use std::fs;
 
 pub fn handle(ctx: &CommandContext, args: &DepositArgs) -> Result<(), CliError> {
     let store = ctx.store;
