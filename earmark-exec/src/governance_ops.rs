@@ -90,8 +90,7 @@ pub fn apply_standing_request<S: CanonicalStore>(
         .map_err(|e| ExecError::GovernanceOperation(e.to_string()))?;
 
     // 1c. Drift Check: verify current standing matches request.from_value
-    let dim_name = normalize_dim_name(&request.dimension);
-    let dim_id = DimensionId::parse(&dim_name)
+    let dim_id = DimensionId::parse(&request.dimension)
         .map_err(|e| ExecError::GovernanceOperation(format!("invalid dimension: {}", e)))?;
     let current_value = current_standing
         .get(&dim_id)
@@ -248,13 +247,4 @@ fn has_accepted_review<S: CanonicalStore>(
         }
     }
     Ok(false)
-}
-
-fn normalize_dim_name(name: &str) -> String {
-    match name {
-        "epistemic" => "kernel:epistemic".to_string(),
-        "review" => "kernel:review".to_string(),
-        "process" => "kernel:process".to_string(),
-        other => other.to_string(),
-    }
 }

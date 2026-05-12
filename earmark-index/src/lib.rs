@@ -20,9 +20,6 @@ pub struct ObjectSummary {
     pub class: Option<String>,
     pub title: Option<String>,
     pub summary: Option<String>,
-    pub standing_epistemic: String,
-    pub standing_review: String,
-    pub standing_process: String,
     pub system_id: Option<String>,
     pub namespace: Option<String>,
     #[serde(default)]
@@ -105,9 +102,6 @@ impl DerivedIndex {
                 class TEXT,
                 title TEXT,
                 summary TEXT,
-                standing_epistemic TEXT NOT NULL,
-                standing_review TEXT NOT NULL,
-                standing_process TEXT NOT NULL,
                 payload_ref TEXT NOT NULL,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
@@ -344,24 +338,6 @@ impl DerivedIndex {
             let object_id = envelope.id.as_str().to_string();
             let kind = envelope.kind.as_str().to_string();
             let class = envelope.class.clone();
-            let standing_epistemic = envelope
-                .standing
-                .get(&DimensionId::new("kernel:epistemic"))
-                .map(TokenId::as_str)
-                .unwrap_or("working")
-                .to_string();
-            let standing_review = envelope
-                .standing
-                .get(&DimensionId::new("kernel:review"))
-                .map(TokenId::as_str)
-                .unwrap_or("unreviewed")
-                .to_string();
-            let standing_process = envelope
-                .standing
-                .get(&DimensionId::new("kernel:process"))
-                .map(TokenId::as_str)
-                .unwrap_or("active")
-                .to_string();
             let payload_ref = envelope.payload_ref.0.clone();
             let created_at = envelope.created_at.to_rfc3339();
             let updated_at = envelope.updated_at.to_rfc3339();
@@ -369,9 +345,8 @@ impl DerivedIndex {
             self.conn.execute(
                 "INSERT OR REPLACE INTO objects (
                     version_id, object_id, kind, class, title, summary,
-                    standing_epistemic, standing_review, standing_process,
                     payload_ref, created_at, updated_at, system_id, namespace, declaration_identity, searchable_text
-                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
+                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
                 params![
                     version_id,
                     object_id,
@@ -379,9 +354,6 @@ impl DerivedIndex {
                     class,
                     title,
                     summary,
-                    standing_epistemic,
-                    standing_review,
-                    standing_process,
                     payload_ref,
                     created_at,
                     updated_at,
@@ -547,9 +519,8 @@ impl DerivedIndex {
         self.conn.execute(
             "INSERT OR REPLACE INTO objects (
                 version_id, object_id, kind, class, title, summary,
-                standing_epistemic, standing_review, standing_process,
                 payload_ref, created_at, updated_at, system_id, namespace, declaration_identity, searchable_text
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
             params![
                 envelope.version_id.as_str().to_string(),
                 envelope.id.as_str().to_string(),
@@ -557,21 +528,6 @@ impl DerivedIndex {
                 envelope.class.clone(),
                 title,
                 summary,
-                envelope
-                    .standing
-                    .get(&DimensionId::new("kernel:epistemic"))
-                    .map(TokenId::as_str)
-                    .unwrap_or("working"),
-                envelope
-                    .standing
-                    .get(&DimensionId::new("kernel:review"))
-                    .map(TokenId::as_str)
-                    .unwrap_or("unreviewed"),
-                envelope
-                    .standing
-                    .get(&DimensionId::new("kernel:process"))
-                    .map(TokenId::as_str)
-                    .unwrap_or("active"),
                 envelope.payload_ref.0.clone(),
                 envelope.created_at.to_rfc3339(),
                 envelope.updated_at.to_rfc3339(),
@@ -607,7 +563,7 @@ impl DerivedIndex {
 
     pub fn query_objects(&self, filter: &QueryFilter) -> Result<Vec<ObjectSummary>, IndexError> {
         let mut sql = String::from(
-            "SELECT o.object_id, o.version_id, o.kind, o.class, o.title, o.summary, o.standing_epistemic, o.standing_review, o.standing_process, o.system_id, o.namespace FROM objects o JOIN heads h ON o.object_id = h.object_id AND o.version_id = h.version_id WHERE 1=1",
+            "SELECT o.object_id, o.version_id, o.kind, o.class, o.title, o.summary, o.system_id, o.namespace FROM objects o JOIN heads h ON o.object_id = h.object_id AND o.version_id = h.version_id WHERE 1=1",
         );
         let mut values: Vec<String> = Vec::new();
 
@@ -655,11 +611,8 @@ impl DerivedIndex {
                     class: row.get(3)?,
                     title: row.get(4)?,
                     summary: row.get(5)?,
-                    standing_epistemic: row.get(6)?,
-                    standing_review: row.get(7)?,
-                    standing_process: row.get(8)?,
-                    system_id: row.get(9)?,
-                    namespace: row.get(10)?,
+                    system_id: row.get(6)?,
+                    namespace: row.get(7)?,
                     standing: BTreeMap::new(),
                 })
             })?;

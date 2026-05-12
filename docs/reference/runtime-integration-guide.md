@@ -206,7 +206,7 @@ Provider exposure requires two gates:
 "expose_to_provider": false
 ```
 
-Legacy v0.2 objects with `epistemic`, `review`, and `process` fields remain readable through compatibility normalization.
+Only the v0.3 map format is supported. Objects using the legacy v0.2 `epistemic` / `review` / `process` fields will not deserialize correctly.
 
 ### Query by Standing Dimension
 

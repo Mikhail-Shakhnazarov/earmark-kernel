@@ -98,49 +98,6 @@ Compose a status summary from the supplied objects.
     assert_eq!(reparsed.name, "compose_status_summary");
 }
 
-/// Legacy v0.2 Standing format: bare `epistemic`, `review`, `process` fields
-/// must still deserialize into v0.3 `kernel:*` dimensions.
-#[test]
-fn legacy_standing_format_deserializes() {
-    let legacy_json = r#"{"epistemic": "working", "review": "unreviewed", "process": "active"}"#;
-    let standing: Standing = serde_json::from_str(legacy_json).unwrap();
-    assert_eq!(
-        standing.get(&DimensionId::from_static("kernel:epistemic")),
-        Some(&TokenId::from_static("working"))
-    );
-    assert_eq!(
-        standing.get(&DimensionId::from_static("kernel:review")),
-        Some(&TokenId::from_static("unreviewed"))
-    );
-    assert_eq!(
-        standing.get(&DimensionId::from_static("kernel:process")),
-        Some(&TokenId::from_static("active"))
-    );
-}
-
-/// Legacy v0.2 YAML Standing format must also deserialize through serde_yaml.
-#[test]
-fn legacy_standing_format_yaml_deserializes() {
-    let legacy_yaml = r#"
-epistemic: working
-review: unreviewed
-process: active
-"#;
-    let standing: Standing = serde_yaml::from_str(legacy_yaml).unwrap();
-    assert_eq!(
-        standing.get(&DimensionId::from_static("kernel:epistemic")),
-        Some(&TokenId::from_static("working"))
-    );
-    assert_eq!(
-        standing.get(&DimensionId::from_static("kernel:review")),
-        Some(&TokenId::from_static("unreviewed"))
-    );
-    assert_eq!(
-        standing.get(&DimensionId::from_static("kernel:process")),
-        Some(&TokenId::from_static("active"))
-    );
-}
-
 #[test]
 fn declaration_yaml_parse_roundtrip() {
     let workflow: WorkflowDefinition = parse_yaml(

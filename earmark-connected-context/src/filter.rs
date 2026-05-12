@@ -12,26 +12,9 @@ pub fn object_summary_matches_standing(
         if allowed.is_empty() {
             return true;
         }
-        let current = match dimension.as_str() {
-            "epistemic" | "kernel:epistemic" => row
-                .standing
-                .get("kernel:epistemic")
-                .map(String::as_str)
-                .unwrap_or(&row.standing_epistemic),
-            "review" | "kernel:review" => row
-                .standing
-                .get("kernel:review")
-                .map(String::as_str)
-                .unwrap_or(&row.standing_review),
-            "process" | "kernel:process" => row
-                .standing
-                .get("kernel:process")
-                .map(String::as_str)
-                .unwrap_or(&row.standing_process),
-            other => match row.standing.get(other) {
-                Some(v) => v.as_str(),
-                None => return false,
-            },
+        let current = match row.standing.get(dimension) {
+            Some(v) => v.as_str(),
+            None => return false,
         };
         allowed.iter().any(|candidate| candidate == current)
     })

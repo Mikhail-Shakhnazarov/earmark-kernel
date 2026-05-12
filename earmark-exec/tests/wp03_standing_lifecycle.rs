@@ -35,7 +35,7 @@ fn test_standing_request_lifecycle() {
         version: "1".to_string(),
         description: None,
         transition_rules: vec![StandingTransitionRule {
-            dimension: "review".to_string(),
+            dimension: "kernel:review".to_string(),
             from: vec!["unreviewed".to_string()],
             to: vec!["accepted".to_string()],
             requires_review: true,
@@ -61,7 +61,7 @@ fn test_standing_request_lifecycle() {
     // 3. Create a standing request (Proposed)
     let request = earmark_core::StandingTransitionRequest {
         target_object_id: target_ref.id.clone(),
-        dimension: "review".to_string(),
+        dimension: "kernel:review".to_string(),
         from_value: "unreviewed".to_string(),
         to_value: "accepted".to_string(),
         rationale: Some("Requesting review upgrade".to_string()),
@@ -183,7 +183,7 @@ fn test_standing_request_drift_failure() {
     // 2. Create a standing request (Proposed) expected from "unreviewed"
     let request = earmark_core::StandingTransitionRequest {
         target_object_id: target_ref.id.clone(),
-        dimension: "review".to_string(),
+        dimension: "kernel:review".to_string(),
         from_value: "unreviewed".to_string(),
         to_value: "accepted".to_string(),
         rationale: Some("Requesting review upgrade".to_string()),
@@ -217,7 +217,7 @@ fn test_standing_request_drift_failure() {
         version: "1".to_string(),
         description: None,
         transition_rules: vec![StandingTransitionRule {
-            dimension: "review".to_string(),
+            dimension: "kernel:review".to_string(),
             from: vec!["unreviewed".to_string()],
             to: vec!["accepted".to_string()],
             requires_review: false,
@@ -281,7 +281,7 @@ fn test_standing_request_noop_apply() {
     // 2. Create a standing request to move to "accepted" (already there)
     let request = earmark_core::StandingTransitionRequest {
         target_object_id: target_ref.id.clone(),
-        dimension: "review".to_string(),
+        dimension: "kernel:review".to_string(),
         from_value: "accepted".to_string(),
         to_value: "accepted".to_string(),
         rationale: None,
@@ -305,7 +305,7 @@ fn test_standing_request_noop_apply() {
         version: "1".to_string(),
         description: None,
         transition_rules: vec![StandingTransitionRule {
-            dimension: "review".to_string(),
+            dimension: "kernel:review".to_string(),
             from: vec!["accepted".to_string()],
             to: vec!["accepted".to_string()],
             requires_review: false,
@@ -382,7 +382,7 @@ fn test_standing_request_version_specific_review() {
         version: "1".to_string(),
         description: None,
         transition_rules: vec![StandingTransitionRule {
-            dimension: "review".to_string(),
+            dimension: "kernel:review".to_string(),
             from: vec!["unreviewed".to_string()],
             to: vec!["accepted".to_string()],
             requires_review: true,
@@ -405,7 +405,7 @@ fn test_standing_request_version_specific_review() {
     // 4. Create request for V2
     let request = earmark_core::StandingTransitionRequest {
         target_object_id: target_v1_ref.id.clone(),
-        dimension: "review".to_string(),
+        dimension: "kernel:review".to_string(),
         from_value: "unreviewed".to_string(),
         to_value: "accepted".to_string(),
         rationale: None,

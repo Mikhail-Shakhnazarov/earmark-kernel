@@ -6,9 +6,7 @@ use crate::cli::*;
 use crate::config::{load_config, resolve_json, resolve_root, resolve_system_id};
 use crate::output;
 use clap_complete::{generate, shells};
-use earmark_core::{
-    EpistemicStanding, HeaderValue, Kind, ObjectId, ObjectRef, Provenance, Standing, VersionRef,
-};
+use earmark_core::{HeaderValue, Kind, ObjectId, ObjectRef, Provenance, Standing, VersionRef};
 use earmark_declarations::{
     load_class_definition, load_compiled_context_template, load_instruction, load_provider_profile,
     load_standing_policy, load_system_definition, load_workflow_definition,
@@ -2391,20 +2389,6 @@ fn load_relation_object_by_id<S: CanonicalStore>(
         )));
     }
     Ok(found)
-}
-
-pub(crate) fn parse_epistemic(value: &str) -> Result<EpistemicStanding, CliError> {
-    match value {
-        "unresolved" => Ok(EpistemicStanding::Unresolved),
-        "working" => Ok(EpistemicStanding::Working),
-        "supported" => Ok(EpistemicStanding::Supported),
-        "contested" => Ok(EpistemicStanding::Contested),
-        "superseded" => Ok(EpistemicStanding::Superseded),
-        _ => Err(CliError::argument(format!(
-            "invalid epistemic standing: {}",
-            value
-        ))),
-    }
 }
 
 fn resolve_system_version_ref(

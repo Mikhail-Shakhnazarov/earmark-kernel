@@ -63,7 +63,7 @@ standing:
 
 Dimensions and tokens are declared by the active system definition. Kernel behavior is derived by projecting standing tokens through protocol bindings. The kernel enforces protocols, not token names.
 
-Legacy v0.2 objects using `epistemic` / `review` / `process` as direct fields remain readable through compatibility normalization that maps them to `kernel:*` dimensions. New declarations and objects should use the dimension/token map format.
+Standing format: dimension IDs use the `kernel:*` prefix for built-in kernel dimensions. Legacy v0.2 objects using bare `epistemic` / `review` / `process` fields are not supported.
 
 ### Custom Dimension Example
 
