@@ -145,15 +145,12 @@ pub fn validate_standing_transition(
                 )));
             }
 
-            let dim_def = registry
-                .dimensions
-                .get(dim_id)
-                .ok_or_else(|| {
-                    GovernanceError::IllegalTransition(format!(
-                        "dimension '{}' not found",
-                        dim_id.as_str()
-                    ))
-                })?;
+            let dim_def = registry.dimensions.get(dim_id).ok_or_else(|| {
+                GovernanceError::IllegalTransition(format!(
+                    "dimension '{}' not found",
+                    dim_id.as_str()
+                ))
+            })?;
 
             if let Some(from_tok) = cur_val {
                 if !dim_def.tokens.iter().any(|t| t.id == *from_tok) {
@@ -257,7 +254,10 @@ pub fn export_allowed(
         if requirement.operation == "export" {
             for (dim_str, required_value) in &requirement.required_standing {
                 let dim_id = DimensionId::parse(dim_str).map_err(|e| {
-                    GovernanceError::ExportBlocked(format!("invalid dimension '{}': {}", dim_str, e))
+                    GovernanceError::ExportBlocked(format!(
+                        "invalid dimension '{}': {}",
+                        dim_str, e
+                    ))
                 })?;
                 let actual = standing
                     .get(&dim_id)
@@ -273,7 +273,10 @@ pub fn export_allowed(
 
             for (dim_str, forbidden_values) in &requirement.forbidden_standing {
                 let dim_id = DimensionId::parse(dim_str).map_err(|e| {
-                    GovernanceError::ExportBlocked(format!("invalid dimension '{}': {}", dim_str, e))
+                    GovernanceError::ExportBlocked(format!(
+                        "invalid dimension '{}': {}",
+                        dim_str, e
+                    ))
                 })?;
                 let actual = standing
                     .get(&dim_id)
@@ -380,7 +383,10 @@ pub fn status_class_for_standing(
     match (projection.review, projection.process) {
         (Some(ReviewProjection::Rejected), _) => Ok("attention_required"),
         (_, Some(earmark_core::projection::ProcessProjection::Blocked)) => Ok("blocked"),
-        (Some(ReviewProjection::Accepted), Some(earmark_core::projection::ProcessProjection::Completed)) => Ok("complete"),
+        (
+            Some(ReviewProjection::Accepted),
+            Some(earmark_core::projection::ProcessProjection::Completed),
+        ) => Ok("complete"),
         _ => Ok("active"),
     }
 }
@@ -414,7 +420,7 @@ mod tests {
     use super::*;
     use earmark_core::{
         DimensionId, ObjectId, OperationRequirement, Standing, StandingPolicy,
-        StandingTransitionRule, TokenId, VersionId,
+        StandingTransitionRule, TokenId,
     };
 
     fn kernel_registry() -> StandingRegistry {
@@ -427,8 +433,10 @@ mod tests {
             .insert(DimensionId::new("kernel:review"), TokenId::new(review));
         s.values
             .insert(DimensionId::new("kernel:process"), TokenId::new(process));
-        s.values
-            .insert(DimensionId::new("kernel:epistemic"), TokenId::new(epistemic));
+        s.values.insert(
+            DimensionId::new("kernel:epistemic"),
+            TokenId::new(epistemic),
+        );
         s
     }
 
@@ -508,8 +516,7 @@ mod tests {
         let current = Standing::default();
         let requested = make_standing("accepted", "active", "working");
 
-        let res =
-            validate_standing_transition(&policy, &registry, &current, &requested).unwrap();
+        let res = validate_standing_transition(&policy, &registry, &current, &requested).unwrap();
         assert!(!res.requires_review);
 
         let requested_rejected = make_standing("rejected", "active", "working");
@@ -548,9 +555,7 @@ mod tests {
         let current = Standing::default();
         let requested = make_standing("accepted", "completed", "working");
 
-        assert!(
-            validate_standing_transition(&policy, &registry, &current, &requested).is_err()
-        );
+        assert!(validate_standing_transition(&policy, &registry, &current, &requested).is_err());
     }
 
     #[test]
@@ -593,8 +598,8 @@ mod tests {
     #[test]
     fn test_generic_standing_transition() {
         use earmark_core::{
-            KernelProtocolId, ProtocolBinding, StandingDimensionDefinition,
-            StandingRegistry, StandingTokenDefinition, SystemDefinition,
+            KernelProtocolId, ProtocolBinding, StandingDimensionDefinition, StandingRegistry,
+            StandingTokenDefinition, SystemDefinition,
         };
         let sys = SystemDefinition {
             system_id: "test".to_string(),
@@ -651,18 +656,23 @@ mod tests {
             rationale: None,
         };
 
-        let mut current = Standing { values: BTreeMap::new() };
-        current
-            .values
-            .insert(DimensionId::from_static("research:status"), TokenId::from_static("draft"));
+        let mut current = Standing {
+            values: BTreeMap::new(),
+        };
+        current.values.insert(
+            DimensionId::from_static("research:status"),
+            TokenId::from_static("draft"),
+        );
 
-        let mut requested = Standing { values: BTreeMap::new() };
-        requested
-            .values
-            .insert(DimensionId::from_static("research:status"), TokenId::from_static("verified"));
+        let mut requested = Standing {
+            values: BTreeMap::new(),
+        };
+        requested.values.insert(
+            DimensionId::from_static("research:status"),
+            TokenId::from_static("verified"),
+        );
 
-        let res =
-            validate_standing_transition(&policy, &registry, &current, &requested).unwrap();
+        let res = validate_standing_transition(&policy, &registry, &current, &requested).unwrap();
         assert!(!res.requires_review);
     }
 
@@ -687,16 +697,15 @@ mod tests {
         let current = Standing::default();
         let requested = make_standing("accepted", "active", "working");
 
-        let res =
-            validate_standing_transition(&policy, &registry, &current, &requested).unwrap();
+        let res = validate_standing_transition(&policy, &registry, &current, &requested).unwrap();
         assert!(res.requires_review);
     }
 
     #[test]
     fn test_immutability_check() {
         use earmark_core::{
-            KernelProtocolId, ProtocolBinding, StandingDimensionDefinition, StandingTokenDefinition,
-            SystemDefinition,
+            KernelProtocolId, ProtocolBinding, StandingDimensionDefinition,
+            StandingTokenDefinition, SystemDefinition,
         };
         let sys = SystemDefinition {
             system_id: "test_immut".to_string(),
@@ -739,15 +748,17 @@ mod tests {
         let registry = StandingRegistry::from_system_definition(&sys).expect("immut registry");
 
         let mut mutable = Standing::default();
-        mutable
-            .values
-            .insert(DimensionId::from_static("dim:immut"), TokenId::from_static("mutable_val"));
+        mutable.values.insert(
+            DimensionId::from_static("dim:immut"),
+            TokenId::from_static("mutable_val"),
+        );
         assert!(check_immutability(&registry, &mutable).is_ok());
 
         let mut sealed = Standing::default();
-        sealed
-            .values
-            .insert(DimensionId::from_static("dim:immut"), TokenId::from_static("sealed_val"));
+        sealed.values.insert(
+            DimensionId::from_static("dim:immut"),
+            TokenId::from_static("sealed_val"),
+        );
         assert!(check_immutability(&registry, &sealed).is_err());
     }
 
@@ -765,11 +776,17 @@ mod tests {
                 forbidden_standing: BTreeMap::new(),
                 required_protocols: BTreeMap::from([(
                     "kernel:review".to_string(),
-                    BTreeMap::from([("state".to_string(), ScalarValue::String("accepted".to_string()))]),
+                    BTreeMap::from([(
+                        "state".to_string(),
+                        ScalarValue::String("accepted".to_string()),
+                    )]),
                 )]),
                 forbidden_protocols: BTreeMap::from([(
                     "kernel:immutability".to_string(),
-                    BTreeMap::from([("state".to_string(), ScalarValue::String("sealed".to_string()))]),
+                    BTreeMap::from([(
+                        "state".to_string(),
+                        ScalarValue::String("sealed".to_string()),
+                    )]),
                 )]),
             }],
             escalations: vec![],
@@ -786,8 +803,8 @@ mod tests {
     #[test]
     fn test_projection_ambiguity_causes_status_error() {
         use earmark_core::{
-            KernelProtocolId, ProtocolBinding, StandingDimensionDefinition, StandingTokenDefinition,
-            SystemDefinition,
+            KernelProtocolId, ProtocolBinding, StandingDimensionDefinition,
+            StandingTokenDefinition, SystemDefinition,
         };
         let sys = SystemDefinition {
             system_id: "sys_ambig".to_string(),
@@ -838,16 +855,21 @@ mod tests {
         let registry = StandingRegistry::from_system_definition(&sys).expect("ambig registry");
 
         let mut standing = Standing::default();
-        standing
-            .values
-            .insert(DimensionId::from_static("dim:rev_a"), TokenId::from_static("accepted_tok"));
-        standing
-            .values
-            .insert(DimensionId::from_static("dim:rev_b"), TokenId::from_static("rejected_tok"));
+        standing.values.insert(
+            DimensionId::from_static("dim:rev_a"),
+            TokenId::from_static("accepted_tok"),
+        );
+        standing.values.insert(
+            DimensionId::from_static("dim:rev_b"),
+            TokenId::from_static("rejected_tok"),
+        );
 
         let result = status_class_for_standing(&standing, &registry);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), GovernanceError::AmbiguousStatus(_)));
+        assert!(matches!(
+            result.unwrap_err(),
+            GovernanceError::AmbiguousStatus(_)
+        ));
     }
 
     #[test]
@@ -855,7 +877,9 @@ mod tests {
         let registry = kernel_registry();
         let standing = Standing::default();
         assert_eq!(
-            standing.get(&DimensionId::new("kernel:review")).map(TokenId::as_str),
+            standing
+                .get(&DimensionId::new("kernel:review"))
+                .map(TokenId::as_str),
             Some("unreviewed")
         );
 
@@ -875,7 +899,9 @@ mod tests {
         let projection = project(&standing, &registry).expect("projection should succeed");
         assert_eq!(projection.review, Some(ReviewProjection::Unreviewed));
         assert_eq!(
-            standing.get(&DimensionId::new("kernel:review")).map(TokenId::as_str),
+            standing
+                .get(&DimensionId::new("kernel:review"))
+                .map(TokenId::as_str),
             Some("unreviewed")
         );
     }
@@ -883,7 +909,7 @@ mod tests {
     #[test]
     fn test_export_requirement_checks_raw_dimension() {
         use earmark_core::{
-            KernelProtocolId, ProtocolBinding, StandingDimensionDefinition, StandingTokenDefinition,
+            StandingDimensionDefinition, StandingTokenDefinition, SystemDefinition,
         };
         let sys = SystemDefinition {
             system_id: "test_export_raw".to_string(),
@@ -939,16 +965,22 @@ mod tests {
             rationale: None,
         };
 
-        let mut draft_standing = Standing { values: BTreeMap::new() };
-        draft_standing
-            .values
-            .insert(DimensionId::from_static("research:status"), TokenId::from_static("draft"));
+        let mut draft_standing = Standing {
+            values: BTreeMap::new(),
+        };
+        draft_standing.values.insert(
+            DimensionId::from_static("research:status"),
+            TokenId::from_static("draft"),
+        );
         assert!(export_allowed(&policy, &registry, &draft_standing).is_err());
 
-        let mut verified_standing = Standing { values: BTreeMap::new() };
-        verified_standing
-            .values
-            .insert(DimensionId::from_static("research:status"), TokenId::from_static("verified"));
+        let mut verified_standing = Standing {
+            values: BTreeMap::new(),
+        };
+        verified_standing.values.insert(
+            DimensionId::from_static("research:status"),
+            TokenId::from_static("verified"),
+        );
         assert!(export_allowed(&policy, &registry, &verified_standing).is_ok());
     }
 }

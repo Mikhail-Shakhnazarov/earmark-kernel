@@ -311,18 +311,16 @@ pub fn validate_transition_change_set<S: CanonicalStore>(
                 }
 
                 // Initial accepted standing check
-                if let Ok(projection) = earmark_core::projection::project(
-                    &stored.envelope.standing,
-                    &registry,
-                ) {
+                if let Ok(projection) =
+                    earmark_core::projection::project(&stored.envelope.standing, &registry)
+                {
                     if projection.review
                         == Some(earmark_core::projection::ReviewProjection::Accepted)
                     {
                         let actor = stored.envelope.provenance.actor.as_str();
                         if !is_trusted_actor(actor)
                             && !review_targets.iter().any(|(id, vid)| {
-                                id == &stored.envelope.id
-                                    && vid == &stored.envelope.version_id
+                                id == &stored.envelope.id && vid == &stored.envelope.version_id
                             })
                         {
                             failures.push(format!(
