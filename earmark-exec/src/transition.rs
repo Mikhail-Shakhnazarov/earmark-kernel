@@ -211,11 +211,15 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                 state.emitted_packets.push(work_packet_ref.clone());
                 record.work_packets.push(work_packet_ref.clone());
 
-                let output_class = transition
-                    .output_contracts
-                    .first()
-                    .cloned()
-                    .unwrap_or_else(|| "candidate_output".to_string());
+                let output_class = if !instruction.register.is_empty() {
+                    instruction.register.clone()
+                } else {
+                    transition
+                        .output_contracts
+                        .first()
+                        .cloned()
+                        .unwrap_or_else(|| "candidate_output".to_string())
+                };
 
                 let artifacts = match provider_mode {
                     ProviderMode::LocalExecution => {
