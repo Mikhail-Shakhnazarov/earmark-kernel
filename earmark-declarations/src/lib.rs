@@ -374,9 +374,7 @@ pub fn validate_standing_policy_against_registry(
     Ok(())
 }
 
-pub fn validate_workflow_definition(
-    value: &WorkflowDeclaration,
-) -> Result<(), DeriveError> {
+pub fn validate_workflow_definition(value: &WorkflowDeclaration) -> Result<(), DeriveError> {
     earmark_core::validate_class_name(&value.name)
         .map_err(|e| DeriveError::Validation(e.to_string()))?;
     let valid_kinds = ["compile_context", "transform", "nop"];

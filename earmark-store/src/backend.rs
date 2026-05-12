@@ -71,9 +71,7 @@ impl GixBackend {
             .map_err(|e| StoreError::GitBackend(e.to_string()))?
             .into_owned();
 
-        index.remove_entries(|_, path, _| {
-            !Self::has_scope_prefix(path, ".git")
-        });
+        index.remove_entries(|_, path, _| !Self::has_scope_prefix(path, ".git"));
 
         for entry in walkdir::WalkDir::new(root)
             .into_iter()
@@ -87,7 +85,7 @@ impl GixBackend {
                 .path()
                 .strip_prefix(root)
                 .map_err(|e| StoreError::Invariant(e.to_string()))?;
-            
+
             if rel.starts_with(".git") {
                 continue;
             }
@@ -155,12 +153,20 @@ impl GitBackend for GixBackend {
     fn commit_paths(&self, root: &Path, message: &str) -> Result<(), StoreError> {
         let repo = gix::open_opts(root, gix::open::Options::isolated())
             .map_err(|e| StoreError::GitBackend(e.to_string()))?;
-        
+
         // Ensure we haven't discovered the workspace root through upward traversal
-        let git_dir = repo.git_dir().canonicalize().map_err(|e| StoreError::GitBackend(e.to_string()))?;
-        let expected_git_dir = root.join(".git").canonicalize().map_err(|e| StoreError::GitBackend(e.to_string()))?;
+        let git_dir = repo
+            .git_dir()
+            .canonicalize()
+            .map_err(|e| StoreError::GitBackend(e.to_string()))?;
+        let expected_git_dir = root
+            .join(".git")
+            .canonicalize()
+            .map_err(|e| StoreError::GitBackend(e.to_string()))?;
         if git_dir != expected_git_dir {
-            return Err(StoreError::GitBackend("discovered wrong repository through upward traversal".to_string()));
+            return Err(StoreError::GitBackend(
+                "discovered wrong repository through upward traversal".to_string(),
+            ));
         }
 
         // Snapshot current index to allow rollback on failure

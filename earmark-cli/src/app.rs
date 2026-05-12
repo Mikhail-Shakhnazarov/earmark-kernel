@@ -6,16 +6,16 @@ use crate::cli::*;
 use crate::config::{load_config, resolve_json, resolve_root, resolve_system_id};
 use crate::output;
 use clap_complete::{generate, shells};
+use earmark_core::{
+    FlexibleVersionRef, HeaderValue, Kind, ObjectId, ObjectRef, Provenance, Standing, VersionRef,
+    WorkflowDeclaration, WorkflowDefinition, WorkflowOperation,
+};
 use earmark_declarations::{
     load_class_definition, load_compiled_context_template, load_instruction, load_provider_profile,
     load_standing_policy, load_system_definition, load_workflow_definition,
     validate_class_definition, validate_compiled_context_template, validate_instruction,
     validate_provider_profile, validate_standing_policy, validate_system_definition,
     validate_workflow_definition,
-};
-use earmark_core::{
-    FlexibleVersionRef, HeaderValue, Kind, ObjectId, ObjectRef, Provenance, Standing, VersionRef,
-    WorkflowDeclaration, WorkflowDefinition, WorkflowOperation,
 };
 use earmark_exec::{default_provider_registry, ExecutionEngine, WorkflowRunRequest};
 use earmark_governance::GovernanceService;
@@ -486,8 +486,13 @@ pub fn run(cli: Cli) -> Result<(), CliError> {
                 }
                 DeclareAction::Register(args) => {
                     tracing::info!(kind = %args.kind.as_str(), path = %args.path.display(), "registering declaration");
-                    let version_ref =
-                        register_declaration_file(&store, index.as_ref(), args.kind, &args.path, None)?;
+                    let version_ref = register_declaration_file(
+                        &store,
+                        index.as_ref(),
+                        args.kind,
+                        &args.path,
+                        None,
+                    )?;
                     if matches!(args.kind, DeclarationKind::System) {
                         index
                             .as_ref()
@@ -1173,9 +1178,7 @@ fn resolve_flex_ref(
             let abs_path = parent.join(&rel_path);
 
             // Try to canonicalize for robust matching, but fall back to joined path
-            let lookup_path = abs_path
-                .canonicalize()
-                .unwrap_or_else(|_| abs_path.clone());
+            let lookup_path = abs_path.canonicalize().unwrap_or_else(|_| abs_path.clone());
 
             if let Some(vref) = registry.get(&lookup_path) {
                 Ok(Some(vref.clone()))
@@ -1683,10 +1686,14 @@ pub(crate) fn register_declaration_file<S: CanonicalStore>(
             }
 
             // Resolve into strict WorkflowDefinition
-            let resolved = resolve_workflow_declaration(path, decl, registry.unwrap_or(&BTreeMap::new()))?;
+            let resolved =
+                resolve_workflow_declaration(path, decl, registry.unwrap_or(&BTreeMap::new()))?;
 
             let mut headers = BTreeMap::new();
-            headers.insert("title".to_string(), HeaderValue::String(resolved.name.clone()));
+            headers.insert(
+                "title".to_string(),
+                HeaderValue::String(resolved.name.clone()),
+            );
             (
                 Kind::Workflow,
                 Some(resolved.name.clone()),
@@ -1943,7 +1950,8 @@ fn assemble_system_definition_from_manifest<S: CanonicalStore>(
     let mut policies = Vec::new();
     for rel in &manifest.standing_policies {
         let p = resolve_manifest_path(path, rel);
-        let vref = register_declaration_file(store, None, DeclarationKind::StandingPolicy, &p, None)?;
+        let vref =
+            register_declaration_file(store, None, DeclarationKind::StandingPolicy, &p, None)?;
         policies.push(vref.clone());
         if let Ok(abs) = p.canonicalize() {
             registry.insert(abs, vref);
@@ -1954,7 +1962,8 @@ fn assemble_system_definition_from_manifest<S: CanonicalStore>(
     let mut compiled_contexts = Vec::new();
     for rel in &manifest.compiled_contexts {
         let p = resolve_manifest_path(path, rel);
-        let vref = register_declaration_file(store, None, DeclarationKind::CompiledContext, &p, None)?;
+        let vref =
+            register_declaration_file(store, None, DeclarationKind::CompiledContext, &p, None)?;
         compiled_contexts.push(vref.clone());
         if let Ok(abs) = p.canonicalize() {
             registry.insert(abs, vref);
@@ -1965,7 +1974,8 @@ fn assemble_system_definition_from_manifest<S: CanonicalStore>(
     let mut provider_profiles = Vec::new();
     for rel in &manifest.provider_profiles {
         let p = resolve_manifest_path(path, rel);
-        let vref = register_declaration_file(store, None, DeclarationKind::ProviderProfile, &p, None)?;
+        let vref =
+            register_declaration_file(store, None, DeclarationKind::ProviderProfile, &p, None)?;
         provider_profiles.push(vref.clone());
         if let Ok(abs) = p.canonicalize() {
             registry.insert(abs, vref);
