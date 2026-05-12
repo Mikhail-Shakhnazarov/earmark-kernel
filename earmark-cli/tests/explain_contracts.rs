@@ -40,7 +40,7 @@ fn declare_explain_contracts() {
     let parsed: Value = serde_json::from_slice(&output).unwrap();
 
     assert_eq!(parsed["contract_version"], "0.2.0");
-    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["ok"], true);
     assert!(parsed["data"]["explanation"]["title"].is_string());
 }
 
@@ -91,7 +91,7 @@ fn run_explain_contracts() {
     let parsed: Value = serde_json::from_slice(&output).unwrap();
 
     assert_eq!(parsed["contract_version"], "0.2.0");
-    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["ok"], true);
     assert_eq!(parsed["data"]["kind"], "run");
     assert!(parsed["data"]["summary"].is_string());
     assert!(parsed["data"]["related"].is_object());
@@ -144,7 +144,7 @@ fn assignment_explain_contracts() {
     let parsed: Value = serde_json::from_slice(&output).unwrap();
 
     assert_eq!(parsed["contract_version"], "0.2.0");
-    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["ok"], true);
     assert_eq!(parsed["data"]["kind"], "assignment");
     assert!(parsed["data"]["summary"].is_string());
     assert!(parsed["data"]["related"].is_object());
@@ -200,7 +200,7 @@ fn changeset_explain_contracts() {
     let parsed: Value = serde_json::from_slice(&output).unwrap();
 
     assert_eq!(parsed["contract_version"], "0.2.0");
-    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["ok"], true);
     assert_eq!(parsed["data"]["kind"], "change_set");
     assert!(parsed["data"]["summary"].is_string());
     assert!(parsed["data"]["related"].is_object());
@@ -258,7 +258,7 @@ fn handoff_explain_contracts() {
     let parsed: Value = serde_json::from_slice(&output).unwrap();
 
     assert_eq!(parsed["contract_version"], "0.2.0");
-    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["ok"], true);
     assert_eq!(parsed["data"]["kind"], "handoff");
     assert!(parsed["data"]["summary"].is_string());
     assert!(parsed["data"]["related"].is_object());
@@ -306,7 +306,7 @@ fn failure_explain_contracts() {
     let parsed: Value = serde_json::from_slice(&output).unwrap();
 
     assert_eq!(parsed["contract_version"], "0.2.0");
-    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["ok"], true);
     assert_eq!(parsed["data"]["kind"], "failure");
     assert!(parsed["data"]["summary"].is_string());
     assert!(parsed["data"]["related"].is_object());
@@ -350,7 +350,7 @@ fn relation_explain_contracts() {
     let parsed: Value = serde_json::from_slice(&output).unwrap();
 
     assert_eq!(parsed["contract_version"], "0.2.0");
-    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["ok"], true);
     assert_eq!(parsed["data"]["kind"], "relation");
     assert!(parsed["data"]["summary"].is_string());
     assert!(parsed["data"]["related"].is_object());

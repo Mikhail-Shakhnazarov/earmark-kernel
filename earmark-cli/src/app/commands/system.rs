@@ -23,7 +23,6 @@ pub fn handle(ctx: &CommandContext, command: &SystemCommand) -> Result<(), CliEr
             emit(
                 as_json,
                 json!({
-                    "ok": true,
                     "kind": "system_registration",
                     "object_id": version_ref.id.as_str(),
                     "version_id": version_ref.version_id.as_str(),
@@ -40,7 +39,6 @@ pub fn handle(ctx: &CommandContext, command: &SystemCommand) -> Result<(), CliEr
             emit(
                 as_json,
                 json!({
-                    "ok": true,
                     "namespace": active.namespace,
                     "system_id": active.system_id,
                     "object_id": active.object_id,

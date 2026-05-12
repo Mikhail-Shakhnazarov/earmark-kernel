@@ -17,7 +17,7 @@ All successful and unsuccessful CLI operations in JSON mode return a standard en
   "contract_version": "0.2.0",
   "ok": true,
   "data": {
-    // Command-specific data
+    // Command-specific data payload
   }
 }
 ```
@@ -35,55 +35,55 @@ All successful and unsuccessful CLI operations in JSON mode return a standard en
 }
 ```
 
-## Command-Specific Data Structures
+## Command-Specific Data Payloads
+
+The following examples show the content of the `data` field in the successful response envelope.
 
 ### `standing-request` Family
 
 #### `list`
 Returns an array of standing request summaries.
 ```json
-{
-  "data": [
-    {
-      "id": "obj_...",
-      "status": "proposed|approved|rejected|applied",
-      "target_id": "obj_...",
+[
+  {
+    "id": "obj_...",
+    "version_id": "ver_...",
+    "request": {
+      "target_object_id": "obj_...",
       "dimension": "...",
-      "from": "...",
-      "to": "..."
+      "from_value": "...",
+      "to_value": "...",
+      "status": "proposed|approved|rejected|applied",
+      "rationale": "..."
     }
-  ]
-}
+  }
+]
 ```
 
 #### `show`
 Returns full details of a standing request.
 ```json
 {
-  "data": {
-    "ok": true,
-    "id": "obj_...",
-    "request": {
-      "target_object_id": "obj_...",
-      "dimension": "...",
-      "from_value": "...",
-      "to_value": "...",
-      "status": "...",
-      "rationale": "..."
-    }
+  "id": "obj_...",
+  "version_id": "ver_...",
+  "request": {
+    "target_object_id": "obj_...",
+    "dimension": "...",
+    "from_value": "...",
+    "to_value": "...",
+    "status": "...",
+    "rationale": "..."
   }
 }
 ```
 
 #### `approve` / `reject`
-Returns the status of the operation.
+Returns the result of the operation.
 ```json
 {
-  "data": {
-    "ok": true,
-    "id": "obj_...",
-    "status": "approved|rejected"
-  }
+  "request_id": "obj_...",
+  "new_version_id": "ver_...",
+  "status": "approved|rejected"
 }
 ```
 
@@ -91,13 +91,11 @@ Returns the status of the operation.
 Returns the resulting version IDs.
 ```json
 {
-  "data": {
-    "ok": true,
-    "status": "applied",
-    "target_id": "obj_...",
-    "next_target_version": "ver_...",
-    "next_request_version": "ver_..."
-  }
+  "request_id": "obj_...",
+  "new_request_version_id": "ver_...",
+  "target_id": "obj_...",
+  "new_target_version_id": "ver_...",
+  "status": "applied"
 }
 ```
 
@@ -107,23 +105,18 @@ The `explain` commands provide an interpreted view of objects, including summari
 
 ```json
 {
-  "data": {
-    "ok": true,
-    "kind": "run|assignment|change_set|handoff|failure|relation",
-    "id": "...",
-    "summary": "Short human-readable summary",
-    "artifact": { /* Original object payload */ },
-    "related": {
-      "run_id": "...",
-      // Other kind-specific relations
-    },
-    "next_commands": [
-      {
-        "command": "em ...",
-        "description": "..."
-      }
-    ]
-  }
+  "kind": "run|assignment|change_set|handoff|failure|relation",
+  "id": "...",
+  "summary": "Short human-readable summary",
+  "artifact": { /* Original object payload */ },
+  "related": {
+    "run_id": "...",
+    // Other kind-specific relations
+  },
+  "next_commands": [
+    "em run explain <run_id>",
+    "em run timeline <run_id>"
+  ]
 }
 ```
 

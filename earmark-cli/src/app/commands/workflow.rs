@@ -84,7 +84,6 @@ pub fn handle(ctx: &CommandContext, command: &WorkflowCommand) -> Result<(), Cli
             emit(
                 as_json,
                 json!({
-                    "ok": true,
                     "run_id": outcome.record.run_id,
                     "summary": "workflow run completed",
                     "status": format!("{:?}", outcome.record.status).to_lowercase(),

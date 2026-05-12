@@ -28,7 +28,7 @@ fn deposit_outputs_machine_readable_json() {
     let output = cmd.assert().success().get_output().stdout.clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
     assert_eq!(parsed["contract_version"], "0.2.0");
-    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["ok"], true);
     assert_eq!(parsed["data"]["class"], "note");
 }
 
@@ -116,7 +116,7 @@ activated_at: null
         .clone();
 
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["ok"], true);
     assert_eq!(parsed["data"]["system_id"], "pkm-core");
 }
 
@@ -151,7 +151,7 @@ fn declare_validate_class_outputs_summary() {
         .clone();
 
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["ok"], true);
     assert_eq!(parsed["data"]["kind"], "class");
     assert_eq!(parsed["data"]["summary"]["name"], "finding");
 }
@@ -188,7 +188,7 @@ fn declare_explain_workflow_outputs_operations() {
         .clone();
 
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["ok"], true);
     assert_eq!(parsed["data"]["kind"], "workflow");
     assert_eq!(
         parsed["data"]["explanation"]["title"],
@@ -234,7 +234,7 @@ fn declare_list_examples_outputs_examples() {
         .stdout
         .clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["ok"], true);
     assert_eq!(parsed["data"]["examples"].as_array().unwrap().len(), 1);
     assert!(parsed["data"]["summary"]
         .as_str()
@@ -266,7 +266,7 @@ fn declare_list_examples_empty_in_fresh_workspace() {
         .stdout
         .clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["ok"], true);
     assert_eq!(parsed["data"]["examples"].as_array().unwrap().len(), 0);
     assert!(parsed["data"]["summary"]
         .as_str()
@@ -290,7 +290,7 @@ fn init_outputs_workspace_paths() {
         .stdout
         .clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["ok"], true);
     assert!(parsed["data"]["paths"]["canonical_dir"]
         .as_str()
         .unwrap()
@@ -318,6 +318,7 @@ fn doctor_reports_uninitialized_workspace_without_side_effects() {
         .stdout
         .clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(parsed["ok"], true);
     assert_eq!(parsed["data"]["ok"], false);
     assert_eq!(parsed["data"]["summary"], "workspace is not initialized");
     assert!(!dir.path().join(".earmark").exists());
@@ -348,7 +349,7 @@ fn run_list_outputs_json() {
         .stdout
         .clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["ok"], true);
     assert!(parsed["data"]["runs"].is_array());
 }
 
@@ -375,7 +376,7 @@ fn status_outputs_artifact_counts() {
         .stdout
         .clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["ok"], true);
     assert!(parsed["data"]["change_set_count"].is_number());
     assert!(parsed["data"]["run_count"].is_number());
     assert!(parsed["data"]["assignment_count_by_status"].is_object());
@@ -436,7 +437,7 @@ fn declare_new_scaffolds_file() {
         .stdout
         .clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["ok"], true);
     assert!(output_path.exists());
 }
 
@@ -469,7 +470,7 @@ fn system_path_manifest_validates() {
         .stdout
         .clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["ok"], true);
     assert_eq!(parsed["data"]["summary"]["kind"], "path_system_manifest");
 }
 
@@ -817,7 +818,7 @@ fn doctor_reports_healthy_workspace_after_deposit() {
         .clone();
 
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["ok"], true);
     assert_eq!(parsed["data"]["store_scan_ok"], true);
     assert_eq!(parsed["data"]["index_exists"], true);
     assert_eq!(parsed["data"]["index_open_ok"], true);
@@ -862,6 +863,7 @@ fn doctor_reports_index_missing_after_deletion() {
         .clone();
 
     let parsed: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(parsed["ok"], true);
     assert_eq!(parsed["data"]["ok"], false);
     assert_eq!(parsed["data"]["store_scan_ok"], true);
     assert_eq!(parsed["data"]["index_exists"], false);
@@ -899,7 +901,7 @@ fn demo_path_research_synthesis_full_workflow() {
         .stdout
         .clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["ok"], true);
 
     // 2. system register
     let output = Command::cargo_bin("earmark-cli")
@@ -916,7 +918,7 @@ fn demo_path_research_synthesis_full_workflow() {
         .stdout
         .clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["ok"], true);
     assert_eq!(parsed["data"]["kind"], "system_registration");
 
     // 3. system activate
@@ -934,7 +936,7 @@ fn demo_path_research_synthesis_full_workflow() {
         .stdout
         .clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["ok"], true);
     assert_eq!(parsed["data"]["system_id"], "sys_research_synthesis");
 
     // 4. deposit seed note 1
@@ -956,7 +958,7 @@ fn demo_path_research_synthesis_full_workflow() {
         .stdout
         .clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["ok"], true);
     assert_eq!(parsed["data"]["class"], "source_note");
     let note1_id = parsed["data"]["object_id"].as_str().unwrap().to_string();
 
@@ -979,7 +981,7 @@ fn demo_path_research_synthesis_full_workflow() {
         .stdout
         .clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["ok"], true);
     assert_eq!(parsed["data"]["class"], "source_note");
 
     // 6. query source notes
@@ -1019,7 +1021,7 @@ fn demo_path_research_synthesis_full_workflow() {
         .stdout
         .clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["ok"], true);
     assert_eq!(parsed["data"]["status"], "completed");
     let run_id = parsed["data"]["run_id"].as_str().unwrap().to_string();
     assert!(!parsed["data"]["created_assignments"]
@@ -1051,7 +1053,7 @@ fn demo_path_research_synthesis_full_workflow() {
         .stdout
         .clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["ok"], true);
     assert_eq!(parsed["data"]["kind"], "run");
 
     // 9. run timeline
@@ -1069,7 +1071,7 @@ fn demo_path_research_synthesis_full_workflow() {
         .stdout
         .clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["ok"], true);
 
     // 10. query findings
     let output = Command::cargo_bin("earmark-cli")
@@ -1125,7 +1127,7 @@ fn demo_path_research_synthesis_full_workflow() {
         .stdout
         .clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["ok"], true);
     let handoffs = parsed["data"]["artifact"]["handoffs"]
         .as_array()
         .expect("run artifacts should contain a non-empty handoffs array");
@@ -1150,7 +1152,7 @@ fn demo_path_research_synthesis_full_workflow() {
         .stdout
         .clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["ok"], true);
     assert!(
         parsed["data"]["kind"]
             .as_str()
@@ -1180,7 +1182,7 @@ fn demo_path_research_synthesis_full_workflow() {
         .stdout
         .clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["ok"], true);
 
     // 14. report generation
     let report_path = root.join("research_report.html");
@@ -1200,7 +1202,7 @@ fn demo_path_research_synthesis_full_workflow() {
         .stdout
         .clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["ok"], true);
     assert_eq!(parsed["data"]["kind"], "report_generation");
     assert!(report_path.exists());
     let report_bytes = std::fs::read(&report_path).unwrap();
@@ -1219,7 +1221,7 @@ fn demo_path_research_synthesis_full_workflow() {
         .stdout
         .clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["ok"], true);
     assert_eq!(parsed["data"]["store_scan_ok"], true);
     assert_eq!(parsed["data"]["index_exists"], true);
     assert!(parsed["data"]["canonical_object_count"].as_u64().unwrap() > 0);
@@ -1267,7 +1269,7 @@ fn provider_capabilities_outputs_json() {
         .clone();
 
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["ok"], true);
     assert_eq!(parsed["data"]["kind"], "provider_capabilities");
     assert!(parsed["data"]["providers"].is_array());
 }
@@ -1408,7 +1410,7 @@ guards: []
         .stdout
         .clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["ok"], true);
     assert_eq!(parsed["data"]["kind"], "failure");
     assert_eq!(parsed["data"]["related"]["run_id"], run_id);
     assert!(parsed["data"]["next_commands"].as_array().unwrap().len() >= 2);
@@ -1430,7 +1432,7 @@ guards: []
         .stdout
         .clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["ok"], true);
     let failures = parsed["data"]["failures"].as_array().unwrap();
     assert!(failures
         .iter()
@@ -1454,7 +1456,7 @@ guards: []
         .stdout
         .clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["ok"], true);
     let artifact_failures = parsed["data"]["artifact"]["failures"].as_array().unwrap();
     assert!(artifact_failures
         .iter()
@@ -1930,7 +1932,7 @@ guards: []
         .stdout
         .clone();
     let explain_parsed: Value = serde_json::from_slice(&explain_output).unwrap();
-    assert_eq!(explain_parsed["data"]["ok"], true);
+    assert_eq!(explain_parsed["ok"], true);
     assert_eq!(explain_parsed["data"]["kind"], "run");
     assert!(explain_parsed["data"]["related"].is_object());
     assert!(explain_parsed["data"]["next_commands"].is_array());

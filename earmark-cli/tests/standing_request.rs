@@ -133,7 +133,7 @@ fn standing_request_show_outputs_machine_readable_json() {
     let parsed: Value = serde_json::from_slice(&output).unwrap();
 
     assert_eq!(parsed["contract_version"], "0.2.0");
-    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["ok"], true);
     assert_eq!(parsed["data"]["id"], id.as_str());
     assert_eq!(parsed["data"]["request"]["status"], "proposed");
 }
@@ -157,7 +157,7 @@ fn standing_request_approve_outputs_machine_readable_json() {
     let parsed: Value = serde_json::from_slice(&output).unwrap();
 
     assert_eq!(parsed["contract_version"], "0.2.0");
-    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["ok"], true);
     assert_eq!(parsed["data"]["status"], "approved");
 }
 
@@ -180,7 +180,7 @@ fn standing_request_reject_outputs_machine_readable_json() {
     let parsed: Value = serde_json::from_slice(&output).unwrap();
 
     assert_eq!(parsed["contract_version"], "0.2.0");
-    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["ok"], true);
     assert_eq!(parsed["data"]["status"], "rejected");
 }
 
@@ -249,7 +249,7 @@ fn standing_request_apply_outputs_machine_readable_json() {
     let parsed: Value = serde_json::from_slice(&output).unwrap();
 
     assert_eq!(parsed["contract_version"], "0.2.0");
-    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["ok"], true);
     assert_eq!(parsed["data"]["status"], "applied");
     assert_eq!(parsed["data"]["target_id"], target_id.as_str());
 }
