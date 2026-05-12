@@ -32,4 +32,3 @@ pub fn emit_error_envelope(message: &str) {
         serde_json::to_string_pretty(&value).unwrap_or_else(|_| "{}".to_string())
     );
 }
-
