@@ -20,8 +20,9 @@ Use `em declare new` to generate templates:
 
 ```bash
 mkdir -p my_domain/classes
-em declare new class contract_clause > my_domain/classes/clause.yaml
-em declare new class violation_risk > my_domain/classes/risk.yaml
+em declare new --kind class contract --path my_domain/classes/contract.yaml
+em declare new --kind class contract_clause --path my_domain/classes/clause.yaml
+em declare new --kind class violation_risk --path my_domain/classes/risk.yaml
 ```
 
 Edit the generated files to define your schemas, relation rules, and standing constraints. Here's what a class declaration looks like:
@@ -62,6 +63,7 @@ title: Contract Policy Reviewer
 description: Extract clauses and flag policy violations.
 
 classes:
+  - classes/contract.yaml
   - classes/clause.yaml
   - classes/risk.yaml
 
@@ -87,11 +89,11 @@ em declare validate my_domain/system.yaml
 
 If something is wrong, you'll see a specific error:
 
-```
-Error: Class 'contract' referenced by relation rule in 'contract_clause' is not defined in the system.
+```text
+Error: Class 'contract_clause' referenced by workflow 'review_workflow' is not defined in the system.
 ```
 
-Fix the error and re-validate.
+Fix the missing declaration or reference, then re-validate.
 
 ## 5. Register and Activate
 
@@ -108,8 +110,11 @@ Deposit data and run your workflow:
 
 ```bash
 em deposit --class contract --title "Lease Agreement" --body "..."
+em query --class contract
 em workflow run review_workflow --system-id my_contract_reviewer --with <object_id>
 ```
+
+Use the `object_id` returned by `em query --class contract`.
 
 ## The Cycle
 

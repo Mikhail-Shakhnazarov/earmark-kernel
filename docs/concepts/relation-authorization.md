@@ -1,10 +1,14 @@
 # Relation Authorization
 
-Relations created through the declared runtime path are authorized before creation. The authorization decision is recorded as headers on the relation object, making it inspectable after the fact.
+A relation is useful only if the workspace can explain why the link was allowed.
+
+If a `source_note` links to a `finding`, the relation may affect lineage, context traversal, reports, and later review. The system should be able to say which rule authorized the link: the source class's outgoing rule, the target class's incoming rule, either endpoint, or privileged runtime authority.
+
+Relation authorization records that decision on the relation object. A later operator can inspect not only the link, but the reason the link was permitted.
 
 ## Why This Matters
 
-A relation is a directed link between two objects. When you see a relation in the workspace, you need to know why it was allowed: which class's rule authorized it, and under what authority.
+Relations are not just hyperlinks. They shape what later stages can traverse and what lineage claims the system can make. When a relation appears in the workspace, the important question is not only "what does this connect?" but "why was this connection allowed?"
 
 ## What Earmark Records
 
