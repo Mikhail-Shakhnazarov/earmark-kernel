@@ -6,13 +6,16 @@ use crate::cli::*;
 use crate::config::{load_config, resolve_json, resolve_root, resolve_system_id};
 use crate::output;
 use clap_complete::{generate, shells};
-use earmark_core::{HeaderValue, Kind, ObjectId, ObjectRef, Provenance, Standing, VersionRef};
 use earmark_declarations::{
     load_class_definition, load_compiled_context_template, load_instruction, load_provider_profile,
     load_standing_policy, load_system_definition, load_workflow_definition,
     validate_class_definition, validate_compiled_context_template, validate_instruction,
     validate_provider_profile, validate_standing_policy, validate_system_definition,
     validate_workflow_definition,
+};
+use earmark_core::{
+    FlexibleVersionRef, HeaderValue, Kind, ObjectId, ObjectRef, Provenance, Standing, VersionRef,
+    WorkflowDeclaration, WorkflowDefinition, WorkflowOperation,
 };
 use earmark_exec::{default_provider_registry, ExecutionEngine, WorkflowRunRequest};
 use earmark_governance::GovernanceService;
@@ -484,7 +487,7 @@ pub fn run(cli: Cli) -> Result<(), CliError> {
                 DeclareAction::Register(args) => {
                     tracing::info!(kind = %args.kind.as_str(), path = %args.path.display(), "registering declaration");
                     let version_ref =
-                        register_declaration_file(&store, index.as_ref(), args.kind, &args.path)?;
+                        register_declaration_file(&store, index.as_ref(), args.kind, &args.path, None)?;
                     if matches!(args.kind, DeclarationKind::System) {
                         index
                             .as_ref()
@@ -1126,6 +1129,67 @@ pub fn run(cli: Cli) -> Result<(), CliError> {
     result
 }
 
+fn resolve_workflow_declaration(
+    workflow_path: &std::path::Path,
+    decl: WorkflowDeclaration,
+    registry: &BTreeMap<std::path::PathBuf, VersionRef>,
+) -> Result<WorkflowDefinition, CliError> {
+    let mut operations = Vec::new();
+    for op in decl.operations {
+        operations.push(WorkflowOperation {
+            id: op.id.clone(),
+            kind: op.kind.clone(),
+            input_contracts: op.input_contracts.clone(),
+            output_contracts: op.output_contracts.clone(),
+            instruction: resolve_flex_ref(workflow_path, op.instruction, registry)?,
+            compiled_context: resolve_flex_ref(workflow_path, op.compiled_context, registry)?,
+            policy: resolve_flex_ref(workflow_path, op.policy, registry)?,
+            provider_profile: resolve_flex_ref(workflow_path, op.provider_profile, registry)?,
+        });
+    }
+
+    Ok(WorkflowDefinition {
+        name: decl.name,
+        version: decl.version,
+        description: decl.description,
+        operations,
+        edges: decl.edges,
+        guards: decl.guards,
+        output_contracts: decl.output_contracts,
+    })
+}
+
+fn resolve_flex_ref(
+    workflow_path: &std::path::Path,
+    flex: Option<FlexibleVersionRef>,
+    registry: &BTreeMap<std::path::PathBuf, VersionRef>,
+) -> Result<Option<VersionRef>, CliError> {
+    match flex {
+        None => Ok(None),
+        Some(FlexibleVersionRef::Ref(r)) => Ok(Some(r)),
+        Some(FlexibleVersionRef::Path(p)) => {
+            let rel_path = std::path::PathBuf::from(&p);
+            let parent = workflow_path.parent().unwrap_or(workflow_path);
+            let abs_path = parent.join(&rel_path);
+
+            // Try to canonicalize for robust matching, but fall back to joined path
+            let lookup_path = abs_path
+                .canonicalize()
+                .unwrap_or_else(|_| abs_path.clone());
+
+            if let Some(vref) = registry.get(&lookup_path) {
+                Ok(Some(vref.clone()))
+            } else {
+                Err(CliError::argument(format!(
+                    "unresolved path reference '{}' in workflow '{}'. Referenced declaration must be included in the system manifest.",
+                    p,
+                    workflow_path.display()
+                )))
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum WorkspaceAccessMode {
     None,
@@ -1444,10 +1508,12 @@ fn explain_declaration_file<S: CanonicalStore>(
                     "has_compiled_context": operation.compiled_context.is_some(),
                     "has_policy": operation.policy.is_some(),
                     "has_provider_profile": operation.provider_profile.is_some(),
-                    "standing_implications": operation.policy.as_ref().map(|policy| vec![format!(
-                        "policy-bound: {}@{}",
-                        policy.id.as_str(), policy.version_id.as_str()
-                    )]).unwrap_or_default(),
+                    "standing_implications": operation.policy.as_ref().map(|policy| {
+                        match policy {
+                            FlexibleVersionRef::Ref(r) => vec![format!("policy-bound: {}@{}", r.id.as_str(), r.version_id.as_str())],
+                            FlexibleVersionRef::Path(p) => vec![format!("policy-bound (path): {}", p)],
+                        }
+                    }).unwrap_or_default(),
                 })).collect::<Vec<_>>(),
                 "edges": declaration.edges,
                 "guards": declaration.guards,
@@ -1551,6 +1617,7 @@ pub(crate) fn register_declaration_file<S: CanonicalStore>(
     index: Option<&DerivedIndex>,
     kind: DeclarationKind,
     path: &PathBuf,
+    registry: Option<&BTreeMap<PathBuf, VersionRef>>,
 ) -> Result<VersionRef, CliError> {
     let (stored_kind, name, payload, headers, explicit_symbolic_name) = match kind {
         DeclarationKind::Class => {
@@ -1595,14 +1662,37 @@ pub(crate) fn register_declaration_file<S: CanonicalStore>(
         DeclarationKind::Workflow => {
             let decl = load_workflow_definition(path)?;
             validate_workflow_definition(&decl)?;
+
+            // Standalone registration must not contain path references
+            for op in &decl.operations {
+                let has_paths = [
+                    &op.instruction,
+                    &op.compiled_context,
+                    &op.policy,
+                    &op.provider_profile,
+                ]
+                .iter()
+                .any(|opt| matches!(opt, Some(FlexibleVersionRef::Path(_))));
+
+                if has_paths {
+                    return Err(CliError::argument(format!(
+                        "workflow path references require system-manifest registration (found in workflow '{}')",
+                        decl.name
+                    )));
+                }
+            }
+
+            // Resolve into strict WorkflowDefinition
+            let resolved = resolve_workflow_declaration(path, decl, registry.unwrap_or(&BTreeMap::new()))?;
+
             let mut headers = BTreeMap::new();
-            headers.insert("title".to_string(), HeaderValue::String(decl.name.clone()));
+            headers.insert("title".to_string(), HeaderValue::String(resolved.name.clone()));
             (
                 Kind::Workflow,
-                Some(decl.name.clone()),
-                StoredPayload::from_yaml(earmark_core::to_yaml(&decl)?),
+                Some(resolved.name.clone()),
+                StoredPayload::from_yaml(earmark_core::to_yaml(&resolved)?),
                 headers,
-                decl.name.clone(),
+                resolved.name.clone(),
             )
         }
         DeclarationKind::CompiledContext => {
@@ -1826,66 +1916,64 @@ fn assemble_system_definition_from_manifest<S: CanonicalStore>(
     path: &std::path::Path,
     manifest: &PathSystemManifest,
 ) -> Result<earmark_core::SystemDefinition, CliError> {
-    let classes = manifest
-        .classes
-        .iter()
-        .map(|rel| {
-            register_declaration_file(
-                store,
-                None,
-                DeclarationKind::Class,
-                &resolve_manifest_path(path, rel),
-            )
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    let instructions = manifest
-        .instructions
-        .iter()
-        .map(|rel| {
-            register_declaration_file(
-                store,
-                None,
-                DeclarationKind::Instruction,
-                &resolve_manifest_path(path, rel),
-            )
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    let policies = manifest
-        .standing_policies
-        .iter()
-        .map(|rel| {
-            register_declaration_file(
-                store,
-                None,
-                DeclarationKind::StandingPolicy,
-                &resolve_manifest_path(path, rel),
-            )
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    let compiled_contexts = manifest
-        .compiled_contexts
-        .iter()
-        .map(|rel| {
-            register_declaration_file(
-                store,
-                None,
-                DeclarationKind::CompiledContext,
-                &resolve_manifest_path(path, rel),
-            )
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    let provider_profiles = manifest
-        .provider_profiles
-        .iter()
-        .map(|rel| {
-            register_declaration_file(
-                store,
-                None,
-                DeclarationKind::ProviderProfile,
-                &resolve_manifest_path(path, rel),
-            )
-        })
-        .collect::<Result<Vec<_>, _>>()?;
+    let mut registry = BTreeMap::new();
+
+    let mut classes = Vec::new();
+    for rel in &manifest.classes {
+        let p = resolve_manifest_path(path, rel);
+        let vref = register_declaration_file(store, None, DeclarationKind::Class, &p, None)?;
+        classes.push(vref.clone());
+        if let Ok(abs) = p.canonicalize() {
+            registry.insert(abs, vref);
+        } else {
+            registry.insert(p, vref);
+        }
+    }
+    let mut instructions = Vec::new();
+    for rel in &manifest.instructions {
+        let p = resolve_manifest_path(path, rel);
+        let vref = register_declaration_file(store, None, DeclarationKind::Instruction, &p, None)?;
+        instructions.push(vref.clone());
+        if let Ok(abs) = p.canonicalize() {
+            registry.insert(abs, vref);
+        } else {
+            registry.insert(p, vref);
+        }
+    }
+    let mut policies = Vec::new();
+    for rel in &manifest.standing_policies {
+        let p = resolve_manifest_path(path, rel);
+        let vref = register_declaration_file(store, None, DeclarationKind::StandingPolicy, &p, None)?;
+        policies.push(vref.clone());
+        if let Ok(abs) = p.canonicalize() {
+            registry.insert(abs, vref);
+        } else {
+            registry.insert(p, vref);
+        }
+    }
+    let mut compiled_contexts = Vec::new();
+    for rel in &manifest.compiled_contexts {
+        let p = resolve_manifest_path(path, rel);
+        let vref = register_declaration_file(store, None, DeclarationKind::CompiledContext, &p, None)?;
+        compiled_contexts.push(vref.clone());
+        if let Ok(abs) = p.canonicalize() {
+            registry.insert(abs, vref);
+        } else {
+            registry.insert(p, vref);
+        }
+    }
+    let mut provider_profiles = Vec::new();
+    for rel in &manifest.provider_profiles {
+        let p = resolve_manifest_path(path, rel);
+        let vref = register_declaration_file(store, None, DeclarationKind::ProviderProfile, &p, None)?;
+        provider_profiles.push(vref.clone());
+        if let Ok(abs) = p.canonicalize() {
+            registry.insert(abs, vref);
+        } else {
+            registry.insert(p, vref);
+        }
+    }
+
     let workflows = manifest
         .workflows
         .iter()
@@ -1895,6 +1983,7 @@ fn assemble_system_definition_from_manifest<S: CanonicalStore>(
                 None,
                 DeclarationKind::Workflow,
                 &resolve_manifest_path(path, rel),
+                Some(&registry),
             )
         })
         .collect::<Result<Vec<_>, _>>()?;
@@ -1908,6 +1997,7 @@ fn assemble_system_definition_from_manifest<S: CanonicalStore>(
                 None,
                 DeclarationKind::CompiledContext,
                 &resolve_manifest_path(path, rel),
+                None,
             )
         })
         .transpose()?;
@@ -1920,6 +2010,7 @@ fn assemble_system_definition_from_manifest<S: CanonicalStore>(
                 None,
                 DeclarationKind::ProviderProfile,
                 &resolve_manifest_path(path, rel),
+                None,
             )
         })
         .transpose()?;
