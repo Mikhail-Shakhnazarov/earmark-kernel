@@ -18,7 +18,7 @@ pub fn handle(
         SystemAction::Register { manifest } => {
             tracing::info!(manifest = %manifest.display(), "registering system declaration");
             let version_ref =
-                register_declaration_file(store, None, DeclarationKind::System, &manifest, None)?;
+                register_declaration_file(store, None, DeclarationKind::System, &manifest)?;
             index.rebuild_from_store(store)?;
             emit(
                 as_json,
