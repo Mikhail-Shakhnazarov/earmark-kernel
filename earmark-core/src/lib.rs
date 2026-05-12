@@ -1455,6 +1455,10 @@ impl TransitionAssignmentId {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    pub fn as_object_id(&self) -> ObjectId {
+        ObjectId::parse(self.0.clone()).unwrap()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -1501,6 +1505,10 @@ impl ChangeSetId {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    pub fn as_object_id(&self) -> ObjectId {
+        ObjectId::parse(self.0.clone()).unwrap()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -1546,6 +1554,10 @@ impl HandoffManifestId {
 
     pub fn as_str(&self) -> &str {
         &self.0
+    }
+
+    pub fn as_object_id(&self) -> ObjectId {
+        ObjectId::parse(self.0.clone()).unwrap()
     }
 }
 

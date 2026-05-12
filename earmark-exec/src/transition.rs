@@ -3,8 +3,8 @@ use std::collections::BTreeMap;
 use chrono::Utc;
 use earmark_connected_context::CompiledContextCompiler;
 use earmark_core::{
-    AssignmentStatus, ChangeSetDraft, ChangeSetId, ChangeSetValidationResult, Kind, ObjectRef,
-    ProviderRequest, RunRecord, TransitionAssignment, TransitionAssignmentId,
+    AssignmentStatus, ChangeSetDraft, ChangeSetId, ChangeSetValidationResult, Kind, ObjectId,
+    ObjectRef, ProviderRequest, RunRecord, TransitionAssignment, TransitionAssignmentId,
     WorkPacketConstraints,
 };
 use earmark_governance::{escalation_for_trigger, export_allowed, GovernanceService};
@@ -69,14 +69,18 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
             completed_at: None,
         };
 
-        let stored_assignment = StoredObject::new(
+        let stored_assignment = StoredObject::new_with_id(
+            assignment.id.as_object_id(),
             Kind::TransitionAssignment,
             Some("transition_assignment".to_string()),
             earmark_core::Standing::default(),
             earmark_core::Provenance::direct_input("execution_engine"),
             BTreeMap::from([(
                 "title".to_string(),
-                earmark_core::HeaderValue::String(format!("Assignment {}", assignment_id.as_str())),
+                earmark_core::HeaderValue::String(format!(
+                    "TransitionAssignment {}",
+                    assignment.id.as_str()
+                )),
             )]),
             StoredPayload::from_json_bytes(serde_json::to_vec_pretty(&assignment)?),
             vec![],
@@ -284,7 +288,8 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                                 if let Some(warning) = &synthetic_output_warning {
                                     provider_record.advisory_warnings.push(warning.clone());
                                 }
-                                let event = StoredObject::new(
+                                let event = StoredObject::new_with_id(
+                                    ObjectId::parse(provider_record.record_id.clone()).unwrap(),
                                     Kind::Event,
                                     Some("provider_record".to_string()),
                                     earmark_core::Standing::default(),
@@ -331,7 +336,8 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                                     &profile,
                                     &failure,
                                 );
-                                let event = StoredObject::new(
+                                let event = StoredObject::new_with_id(
+                                    ObjectId::parse(provider_record.record_id.clone()).unwrap(),
                                     Kind::Event,
                                     Some("provider_record".to_string()),
                                     earmark_core::Standing::default(),
@@ -661,7 +667,8 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                     created_at: now_end,
                 };
 
-                let stored_handoff = StoredObject::new(
+                let stored_handoff = StoredObject::new_with_id(
+                    handoff.id.as_object_id(),
                     Kind::HandoffManifest,
                     Some("handoff_manifest".to_string()),
                     earmark_core::Standing::default(),
@@ -669,7 +676,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                     BTreeMap::from([(
                         "title".to_string(),
                         earmark_core::HeaderValue::String(format!(
-                            "Handoff for {}",
+                            "HandoffManifest {}",
                             handoff.id.as_str()
                         )),
                     )]),
