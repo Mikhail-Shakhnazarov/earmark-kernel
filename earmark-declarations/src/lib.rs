@@ -3,7 +3,7 @@ use std::{fs, path::Path};
 use earmark_core::{
     parse_yaml, ClassDefinition, ClassStandingRules, CompiledContextTemplate, InstructionPayload,
     Kind, ProviderProfile, StandingPolicy, StandingRegistry, SystemDefinition, VersionRef,
-    WorkflowDefinition,
+    WorkflowDeclaration, WorkflowDefinition,
 };
 use earmark_index::{ActiveSystemRecord, DerivedIndex};
 use earmark_store::CanonicalStore;
@@ -23,7 +23,9 @@ pub fn load_standing_policy(path: impl AsRef<Path>) -> Result<StandingPolicy, De
     Ok(parse_yaml(&fs::read_to_string(path)?)?)
 }
 
-pub fn load_workflow_definition(path: impl AsRef<Path>) -> Result<WorkflowDefinition, DeriveError> {
+pub fn load_workflow_definition(
+    path: impl AsRef<Path>,
+) -> Result<WorkflowDeclaration, DeriveError> {
     Ok(parse_yaml(&fs::read_to_string(path)?)?)
 }
 
@@ -372,7 +374,9 @@ pub fn validate_standing_policy_against_registry(
     Ok(())
 }
 
-pub fn validate_workflow_definition(value: &WorkflowDefinition) -> Result<(), DeriveError> {
+pub fn validate_workflow_definition(
+    value: &WorkflowDeclaration,
+) -> Result<(), DeriveError> {
     earmark_core::validate_class_name(&value.name)
         .map_err(|e| DeriveError::Validation(e.to_string()))?;
     let valid_kinds = ["compile_context", "transform", "nop"];

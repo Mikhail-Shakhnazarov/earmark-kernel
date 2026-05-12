@@ -1,0 +1,17 @@
+system_id: research_synthesis
+namespace: external_use_case
+title: Research Synthesis Engine
+description: A system for aggregating field notes into structured synthesis reports.
+classes:
+  - ./classes/interview_note.yaml
+  - ./classes/synthesis_report.yaml
+instructions:
+  - ./instructions/synthesize.md
+compiled_contexts:
+  - ./compiled_contexts/research_context.yaml
+workflows:
+  - ./workflows/aggregate_research.yaml
+runtime_profile:
+  execution_surface: local
+  machine_output_default: markdown
+  work_surface_mode: persistent
