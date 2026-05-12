@@ -84,7 +84,7 @@ runtime_profile:
 Always validate before registering. Earmark checks for missing references, undefined classes, and schema errors:
 
 ```bash
-em declare validate my_domain/system.yaml
+em declare validate --kind system my_domain/system.yaml
 ```
 
 If something is wrong, you'll see a specific error:

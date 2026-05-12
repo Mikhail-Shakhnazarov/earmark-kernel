@@ -300,7 +300,7 @@ fn init_outputs_workspace_paths() {
     assert!(dir.path().join(".earmark/derived").exists());
     assert!(dir.path().join(".earmark/work_surfaces").exists());
     assert!(dir.path().join("corpus").exists());
-    assert!(dir.path().join(".git").exists());
+    assert!(dir.path().join(".earmark/canonical/.git").exists());
 }
 
 #[test]

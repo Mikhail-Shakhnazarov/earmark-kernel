@@ -133,6 +133,7 @@ impl StoredObject {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn new_with_id(
         id: ObjectId,
         kind: Kind,
@@ -340,7 +341,7 @@ impl GitCanonicalStore {
     pub fn layout_status(&self) -> WorkspaceLayoutStatus {
         WorkspaceLayoutStatus {
             root_exists: self.root.exists(),
-            git_exists: self.root.join(".git").exists(),
+            git_exists: self.canonical_dir().join(".git").exists(),
             manifest_exists: self.manifest_path().exists(),
             canonical_dir_exists: self.canonical_dir().exists(),
             objects_dir_exists: self.objects_dir().exists(),

@@ -71,6 +71,7 @@ fn guarded_edge_blocking() {
             condition: Some("operator_approved".to_string()),
         }],
         guards: vec![],
+        output_contracts: vec![],
     };
 
     let system_ref = store
@@ -230,6 +231,7 @@ fn branching_execution() {
             },
         ],
         guards: vec![],
+        output_contracts: vec![],
     };
 
     let system_ref = store
@@ -434,6 +436,7 @@ fn parallel_transform_leak_bug() {
             },
         ],
         guards: vec![],
+        output_contracts: vec![],
     };
 
     let out1_class = ClassDefinition {
@@ -619,6 +622,7 @@ fn execution_error_persists_failed_delta() {
         }],
         edges: vec![],
         guards: vec![],
+        output_contracts: vec![],
     };
 
     let system = SystemDefinition {

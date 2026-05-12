@@ -318,12 +318,12 @@ fn resolve_visibility(
     let include = bindings.iter().any(|(props, _, _)| {
         props
             .get("include_in_standard_context")
-            .map_or(false, |v| matches!(v, ScalarValue::Bool(false)))
+            .is_some_and(|v| matches!(v, ScalarValue::Bool(false)))
     });
     let expose = bindings.iter().any(|(props, _, _)| {
         props
             .get("expose_to_provider")
-            .map_or(false, |v| matches!(v, ScalarValue::Bool(false)))
+            .is_some_and(|v| matches!(v, ScalarValue::Bool(false)))
     });
 
     // If none said false, check if any said true
@@ -333,7 +333,7 @@ fn resolve_visibility(
         bindings.iter().any(|(props, _, _)| {
             props
                 .get("include_in_standard_context")
-                .map_or(false, |v| matches!(v, ScalarValue::Bool(true)))
+                .is_some_and(|v| matches!(v, ScalarValue::Bool(true)))
         }) || VisibilityProjection::defaults().include_in_standard_context
     };
 
@@ -343,7 +343,7 @@ fn resolve_visibility(
         bindings.iter().any(|(props, _, _)| {
             props
                 .get("expose_to_provider")
-                .map_or(false, |v| matches!(v, ScalarValue::Bool(true)))
+                .is_some_and(|v| matches!(v, ScalarValue::Bool(true)))
         }) || VisibilityProjection::defaults().expose_to_provider
     };
 
@@ -592,9 +592,9 @@ mod tests {
 
         let projection = project(&standing, &registry).expect("projection should succeed");
         // false beats true for expose_to_provider
-        assert_eq!(projection.visibility.expose_to_provider, false);
+        assert!(!projection.visibility.expose_to_provider);
         // no false for include_in_standard_context, so true from dim:a wins
-        assert_eq!(projection.visibility.include_in_standard_context, true);
+        assert!(projection.visibility.include_in_standard_context);
         assert!(projection.conflicts.is_empty());
     }
 
@@ -1057,8 +1057,8 @@ mod tests {
         let standing = Standing { values };
 
         let vis = project_visibility(&standing, &registry);
-        assert_eq!(vis.include_in_standard_context, true);
-        assert_eq!(vis.expose_to_provider, false);
+        assert!(vis.include_in_standard_context);
+        assert!(!vis.expose_to_provider);
     }
 
     #[test]
@@ -1072,8 +1072,8 @@ mod tests {
         let standing = Standing { values };
 
         let vis = project_visibility(&standing, &registry);
-        assert_eq!(vis.include_in_standard_context, true);
-        assert_eq!(vis.expose_to_provider, true);
+        assert!(vis.include_in_standard_context);
+        assert!(vis.expose_to_provider);
     }
 
     #[test]
@@ -1147,11 +1147,11 @@ mod tests {
 
         // Use full project to verify
         let projection = project(&standing, &registry).expect("projection should succeed");
-        assert_eq!(projection.visibility.include_in_standard_context, false);
-        assert_eq!(projection.visibility.expose_to_provider, true);
+        assert!(!projection.visibility.include_in_standard_context);
+        assert!(projection.visibility.expose_to_provider);
 
         let vis = project_visibility(&standing, &registry);
-        assert_eq!(vis.include_in_standard_context, false);
-        assert_eq!(vis.expose_to_provider, true);
+        assert!(!vis.include_in_standard_context);
+        assert!(vis.expose_to_provider);
     }
 }
