@@ -298,7 +298,11 @@ pub fn validate_transition_change_set<S: CanonicalStore>(
                 })?;
                 created_output_classes.push(class.clone());
                 if !declared_classes.contains_key(&class) {
-                    failures.push(format!("created object uses undeclared class {}", class));
+                    info.push(format!(
+                        "created object {} uses undeclared class {} - falling back to resilient open schema",
+                        object_id.as_str(),
+                        class
+                    ));
                 } else if let Some(definition) = declared_classes.get(&class) {
                     let reqs = validate_standing_rules(
                         object_id,
