@@ -84,7 +84,7 @@ fn run_artifacts_exposes_handoffs_for_demo_path() {
         .stdout
         .clone();
     let parsed: Value = serde_json::from_slice(&run_output).unwrap();
-    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["ok"], true);
     assert_eq!(parsed["data"]["status"], "completed");
     let run_id = parsed["data"]["run_id"].as_str().unwrap().to_string();
 
@@ -102,7 +102,7 @@ fn run_artifacts_exposes_handoffs_for_demo_path() {
         .stdout
         .clone();
     let parsed: Value = serde_json::from_slice(&artifacts_output).unwrap();
-    assert_eq!(parsed["data"]["ok"], true);
+    assert_eq!(parsed["ok"], true);
 
     let artifact = &parsed["data"]["artifact"];
     assert!(

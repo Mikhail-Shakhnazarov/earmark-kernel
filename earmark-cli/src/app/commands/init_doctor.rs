@@ -15,7 +15,6 @@ pub(crate) fn handle_init(ctx: &CommandContext) -> Result<(), CliError> {
     emit(
         ctx.as_json,
         json!({
-            "ok": true,
             "summary": "workspace initialized",
             "root": root.display().to_string(),
             "paths": {

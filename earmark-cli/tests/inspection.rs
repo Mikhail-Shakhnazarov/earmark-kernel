@@ -99,7 +99,7 @@ fn run_inspection_and_reports() {
         .stdout
         .clone();
     let explain_json: Value = serde_json::from_slice(&explain_output).unwrap();
-    assert_eq!(explain_json["data"]["ok"], true);
+    assert_eq!(explain_json["ok"], true);
     assert_eq!(explain_json["data"]["kind"], "run");
     assert!(!explain_json["data"]["related"]["assignments"]
         .as_array()

@@ -75,7 +75,6 @@ pub fn handle(ctx: &CommandContext, args: &DepositArgs) -> Result<(), CliError> 
     emit(
         as_json,
         json!({
-            "ok": true,
             "object_id": object_ref.id.as_str(),
             "version_id": object_ref.version_id.as_str(),
             "kind": object_ref.kind.as_str(),

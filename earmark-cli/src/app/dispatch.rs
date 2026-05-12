@@ -38,7 +38,6 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
                 emit(
                     as_json,
                     json!({
-                        "ok": true,
                         "summary": format!("{} runs found", summaries.len()),
                         "runs": summaries,
                         "next_commands": ["em run show <run_id>", "em run timeline <run_id>"],
@@ -56,7 +55,6 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
                 emit(
                     as_json,
                     json!({
-                        "ok": true,
                         "kind": "run_timeline",
                         "id": resolved_id,
                         "summary": format!("{} events across run {}", ledger.events.len(), resolved_id),
@@ -80,7 +78,6 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
                 emit(
                     as_json,
                     json!({
-                        "ok": true,
                         "kind": "run_artifacts",
                         "id": resolved_id,
                         "summary": format!("artifacts for run {}", resolved_id),
@@ -95,7 +92,6 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
                 emit(
                     as_json,
                     json!({
-                        "ok": true,
                         "kind": "run",
                         "id": resolved_id,
                         "summary": format!("run {} is {}", resolved_id, format!("{:?}", ledger.status).to_lowercase()),
@@ -111,7 +107,6 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
                 emit(
                     as_json,
                     json!({
-                        "ok": true,
                         "kind": "run_graph",
                         "id": resolved_id,
                         "summary": format!("relationship graph for run {}", resolved_id),
@@ -127,7 +122,6 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
                 emit(
                     as_json,
                     json!({
-                        "ok": true,
                         "action": "validate",
                         "kind": args.kind.as_str(),
                         "path": args.path.display().to_string(),
@@ -140,7 +134,6 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
                 emit(
                     as_json,
                     json!({
-                        "ok": true,
                         "action": "explain",
                         "kind": args.kind.as_str(),
                         "path": args.path.display().to_string(),
@@ -159,7 +152,6 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
                 emit(
                     as_json,
                     json!({
-                        "ok": true,
                         "action": "new",
                         "kind": args.kind.as_str(),
                         "name": args.name,
@@ -184,7 +176,6 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
                 emit(
                     as_json,
                     json!({
-                        "ok": true,
                         "action": "register",
                         "kind": args.kind.as_str(),
                         "path": args.path.display().to_string(),
@@ -228,7 +219,6 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
                 emit(
                     as_json,
                     json!({
-                        "ok": true,
                         "summary": summary,
                         "examples_root": examples_dir.display().to_string(),
                         "examples": examples,
@@ -247,7 +237,6 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
                 emit(
                     as_json,
                     json!({
-                        "ok": true,
                         "kind": "assignment",
                         "id": assignment_id,
                         "summary": format!("assignment {} in status {}", assignment.id.as_str(), format!("{:?}", assignment.status).to_lowercase()),
@@ -305,8 +294,7 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
                 emit(
                     as_json,
                     json!({
-                            "ok": true,
-                            "kind": "change_set",
+                                "kind": "change_set",
                             "id": change_set_id,
                             "summary": format!("change set {} for transition {}", change_set.id.as_str(), change_set.transition_id),
                             "artifact": change_set.clone(),
@@ -351,7 +339,6 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
                 emit(
                     as_json,
                     json!({
-                        "ok": true,
                         "kind": "handoff",
                         "id": handoff_id,
                         "summary": format!("handoff {} from transition {}", handoff.id.as_str(), handoff.from_transition_id),
@@ -400,7 +387,6 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
                 emit(
                     as_json,
                     json!({
-                        "ok": true,
                         "kind": "failure",
                         "id": failure_id,
                         "summary": format!("failure on transition {}", failure.transition_id),
@@ -424,7 +410,6 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
                 emit(
                     as_json,
                     json!({
-                        "ok": true,
                         "summary": format!("{} failures found", failures.len()),
                         "failures": failures,
                         "next_commands": ["em failure show <failure_id>", "em failure explain <failure_id>"],
@@ -448,7 +433,6 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
                 emit(
                     as_json,
                     json!({
-                        "ok": true,
                         "kind": "audit_failures",
                         "summary": format!("{} failures found", failures.len()),
                         "failures": failures,
@@ -475,7 +459,6 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
                 emit(
                     as_json,
                     json!({
-                        "ok": true,
                         "kind": "report_generation",
                         "target_kind": "run",
                         "target_id": resolved_id,
@@ -492,7 +475,6 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
                 emit(
                     as_json,
                     json!({
-                        "ok": true,
                         "kind": "report_generation",
                         "target_kind": "handoff",
                         "target_id": target_id,
@@ -515,7 +497,6 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
                 emit(
                     as_json,
                     json!({
-                        "ok": true,
                         "kind": "report_generation",
                         "target_kind": "system",
                         "target_id": target_id,
@@ -529,7 +510,6 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
                 emit(
                     as_json,
                     json!({
-                        "ok": true,
                         "kind": "provider_capabilities",
                         "providers": earmark_exec::compiled_provider_capabilities(),
                     }),
@@ -555,7 +535,6 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
             emit(
                 as_json,
                 json!({
-                    "ok": true,
                     "kind": "status",
                     "summary": "workspace status",
                     "object_count": object_count,
@@ -622,7 +601,6 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
                 emit(
                     as_json,
                     json!({
-                        "ok": true,
                         "kind": "relation",
                         "id": relation_id,
                         "summary": format!("relation '{}' from {} to {}", payload.relation_type, payload.source.id, payload.target.id),
@@ -717,7 +695,6 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
                 emit(
                     as_json,
                     json!({
-                        "ok": true,
                         "id": obj.envelope.id.as_str(),
                         "version_id": obj.envelope.version_id.as_str(),
                         "request": request
@@ -737,7 +714,6 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
                 emit(
                     as_json,
                     json!({
-                        "ok": true,
                         "request_id": request_id,
                         "new_version_id": new_version.version_id.as_str(),
                         "status": "approved"
@@ -757,7 +733,6 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
                 emit(
                     as_json,
                     json!({
-                        "ok": true,
                         "request_id": request_id,
                         "new_version_id": new_version.version_id.as_str(),
                         "status": "rejected"
@@ -790,7 +765,6 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
                 emit(
                     as_json,
                     json!({
-                        "ok": true,
                         "request_id": request_id,
                         "new_request_version_id": request_ref.version_id.as_str(),
                         "target_id": target_ref.id.as_str(),

@@ -5,6 +5,7 @@ pub const CONTRACT_VERSION: &str = "0.2.0";
 pub fn emit_json_envelope(value: serde_json::Value) {
     let envelope = json!({
         "contract_version": CONTRACT_VERSION,
+        "ok": true,
         "data": value
     });
     println!(
