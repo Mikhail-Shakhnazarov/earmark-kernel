@@ -35,8 +35,8 @@ rm -rf "$WORKSPACE"
 # Workspace initialisieren
 em --root "$WORKSPACE" init
 
-em --root "$WORKSPACE" system register "$REPO_ROOT/examples/kommunale-waermeplanung/declarations/systems/system.yaml"
 em --root "$WORKSPACE" declare validate --kind system "$REPO_ROOT/examples/kommunale-waermeplanung/declarations/systems/system.yaml"
+em --root "$WORKSPACE" system register "$REPO_ROOT/examples/kommunale-waermeplanung/declarations/systems/system.yaml"
 em --root "$WORKSPACE" system activate sys_waermeplanung_briefing
 
 em --root "$WORKSPACE" deposit --class quellnotiz --title "Workshopprotokoll Wärmeplanung" --payload-file "$REPO_ROOT/examples/kommunale-waermeplanung/seed/notiz_1_workshop.md"

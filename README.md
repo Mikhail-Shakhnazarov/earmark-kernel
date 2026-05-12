@@ -2,27 +2,7 @@
 
 [![CI](https://github.com/Mikhail-Shakhnazarov/earmark-workspace/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Mikhail-Shakhnazarov/earmark-workspace/actions/workflows/ci.yml)
 
-A declarative kernel for governed AI work. Earmark compiles bounded context from a corpus, executes declared transitions over that context, and records what happened as durable, inspectable artifacts. Workspace state lives in a Git-backed canonical store implemented through `gix`, with a rebuildable derived index for fast query and inspection.
-
-## Standing Model
-
-Standing is declared domain state stored as a map from dimension IDs to token IDs:
-
-```yaml
-standing:
-  kernel:epistemic: working
-  kernel:review: unreviewed
-  kernel:process: active
-  research:status: draft
-```
-
-Dimensions and tokens are declared by the active system definition. Kernel behavior (review authorization, visibility, immutability) is projected from standing tokens through protocol bindings. The kernel enforces protocols, not token names.
-
-Only the v0.3 map format is supported. Legacy v0.2 objects using bare `epistemic` / `review` / `process` fields are not supported.
-
-## The Problem
-
-AI-assisted work usually runs on ambient context: a chat history, some retrieved snippets, whatever files happen to be open. That's fine for quick tasks. It falls apart when work needs to be inspected, resumed, reviewed, or handed to someone else.
+AI-assisted work usually runs on ambient context: a chat history, some retrieved snippets, whatever files happen to be open. That works for quick tasks. It falls apart when work needs to be inspected, resumed, reviewed, or handed to someone else.
 
 Concrete failure modes:
 
@@ -34,6 +14,8 @@ Concrete failure modes:
 - Continuing work means re-reading a long conversation, not loading a durable artifact.
 
 Earmark replaces ambient context with bounded, inspectable continuation.
+
+Earmark is a declarative kernel for governed AI work. It compiles bounded context from a corpus, executes declared transitions over that context, and records what happened as durable, inspectable artifacts. Workspace state lives in a Git-backed store implemented through `gix`, with a rebuildable derived index for fast query and inspection.
 
 ## How It Works
 
@@ -135,6 +117,22 @@ See the [Quickstart Tutorial](docs/tutorials/quickstart.md) for a complete walkt
 ## Current Status
 
 Workspace verification is exposed through the CI workflow, which runs formatting, workspace checks, tests, and Clippy. Build from source with Cargo. Binary packaging is a later release step.
+
+## Standing Model
+
+Standing is declared domain state stored as a map from dimension IDs to token IDs:
+
+```yaml
+standing:
+  kernel:epistemic: working
+  kernel:review: unreviewed
+  kernel:process: active
+  research:status: draft
+```
+
+Dimensions and tokens are declared by the active system definition. Kernel behavior — review authorization, visibility, immutability — is projected from standing tokens through protocol bindings. The kernel enforces protocols, not token names.
+
+Only the v0.3 map format is supported. Legacy v0.2 objects using bare `epistemic`, `review`, or `process` fields are not supported.
 
 What works:
 - Declaration, validation, and scaffolding of domain definitions
