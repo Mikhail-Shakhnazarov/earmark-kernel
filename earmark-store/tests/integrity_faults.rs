@@ -49,7 +49,12 @@ fn test_git_index_restoration_on_failure() {
 
     // We'll make the version path a directory to force failure during fs::write or during gix walk.
     // Force failure by locking the git index
-    let lock_path = dir.path().join(".git").join("index.lock");
+    let lock_path = dir
+        .path()
+        .join(".earmark")
+        .join("canonical")
+        .join(".git")
+        .join("index.lock");
     let _lock_file = fs::File::create(&lock_path).unwrap();
 
     println!("Attempting write while git index is locked");
