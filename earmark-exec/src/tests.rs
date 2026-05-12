@@ -714,3 +714,32 @@ fn test_privileged_relation_enforcement_failure() {
         .to_string()
         .contains("is not a privileged system relation"));
 }
+
+#[test]
+fn test_resolution_error_propagation() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+    let store = GitCanonicalStore::new(root);
+    store.init_layout().unwrap();
+    let index = DerivedIndex::open(root).unwrap();
+
+    let obj_id = ObjectId::new();
+    let head_path = store.root().join(".earmark/canonical/heads").join(format!("{}.json", obj_id.as_str()));
+    std::fs::create_dir_all(head_path.parent().unwrap()).unwrap();
+    std::fs::write(&head_path, "invalid json").unwrap();
+
+    let version_ref = VersionRef::new(
+        obj_id,
+        earmark_core::VersionId::parse("ver_00000000000000000000000000000000").unwrap(),
+    ); // latest
+    
+    let res = crate::resolution::resolve_version_for_kind(&store, &index, &version_ref, Kind::Workflow);
+    
+    assert!(res.is_err());
+    // It should NOT be IncompleteExecution (which would mean it fell back and failed), 
+    // it should be a Store error (JSON parse error from reading the head ref)
+    match res.unwrap_err() {
+        crate::error::ExecError::Store(_) => {} // OK
+        e => panic!("Expected Store error, got {:?}", e),
+    }
+}
