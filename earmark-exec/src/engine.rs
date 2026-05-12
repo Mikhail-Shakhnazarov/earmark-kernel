@@ -104,36 +104,82 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
         let mut emitted_packets = Vec::new();
         let mut emitted_objects = Vec::new();
         let mut governance_events = Vec::new();
-        let mut compiled_context: Option<WorkSurfaceManifest> =
-            if let Some(handoff_id) = &request.handoff_manifest {
-                let handoff = load_handoff(self.store, handoff_id)?;
-                if let Some(template_id) = &handoff.compiled_context_template_id {
-                    let template_ref = VersionRef::new(
-                        template_id.clone(),
-                        VersionId::parse("ver_00000000000000000000000000000000").unwrap(), // placeholder for latest
-                    );
-                    let resolved = resolve_version_for_kind(
-                        self.store,
-                        self.index,
-                        &template_ref,
-                        Kind::CompiledContextTemplate,
-                    )?;
-                    Some(context_compiler.compile(self.store, self.index, &resolved, None)?)
-                } else {
-                    None
-                }
-            } else {
-                None
-            };
-        let mut final_marking = effective_inputs.clone();
+        let mut compiled_context: Option<WorkSurfaceManifest> = None;
 
         let initial_contracts_set = crate::validation::initial_contracts(&effective_inputs);
         let mut available_contracts = initial_contracts_set.clone();
 
-        for transition_id in entry_transition_ids(&ir) {
+        let ready_seed_ids: Vec<String> = if let Some(handoff_id) = &request.handoff_manifest {
+            let handoff = load_handoff(self.store, handoff_id)?;
+
+            if let Some(template_id) = &handoff.compiled_context_template_id {
+                let template_ref = VersionRef::new(
+                    template_id.clone(),
+                    VersionId::parse("ver_00000000000000000000000000000000").unwrap(),
+                );
+                let resolved = resolve_version_for_kind(
+                    self.store,
+                    self.index,
+                    &template_ref,
+                    Kind::CompiledContextTemplate,
+                )?;
+                let fallback_registry = earmark_core::StandingRegistry::kernel_defaults();
+                compiled_context = Some(context_compiler.compile(
+                    self.store,
+                    self.index,
+                    &resolved,
+                    None,
+                    &fallback_registry,
+                )?);
+            }
+
+            match handoff.to_transition_id.clone() {
+                Some(target_id) => {
+                    if !transition_map.contains_key(&target_id) {
+                        return Err(ExecError::InvalidWorkflow(format!(
+                            "handoff {} targets transition {}, which is not present in workflow {}",
+                            handoff_id.as_str(),
+                            target_id,
+                            request.workflow.id.as_str()
+                        )));
+                    }
+
+                    record_transition(
+                        &mut record,
+                        target_id.clone(),
+                        "continuation",
+                        vec![],
+                        vec![],
+                        Some(format!("continued from handoff {}", handoff_id.as_str())),
+                    );
+
+                    let mut ancestors = BTreeSet::new();
+                    let mut stack = vec![handoff.from_transition_id.clone()];
+                    while let Some(ancestor_id) = stack.pop() {
+                        if ancestors.insert(ancestor_id.clone()) {
+                            if let Some(preds) = incoming.get(&ancestor_id) {
+                                for edge in preds {
+                                    stack.push(edge.from.clone());
+                                }
+                            }
+                        }
+                    }
+                    executed.extend(ancestors);
+
+                    vec![target_id]
+                }
+                None => entry_transition_ids(&ir),
+            }
+        } else {
+            entry_transition_ids(&ir)
+        };
+
+        let mut final_marking = effective_inputs.clone();
+
+        for transition_id in ready_seed_ids {
             let transition = transition_map.get(&transition_id).ok_or_else(|| {
                 ExecError::InvalidWorkflow(format!(
-                    "entry transition {} missing from workflow",
+                    "transition {} missing from workflow",
                     transition_id
                 ))
             })?;
@@ -146,7 +192,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                 &request,
                 &effective_inputs,
             )? {
-                ready_queue.push_back((transition_id, effective_inputs.clone()));
+                ready_queue.push_back((transition_id.clone(), effective_inputs.clone()));
             }
         }
 

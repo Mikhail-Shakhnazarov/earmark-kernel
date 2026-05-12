@@ -1,7 +1,7 @@
 use chrono::Utc;
 use earmark_core::{
-    ChangeSetId, HandoffManifest, Kind, ObjectId, ReviewStanding, Standing, StandingConstraint,
-    WorkflowDefinition, WorkflowOperation,
+    ChangeSetId, DimensionId, FlexibleVersionRef, HandoffManifest, Kind, ObjectId, Standing,
+    StandingConstraint, TokenId, WorkflowDeclaration, WorkflowDeclarationOperation,
 };
 use earmark_exec::handoff::reconstruct_successor_inputs_from_handoff;
 use earmark_exec::persistence_helpers::{write_batch_and_index, write_object_and_index};
@@ -113,10 +113,10 @@ fn test_handoff_standing_exclusion() {
     let index = DerivedIndex::open(root).unwrap();
 
     // 1. Create a root object (Accepted)
-    let standing_accepted = Standing {
-        review: ReviewStanding::Accepted,
-        ..Default::default()
-    };
+    let mut standing_accepted = Standing::default();
+    standing_accepted
+        .values
+        .insert(DimensionId::new("kernel:review"), TokenId::new("accepted"));
     let root_obj = StoredObject::new(
         Kind::Object,
         Some("finding".to_string()),
@@ -129,10 +129,10 @@ fn test_handoff_standing_exclusion() {
     let root_ref = write_object_and_index(&store, &index, &root_obj).unwrap();
 
     // 2. Create a related object (Rejected)
-    let standing_rejected = Standing {
-        review: ReviewStanding::Rejected,
-        ..Default::default()
-    };
+    let mut standing_rejected = Standing::default();
+    standing_rejected
+        .values
+        .insert(DimensionId::new("kernel:review"), TokenId::new("rejected"));
     let rejected_obj = StoredObject::new(
         Kind::Object,
         Some("finding".to_string()),
@@ -191,7 +191,7 @@ fn test_handoff_standing_exclusion() {
         allowed_output_classes: vec![],
         allowed_relation_types: vec!["linked".to_string()],
         standing_constraints: vec![StandingConstraint {
-            constraint_type: "allowed_review".to_string(),
+            constraint_type: "kernel:review".to_string(),
             requirements: vec!["accepted".to_string()],
         }],
         unresolved_ambiguities: vec![],
@@ -314,25 +314,26 @@ fn write_rel<S: CanonicalStore>(
 
 #[test]
 fn test_multi_output_transform_rejection() {
-    let workflow = WorkflowDefinition {
+    let workflow = WorkflowDeclaration {
         name: "bad_workflow".to_string(),
         version: "1".to_string(),
         description: None,
-        operations: vec![WorkflowOperation {
+        operations: vec![WorkflowDeclarationOperation {
             id: "op1".to_string(),
             kind: "transform".to_string(),
             input_contracts: vec!["input".to_string()],
             output_contracts: vec!["out1".to_string(), "out2".to_string()], // TWO OUTPUTS
-            instruction: Some(earmark_core::VersionRef::new(
+            instruction: Some(FlexibleVersionRef::Ref(earmark_core::VersionRef::new(
                 ObjectId::parse("obj_00000000000000000000000000000001").unwrap(),
                 earmark_core::VersionId::parse("ver_00000000000000000000000000000001").unwrap(),
-            )),
+            ))),
             compiled_context: None,
             policy: None,
             provider_profile: None,
         }],
         edges: vec![],
         guards: vec![],
+        output_contracts: vec![],
     };
 
     let res = earmark_declarations::validate_workflow_definition(&workflow);

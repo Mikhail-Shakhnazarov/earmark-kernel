@@ -3,7 +3,7 @@ use crate::relation_logic::{
 };
 use earmark_core::{
     ChangeSetDraft, ChangeSetValidationResult, ClassDefinition, Kind, ObjectId, ObjectRef,
-    Standing, SystemDefinition, WorkflowGuard,
+    Standing, SystemDefinition, VersionId, WorkflowGuard,
 };
 use earmark_index::DerivedIndex;
 use earmark_store::{CanonicalStore, StoredObject};
@@ -248,6 +248,9 @@ pub fn validate_transition_change_set<S: CanonicalStore>(
     ),
     ExecError,
 > {
+    let registry =
+        earmark_core::StandingRegistry::from_system_definition(system).map_err(ExecError::Core)?;
+
     let declared_classes = system
         .classes
         .iter()
@@ -262,6 +265,20 @@ pub fn validate_transition_change_set<S: CanonicalStore>(
     let mut info = Vec::new();
     let mut created_output_classes = Vec::new();
     let mut all_standing_requests = Vec::new();
+
+    // Pre-scan review objects in the change set for initial-accepted checking
+    let mut review_targets: Vec<(ObjectId, VersionId)> = Vec::new();
+    for object_id in &change_set_draft.created_objects {
+        if let Ok(Some(stored)) = store.read_head(object_id) {
+            if stored.envelope.kind == Kind::Review {
+                if let Ok(payload) = serde_json::from_slice::<earmark_governance::ReviewPayload>(
+                    &stored.payload.bytes,
+                ) {
+                    review_targets.push((payload.target.id, payload.target.version_id));
+                }
+            }
+        }
+    }
 
     for object_id in &change_set_draft.created_objects {
         let stored = store.read_head(object_id)?.ok_or_else(|| {
@@ -281,7 +298,11 @@ pub fn validate_transition_change_set<S: CanonicalStore>(
                 })?;
                 created_output_classes.push(class.clone());
                 if !declared_classes.contains_key(&class) {
-                    failures.push(format!("created object uses undeclared class {}", class));
+                    info.push(format!(
+                        "created object {} uses undeclared class {} - falling back to resilient open schema",
+                        object_id.as_str(),
+                        class
+                    ));
                 } else if let Some(definition) = declared_classes.get(&class) {
                     let reqs = validate_standing_rules(
                         object_id,
@@ -291,6 +312,27 @@ pub fn validate_transition_change_set<S: CanonicalStore>(
                         &mut failures,
                     );
                     all_standing_requests.extend(reqs);
+                }
+
+                // Initial accepted standing check
+                if let Ok(projection) =
+                    earmark_core::projection::project(&stored.envelope.standing, &registry)
+                {
+                    if projection.review
+                        == Some(earmark_core::projection::ReviewProjection::Accepted)
+                    {
+                        let actor = stored.envelope.provenance.actor.as_str();
+                        if !is_trusted_actor(actor)
+                            && !review_targets.iter().any(|(id, vid)| {
+                                id == &stored.envelope.id && vid == &stored.envelope.version_id
+                            })
+                        {
+                            failures.push(format!(
+                                "created object {} projects accepted review but has no same-change-set review evidence and no trusted provenance",
+                                object_id.as_str()
+                            ));
+                        }
+                    }
                 }
             }
             Kind::Relation => validate_relation_object(
@@ -361,6 +403,41 @@ pub fn validate_transition_change_set<S: CanonicalStore>(
     Ok((result, all_standing_requests))
 }
 
+fn check_dimension(
+    target_object_id: &ObjectId,
+    standing: &Standing,
+    class: &str,
+    dim_id: &earmark_core::DimensionId,
+    allowed_tokens: &[earmark_core::TokenId],
+    failures: &mut Vec<String>,
+    requests: &mut Vec<earmark_core::StandingTransitionRequest>,
+) {
+    if allowed_tokens.is_empty() {
+        return;
+    }
+    let actual = standing.get(dim_id);
+    let actual_str = actual.map(|t| t.as_str()).unwrap_or("unknown");
+    if allowed_tokens.iter().any(|t| t.as_str() == actual_str) {
+        return;
+    }
+    failures.push(format!(
+        "created object class {} uses disallowed {} standing {}",
+        class,
+        dim_id.as_str(),
+        actual_str
+    ));
+    if let Some(first) = allowed_tokens.first() {
+        requests.push(earmark_core::StandingTransitionRequest {
+            target_object_id: target_object_id.clone(),
+            dimension: dim_id.as_str().to_string(),
+            from_value: actual_str.to_string(),
+            to_value: first.as_str().to_string(),
+            rationale: Some("standing rule violation".to_string()),
+            status: earmark_core::StandingRequestStatus::Proposed,
+        });
+    }
+}
+
 pub fn validate_standing_rules(
     target_object_id: &ObjectId,
     standing: &Standing,
@@ -370,59 +447,16 @@ pub fn validate_standing_rules(
 ) -> Vec<earmark_core::StandingTransitionRequest> {
     let mut requests = Vec::new();
 
-    if !rules.allowed_epistemic.is_empty() && !rules.allowed_epistemic.contains(&standing.epistemic)
-    {
-        let actual = standing.epistemic.as_str().to_string();
-        failures.push(format!(
-            "created object class {} uses disallowed epistemic standing {}",
-            class, actual
-        ));
-        if let Some(first) = rules.allowed_epistemic.first() {
-            requests.push(earmark_core::StandingTransitionRequest {
-                target_object_id: target_object_id.clone(),
-                dimension: "epistemic".to_string(),
-                from_value: actual,
-                to_value: first.as_str().to_string(),
-                rationale: Some("standing rule violation".to_string()),
-                status: earmark_core::StandingRequestStatus::Proposed,
-            });
-        }
-    }
-
-    if !rules.allowed_review.is_empty() && !rules.allowed_review.contains(&standing.review) {
-        let actual = standing.review.as_str().to_string();
-        failures.push(format!(
-            "created object class {} uses disallowed review standing {}",
-            class, actual
-        ));
-        if let Some(first) = rules.allowed_review.first() {
-            requests.push(earmark_core::StandingTransitionRequest {
-                target_object_id: target_object_id.clone(),
-                dimension: "review".to_string(),
-                from_value: actual,
-                to_value: first.as_str().to_string(),
-                rationale: Some("standing rule violation".to_string()),
-                status: earmark_core::StandingRequestStatus::Proposed,
-            });
-        }
-    }
-
-    if !rules.allowed_process.is_empty() && !rules.allowed_process.contains(&standing.process) {
-        let actual = standing.process.as_str().to_string();
-        failures.push(format!(
-            "created object class {} uses disallowed process standing {}",
-            class, actual
-        ));
-        if let Some(first) = rules.allowed_process.first() {
-            requests.push(earmark_core::StandingTransitionRequest {
-                target_object_id: target_object_id.clone(),
-                dimension: "process".to_string(),
-                from_value: actual,
-                to_value: first.as_str().to_string(),
-                rationale: Some("standing rule violation".to_string()),
-                status: earmark_core::StandingRequestStatus::Proposed,
-            });
-        }
+    for (dim_id, allowed_tokens) in &rules.allowed_standing {
+        check_dimension(
+            target_object_id,
+            standing,
+            class,
+            dim_id,
+            allowed_tokens,
+            failures,
+            &mut requests,
+        );
     }
 
     requests
@@ -486,8 +520,20 @@ pub fn validate_relation_object<S: CanonicalStore>(
         return Ok(());
     }
 
-    let source_stored = source_stored.unwrap();
-    let target_stored = target_stored.unwrap();
+    let Some(source_stored) = source_stored else {
+        failures.push(format!(
+            "relation {} source endpoint missing after load attempt",
+            object_id.as_str()
+        ));
+        return Ok(());
+    };
+    let Some(target_stored) = target_stored else {
+        failures.push(format!(
+            "relation {} target endpoint missing after load attempt",
+            object_id.as_str()
+        ));
+        return Ok(());
+    };
 
     // Step 4: Construct facts
     let source_facts = RelationEndpointFacts {

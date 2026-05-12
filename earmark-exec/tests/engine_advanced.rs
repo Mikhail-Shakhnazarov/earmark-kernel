@@ -30,6 +30,7 @@ fn guarded_edge_blocking() {
         provider_profiles: vec![],
         default_compiled_context: None,
         default_provider_profile: None,
+        standing_dimensions: vec![],
         runtime_profile: RuntimeProfile {
             execution_surface: "runtime_over_folder".to_string(),
             machine_output_default: "json".to_string(),
@@ -70,6 +71,7 @@ fn guarded_edge_blocking() {
             condition: Some("operator_approved".to_string()),
         }],
         guards: vec![],
+        output_contracts: vec![],
     };
 
     let system_ref = store
@@ -171,6 +173,7 @@ fn branching_execution() {
         provider_profiles: vec![],
         default_compiled_context: None,
         default_provider_profile: None,
+        standing_dimensions: vec![],
         runtime_profile: RuntimeProfile {
             execution_surface: "runtime_over_folder".to_string(),
             machine_output_default: "json".to_string(),
@@ -228,6 +231,7 @@ fn branching_execution() {
             },
         ],
         guards: vec![],
+        output_contracts: vec![],
     };
 
     let system_ref = store
@@ -340,11 +344,11 @@ fn parallel_transform_leak_bug() {
         version: "1".to_string(),
         purpose: "p1".to_string(),
         input_classes: vec!["start_class".to_string()],
-        output_classes: vec!["c1".to_string()],
+        output_classes: vec!["out1".to_string()],
         execution_policy: "local".to_string(),
         provider_profile: None,
         trace_policy: "t".to_string(),
-        register: "r".to_string(),
+        register: "out1".to_string(),
         body: earmark_core::MarkdownBody::new("b1".to_string()),
     };
     let instr1_ref = store
@@ -364,11 +368,11 @@ fn parallel_transform_leak_bug() {
         version: "1".to_string(),
         purpose: "p2".to_string(),
         input_classes: vec!["start_class".to_string()],
-        output_classes: vec!["c2".to_string()],
+        output_classes: vec!["out2".to_string()],
         execution_policy: "local".to_string(),
         provider_profile: None,
         trace_policy: "t".to_string(),
-        register: "r".to_string(),
+        register: "out2".to_string(),
         body: earmark_core::MarkdownBody::new("b2".to_string()),
     };
     let instr2_ref = store
@@ -432,6 +436,7 @@ fn parallel_transform_leak_bug() {
             },
         ],
         guards: vec![],
+        output_contracts: vec![],
     };
 
     let out1_class = ClassDefinition {
@@ -493,6 +498,7 @@ fn parallel_transform_leak_bug() {
         provider_profiles: vec![],
         default_compiled_context: None,
         default_provider_profile: None,
+        standing_dimensions: vec![],
         runtime_profile: RuntimeProfile {
             execution_surface: "r".to_string(),
             machine_output_default: "j".to_string(),
@@ -616,6 +622,7 @@ fn execution_error_persists_failed_delta() {
         }],
         edges: vec![],
         guards: vec![],
+        output_contracts: vec![],
     };
 
     let system = SystemDefinition {
@@ -631,6 +638,7 @@ fn execution_error_persists_failed_delta() {
         provider_profiles: vec![],
         default_compiled_context: None,
         default_provider_profile: None,
+        standing_dimensions: vec![],
         runtime_profile: RuntimeProfile {
             execution_surface: "r".to_string(),
             machine_output_default: "j".to_string(),

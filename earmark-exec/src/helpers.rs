@@ -1,8 +1,9 @@
 use chrono::Utc;
 use earmark_connected_context::WorkSurfaceManifest;
 use earmark_core::{
-    Kind, ObjectRef, RunRecord, RunStatus, TokenRecord, TransitionAssignment, VersionRef,
-    WorkPacket, WorkPacketConstraints, WorkSurfaceRef, WorkflowDefinition,
+    projection::project_visibility, Kind, ObjectRef, RunRecord, RunStatus, StandingRegistry,
+    TokenRecord, TransitionAssignment, VersionRef, WorkPacket, WorkPacketConstraints,
+    WorkSurfaceRef, WorkflowDefinition,
 };
 use earmark_store::{CanonicalStore, StoredObject, StoredPayload};
 use std::collections::{BTreeMap, BTreeSet};
@@ -233,4 +234,137 @@ pub(crate) fn dedupe_strings(values: Vec<String>) -> Vec<String> {
 
 pub(crate) fn uuid_like() -> String {
     format!("{}", Utc::now().timestamp_nanos_opt().unwrap_or_default())
+}
+
+pub fn render_provider_context(manifest: &WorkSurfaceManifest) -> String {
+    let mut rendered = String::new();
+    rendered.push_str("### Work Surface Context\n\n");
+    rendered.push_str(&format!("Surface ID: {}\n", manifest.surface_id));
+    rendered.push_str(&format!("Object Count: {}\n", manifest.objects.len()));
+    rendered.push('\n');
+    rendered
+}
+
+pub fn render_provider_input<S: CanonicalStore>(
+    store: &S,
+    instruction: &earmark_core::InstructionPayload,
+    manifest: Option<&WorkSurfaceManifest>,
+    inputs: &[ObjectRef],
+    profile: &earmark_core::ProviderProfile,
+    registry: &StandingRegistry,
+) -> Result<String, ExecError> {
+    let mut rendered = String::new();
+
+    // 1. Instruction
+    rendered.push_str("### Instruction\n\n");
+    rendered.push_str(instruction.body.as_str());
+    rendered.push_str("\n\n");
+
+    // 2. Context
+    if let Some(m) = manifest {
+        rendered.push_str(&render_provider_context(m));
+    }
+
+    // 3. Inputs / Evidence
+    rendered.push_str("### Input Evidence\n\n");
+
+    // Build the evidence set: manifest objects if present, otherwise active inputs.
+    // Deduplicate by (id, version_id).
+    let mut to_render_refs: Vec<ObjectRef> = if let Some(m) = manifest {
+        m.objects.iter().map(|o| o.object.clone()).collect()
+    } else {
+        inputs.to_vec()
+    };
+
+    // If allow_work_surface_only is false, ensure all active inputs are also included
+    if !profile.exposure.allow_work_surface_only {
+        for input in inputs {
+            if !to_render_refs
+                .iter()
+                .any(|r| r.id == input.id && r.version_id == input.version_id)
+            {
+                to_render_refs.push(input.clone());
+            }
+        }
+    }
+
+    let active_refs: BTreeSet<(earmark_core::ObjectId, earmark_core::VersionId)> = inputs
+        .iter()
+        .map(|o| (o.id.clone(), o.version_id.clone()))
+        .collect();
+
+    for (i, obj_ref) in to_render_refs.iter().enumerate() {
+        let obj = store.read_version(&obj_ref.version_ref()).map_err(|e| {
+            ExecError::IncompleteExecution(format!(
+                "failed to read input object {}: {}",
+                obj_ref.id, e
+            ))
+        })?;
+
+        // Standing visibility gate — checked before any metadata rendering
+        let vis = project_visibility(&obj.envelope.standing, registry);
+
+        if !vis.expose_to_provider {
+            rendered.push_str(&format!("#### Evidence [{}]\n", i + 1));
+            rendered.push_str(
+                "Evidence item omitted from provider input by standing visibility policy.\n",
+            );
+            rendered.push('\n');
+            continue;
+        }
+
+        let is_active = active_refs.contains(&(obj_ref.id.clone(), obj_ref.version_id.clone()));
+        let active_marker = if is_active { " [Active Input]" } else { "" };
+
+        rendered.push_str(&format!("#### Evidence [{}]{}\n", i + 1, active_marker));
+        rendered.push_str(&format!("ID: {}\n", obj_ref.id));
+        rendered.push_str(&format!("Kind: {}\n", obj_ref.kind.as_str()));
+        rendered.push_str(&format!(
+            "Class: {}\n",
+            obj_ref.class.as_deref().unwrap_or("unknown")
+        ));
+
+        if let Some(title) = obj.envelope.headers.get("title") {
+            rendered.push_str(&format!("Title: {:?}\n", title));
+        }
+
+        // Determine if this is a structured declaration
+        let is_structured = match obj_ref.kind {
+            Kind::Instruction
+            | Kind::Policy
+            | Kind::Workflow
+            | Kind::CompiledContextTemplate
+            | Kind::ProviderProfile
+            | Kind::SystemDefinition => true,
+            Kind::Object if obj_ref.class.as_deref() == Some("class_definition") => true,
+            _ => false,
+        };
+
+        let profile_permits = if is_structured {
+            profile.exposure.allow_structured_declarations
+        } else {
+            profile.exposure.allow_prose_objects
+        };
+
+        // Second gate: provider profile exposure must also permit
+        if profile_permits {
+            if let Ok(payload_str) = String::from_utf8(obj.payload.bytes.clone()) {
+                rendered.push_str("\nPayload:\n---\n");
+                rendered.push_str(&payload_str);
+                rendered.push_str("\n---\n");
+            } else {
+                rendered.push_str("\n(Binary payload not displayed)\n");
+            }
+        } else {
+            let reason = if is_structured {
+                "Structured declarations hidden by exposure policy"
+            } else {
+                "Payload content hidden by exposure policy"
+            };
+            rendered.push_str(&format!("\n({})\n", reason));
+        }
+        rendered.push('\n');
+    }
+
+    Ok(rendered)
 }

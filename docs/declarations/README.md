@@ -49,6 +49,58 @@ em declare new --kind workflow research_synthesis
 em declare new --kind system research_synthesis
 ```
 
+## Standing Model
+
+Standing is stored as a map from standing dimension IDs to token IDs.
+
+```yaml
+standing:
+  kernel:epistemic: working
+  kernel:review: unreviewed
+  kernel:process: active
+  research:status: draft
+```
+
+Dimensions and tokens are declared by the active system definition. Kernel behavior is derived by projecting standing tokens through protocol bindings. The kernel enforces protocols, not token names.
+
+Standing format: dimension IDs use the `kernel:*` prefix for built-in kernel dimensions. Legacy v0.2 objects using bare `epistemic` / `review` / `process` fields are not supported.
+
+### Custom Dimension Example
+
+A system declaration can define additional standing dimensions with protocol bindings:
+
+```yaml
+standing_dimensions:
+  - id: research:status
+    default: draft
+    tokens:
+      - id: draft
+      - id: verified
+        implements:
+          - protocol: kernel:review
+            state: accepted
+          - protocol: kernel:visibility
+            properties:
+              include_in_standard_context: true
+              expose_to_provider: true
+```
+
+The token `verified` is a domain token. It is not itself a kernel token. It projects to kernel behavior because the declaration binds it to `kernel:review` and `kernel:visibility`.
+
+### Provider Exposure
+
+Provider exposure requires two gates:
+
+- The standing projection must return `expose_to_provider: true`.
+- The provider profile must permit the object/content type.
+
+`include_in_standard_context = true` does not imply provider exposure. Default visibility projection:
+
+```yaml
+include_in_standard_context: true
+expose_to_provider: false
+```
+
 ## Declaration Kinds
 
 Supported kinds:
@@ -79,12 +131,28 @@ Key examples:
 - `class`: [Finding](examples/classes/finding.yaml)
 - `instruction`: [Source to Finding](examples/instructions/source_to_finding.md)
 - `workflow`: [Source to Finding](examples/workflows/source_to_finding.yaml)
-- `provider-profile`: [Google Gemini](examples/provider_profiles/google_gemini.yaml), [Local Mock](examples/provider_profiles/local_mock.yaml)
+- `provider-profile`: [Google Gemini (HTTP)](examples/provider_profiles/google_gemini.yaml), [Local Mock](examples/provider_profiles/local_mock.yaml)
 
 ## Schemas
 
-JSON Schema files for active declaration kinds are published in:
+JSON Schema files for the seven declaration kinds are published in:
 
 ```text
 docs/declarations/schema/
 ```
+
+CLI and Rust validation are authoritative. JSON Schema files are useful authoring aids but may not capture every semantic check enforced by the validator.
+
+### Validation Coverage
+
+CLI and Rust validation is active across all seven declaration kinds.
+
+| Kind | Current validation coverage |
+|---|---|
+| `class` | Class name, non-empty version, `kind` value, standing-rule tokens, relation type tokens, counterparty class tokens, relation direction, authorizing endpoint, and dead direction/authority combinations |
+| `instruction` | Instruction name, non-empty version, non-empty purpose, non-empty body, input class tokens, and output class tokens |
+| `standing-policy` | Policy name, non-empty version, transition-rule dimensions and standing tokens, operation requirement dimensions/tokens, and non-empty escalation trigger/message |
+| `workflow` | Workflow name, operation id tokens and uniqueness, operation kind, required `compiled_context` for `compile_context` operations, required instruction for `transform` operations, one output contract for transform operations, input/output class tokens, guard id tokens and uniqueness, edge endpoints, and guard references |
+| `compiled-context` | Template name, non-empty version, selected class tokens, non-empty render mode, standing dimensions/tokens, and relation type tokens |
+| `provider-profile` | Profile name, non-empty version, provider/model presence, response format, non-negative budget, auth/endpoint environment variable names, and HTTP provider template/auth/body constraints when `provider: http_generation` is used |
+| `system` | System id, namespace, referenced object existence, referenced kind/class where required, referenced payload decodability, title, and non-empty runtime profile fields |

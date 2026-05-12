@@ -2,11 +2,7 @@
 
 [![CI](https://github.com/Mikhail-Shakhnazarov/earmark-workspace/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Mikhail-Shakhnazarov/earmark-workspace/actions/workflows/ci.yml)
 
-A declarative kernel for governed AI work. Earmark compiles bounded context from a corpus, executes declared transitions over that context, and records what happened as durable, inspectable artifacts. Workspace state lives in a Git-backed canonical store implemented through `gix`, with a rebuildable derived index for fast query and inspection.
-
-## The Problem
-
-AI-assisted work usually runs on ambient context: a chat history, some retrieved snippets, whatever files happen to be open. That's fine for quick tasks. It falls apart when work needs to be inspected, resumed, reviewed, or handed to someone else.
+AI-assisted work usually runs on ambient context: a chat history, some retrieved snippets, whatever files happen to be open. That works for quick tasks. It falls apart when work needs to be inspected, resumed, reviewed, or handed to someone else.
 
 Concrete failure modes:
 
@@ -18,6 +14,8 @@ Concrete failure modes:
 - Continuing work means re-reading a long conversation, not loading a durable artifact.
 
 Earmark replaces ambient context with bounded, inspectable continuation.
+
+Earmark is a declarative kernel for governed AI work. It compiles bounded context from a corpus, executes declared transitions over that context, and records what happened as durable, inspectable artifacts. Workspace state lives in a Git-backed store implemented through `gix`, with a rebuildable derived index for fast query and inspection.
 
 ## How It Works
 
@@ -83,10 +81,17 @@ alias em="$(pwd)/target/debug/earmark-cli"
 mkdir my-workspace && cd my-workspace
 em init
 
-# Register and run the demo
+# Register the demo system
 em system register ../examples/research-synthesis/declarations/systems/system.yaml
 em system activate sys_research_synthesis
+
+# Deposit a source note
 em deposit --class source_note --title "Test Note" --body "AI context should be bounded."
+
+# Find the deposited object's ID
+em query --class source_note
+
+# Run the workflow (use the object_id from the deposit or query output)
 em workflow run research_synthesis --system-id sys_research_synthesis --with <object_id>
 ```
 
@@ -100,16 +105,34 @@ See the [Quickstart Tutorial](docs/tutorials/quickstart.md) for a complete walkt
 | **[Practical Guide](docs/tutorials/practical-guide.md)** | Plain-language explanation and use cases |
 | **[Staged Execution](docs/concepts/staged-execution.md)** | How transitions, assignments, and handoffs work |
 | **[Context Compilation](docs/concepts/context-compilation.md)** | How Earmark bounds what a runtime sees |
-| **[Research Synthesis Demo](docs/tutorials/research-synthesis-demo.md)** | Walk through a complete two-stage workflow |
+| **[Relation Authorization](docs/concepts/relation-authorization.md)** | How relation creation records the rule that authorized it |
+| **[Research Synthesis Demo](docs/tutorials/research-synthesis-demo.md)** | Run and inspect a complete research synthesis workflow |
 | **[Build a Domain](docs/tutorials/build-a-domain-definition.md)** | Define your own classes, workflows, and system |
 | **[CLI Reference](docs/reference/cli.md)** | Command lookup |
 | **[Runtime Integration](docs/reference/runtime-integration-guide.md)** | Using Earmark from Rust or any language |
 | **[Provider Extension](docs/reference/provider-extension.md)** | Register custom providers through the current extension surface |
 | **[Declaration Authoring](docs/declarations/README.md)** | Examples and validation rules |
 
+
 ## Current Status
 
-Workspace verification is exposed through the CI workflow, which runs formatting, workspace checks, tests, and Clippy. It is not yet a packaged application.
+Workspace verification is exposed through the CI workflow, which runs formatting, workspace checks, tests, and Clippy. Build from source with Cargo. Binary packaging is a later release step.
+
+## Standing Model
+
+Standing is declared domain state stored as a map from dimension IDs to token IDs:
+
+```yaml
+standing:
+  kernel:epistemic: working
+  kernel:review: unreviewed
+  kernel:process: active
+  research:status: draft
+```
+
+Dimensions and tokens are declared by the active system definition. Kernel behavior — review authorization, visibility, immutability — is projected from standing tokens through protocol bindings. The kernel enforces protocols, not token names.
+
+Only the v0.3 map format is supported. Legacy v0.2 objects using bare `epistemic`, `review`, or `process` fields are not supported.
 
 What works:
 - Declaration, validation, and scaffolding of domain definitions
@@ -120,7 +143,6 @@ What works:
 - CLI inspection, explanation, and HTML report generation
 - Registry-based custom provider extension through `ProviderRegistry` and `ProviderService`
 - Additive async provider traits through `AsyncProviderService` and `AsyncProviderAdapter`
-- Optional Google Gemini provider adapter (requires `gemini` feature)
 - Versioned JSON CLI contracts at 0.2.0
 
 What doesn't exist yet:

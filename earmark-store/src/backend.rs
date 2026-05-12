@@ -71,48 +71,44 @@ impl GixBackend {
             .map_err(|e| StoreError::GitBackend(e.to_string()))?
             .into_owned();
 
-        index.remove_entries(|_, path, _| {
-            Self::has_scope_prefix(path, ".earmark") || Self::has_scope_prefix(path, "corpus")
-        });
+        index.remove_entries(|_, path, _| !Self::has_scope_prefix(path, ".git"));
 
-        for scope in [".earmark", "corpus"] {
-            let scope_path = root.join(scope);
-            if !scope_path.exists() {
+        for entry in walkdir::WalkDir::new(root)
+            .into_iter()
+            .filter_map(Result::ok)
+        {
+            if !entry.file_type().is_file() {
                 continue;
             }
 
-            for entry in walkdir::WalkDir::new(&scope_path)
-                .into_iter()
-                .filter_map(Result::ok)
-            {
-                if !entry.file_type().is_file() {
-                    continue;
-                }
+            let rel = entry
+                .path()
+                .strip_prefix(root)
+                .map_err(|e| StoreError::Invariant(e.to_string()))?;
 
-                let rel = entry
-                    .path()
-                    .strip_prefix(root)
-                    .map_err(|e| StoreError::Invariant(e.to_string()))?;
-                let rel = rel.to_string_lossy().replace('\\', "/");
-                let path = rel.as_bytes().as_bstr();
-
-                let data = std::fs::read(entry.path())?;
-                let blob = repo
-                    .write_blob(data)
-                    .map_err(|e| StoreError::GitBackend(e.to_string()))?;
-                let meta = gix::index::fs::Metadata::from_path_no_follow(entry.path())?;
-                let stat = gix::index::entry::Stat::from_fs(&meta)
-                    .map_err(|e| StoreError::GitBackend(e.to_string()))?;
-                let mode = Self::mode_from_metadata(&meta);
-
-                index.dangerously_push_entry(
-                    stat,
-                    blob.detach(),
-                    gix::index::entry::Flags::empty(),
-                    mode,
-                    path,
-                );
+            if rel.starts_with(".git") {
+                continue;
             }
+
+            let rel_str = rel.to_string_lossy().replace('\\', "/");
+            let path = rel_str.as_bytes().as_bstr();
+
+            let data = std::fs::read(entry.path())?;
+            let blob = repo
+                .write_blob(data)
+                .map_err(|e| StoreError::GitBackend(e.to_string()))?;
+            let meta = gix::index::fs::Metadata::from_path_no_follow(entry.path())?;
+            let stat = gix::index::entry::Stat::from_fs(&meta)
+                .map_err(|e| StoreError::GitBackend(e.to_string()))?;
+            let mode = Self::mode_from_metadata(&meta);
+
+            index.dangerously_push_entry(
+                stat,
+                blob.detach(),
+                gix::index::entry::Flags::empty(),
+                mode,
+                path,
+            );
         }
 
         index.sort_entries();
@@ -148,14 +144,30 @@ impl GixBackend {
 
 impl GitBackend for GixBackend {
     fn ensure_repo(&self, root: &Path) -> Result<(), StoreError> {
-        if gix::open(root).is_err() {
+        if !root.join(".git").exists() {
             gix::init(root).map_err(|e| StoreError::GitBackend(e.to_string()))?;
         }
         Ok(())
     }
 
     fn commit_paths(&self, root: &Path, message: &str) -> Result<(), StoreError> {
-        let repo = gix::open(root).map_err(|e| StoreError::GitBackend(e.to_string()))?;
+        let repo = gix::open_opts(root, gix::open::Options::isolated())
+            .map_err(|e| StoreError::GitBackend(e.to_string()))?;
+
+        // Ensure we haven't discovered the workspace root through upward traversal
+        let git_dir = repo
+            .git_dir()
+            .canonicalize()
+            .map_err(|e| StoreError::GitBackend(e.to_string()))?;
+        let expected_git_dir = root
+            .join(".git")
+            .canonicalize()
+            .map_err(|e| StoreError::GitBackend(e.to_string()))?;
+        if git_dir != expected_git_dir {
+            return Err(StoreError::GitBackend(
+                "discovered wrong repository through upward traversal".to_string(),
+            ));
+        }
 
         // Snapshot current index to allow rollback on failure
         let index_path = repo.index_path();

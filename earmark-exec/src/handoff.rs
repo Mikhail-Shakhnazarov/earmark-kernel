@@ -75,33 +75,15 @@ pub(crate) fn derive_successor_handoff<S: CanonicalStore>(
                 if &class.name != contract {
                     continue;
                 }
-                standing_constraints.push(StandingConstraint {
-                    constraint_type: "allowed_epistemic".to_string(),
-                    requirements: class
-                        .standing_rules
-                        .allowed_epistemic
-                        .iter()
-                        .map(|e| e.as_str().to_string())
-                        .collect(),
-                });
-                standing_constraints.push(StandingConstraint {
-                    constraint_type: "allowed_review".to_string(),
-                    requirements: class
-                        .standing_rules
-                        .allowed_review
-                        .iter()
-                        .map(|r| r.as_str().to_string())
-                        .collect(),
-                });
-                standing_constraints.push(StandingConstraint {
-                    constraint_type: "allowed_process".to_string(),
-                    requirements: class
-                        .standing_rules
-                        .allowed_process
-                        .iter()
-                        .map(|p| p.as_str().to_string())
-                        .collect(),
-                });
+                for (dim_id, tokens) in &class.standing_rules.allowed_standing {
+                    let reqs: Vec<String> = tokens.iter().map(|t| t.as_str().to_string()).collect();
+                    if !reqs.is_empty() {
+                        standing_constraints.push(StandingConstraint {
+                            constraint_type: dim_id.as_str().to_string(),
+                            requirements: reqs,
+                        });
+                    }
+                }
                 for rule in &class.relation_rules {
                     allowed_relation_types.push(rule.relation_type.clone());
                 }
@@ -239,19 +221,20 @@ fn handoff_object_admissible(
 
     // 3. Standing check
     for constraint in &handoff.standing_constraints {
-        let actual_value = match constraint.constraint_type.as_str() {
-            "allowed_epistemic" => {
-                format!("{:?}", object.envelope.standing.epistemic).to_lowercase()
-            }
-            "allowed_review" => format!("{:?}", object.envelope.standing.review).to_lowercase(),
-            "allowed_process" => format!("{:?}", object.envelope.standing.process).to_lowercase(),
-            unknown => {
-                return Err(ExecError::HandoffReconstruction(format!(
-                    "unknown standing constraint type: {}",
-                    unknown
-                )));
-            }
-        };
+        let dim_id =
+            earmark_core::DimensionId::parse(&constraint.constraint_type).map_err(|e| {
+                ExecError::HandoffReconstruction(format!(
+                    "invalid standing constraint dimension '{}': {}",
+                    constraint.constraint_type, e
+                ))
+            })?;
+        let actual_value = object
+            .envelope
+            .standing
+            .get(&dim_id)
+            .map(earmark_core::TokenId::as_str)
+            .unwrap_or("unknown")
+            .to_string();
 
         if !constraint.requirements.contains(&actual_value) {
             return Ok(false);

@@ -1,10 +1,11 @@
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use chrono::Utc;
 use earmark_core::{
-    parse_json, parse_yaml, ClassDefinition, CompiledContextTemplate, InstructionPayload, Kind,
-    ObjectId, ProviderProfile, RelationPayload, StandingPolicy, SystemDefinition, VersionRef,
-    WorkflowDefinition,
+    parse_json, parse_yaml, ClassDefinition, CompiledContextTemplate, DimensionId,
+    InstructionPayload, Kind, ObjectId, ProviderProfile, RelationPayload, StandingPolicy,
+    SystemDefinition, TokenId, VersionRef, WorkflowDefinition,
 };
 use earmark_store::CanonicalStore;
 use rusqlite::{params, Connection, OptionalExtension};
@@ -19,11 +20,10 @@ pub struct ObjectSummary {
     pub class: Option<String>,
     pub title: Option<String>,
     pub summary: Option<String>,
-    pub standing_epistemic: String,
-    pub standing_review: String,
-    pub standing_process: String,
     pub system_id: Option<String>,
     pub namespace: Option<String>,
+    #[serde(default)]
+    pub standing: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -51,8 +51,10 @@ pub struct QueryFilter {
     pub kind: Option<String>,
     pub text: Option<String>,
     pub object_id: Option<String>,
+    pub standing: BTreeMap<DimensionId, Vec<TokenId>>,
 }
 
+#[derive(Debug)]
 pub struct DerivedIndex {
     conn: Connection,
     path: PathBuf,
@@ -100,9 +102,6 @@ impl DerivedIndex {
                 class TEXT,
                 title TEXT,
                 summary TEXT,
-                standing_epistemic TEXT NOT NULL,
-                standing_review TEXT NOT NULL,
-                standing_process TEXT NOT NULL,
                 payload_ref TEXT NOT NULL,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
@@ -141,6 +140,20 @@ impl DerivedIndex {
                 claimed_at TEXT NOT NULL,
                 PRIMARY KEY (run_id, transition_id)
             );
+
+            CREATE TABLE IF NOT EXISTS object_standing (
+                version_id TEXT NOT NULL,
+                object_id TEXT NOT NULL,
+                dimension TEXT NOT NULL,
+                token TEXT NOT NULL,
+                PRIMARY KEY (version_id, dimension)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_object_standing_dimension_token
+            ON object_standing(dimension, token);
+
+            CREATE INDEX IF NOT EXISTS idx_object_standing_object
+            ON object_standing(object_id);
             "#,
         )?;
         // Backfill for existing indexes created before declaration_identity existed.
@@ -201,6 +214,7 @@ impl DerivedIndex {
         self.conn.execute("DELETE FROM objects", [])?;
         self.conn.execute("DELETE FROM heads", [])?;
         self.conn.execute("DELETE FROM relations", [])?;
+        self.conn.execute("DELETE FROM object_standing", [])?;
 
         let objects = store.scan_objects()?;
         let mut seen = std::collections::BTreeSet::new();
@@ -324,9 +338,6 @@ impl DerivedIndex {
             let object_id = envelope.id.as_str().to_string();
             let kind = envelope.kind.as_str().to_string();
             let class = envelope.class.clone();
-            let standing_epistemic = format!("{:?}", envelope.standing.epistemic).to_lowercase();
-            let standing_review = format!("{:?}", envelope.standing.review).to_lowercase();
-            let standing_process = format!("{:?}", envelope.standing.process).to_lowercase();
             let payload_ref = envelope.payload_ref.0.clone();
             let created_at = envelope.created_at.to_rfc3339();
             let updated_at = envelope.updated_at.to_rfc3339();
@@ -334,9 +345,8 @@ impl DerivedIndex {
             self.conn.execute(
                 "INSERT OR REPLACE INTO objects (
                     version_id, object_id, kind, class, title, summary,
-                    standing_epistemic, standing_review, standing_process,
                     payload_ref, created_at, updated_at, system_id, namespace, declaration_identity, searchable_text
-                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
+                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
                 params![
                     version_id,
                     object_id,
@@ -344,9 +354,6 @@ impl DerivedIndex {
                     class,
                     title,
                     summary,
-                    standing_epistemic,
-                    standing_review,
-                    standing_process,
                     payload_ref,
                     created_at,
                     updated_at,
@@ -356,6 +363,18 @@ impl DerivedIndex {
                     searchable_text,
                 ],
             )?;
+
+            for (dim, token) in envelope.standing.iter() {
+                self.conn.execute(
+                    "INSERT OR REPLACE INTO object_standing (version_id, object_id, dimension, token) VALUES (?1, ?2, ?3, ?4)",
+                    params![
+                        envelope.version_id.as_str(),
+                        envelope.id.as_str(),
+                        dim.as_str(),
+                        token.as_str(),
+                    ],
+                )?;
+            }
         }
 
         for object_id in seen {
@@ -500,9 +519,8 @@ impl DerivedIndex {
         self.conn.execute(
             "INSERT OR REPLACE INTO objects (
                 version_id, object_id, kind, class, title, summary,
-                standing_epistemic, standing_review, standing_process,
                 payload_ref, created_at, updated_at, system_id, namespace, declaration_identity, searchable_text
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
             params![
                 envelope.version_id.as_str().to_string(),
                 envelope.id.as_str().to_string(),
@@ -510,9 +528,6 @@ impl DerivedIndex {
                 envelope.class.clone(),
                 title,
                 summary,
-                envelope.standing.epistemic.as_str(),
-                envelope.standing.review.as_str(),
-                envelope.standing.process.as_str(),
                 envelope.payload_ref.0.clone(),
                 envelope.created_at.to_rfc3339(),
                 envelope.updated_at.to_rfc3339(),
@@ -526,12 +541,29 @@ impl DerivedIndex {
             "INSERT OR REPLACE INTO heads (object_id, version_id) VALUES (?1, ?2)",
             params![envelope.id.as_str(), envelope.version_id.as_str()],
         )?;
+
+        let version_id_str = envelope.version_id.as_str();
+        self.conn.execute(
+            "DELETE FROM object_standing WHERE version_id = ?1",
+            params![version_id_str],
+        )?;
+        for (dim, token) in envelope.standing.iter() {
+            self.conn.execute(
+                "INSERT INTO object_standing (version_id, object_id, dimension, token) VALUES (?1, ?2, ?3, ?4)",
+                params![
+                    version_id_str,
+                    envelope.id.as_str(),
+                    dim.as_str(),
+                    token.as_str(),
+                ],
+            )?;
+        }
         Ok(())
     }
 
     pub fn query_objects(&self, filter: &QueryFilter) -> Result<Vec<ObjectSummary>, IndexError> {
         let mut sql = String::from(
-            "SELECT o.object_id, o.version_id, o.kind, o.class, o.title, o.summary, o.standing_epistemic, o.standing_review, o.standing_process, o.system_id, o.namespace FROM objects o JOIN heads h ON o.object_id = h.object_id AND o.version_id = h.version_id WHERE 1=1",
+            "SELECT o.object_id, o.version_id, o.kind, o.class, o.title, o.summary, o.system_id, o.namespace FROM objects o JOIN heads h ON o.object_id = h.object_id AND o.version_id = h.version_id WHERE 1=1",
         );
         let mut values: Vec<String> = Vec::new();
 
@@ -551,26 +583,71 @@ impl DerivedIndex {
             sql.push_str(" AND o.object_id = ?");
             values.push(object_id.clone());
         }
+
+        for (dim, tokens) in &filter.standing {
+            if tokens.is_empty() {
+                continue;
+            }
+            let placeholders: Vec<String> = (0..tokens.len()).map(|_| "?".to_string()).collect();
+            sql.push_str(&format!(
+                " AND EXISTS (SELECT 1 FROM object_standing os WHERE os.version_id = o.version_id AND os.dimension = ? AND os.token IN ({}))",
+                placeholders.join(",")
+            ));
+            values.push(dim.as_str().to_string());
+            for token in tokens {
+                values.push(token.as_str().to_string());
+            }
+        }
+
         sql.push_str(" ORDER BY o.updated_at DESC");
 
-        let mut stmt = self.conn.prepare(&sql)?;
-        let rows = stmt.query_map(rusqlite::params_from_iter(values.iter()), |row| {
-            Ok(ObjectSummary {
-                object_id: row.get(0)?,
-                version_id: row.get(1)?,
-                kind: row.get(2)?,
-                class: row.get(3)?,
-                title: row.get(4)?,
-                summary: row.get(5)?,
-                standing_epistemic: row.get(6)?,
-                standing_review: row.get(7)?,
-                standing_process: row.get(8)?,
-                system_id: row.get(9)?,
-                namespace: row.get(10)?,
-            })
-        })?;
+        let results: Vec<ObjectSummary> = {
+            let mut stmt = self.conn.prepare(&sql)?;
+            let rows = stmt.query_map(rusqlite::params_from_iter(values.iter()), |row| {
+                Ok(ObjectSummary {
+                    object_id: row.get(0)?,
+                    version_id: row.get(1)?,
+                    kind: row.get(2)?,
+                    class: row.get(3)?,
+                    title: row.get(4)?,
+                    summary: row.get(5)?,
+                    system_id: row.get(6)?,
+                    namespace: row.get(7)?,
+                    standing: BTreeMap::new(),
+                })
+            })?;
+            rows.collect::<Result<Vec<_>, _>>()?
+        };
 
-        Ok(rows.collect::<Result<Vec<_>, _>>()?)
+        let mut results = results;
+        if !results.is_empty() {
+            let version_ids: Vec<String> = results.iter().map(|r| r.version_id.clone()).collect();
+            let placeholders: Vec<String> =
+                (0..version_ids.len()).map(|_| "?".to_string()).collect();
+            let mut stmt = self.conn.prepare(&format!(
+                "SELECT version_id, dimension, token FROM object_standing WHERE version_id IN ({})",
+                placeholders.join(",")
+            ))?;
+            let standing_rows =
+                stmt.query_map(rusqlite::params_from_iter(version_ids.iter()), |row| {
+                    let vid: String = row.get(0)?;
+                    let dim: String = row.get(1)?;
+                    let token: String = row.get(2)?;
+                    Ok((vid, dim, token))
+                })?;
+            let mut acc: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
+            for row in standing_rows {
+                let (vid, dim, token) = row?;
+                acc.entry(vid).or_default().insert(dim, token);
+            }
+            for result in &mut results {
+                if let Some(map) = acc.remove(&result.version_id) {
+                    result.standing = map;
+                }
+            }
+        }
+
+        Ok(results)
     }
 
     pub fn relation_adjacency(
@@ -761,6 +838,18 @@ impl DerivedIndex {
             self.conn
                 .query_row("SELECT COUNT(*) FROM active_systems", [], |row| row.get(0))?;
         Ok((objects, active_systems))
+    }
+
+    pub fn object_count(&self) -> Result<u64, IndexError> {
+        Ok(self
+            .conn
+            .query_row("SELECT COUNT(*) FROM objects", [], |row| row.get(0))?)
+    }
+
+    pub fn head_count(&self) -> Result<u64, IndexError> {
+        Ok(self
+            .conn
+            .query_row("SELECT COUNT(*) FROM heads", [], |row| row.get(0))?)
     }
 
     pub fn relation_count(&self) -> Result<u64, IndexError> {

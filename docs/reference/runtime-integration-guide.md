@@ -8,7 +8,7 @@ Earmark doesn't run agents directly. It provides bounded context through work pa
 
 1. Compile context from the kernel.
 2. Receive a work packet for a transition.
-3. Dispatch to a provider (e.g., Gemini).
+3. Dispatch to a provider through the registry.
 4. Deposit the result back into the kernel.
 5. Continue to the next transition using the handoff manifest.
 
@@ -32,7 +32,7 @@ earmark-runtime-tools = { path = "..." }
 ```rust
 use earmark_store::GitCanonicalStore;
 use earmark_index::DerivedIndex;
-use earmark_exec::{ProviderRegistry, GeminiAdapter};
+use earmark_exec::{ProviderRegistry, HttpGenerationAdapter};
 use earmark_runtime_tools::RuntimeToolSurface;
 use std::sync::Arc;
 
@@ -40,20 +40,17 @@ let store = GitCanonicalStore::new("./workspace");
 let index = DerivedIndex::open("./workspace")?;
 let mut registry = ProviderRegistry::new();
 
-// Register the Gemini adapter (requires GOOGLE_API_KEY env var)
-registry.register(Arc::new(GeminiAdapter::new(
-    "gemini-2.5-flash".to_string(),
-    std::env::var("GOOGLE_API_KEY").expect("GOOGLE_API_KEY must be set"),
-)));
+// Register the declarative HTTP provider adapter
+registry.register(Arc::new(HttpGenerationAdapter));
 
 let surface = RuntimeToolSurface {
     store: &store,
     index: &index,
-    provider_registry: &registry,
+    provider_service: &registry,
 };
 ```
 
-The provider registry is the current extension seam for custom provider integration. You can register additional adapters in-process and hand the registry to the runtime surface without modifying the core execution engine. If you want the bundled adapters pre-registered, use `default_provider_registry()` or `ProviderRegistry::with_defaults()`.
+The provider registry is the current extension seam for custom provider integration. The bundled `HttpGenerationAdapter` handles most REST-based LLM providers (OpenAI, Anthropic, Gemini, etc.) through declarative profiles. For standalone or legacy integrations, you can still register custom `ProviderAdapter` implementations.
 
 ### Running a Workflow
 
@@ -79,7 +76,7 @@ for object in outcome.emitted_objects {
 
 You can drive Earmark from any language by spawning the `em` binary and parsing its JSON output.
 
-All JSON output is wrapped in a versioned envelope. Always check `contract_version`:
+With `--json`, most command output is wrapped in a versioned envelope. Always check `contract_version`:
 
 ```json
 {
@@ -87,6 +84,8 @@ All JSON output is wrapped in a versioned envelope. Always check `contract_versi
   "data": { ... }
 }
 ```
+
+Some output-special commands (`completions`, `run explain`) return shell code or formatted text even with `--json`; they are not designed for machine-driven parsing.
 
 ### Python Example
 
@@ -119,26 +118,106 @@ print(f"Run completed: {run_resp['data']['run_id']}")
 
 ## Provider Profiles
 
-A provider profile connects a transition to a specific LLM provider. Example for Google Gemini:
+A provider profile connects a transition to a specific LLM provider.
+
+### Declarative HTTP Provider Example
 
 ```yaml
-name: gemini_research
-version: 0.2.0
-provider: google_gemini
-model: gemini-2.5-flash
-auth_env: GOOGLE_API_KEY
+name: gemini_3_1_flash
+version: 0.1.0
+provider: http_generation
+model: gemini-3.1-flash-lite
+auth_env: GEMINI_API_KEY
 budget:
-  max_output_tokens: 4000
-  max_latency_ms: 30000
+  max_output_tokens: 2048
 response_contract:
-  format: json
+  format: markdown
   must_return_candidate_only: true
+http:
+  method: POST
+  url_template: "https://generativelanguage.googleapis.com/v1beta/models/{{model}}:generateContent"
+  auth:
+    kind: query_parameter
+    param_name: key
+  request:
+    body:
+      contents:
+        - parts:
+            - text: "{{input_text}}"
+  response:
+    text_path: "$.candidates[0].content.parts[0].text"
+    input_tokens_path: "$.usageMetadata.promptTokenCount"
+    output_tokens_path: "$.usageMetadata.candidatesTokenCount"
 ```
 
-The mock provider (`local_mock`) is the default and requires no API keys. Use it for development and testing.
-Outputs produced through the mock provider are marked as synthetic in provider metadata and propagated into durable execution artifacts so they are not mistaken for model-derived production evidence.
+### OpenAI-Compatible Example
+
+```yaml
+name: gpt_4o
+version: 0.1.0
+provider: http_generation
+model: gpt-4o
+auth_env: OPENAI_API_KEY
+http:
+  method: POST
+  url_template: "https://api.openai.com/v1/chat/completions"
+  auth:
+    kind: bearer
+  request:
+    body:
+      model: "{{model}}"
+      messages:
+        - role: user
+          content: "{{input_text}}"
+  response:
+    text_path: "$.choices[0].message.content"
+    input_tokens_path: "$.usage.prompt_tokens"
+    output_tokens_path: "$.usage.completion_tokens"
+```
+
+The mock provider (`mock`) is available for local-only development and testing without requiring API keys.
+Outputs produced through the mock provider are marked as synthetic in provider metadata.
 
 For direct provider extension patterns, see the [Provider Extension](provider-extension.md) reference.
+
+## Standing Model
+
+Standing is stored as a map from standing dimension IDs to token IDs:
+
+```json
+"standing": {
+  "kernel:epistemic": "working",
+  "kernel:review": "unreviewed",
+  "kernel:process": "active",
+  "research:status": "draft"
+}
+```
+
+Built-in kernel dimensions use the `kernel:` prefix. Custom dimensions are declared in the system definition. Kernel behavior (review authorization, visibility, immutability) is projected from declared standing tokens through protocol bindings, not by matching token names.
+
+Provider exposure requires two gates:
+1. The standing projection must return `expose_to_provider: true`.
+2. The provider profile must permit the object/content type.
+
+`include_in_standard_context = true` does not imply provider exposure. Visibility defaults are:
+
+```json
+"include_in_standard_context": true,
+"expose_to_provider": false
+```
+
+Only the v0.3 map format is supported. Objects using the legacy v0.2 `epistemic` / `review` / `process` fields will not deserialize correctly.
+
+### Query by Standing Dimension
+
+Use the index's `object_standing` table to query objects by custom standing dimension:
+
+```rust
+let results = index.query_standing(
+    &DimensionId::parse("research:status")?,
+    &TokenId::parse("verified")?,
+)?;
+```
 
 ## Error Handling
 

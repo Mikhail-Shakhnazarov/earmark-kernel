@@ -1,6 +1,6 @@
 use earmark_core::{
-    Kind, ReviewStanding, Standing, StandingPolicy, StandingRequestStatus, StandingTransitionRule,
-    VersionId,
+    DimensionId, Kind, Standing, StandingPolicy, StandingRegistry, StandingRequestStatus,
+    StandingTransitionRule, TokenId, VersionId,
 };
 use earmark_exec::governance_ops::{apply_standing_request, approve_standing_request};
 use earmark_exec::persistence_helpers::write_object_and_index;
@@ -35,7 +35,7 @@ fn test_standing_request_lifecycle() {
         version: "1".to_string(),
         description: None,
         transition_rules: vec![StandingTransitionRule {
-            dimension: "review".to_string(),
+            dimension: "kernel:review".to_string(),
             from: vec!["unreviewed".to_string()],
             to: vec!["accepted".to_string()],
             requires_review: true,
@@ -61,7 +61,7 @@ fn test_standing_request_lifecycle() {
     // 3. Create a standing request (Proposed)
     let request = earmark_core::StandingTransitionRequest {
         target_object_id: target_ref.id.clone(),
-        dimension: "review".to_string(),
+        dimension: "kernel:review".to_string(),
         from_value: "unreviewed".to_string(),
         to_value: "accepted".to_string(),
         rationale: Some("Requesting review upgrade".to_string()),
@@ -79,12 +79,14 @@ fn test_standing_request_lifecycle() {
     let request_ref = write_object_and_index(&store, &index, &stored_request).unwrap();
 
     // 4. Try to apply Proposed request (should fail)
+    let registry = StandingRegistry::kernel_defaults();
     let res = apply_standing_request(
         &store,
         &index,
         &request_ref,
         Some(policy_ref.id.as_str()),
         None,
+        &registry,
     );
     assert!(res.is_err(), "should fail to apply proposed request");
 
@@ -100,6 +102,7 @@ fn test_standing_request_lifecycle() {
         &approved_ref,
         Some(policy_ref.id.as_str()),
         None,
+        &registry,
     );
     assert!(res.is_err(), "should fail to apply without review evidence");
 
@@ -134,14 +137,19 @@ fn test_standing_request_lifecycle() {
         &approved_ref,
         Some(policy_ref.id.as_str()),
         Some(apply_reason.clone()),
+        &registry,
     )
     .unwrap();
 
     // 9. Verify results
     let updated_target = store.read_version(&new_target_ref).unwrap();
     assert_eq!(
-        updated_target.envelope.standing.review,
-        ReviewStanding::Accepted
+        updated_target
+            .envelope
+            .standing
+            .get(&DimensionId::new("kernel:review"))
+            .map(TokenId::as_str),
+        Some("accepted")
     );
     assert_eq!(updated_target.envelope.parents, vec![target_ref]);
 
@@ -175,7 +183,7 @@ fn test_standing_request_drift_failure() {
     // 2. Create a standing request (Proposed) expected from "unreviewed"
     let request = earmark_core::StandingTransitionRequest {
         target_object_id: target_ref.id.clone(),
-        dimension: "review".to_string(),
+        dimension: "kernel:review".to_string(),
         from_value: "unreviewed".to_string(),
         to_value: "accepted".to_string(),
         rationale: Some("Requesting review upgrade".to_string()),
@@ -195,7 +203,11 @@ fn test_standing_request_drift_failure() {
 
     // 3. Drift: Update target object standing externally (e.g. to "flagged")
     let mut target_head = store.read_version(&target_ref).unwrap();
-    target_head.envelope.standing.review = ReviewStanding::Rejected;
+    target_head
+        .envelope
+        .standing
+        .values
+        .insert(DimensionId::new("kernel:review"), TokenId::new("rejected"));
     target_head.envelope.version_id = VersionId::new();
     write_object_and_index(&store, &index, &target_head).unwrap();
 
@@ -205,7 +217,7 @@ fn test_standing_request_drift_failure() {
         version: "1".to_string(),
         description: None,
         transition_rules: vec![StandingTransitionRule {
-            dimension: "review".to_string(),
+            dimension: "kernel:review".to_string(),
             from: vec!["unreviewed".to_string()],
             to: vec!["accepted".to_string()],
             requires_review: false,
@@ -224,12 +236,14 @@ fn test_standing_request_drift_failure() {
         vec![],
     );
     let policy_ref = write_object_and_index(&store, &index, &stored_policy).unwrap();
+    let registry = StandingRegistry::kernel_defaults();
     let res = apply_standing_request(
         &store,
         &index,
         &approved_ref,
         Some(policy_ref.id.as_str()),
         None,
+        &registry,
     );
     assert!(res.is_err());
     let err = res.unwrap_err().to_string();
@@ -249,10 +263,10 @@ fn test_standing_request_noop_apply() {
     let index = DerivedIndex::open(root).unwrap();
 
     // 1. Create a target object already in "accepted" review state
-    let standing = Standing {
-        review: ReviewStanding::Accepted,
-        ..Default::default()
-    };
+    let mut standing = Standing::default();
+    standing
+        .values
+        .insert(DimensionId::new("kernel:review"), TokenId::new("accepted"));
     let target = StoredObject::new(
         Kind::Object,
         Some("artifact".to_string()),
@@ -267,7 +281,7 @@ fn test_standing_request_noop_apply() {
     // 2. Create a standing request to move to "accepted" (already there)
     let request = earmark_core::StandingTransitionRequest {
         target_object_id: target_ref.id.clone(),
-        dimension: "review".to_string(),
+        dimension: "kernel:review".to_string(),
         from_value: "accepted".to_string(),
         to_value: "accepted".to_string(),
         rationale: None,
@@ -291,7 +305,7 @@ fn test_standing_request_noop_apply() {
         version: "1".to_string(),
         description: None,
         transition_rules: vec![StandingTransitionRule {
-            dimension: "review".to_string(),
+            dimension: "kernel:review".to_string(),
             from: vec!["accepted".to_string()],
             to: vec!["accepted".to_string()],
             requires_review: false,
@@ -312,12 +326,14 @@ fn test_standing_request_noop_apply() {
     let policy_ref = write_object_and_index(&store, &index, &stored_policy).unwrap();
 
     // 3. Apply request (should be no-op for target but Applied for request)
+    let registry = StandingRegistry::kernel_defaults();
     let (final_target_ref, final_request_ref) = apply_standing_request(
         &store,
         &index,
         &approved_ref,
         Some(policy_ref.id.as_str()),
         Some("No-op reason".to_string()),
+        &registry,
     )
     .unwrap();
 
@@ -366,7 +382,7 @@ fn test_standing_request_version_specific_review() {
         version: "1".to_string(),
         description: None,
         transition_rules: vec![StandingTransitionRule {
-            dimension: "review".to_string(),
+            dimension: "kernel:review".to_string(),
             from: vec!["unreviewed".to_string()],
             to: vec!["accepted".to_string()],
             requires_review: true,
@@ -389,7 +405,7 @@ fn test_standing_request_version_specific_review() {
     // 4. Create request for V2
     let request = earmark_core::StandingTransitionRequest {
         target_object_id: target_v1_ref.id.clone(),
-        dimension: "review".to_string(),
+        dimension: "kernel:review".to_string(),
         from_value: "unreviewed".to_string(),
         to_value: "accepted".to_string(),
         rationale: None,
@@ -431,12 +447,14 @@ fn test_standing_request_version_specific_review() {
     write_object_and_index(&store, &index, &stored_review).unwrap();
 
     // 6. Try to apply request to V2 (should fail because review is for V1)
+    let registry = StandingRegistry::kernel_defaults();
     let res = apply_standing_request(
         &store,
         &index,
         &approved_ref,
         Some(policy_ref.id.as_str()),
         None,
+        &registry,
     );
     assert!(res.is_err());
     assert!(res

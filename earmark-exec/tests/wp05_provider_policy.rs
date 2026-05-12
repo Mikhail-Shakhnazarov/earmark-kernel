@@ -51,6 +51,7 @@ fn mock_profile(allowed_ops: Vec<&str>) -> ProviderProfile {
             must_return_candidate_only: true,
             must_include_lineage: false,
         },
+        http: None,
     }
 }
 
@@ -61,6 +62,8 @@ fn mock_request() -> ProviderRequest {
         work_packet: ObjectRef::new(ObjectId::new(), VersionId::new(), Kind::WorkPacket, None),
         provider_profile: VersionRef::new(ObjectId::new(), VersionId::new()),
         instruction_text: "Do something".to_string(),
+        context_text: None,
+        input_text: "Do something".to_string(),
         work_surface_manifest: None,
         inputs: vec![],
         response_contract: ProviderResponseContract {
@@ -245,11 +248,7 @@ fn test_transition_enforces_honest_work_packet_defaults() {
         kind: "class".to_string(),
         required_headers: vec![],
         payload_schema: earmark_core::JsonSchemaRef("{}".to_string()),
-        standing_rules: earmark_core::ClassStandingRules {
-            allowed_epistemic: vec![],
-            allowed_review: vec![],
-            allowed_process: vec![],
-        },
+        standing_rules: earmark_core::ClassStandingRules::default(),
         relation_rules: vec![],
         validators: vec![],
     };
@@ -278,6 +277,7 @@ fn test_transition_enforces_honest_work_packet_defaults() {
         provider_profiles: vec![],
         default_compiled_context: None,
         default_provider_profile: None,
+        standing_dimensions: vec![],
         runtime_profile: RuntimeProfile {
             execution_surface: "test".to_string(),
             machine_output_default: "json".to_string(),
@@ -466,11 +466,7 @@ fn test_transition_preserves_provider_record_warnings() {
         kind: "class".to_string(),
         required_headers: vec![],
         payload_schema: earmark_core::JsonSchemaRef("{}".to_string()),
-        standing_rules: earmark_core::ClassStandingRules {
-            allowed_epistemic: vec![],
-            allowed_review: vec![],
-            allowed_process: vec![],
-        },
+        standing_rules: earmark_core::ClassStandingRules::default(),
         relation_rules: vec![],
         validators: vec![],
     };
@@ -499,6 +495,7 @@ fn test_transition_preserves_provider_record_warnings() {
         provider_profiles: vec![],
         default_compiled_context: None,
         default_provider_profile: None,
+        standing_dimensions: vec![],
         runtime_profile: RuntimeProfile {
             execution_surface: "test".to_string(),
             machine_output_default: "json".to_string(),
@@ -556,6 +553,7 @@ fn test_transition_preserves_provider_record_warnings() {
             must_return_candidate_only: false,
             must_include_lineage: false,
         },
+        http: None,
     };
     let profile_obj = StoredObject::new(
         Kind::ProviderProfile,
@@ -662,6 +660,10 @@ fn test_transition_preserves_provider_record_warnings() {
     let event_obj = store.read_version(&event_ref.version_ref()).unwrap();
     let pr: earmark_core::ProviderRecord =
         serde_json::from_slice(&event_obj.payload.bytes).unwrap();
+
+    // SUBSTANTIVE ASSERTIONS: verify stored object identity and provider record identity remain separate.
+    assert!(event_ref.id.as_str().starts_with("obj_"));
+    assert!(pr.record_id.starts_with("prec_"));
 
     // SUBSTANTIVE ASSERTIONS: verify both warnings are preserved
     assert!(pr

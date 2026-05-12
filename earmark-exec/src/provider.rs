@@ -157,11 +157,8 @@ impl ProviderRegistry {
     pub fn register_default_adapters(&mut self) {
         self.register(Arc::new(MockAdapter));
 
-        #[cfg(feature = "gemini")]
-        self.register(Arc::new(crate::GeminiAdapter::new(
-            "gemini-1.5-pro".to_string(),
-            "GOOGLE_API_KEY".to_string(),
-        )));
+        #[cfg(feature = "http-provider")]
+        self.register(Arc::new(crate::HttpGenerationAdapter));
     }
 
     pub fn capabilities(&self) -> Vec<ProviderCapability> {
@@ -191,17 +188,26 @@ pub fn default_provider_registry() -> ProviderRegistry {
 pub fn compiled_provider_capabilities() -> Vec<ProviderCapability> {
     let mut capabilities = ProviderRegistry::with_defaults().capabilities();
 
-    #[cfg(not(feature = "gemini"))]
+    #[cfg(not(feature = "http-provider"))]
     capabilities.push(ProviderCapability {
-        provider: "google_gemini".to_string(),
+        provider: "http_generation".to_string(),
         status: ProviderCapabilityStatus::CompileDisabled,
-        feature: Some("gemini".to_string()),
-        required_env: vec!["GOOGLE_API_KEY".to_string()],
+        feature: Some("http-provider".to_string()),
+        required_env: vec![],
         missing_env: vec![],
-        message: Some("provider requires the gemini cargo feature".to_string()),
+        message: Some("provider requires the http-provider cargo feature".to_string()),
     });
 
-    capabilities.sort_by(|a, b| a.provider.cmp(&b.provider));
+    capabilities.sort_by(|a, b| {
+        // Foreground http_generation
+        if a.provider == "http_generation" {
+            return std::cmp::Ordering::Less;
+        }
+        if b.provider == "http_generation" {
+            return std::cmp::Ordering::Greater;
+        }
+        a.provider.cmp(&b.provider)
+    });
     capabilities
 }
 

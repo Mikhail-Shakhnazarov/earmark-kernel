@@ -128,24 +128,53 @@ fn test_write_serialization_locking() {
 
     // Acquire lock manually
     let _guard = store.acquire_write_lock().unwrap();
+    let lock_path = store.lock_path();
 
-    let store_clone = store.clone();
-    let (tx, rx) = std::sync::mpsc::channel();
+    let (blocked_tx, blocked_rx) = std::sync::mpsc::channel();
+    let (done_tx, done_rx) = std::sync::mpsc::channel();
 
     std::thread::spawn(move || {
+        use fs4::fs_std::FileExt;
+
+        // Open the lock file independently (new file description)
+        let file = fs::File::create(&lock_path).unwrap();
+
+        // Try non-blocking acquisition first to confirm parent holds the lock
+        match file.try_lock_exclusive() {
+            Ok(()) => {
+                // Lock was not held — parent's lock is not excluding us
+                done_tx.send(std::time::Duration::ZERO).unwrap();
+                return;
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                // Lock is held by parent — signal readiness
+                blocked_tx.send(()).unwrap();
+            }
+            Err(e) => panic!("try_lock_exclusive failed: {}", e),
+        }
+
+        // Now do the blocking acquisition and measure the wait
         let start = std::time::Instant::now();
-        let _guard2 = store_clone.acquire_write_lock().unwrap();
-        tx.send(start.elapsed()).unwrap();
+        file.lock_exclusive().unwrap();
+        drop(file);
+        done_tx.send(start.elapsed()).unwrap();
     });
 
-    std::thread::sleep(std::time::Duration::from_millis(200));
+    // Wait until child confirms it's blocked by the exclusive lock
+    blocked_rx.recv().unwrap();
+    // Brief pause to ensure child has fully entered the blocking lock_exclusive call
+    std::thread::sleep(std::time::Duration::from_millis(50));
     drop(_guard);
 
-    let elapsed = rx.recv().unwrap();
+    let elapsed = done_rx.recv().unwrap();
     assert!(
-        elapsed >= std::time::Duration::from_millis(200),
-        "Second lock acquisition should have been blocked"
+        elapsed >= std::time::Duration::from_millis(50),
+        "Second lock acquisition should have been blocked; elapsed was {:?}",
+        elapsed,
     );
+
+    // Verify the lock can be re-acquired (child thread has released it)
+    let _reacquire = store.acquire_write_lock().unwrap();
 }
 
 #[test]

@@ -42,7 +42,7 @@ The important part: both paths persist artifacts. When work succeeds, you get a 
 
 **Change Set** — The collection of creates, links, and changes produced by a transition. Persisted whether valid or invalid.
 
-**Failure** — A record linking the failed assignment and change set to the specific error. Created when validation fails or execution errors out.
+**Failure** — A record linking the failed assignment and change set to the specific error. Created when validation fails or execution errors out. Each failure preserves the run id, transition id, assignment id, error type, error message, timestamp, input object ids that were active at the time of failure, and the failed change set id when one was produced. The failure is linked to the assignment via a `resulted_in_failure` relation. Failures are inspectable via `em failure show`, `em failure explain`, `em failure list`, and appear in `em run artifacts` and `em run timeline`.
 
 **Handoff** — Defines the bounded input for the next stage. See [Handoffs](handoffs.md).
 
@@ -53,14 +53,14 @@ The point of staging is **continuation without ambient memory**.
 In a chat-based system, Stage 2 continues because the conversation history contains Stage 1's output. In Earmark, Stage 2 continues because it reads a handoff manifest that explicitly defines what it's allowed to see.
 
 That means:
-- Stage 2 can run in a different runtime, a different session, or a different model.
+- Stage 2 can run in a different session or a later run can consume the same handoff.
 - Stage 2 doesn't inherit Stage 1's internal reasoning or side effects.
 - You can re-run Stage 2 multiple times from the same Stage 1 handoff.
 
 ## Why It Matters
 
 - **Auditability**: every object traces to the assignment and run that created it.
-- **Resilience**: if Stage 2 fails, Stage 1's handoff is still there. Resume or retry without re-running everything.
+- **Resilience**: if Stage 2 fails, Stage 1's handoff is still there. Continue from the handoff without re-running Stage 1.
 - **Human review**: insert a review gate between any two stages by requiring standing changes before the handoff is accepted.
 
 ## See Also

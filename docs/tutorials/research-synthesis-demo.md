@@ -1,16 +1,25 @@
 # Research Synthesis Demo
 
-This tutorial walks through a complete two-stage workflow: extracting findings from source notes, then synthesizing a summary from only those findings.
+Run a complete research synthesis workflow: extract findings from source notes, then synthesize a summary from only those findings.
 
-The key demonstration: the summarization stage never sees the original source notes. It works from a bounded handoff containing only the extracted findings.
+The key demonstration: the summarization step never sees the original source notes. The workflow engine compiles bounded work surfaces using declared compiled context templates. Each operation receives only what its template selects. The handoffs produced during execution record exactly what each successor operation may see.
 
 ## The Workflow
 
 ```mermaid
 flowchart LR
-    SN[Source Notes] -->|Stage 1: Extraction| F[Findings]
-    F -->|Handoff| S[Summary]
+    SN[Source Notes] -->|Extraction| F[Findings]
+    F -->|Compile for Summary| Summary
 ```
+
+The research synthesis workflow performs four operations in one invocation:
+
+1. Compile context from `source_note` objects
+2. Transform compiled context into `finding` objects
+3. Compile context from `finding` objects (not from the original source notes)
+4. Transform compiled findings into a `summary`
+
+Between operations, the engine produces handoffs that define the bounded surface for each successor. Step 3 and 4 never see the raw source notes — they work from the handoff produced in step 2.
 
 ## Setup
 
@@ -42,70 +51,92 @@ em --root "$WORKSPACE" deposit --class source_note \
   --payload-file "$REPO_ROOT/examples/research-synthesis/data/seed_notes/note_2_challenges.md"
 ```
 
-## Stage 1: Finding Extraction
+## Run the Workflow
 
-Run the workflow with your deposited source notes:
+Find your deposited source notes and run the workflow:
 
 ```bash
 em --root "$WORKSPACE" query --class source_note
 em --root "$WORKSPACE" workflow run research_synthesis --system-id sys_research_synthesis --with <source_note_id>
 ```
 
-What happens:
+The output shows the run completed with artifacts:
 
-1. The engine compiles a work packet containing only the `source_note` objects (as declared by the `source_notes_for_extraction` compiled context template).
-2. The runtime processes the notes and produces `finding` objects.
-3. An **assignment**, a **change set**, and a **handoff** are created and persisted.
+```
+{
+  "ok": true,
+  "run_id": "run_...",
+  "status": "completed",
+  "output_count": 2,
+  "created_assignments": [...],
+  "created_change_sets": [...],
+  "created_handoffs": [...],
+  "created_failures": []
+}
+```
 
-The output will include a `handoff_id`. This is the bridge to Stage 2.
+The workflow produces findings and a summary in a single invocation. The engine compiles bounded work surfaces at each step — the summary is produced from findings only, not from the original source notes.
 
-Inspect it:
+## Inspect Artifacts
+
+### Queries
+
+View the extracted findings and summary:
 
 ```bash
+# See what findings were extracted
+em --root "$WORKSPACE" query --class finding
+
+# See the synthesized summary
+em --root "$WORKSPACE" query --class summary
+```
+
+### Handoff Inspection
+
+Handoffs define the bounded surface passed between operations. Inspect them to see what each successor operation was permitted to access:
+
+```bash
+# List the handoffs from the run
+em --root "$WORKSPACE" run artifacts <run_id>
+
+# Inspect a handoff to see what it carries forward
 em --root "$WORKSPACE" handoff explain <handoff_id>
 ```
 
-You'll see which objects the handoff carries forward (findings) and which it excludes (the original source notes).
+A handoff from the extraction operation carries findings and their `derived_from` relations — not the original source notes.
 
-## Stage 2: Summarization
-
-Continue work using the handoff from Stage 1:
+### Run Timeline and Graph
 
 ```bash
-em --root "$WORKSPACE" workflow run research_synthesis --system-id sys_research_synthesis --handoff <handoff_id>
-```
-
-> **This is the core idea.** The summarization step receives findings, not source notes. It cannot access the original raw material. If a finding is wrong, the fix is to re-run Stage 1, not to give Stage 2 more context.
-
-## Inspecting the Full Run
-
-After both stages complete:
-
-```bash
-# Summary of what happened and suggested next steps
-em --root "$WORKSPACE" run explain <run_id>
-
 # Visual timeline of every event
 em --root "$WORKSPACE" run timeline <run_id>
 
-# Relationship graph showing lineage from source to finding to summary
+# Relationship graph from source to finding to summary
 em --root "$WORKSPACE" run graph <run_id>
 
-# HTML report you can share
+# Summary with suggested next steps
+em --root "$WORKSPACE" run explain <run_id>
+```
+
+### HTML Report
+
+Generate an HTML report you can open in a browser:
+
+```bash
 em --root "$WORKSPACE" report run <run_id> --output research_report.html
 ```
 
 ## What This Demonstrates
 
-**Bounded context**: Each stage sees only what its compiled context template declares. The summarizer works from findings, not from the full corpus.
+**Bounded compilation**: Each operation sees only what its compiled context template declares. The summarization step compiles findings, not the full corpus. The handoff record proves what was available.
 
-**Durable findings**: Extracted claims persist as objects in the store. They can be queried, inspected, and reused independently of the run that created them.
+**Durable artifacts**: Findings and the summary persist as objects in the store. They can be queried, inspected, and reused independently of the run that created them.
 
-**Governed handoff**: The handoff explicitly defines what the next stage may see. There is no implicit context leaking between stages.
+**Inspectable lineage**: Every finding has a `derived_from` relation linking it to the source note it came from. The summary links back to findings through its change set.
 
-**Inspectable lineage**: Every finding has a `derived_from` relation linking it to the source note it came from. The summary links back to findings. The full chain is traversable.
+**Transparent execution**: The timeline, artifact inventory, and relationship graph show exactly what happened, in what order, and how artifacts connect.
 
 ## Next Steps
 
 - [Build a Domain Definition](build-a-domain-definition.md) — define your own classes and workflows
-- [Context Compilation](../concepts/context-compilation.md) — how compiled context templates control what each stage sees
+- [Context Compilation](../concepts/context-compilation.md) — how compiled context templates control what each operation sees

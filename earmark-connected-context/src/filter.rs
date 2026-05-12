@@ -5,15 +5,16 @@ pub fn object_summary_matches_standing(
     row: &ObjectSummary,
     standing_filters: &BTreeMap<String, Vec<String>>,
 ) -> bool {
+    if standing_filters.is_empty() {
+        return true;
+    }
     standing_filters.iter().all(|(dimension, allowed)| {
         if allowed.is_empty() {
             return true;
         }
-        let current = match dimension.as_str() {
-            "epistemic" => &row.standing_epistemic,
-            "review" => &row.standing_review,
-            "process" => &row.standing_process,
-            _ => return true, // Unknown dimensions pass for forward compatibility
+        let current = match row.standing.get(dimension) {
+            Some(v) => v.as_str(),
+            None => return false,
         };
         allowed.iter().any(|candidate| candidate == current)
     })

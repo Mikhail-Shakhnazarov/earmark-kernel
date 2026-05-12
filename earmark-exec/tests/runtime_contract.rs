@@ -137,7 +137,7 @@ fn test_six_step_flow_via_runtime_tool_surface() {
         execution_policy: "runtime_permitted".to_string(),
         provider_profile: None,
         trace_policy: "summary".to_string(),
-        register: "machined".to_string(),
+        register: "finding".to_string(),
         body: MarkdownBody::new("Extract findings.".to_string()),
     };
     let instr_obj = StoredObject::new(
@@ -213,6 +213,7 @@ guards: []
         provider_profiles: vec![],
         default_compiled_context: None,
         default_provider_profile: None,
+        standing_dimensions: vec![],
         runtime_profile: RuntimeProfile {
             execution_surface: "runtime".to_string(),
             machine_output_default: "json".to_string(),
