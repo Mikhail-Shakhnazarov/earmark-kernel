@@ -9,10 +9,9 @@ use earmark_core::{
     WorkflowDeclaration, WorkflowDeclarationOperation, WorkflowEdge, WorkflowGuard,
 };
 use earmark_declarations::{
-    validate_class_definition, validate_compiled_context_template,
-    validate_compiled_context_template_against_registry, validate_instruction,
-    validate_provider_profile, validate_standing_policy, validate_standing_policy_against_registry,
-    validate_system_definition, validate_workflow_definition,
+    validate_class_definition, validate_compiled_context_template, validate_instruction,
+    validate_provider_profile, validate_standing_policy, validate_system_definition,
+    validate_workflow_definition,
 };
 use earmark_store::{CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload};
 use tempfile::tempdir;

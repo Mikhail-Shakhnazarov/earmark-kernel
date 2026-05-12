@@ -661,6 +661,10 @@ fn test_transition_preserves_provider_record_warnings() {
     let pr: earmark_core::ProviderRecord =
         serde_json::from_slice(&event_obj.payload.bytes).unwrap();
 
+    // SUBSTANTIVE ASSERTIONS: verify stored object identity and provider record identity remain separate.
+    assert!(event_ref.id.as_str().starts_with("obj_"));
+    assert!(pr.record_id.starts_with("prec_"));
+
     // SUBSTANTIVE ASSERTIONS: verify both warnings are preserved
     assert!(pr
         .advisory_warnings

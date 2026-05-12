@@ -248,8 +248,8 @@ pub fn validate_transition_change_set<S: CanonicalStore>(
     ),
     ExecError,
 > {
-    let registry = earmark_core::StandingRegistry::from_system_definition(system)
-        .map_err(|e| ExecError::Core(e))?;
+    let registry =
+        earmark_core::StandingRegistry::from_system_definition(system).map_err(ExecError::Core)?;
 
     let declared_classes = system
         .classes

@@ -143,7 +143,7 @@ fn validate_standing_rules(rules: &ClassStandingRules) -> Result<(), DeriveError
                 e
             ))
         })?;
-        for (k, _v) in props {
+        for k in props.keys() {
             if k.trim().is_empty() {
                 return Err(DeriveError::Validation(
                     "protocol property key cannot be empty".to_string(),

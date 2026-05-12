@@ -293,7 +293,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                                     provider_record.advisory_warnings.push(warning.clone());
                                 }
                                 let event = StoredObject::new_with_id(
-                                    ObjectId::parse(provider_record.record_id.clone()).unwrap(),
+                                    ObjectId::new(),
                                     Kind::Event,
                                     Some("provider_record".to_string()),
                                     earmark_core::Standing::default(),
@@ -341,7 +341,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                                     &failure,
                                 );
                                 let event = StoredObject::new_with_id(
-                                    ObjectId::parse(provider_record.record_id.clone()).unwrap(),
+                                    ObjectId::new(),
                                     Kind::Event,
                                     Some("provider_record".to_string()),
                                     earmark_core::Standing::default(),
@@ -719,5 +719,5 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
 fn load_registry(
     system: &earmark_core::SystemDefinition,
 ) -> Result<earmark_core::StandingRegistry, ExecError> {
-    earmark_core::StandingRegistry::from_system_definition(system).map_err(|e| ExecError::Core(e))
+    earmark_core::StandingRegistry::from_system_definition(system).map_err(ExecError::Core)
 }

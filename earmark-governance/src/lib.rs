@@ -317,22 +317,19 @@ pub fn export_allowed(
             }
 
             for (protocol_id, props) in &requirement.forbidden_protocols {
-                match protocol_id.as_str() {
-                    "kernel:immutability" => {
-                        let state = props.get("state").and_then(|v| match v {
-                            ScalarValue::String(s) => Some(s.as_str()),
-                            _ => None,
-                        });
-                        if state == Some("sealed")
-                            && projection.immutability == ImmutabilityProjection::Sealed
-                        {
-                            return Err(GovernanceError::ExportBlocked(format!(
-                                "export blocked: protocol {} is sealed and export is forbidden",
-                                protocol_id
-                            )));
-                        }
+                if protocol_id.as_str() == "kernel:immutability" {
+                    let state = props.get("state").and_then(|v| match v {
+                        ScalarValue::String(s) => Some(s.as_str()),
+                        _ => None,
+                    });
+                    if state == Some("sealed")
+                        && projection.immutability == ImmutabilityProjection::Sealed
+                    {
+                        return Err(GovernanceError::ExportBlocked(format!(
+                            "export blocked: protocol {} is sealed and export is forbidden",
+                            protocol_id
+                        )));
                     }
-                    _ => {}
                 }
             }
         }
