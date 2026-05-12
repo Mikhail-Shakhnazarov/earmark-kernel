@@ -34,15 +34,16 @@ required_headers:
   - title
 payload_schema: inline:any
 standing_rules:
-  allowed_epistemic:
-    - working
-    - supported
-  allowed_review:
-    - unreviewed
-    - accepted
-  allowed_process:
-    - active
-    - completed
+  allowed_standing:
+    kernel:epistemic:
+      - working
+      - supported
+    kernel:review:
+      - unreviewed
+      - accepted
+    kernel:process:
+      - active
+      - completed
 relation_rules:
   - relation_type: extracted_from
     counterparty_classes:

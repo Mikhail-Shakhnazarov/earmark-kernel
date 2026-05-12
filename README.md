@@ -4,6 +4,22 @@
 
 A declarative kernel for governed AI work. Earmark compiles bounded context from a corpus, executes declared transitions over that context, and records what happened as durable, inspectable artifacts. Workspace state lives in a Git-backed canonical store implemented through `gix`, with a rebuildable derived index for fast query and inspection.
 
+## Standing Model
+
+Standing is declared domain state stored as a map from dimension IDs to token IDs:
+
+```yaml
+standing:
+  kernel:epistemic: working
+  kernel:review: unreviewed
+  kernel:process: active
+  research:status: draft
+```
+
+Dimensions and tokens are declared by the active system definition. Kernel behavior (review authorization, visibility, immutability) is projected from standing tokens through protocol bindings. The kernel enforces protocols, not token names.
+
+Legacy v0.2 objects using `epistemic` / `review` / `process` as direct fields remain readable through compatibility normalization.
+
 ## The Problem
 
 AI-assisted work usually runs on ambient context: a chat history, some retrieved snippets, whatever files happen to be open. That's fine for quick tasks. It falls apart when work needs to be inspected, resumed, reviewed, or handed to someone else.
@@ -114,6 +130,7 @@ See the [Quickstart Tutorial](docs/tutorials/quickstart.md) for a complete walkt
 | **[Runtime Integration](docs/reference/runtime-integration-guide.md)** | Using Earmark from Rust or any language |
 | **[Provider Extension](docs/reference/provider-extension.md)** | Register custom providers through the current extension surface |
 | **[Declaration Authoring](docs/declarations/README.md)** | Examples and validation rules |
+| **[Migration Notes](docs/migrations/v0_3_protocol_based_standing.md)** | v0.3 protocol-based Standing migration |
 
 ## Current Status
 

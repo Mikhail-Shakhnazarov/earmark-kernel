@@ -105,6 +105,9 @@ pub struct StandingTransitionResult {
     pub requires_review: bool,
 }
 
+/// Normalize legacy v0.2 dimension names to v0.3 kernel:* prefix.
+/// This allows policy transition rules written with bare `review`, `epistemic`,
+/// or `process` to match the current standing map format.
 fn normalize_dim_name(name: &str) -> String {
     match name {
         "epistemic" => "kernel:epistemic".to_string(),

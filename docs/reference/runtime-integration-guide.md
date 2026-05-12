@@ -180,6 +180,45 @@ Outputs produced through the mock provider are marked as synthetic in provider m
 
 For direct provider extension patterns, see the [Provider Extension](provider-extension.md) reference.
 
+## Standing Model
+
+Standing is stored as a map from standing dimension IDs to token IDs:
+
+```json
+"standing": {
+  "kernel:epistemic": "working",
+  "kernel:review": "unreviewed",
+  "kernel:process": "active",
+  "research:status": "draft"
+}
+```
+
+Built-in kernel dimensions use the `kernel:` prefix. Custom dimensions are declared in the system definition. Kernel behavior (review authorization, visibility, immutability) is projected from declared standing tokens through protocol bindings, not by matching token names.
+
+Provider exposure requires two gates:
+1. The standing projection must return `expose_to_provider: true`.
+2. The provider profile must permit the object/content type.
+
+`include_in_standard_context = true` does not imply provider exposure. Visibility defaults are:
+
+```json
+"include_in_standard_context": true,
+"expose_to_provider": false
+```
+
+Legacy v0.2 objects with `epistemic`, `review`, and `process` fields remain readable through compatibility normalization.
+
+### Query by Standing Dimension
+
+Use the index's `object_standing` table to query objects by custom standing dimension:
+
+```rust
+let results = index.query_standing(
+    &DimensionId::parse("research:status")?,
+    &TokenId::parse("verified")?,
+)?;
+```
+
 ## Error Handling
 
 - **ExecError**: check the workflow definition and inputs.
