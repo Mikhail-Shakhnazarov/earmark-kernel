@@ -22,7 +22,7 @@ fn setup_store(root: &Path) -> (GitCanonicalStore, DerivedIndex) {
 }
 
 #[test]
-fn test_transition_into_accepted_projection_fails_without_same_change_set_review() {
+fn test_transition_into_accepted_projection_fails_without_review_evidence() {
     let dir = TempDir::new().unwrap();
     let (store, index) = setup_store(dir.path());
     let registry = StandingRegistry::kernel_defaults();
