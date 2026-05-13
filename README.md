@@ -13,13 +13,17 @@ Concrete failure modes:
 - Review and approval are social conventions, not system state.
 - Continuing work means re-reading a long conversation, not loading a durable artifact.
 
-Earmark replaces ambient context with bounded, inspectable continuation.
+Earmark replaces ambient context with structured, inspectable work.
 
-Earmark is a declarative kernel for governed AI work. It compiles bounded context from a corpus, executes declared transitions over that context, and records what happened as durable, inspectable artifacts. Workspace state lives in a Git-backed store implemented through `gix`, with a rebuildable derived index for fast query and inspection.
+## What Earmark Does
+
+You declare your domain: the types of objects you work with, the relations between them, and what each processing step is allowed to see. Earmark then compiles the right context for each step, runs the step, records what happened, and passes bounded results to the next step.
+
+Every result is stored as a durable artifact. Failures are preserved, not discarded. When work moves from one stage to the next, a handoff defines exactly what the next stage receives — no implicit inheritance from earlier conversation.
+
+Workspace state is Git-backed (through `gix`), with a rebuildable derived index for fast query and inspection.
 
 ## How It Works
-
-You declare the shape of your domain — the types of objects, the relations between them, the rules about what each step is allowed to see — and Earmark handles the rest: compiling context, running transitions, validating results, recording failures, and emitting handoffs for successor work.
 
 A staged flow looks like this:
 
@@ -105,6 +109,7 @@ See the [Quickstart Tutorial](docs/tutorials/quickstart.md) for a complete walkt
 | **[Practical Guide](docs/tutorials/practical-guide.md)** | Plain-language explanation and use cases |
 | **[Staged Execution](docs/concepts/staged-execution.md)** | How transitions, assignments, and handoffs work |
 | **[Context Compilation](docs/concepts/context-compilation.md)** | How Earmark bounds what a runtime sees |
+| **[Standing](docs/concepts/standing.md)** | How domain lifecycle state is declared and enforced |
 | **[Relation Authorization](docs/concepts/relation-authorization.md)** | How relation creation records the rule that authorized it |
 | **[Research Synthesis Demo](docs/tutorials/research-synthesis-demo.md)** | Run and inspect a complete research synthesis workflow |
 | **[Build a Domain](docs/tutorials/build-a-domain-definition.md)** | Define your own classes, workflows, and system |
@@ -116,46 +121,27 @@ See the [Quickstart Tutorial](docs/tutorials/quickstart.md) for a complete walkt
 
 ## Current Status
 
-Workspace verification is exposed through the CI workflow, which runs formatting, workspace checks, tests, and Clippy. Build from source with Cargo. Binary packaging is a later release step.
+Earmark is pre-release software. Build from source with Cargo. Binary packaging is a later release step.
 
-## Standing Model
+What works today:
 
-Standing is declared domain state stored as a map from dimension IDs to token IDs:
-
-```yaml
-standing:
-  kernel:epistemic: working
-  kernel:review: unreviewed
-  kernel:process: active
-  research:status: draft
-```
-
-Dimensions and tokens are declared by the active system definition. Kernel behavior — review authorization, visibility, immutability — is projected from standing tokens through protocol bindings. The kernel enforces protocols, not token names.
-
-Only the v0.3 map format is supported. Legacy v0.2 objects using bare `epistemic`, `review`, or `process` fields are not supported.
-
-What works:
+- Workspace initialization, object deposit, and querying
 - Declaration, validation, and scaffolding of domain definitions
 - Bounded context compilation from declared objects and relations
 - Staged workflow execution with assignment lifecycle management
 - Durable change sets, handoffs, and failure records
-- Git-backed canonical storage through `gix`, with commit-backed workspace history
+- Git-backed canonical storage with commit-backed workspace history
 - CLI inspection, explanation, and HTML report generation
+
+For developers building on Earmark:
+
 - Registry-based custom provider extension through `ProviderRegistry` and `ProviderService`
-- Additive async provider traits through `AsyncProviderService` and `AsyncProviderAdapter`
+- Additive async provider traits (`AsyncProviderService`, `AsyncProviderAdapter`) as a preparation seam for future async runtime support
 - Versioned JSON CLI contracts at 0.2.0
 
-What doesn't exist yet:
-- Package distribution (you build from source)
-- GUI or web dashboard
+Not yet available: package distribution (build from source), GUI or web dashboard.
 
-## Features In Development
-
-The current provider extension surface supports in-process custom provider registration through `ProviderRegistry`, `ProviderService`, and provider adapters. That is the active extension mechanism in the repository today.
-
-Planned next-step extension work is focused on fuller plugin functionality around provider loading and discovery. The repository does not present dynamic plugin loading, plugin directories, or marketplace-style plugins as current features.
-
-The repository also exposes additive async provider traits through `AsyncProviderService` and `AsyncProviderAdapter`. The current workflow entrypoints remain synchronous, so async support exists as a preparation seam for future runtime expansion rather than as end-to-end async execution today.
+Workspace verification is exposed through the [CI workflow](.github/workflows/ci.yml), which runs formatting, workspace checks, tests, and Clippy.
 
 ## Build and Test
 
