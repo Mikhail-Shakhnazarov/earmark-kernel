@@ -1670,6 +1670,12 @@ pub struct ChangeSet {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct UndoRecordId(String);
 
+impl Default for UndoRecordId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl UndoRecordId {
     pub fn new() -> Self {
         Self(format!("obj_{}", Uuid::new_v4().simple()))

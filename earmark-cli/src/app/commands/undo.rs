@@ -55,7 +55,7 @@ fn handle_undo_run(
 
     let payload = StoredPayload::new(
         PayloadEncoding::Json,
-        serde_json::to_vec(&undo_record).map_err(|e| CliError::Json(e))?,
+        serde_json::to_vec(&undo_record).map_err(CliError::Json)?,
     );
 
     let object = StoredObject::new_with_id(
