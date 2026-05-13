@@ -20,6 +20,8 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
         Commands::Query(args) => crate::app::commands::query::handle(ctx, &args)?,
         Commands::Review(args) => crate::app::commands::review::handle(ctx, &args)?,
         Commands::Workflow(command) => crate::app::commands::workflow::handle(ctx, &command)?,
+        Commands::Context(command) => crate::app::commands::context::handle(ctx, &command)?,
+        Commands::Undo(command) => crate::app::commands::undo::handle(ctx, &command)?,
         Commands::Run(command) => match command.action {
             RunAction::List => {
                 let runs = list_run_records(store)?;
@@ -417,7 +419,6 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
                 );
             }
         },
-        Commands::Context(command) => crate::app::commands::context::handle(ctx, &command)?,
         Commands::Audit(command) => match command.action {
             AuditAction::Failures {
                 run_id,

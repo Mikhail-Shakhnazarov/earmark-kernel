@@ -86,7 +86,7 @@ fn relation_adjacency_query() {
 
     let index = DerivedIndex::open(dir.path()).unwrap();
     index.rebuild_from_store(&store).unwrap();
-    let adjacency = index.relation_adjacency(&a.envelope.id).unwrap();
+    let adjacency = index.relation_adjacency(&a.envelope.id, false).unwrap();
     assert_eq!(adjacency.len(), 1);
     assert_eq!(adjacency[0].relation_type, "supports");
 }
@@ -497,7 +497,7 @@ fn test_relation_count_after_rebuild() {
     assert_eq!(index.relation_count().unwrap(), 1);
 
     // Verify adjacency query works
-    let adjacency = index.relation_adjacency(&a.envelope.id).unwrap();
+    let adjacency = index.relation_adjacency(&a.envelope.id, false).unwrap();
     assert_eq!(adjacency.len(), 1);
     assert_eq!(adjacency[0].relation_type, "supports");
 

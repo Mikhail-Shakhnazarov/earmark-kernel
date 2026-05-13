@@ -433,6 +433,7 @@ pub enum Kind {
     ChangeSet,
     HandoffManifest,
     TransformationFailure,
+    UndoRecord,
 }
 
 impl Kind {
@@ -454,6 +455,7 @@ impl Kind {
             Self::ChangeSet => "change_set",
             Self::HandoffManifest => "handoff_manifest",
             Self::TransformationFailure => "transformation_failure",
+            Self::UndoRecord => "undo_record",
         }
     }
 }
@@ -1662,6 +1664,66 @@ pub struct ChangeSet {
     pub validation_results: Vec<ChangeSetValidationResult>,
     pub work_packet_id: Option<String>,
     pub handoff_manifest_id: Option<HandoffManifestId>,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct UndoRecordId(String);
+
+impl Default for UndoRecordId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl UndoRecordId {
+    pub fn new() -> Self {
+        Self(format!("obj_{}", Uuid::new_v4().simple()))
+    }
+
+    pub fn parse(s: impl Into<String>) -> Result<Self, CoreError> {
+        let s = s.into();
+        if s.len() > 128 {
+            return Err(CoreError::InvalidIdentifier(
+                "length exceeds 128 characters".to_string(),
+            ));
+        }
+        if !s.starts_with("obj_") {
+            return Err(CoreError::InvalidIdentifier(
+                "must start with obj_".to_string(),
+            ));
+        }
+        let hex_part = &s[4..];
+        if hex_part.len() != 32
+            || !hex_part
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
+        {
+            return Err(CoreError::InvalidIdentifier(
+                "invalid format: expected obj_ followed by 32 lowercase hex characters".to_string(),
+            ));
+        }
+        Ok(Self(s))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    pub fn as_object_id(&self) -> ObjectId {
+        ObjectId::parse(self.0.clone()).unwrap()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct UndoRecord {
+    pub id: UndoRecordId,
+    pub target_run_id: String,
+    pub reverted_change_set_ids: Vec<ChangeSetId>,
+    pub created_object_ids: Vec<ObjectId>,
+    pub created_relation_ids: Vec<ObjectId>,
+    pub restored_heads: Vec<VersionRef>,
+    pub reason: Option<String>,
     pub created_at: DateTime<Utc>,
 }
 

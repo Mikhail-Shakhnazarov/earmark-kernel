@@ -43,6 +43,7 @@ pub enum Commands {
     Status,
     Relation(RelationCommand),
     StandingRequest(StandingRequestCommand),
+    Undo(UndoCommand),
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -426,6 +427,22 @@ pub enum StandingRequestAction {
         request_id: String,
         #[arg(long)]
         policy: Option<String>,
+        #[arg(long)]
+        reason: Option<String>,
+    },
+}
+
+#[derive(Args)]
+pub struct UndoCommand {
+    #[command(subcommand)]
+    pub action: UndoAction,
+}
+
+#[derive(Subcommand)]
+pub enum UndoAction {
+    Run {
+        #[arg(help = "Run ID or 'latest'")]
+        run_id: String,
         #[arg(long)]
         reason: Option<String>,
     },
