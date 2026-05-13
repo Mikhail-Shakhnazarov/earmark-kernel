@@ -155,7 +155,12 @@ fn test_write_serialization_locking() {
                 // Lock is held by parent (ERROR_LOCK_VIOLATION on Windows)
                 blocked_tx.send(()).unwrap();
             }
-            Err(e) => panic!("try_lock_exclusive failed: {} (kind: {:?}, os: {:?})", e, e.kind(), e.raw_os_error()),
+            Err(e) => panic!(
+                "try_lock_exclusive failed: {} (kind: {:?}, os: {:?})",
+                e,
+                e.kind(),
+                e.raw_os_error()
+            ),
         }
 
         // Now do the blocking acquisition and measure the wait
