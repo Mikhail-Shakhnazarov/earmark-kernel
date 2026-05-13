@@ -176,7 +176,7 @@ pub fn reconstruct_successor_inputs_from_handoff<S: CanonicalStore>(
                 continue;
             }
 
-            let edges: Vec<RelationEdge> = index.relation_adjacency(&current_id)?;
+            let edges: Vec<RelationEdge> = index.relation_adjacency(&current_id, false)?;
             for edge in edges {
                 relations_processed += 1;
                 if relations_processed > MAX_EXPANSION_RELATIONS {
