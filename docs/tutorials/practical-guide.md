@@ -146,7 +146,8 @@ Start with the working flow before moving into declarations and code.
 3. **Research Synthesis Demo** — the staged workflow in more detail.
 4. **Staged Execution** — how each stage leaves durable evidence.
 5. **Context Compilation** — how Earmark decides what a runtime is allowed to see.
-6. **Declaration Authoring** — how classes, workflows, instructions, and systems are declared.
+6. **Standing** — how domain lifecycle state is declared and enforced.
+7. **Declaration Authoring** — how classes, workflows, instructions, and systems are declared.
 
 The center is the demo: notes become findings, findings become a summary, and each move leaves a trail.
 
