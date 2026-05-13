@@ -4,4 +4,5 @@ pub mod init_doctor;
 pub mod query;
 pub mod review;
 pub mod system;
+pub mod undo;
 pub mod workflow;

@@ -5,7 +5,7 @@ use chrono::Utc;
 use earmark_core::{
     parse_json, parse_yaml, ClassDefinition, CompiledContextTemplate, DimensionId,
     InstructionPayload, Kind, ObjectId, ProviderProfile, RelationPayload, StandingPolicy,
-    SystemDefinition, TokenId, VersionRef, WorkflowDefinition,
+    SystemDefinition, TokenId, UndoRecord, VersionRef, WorkflowDefinition,
 };
 use earmark_store::CanonicalStore;
 use rusqlite::{params, Connection, OptionalExtension};
@@ -52,6 +52,7 @@ pub struct QueryFilter {
     pub text: Option<String>,
     pub object_id: Option<String>,
     pub standing: BTreeMap<DimensionId, Vec<TokenId>>,
+    pub include_undone: bool,
 }
 
 #[derive(Debug)]
@@ -90,6 +91,16 @@ impl DerivedIndex {
 
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    pub fn is_run_undone(&self, run_id: &str) -> Result<Option<String>, IndexError> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT undo_record_id FROM undo_records WHERE target_run_id = ?1")?;
+        let res = stmt
+            .query_row(params![run_id], |row| row.get::<_, String>(0))
+            .optional()?;
+        Ok(res)
     }
 
     fn init_schema(&self) -> Result<(), IndexError> {
@@ -147,6 +158,24 @@ impl DerivedIndex {
                 dimension TEXT NOT NULL,
                 token TEXT NOT NULL,
                 PRIMARY KEY (version_id, dimension)
+            );
+
+            CREATE TABLE IF NOT EXISTS undo_records (
+                undo_record_id TEXT PRIMARY KEY,
+                target_run_id TEXT NOT NULL UNIQUE,
+                created_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS undone_objects (
+                object_id TEXT PRIMARY KEY,
+                undo_record_id TEXT NOT NULL,
+                target_run_id TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS undone_relations (
+                relation_object_id TEXT PRIMARY KEY,
+                undo_record_id TEXT NOT NULL,
+                target_run_id TEXT NOT NULL
             );
 
             CREATE INDEX IF NOT EXISTS idx_object_standing_dimension_token
@@ -215,6 +244,9 @@ impl DerivedIndex {
         self.conn.execute("DELETE FROM heads", [])?;
         self.conn.execute("DELETE FROM relations", [])?;
         self.conn.execute("DELETE FROM object_standing", [])?;
+        self.conn.execute("DELETE FROM undo_records", [])?;
+        self.conn.execute("DELETE FROM undone_objects", [])?;
+        self.conn.execute("DELETE FROM undone_relations", [])?;
 
         let objects = store.scan_objects()?;
         let mut seen = std::collections::BTreeSet::new();
@@ -325,6 +357,45 @@ impl DerivedIndex {
                             None,
                             None,
                             Some(parsed.name),
+                            Some(text),
+                        )
+                    }
+                    Kind::UndoRecord => {
+                        let text = payload.as_utf8()?;
+                        let parsed: UndoRecord = parse_json(&text)?;
+                        self.conn.execute(
+                            "INSERT OR REPLACE INTO undo_records (undo_record_id, target_run_id, created_at) VALUES (?1, ?2, ?3)",
+                            params![
+                                envelope.id.as_str().to_string(),
+                                parsed.target_run_id.clone(),
+                                envelope.created_at.to_rfc3339(),
+                            ],
+                        )?;
+                        for oid in &parsed.created_object_ids {
+                            self.conn.execute(
+                                "INSERT OR REPLACE INTO undone_objects (object_id, undo_record_id, target_run_id) VALUES (?1, ?2, ?3)",
+                                params![
+                                    oid.as_str().to_string(),
+                                    envelope.id.as_str().to_string(),
+                                    parsed.target_run_id.clone(),
+                                ],
+                            )?;
+                        }
+                        for rid in &parsed.created_relation_ids {
+                            self.conn.execute(
+                                "INSERT OR REPLACE INTO undone_relations (relation_object_id, undo_record_id, target_run_id) VALUES (?1, ?2, ?3)",
+                                params![
+                                    rid.as_str().to_string(),
+                                    envelope.id.as_str().to_string(),
+                                    parsed.target_run_id.clone(),
+                                ],
+                            )?;
+                        }
+                        (
+                            Some("undo record".to_string()),
+                            None,
+                            None,
+                            None,
                             Some(text),
                         )
                     }
@@ -510,6 +581,45 @@ impl DerivedIndex {
                     Some(text),
                 )
             }
+            Kind::UndoRecord => {
+                let text = payload.as_utf8()?;
+                let parsed: UndoRecord = parse_json(&text)?;
+                self.conn.execute(
+                    "INSERT OR REPLACE INTO undo_records (undo_record_id, target_run_id, created_at) VALUES (?1, ?2, ?3)",
+                    params![
+                        envelope.id.as_str().to_string(),
+                        parsed.target_run_id.clone(),
+                        envelope.created_at.to_rfc3339(),
+                    ],
+                )?;
+                for oid in &parsed.created_object_ids {
+                    self.conn.execute(
+                        "INSERT OR REPLACE INTO undone_objects (object_id, undo_record_id, target_run_id) VALUES (?1, ?2, ?3)",
+                        params![
+                            oid.as_str().to_string(),
+                            envelope.id.as_str().to_string(),
+                            parsed.target_run_id.clone(),
+                        ],
+                    )?;
+                }
+                for rid in &parsed.created_relation_ids {
+                    self.conn.execute(
+                        "INSERT OR REPLACE INTO undone_relations (relation_object_id, undo_record_id, target_run_id) VALUES (?1, ?2, ?3)",
+                        params![
+                            rid.as_str().to_string(),
+                            envelope.id.as_str().to_string(),
+                            parsed.target_run_id.clone(),
+                        ],
+                    )?;
+                }
+                (
+                    Some("undo record".to_string()),
+                    None,
+                    None,
+                    None,
+                    Some(text),
+                )
+            }
             _ => {
                 let text = payload.as_utf8().unwrap_or_default();
                 (Some(snippet(&text)), None, None, None, Some(text))
@@ -584,6 +694,12 @@ impl DerivedIndex {
             values.push(object_id.clone());
         }
 
+        if !filter.include_undone {
+            sql.push_str(
+                " AND NOT EXISTS (SELECT 1 FROM undone_objects u WHERE u.object_id = o.object_id)",
+            );
+        }
+
         for (dim, tokens) in &filter.standing {
             if tokens.is_empty() {
                 continue;
@@ -653,10 +769,17 @@ impl DerivedIndex {
     pub fn relation_adjacency(
         &self,
         object_id: &ObjectId,
+        include_undone: bool,
     ) -> Result<Vec<RelationEdge>, IndexError> {
-        let mut stmt = self.conn.prepare(
-            "SELECT version_id, relation_object_id, source_object_id, target_object_id, relation_type, scope FROM relations WHERE source_object_id = ?1 OR target_object_id = ?1 ORDER BY version_id ASC",
-        )?;
+        let mut sql = String::from("SELECT version_id, relation_object_id, source_object_id, target_object_id, relation_type, scope FROM relations WHERE (source_object_id = ?1 OR target_object_id = ?1)");
+
+        if !include_undone {
+            sql.push_str(" AND NOT EXISTS (SELECT 1 FROM undone_relations ur WHERE ur.relation_object_id = relations.relation_object_id)");
+        }
+
+        sql.push_str(" ORDER BY version_id ASC");
+
+        let mut stmt = self.conn.prepare(&sql)?;
         let rows = stmt.query_map(params![object_id.as_str()], |row| {
             Ok(RelationEdge {
                 version_id: row.get(0)?,

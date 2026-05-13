@@ -371,7 +371,7 @@ fn collect_selection<S: CanonicalStore>(
             }
 
             let mut edges =
-                index.relation_adjacency(&ObjectId::parse(current_object_id.clone())?)?;
+                index.relation_adjacency(&ObjectId::parse(current_object_id.clone())?, false)?;
             edges.sort_by(|a, b| a.version_id.cmp(&b.version_id));
             for edge in edges {
                 if !relation_type_admissible(&edge.relation_type, &template.select.relations) {

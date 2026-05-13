@@ -112,6 +112,7 @@ pub fn workspace_access_mode(command: &Commands) -> WorkspaceAccessMode {
             | StandingRequestAction::Reject { .. }
             | StandingRequestAction::Apply { .. } => WorkspaceAccessMode::Write,
         },
+        Commands::Undo(_) => WorkspaceAccessMode::Write,
     }
 }
 
@@ -146,5 +147,6 @@ pub fn command_family_name(command: &Commands) -> &'static str {
         Commands::Status => "status",
         Commands::Relation(_) => "relation",
         Commands::StandingRequest(_) => "standing-request",
+        Commands::Undo(_) => "undo",
     }
 }
