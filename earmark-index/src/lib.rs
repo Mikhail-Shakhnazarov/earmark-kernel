@@ -391,7 +391,13 @@ impl DerivedIndex {
                                 ],
                             )?;
                         }
-                        (Some("undo record".to_string()), None, None, None, Some(text))
+                        (
+                            Some("undo record".to_string()),
+                            None,
+                            None,
+                            None,
+                            Some(text),
+                        )
                     }
                     _ => {
                         let text = payload.as_utf8().unwrap_or_default();
@@ -606,7 +612,13 @@ impl DerivedIndex {
                         ],
                     )?;
                 }
-                (Some("undo record".to_string()), None, None, None, Some(text))
+                (
+                    Some("undo record".to_string()),
+                    None,
+                    None,
+                    None,
+                    Some(text),
+                )
             }
             _ => {
                 let text = payload.as_utf8().unwrap_or_default();
@@ -683,7 +695,9 @@ impl DerivedIndex {
         }
 
         if !filter.include_undone {
-            sql.push_str(" AND NOT EXISTS (SELECT 1 FROM undone_objects u WHERE u.object_id = o.object_id)");
+            sql.push_str(
+                " AND NOT EXISTS (SELECT 1 FROM undone_objects u WHERE u.object_id = o.object_id)",
+            );
         }
 
         for (dim, tokens) in &filter.standing {
@@ -758,13 +772,13 @@ impl DerivedIndex {
         include_undone: bool,
     ) -> Result<Vec<RelationEdge>, IndexError> {
         let mut sql = String::from("SELECT version_id, relation_object_id, source_object_id, target_object_id, relation_type, scope FROM relations WHERE (source_object_id = ?1 OR target_object_id = ?1)");
-        
+
         if !include_undone {
             sql.push_str(" AND NOT EXISTS (SELECT 1 FROM undone_relations ur WHERE ur.relation_object_id = relations.relation_object_id)");
         }
-        
+
         sql.push_str(" ORDER BY version_id ASC");
-        
+
         let mut stmt = self.conn.prepare(&sql)?;
         let rows = stmt.query_map(params![object_id.as_str()], |row| {
             Ok(RelationEdge {

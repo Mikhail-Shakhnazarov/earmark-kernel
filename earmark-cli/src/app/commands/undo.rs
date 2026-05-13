@@ -1,7 +1,5 @@
 use crate::app::common::{CliError, CommandContext};
-use crate::app::{
-    emit, list_change_sets, list_change_sets_by_run, load_run_record_by_id,
-};
+use crate::app::{emit, list_change_sets, list_change_sets_by_run, load_run_record_by_id};
 use crate::cli::{UndoAction, UndoCommand};
 use earmark_core::{
     ChangeSetId, Kind, ObjectId, Provenance, RunRecord, Standing, UndoRecord, UndoRecordId,
