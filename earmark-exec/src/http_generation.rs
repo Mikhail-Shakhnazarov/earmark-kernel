@@ -11,6 +11,8 @@ use std::collections::BTreeMap;
 #[cfg(feature = "http-provider")]
 use std::env;
 #[cfg(feature = "http-provider")]
+use std::time::Instant;
+#[cfg(feature = "http-provider")]
 use std::time::Duration;
 
 #[cfg(feature = "http-provider")]
@@ -174,13 +176,21 @@ impl ProviderAdapter for HttpGenerationAdapter {
             }
         }
 
+        let started = Instant::now();
         let response = rb.json(&body).send().map_err(|e| {
             if e.is_timeout() {
-                ProviderFailure::new(ProviderFailureKind::Timeout, e.to_string())
+                ProviderFailure::new(
+                    ProviderFailureKind::Timeout,
+                    format!(
+                        "request timed out after {} ms",
+                        profile.budget.max_latency_ms.unwrap_or(30_000)
+                    ),
+                )
             } else {
                 ProviderFailure::new(ProviderFailureKind::ProviderUnavailable, e.to_string())
             }
         })?;
+        let latency_ms = started.elapsed().as_millis() as u64;
 
         let status = response.status();
         if !status.is_success() {
@@ -219,13 +229,25 @@ impl ProviderAdapter for HttpGenerationAdapter {
             }
         }
 
+        let mut metadata = BTreeMap::new();
+        metadata.insert(
+            "latency_ms".to_string(),
+            earmark_core::ScalarValue::Integer(latency_ms as i64),
+        );
+        metadata.insert(
+            "configured_timeout_ms".to_string(),
+            earmark_core::ScalarValue::Integer(
+                profile.budget.max_latency_ms.unwrap_or(30_000) as i64,
+            ),
+        );
+
         Ok(ProviderResponse {
             request_id: request.request_id,
             provider: "http_generation".to_string(),
             model: profile.model.clone(),
             status: ProviderResponseStatus::Completed,
             candidate_payload: text,
-            metadata: BTreeMap::new(),
+            metadata,
             advisory_warnings: vec![],
             usage: if has_usage { Some(usage) } else { None },
             received_at: chrono::Utc::now(),
@@ -540,5 +562,90 @@ mod tests {
         );
 
         m.assert();
+    }
+
+    #[test]
+    #[cfg(feature = "http-provider")]
+    fn test_adapter_maps_http_timeout_to_timeout_failure() {
+        let server = MockServer::start();
+        let _m = server.mock(|when, then| {
+            when.method(POST).path("/v1/slow");
+            then.status(200)
+                .delay(Duration::from_millis(200))
+                .json_body(json!({ "output": "slow" }));
+        });
+
+        let profile = ProviderProfile {
+            name: "timeout_test".to_string(),
+            version: "1".to_string(),
+            description: None,
+            provider: "http_generation".to_string(),
+            model: "test-model".to_string(),
+            endpoint_env: None,
+            auth_env: None,
+            budget: ProviderBudget {
+                max_input_tokens: None,
+                max_output_tokens: None,
+                max_cost_usd: None,
+                max_latency_ms: Some(50),
+            },
+            allowed_operations: vec!["transform".to_string()],
+            exposure: earmark_core::ProviderExposure {
+                allow_prose_objects: true,
+                allow_structured_declarations: true,
+                allow_work_surface_only: false,
+                allow_export_requests: false,
+            },
+            response_contract: ProviderResponseContract {
+                format: earmark_core::ProviderResponseFormat::Markdown,
+                must_return_candidate_only: true,
+                must_include_lineage: false,
+            },
+            http: Some(HttpGenerationProfile {
+                method: Some("POST".to_string()),
+                url_template: format!("{}/v1/slow", server.base_url()),
+                auth: HttpAuthConfig {
+                    kind: HttpAuthKind::None,
+                    ..Default::default()
+                },
+                request: HttpRequestTemplate {
+                    content_type: Some("application/json".to_string()),
+                    body: json!({
+                        "prompt": "{{input_text}}"
+                    }),
+                },
+                response: HttpResponseExtraction {
+                    text_path: "$.output".to_string(),
+                    ..Default::default()
+                },
+            }),
+        };
+
+        let request = ProviderRequest {
+            request_id: "req_timeout".to_string(),
+            run_id: "run_timeout".to_string(),
+            work_packet: earmark_core::ObjectRef::new(
+                earmark_core::ObjectId::new(),
+                earmark_core::VersionId::new(),
+                earmark_core::Kind::WorkPacket,
+                None,
+            ),
+            provider_profile: earmark_core::VersionRef::new(
+                earmark_core::ObjectId::new(),
+                earmark_core::VersionId::new(),
+            ),
+            instruction_text: "hi".to_string(),
+            context_text: None,
+            input_text: "hi".to_string(),
+            work_surface_manifest: None,
+            inputs: vec![],
+            response_contract: profile.response_contract.clone(),
+            issued_at: chrono::Utc::now(),
+        };
+
+        let adapter = HttpGenerationAdapter;
+        let err = adapter.provide(request, &profile, "transform").unwrap_err();
+        assert_eq!(err.kind, ProviderFailureKind::Timeout);
+        assert!(err.message.contains("timed out after 50 ms"));
     }
 }

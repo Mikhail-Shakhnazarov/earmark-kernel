@@ -83,7 +83,7 @@ pub trait ProviderService: Send + Sync {
     ) -> Result<ProviderExecutionOutcome, ProviderFailure>;
 }
 
-pub trait AsyncProviderAdapter: Send + Sync {
+pub(crate) trait AsyncProviderAdapter: Send + Sync {
     fn provider_key(&self) -> &'static str;
     fn provide_blocking_bridge(
         &self,
@@ -93,7 +93,7 @@ pub trait AsyncProviderAdapter: Send + Sync {
     ) -> Result<ProviderResponse, ProviderFailure>;
 }
 
-pub trait AsyncProviderService: Send + Sync {
+pub(crate) trait AsyncProviderService: Send + Sync {
     fn provide_blocking_bridge(
         &self,
         profile: &ProviderProfile,
@@ -350,6 +350,12 @@ pub(crate) fn validate_provider_invocation(
     if profile.budget.max_cost_usd.is_some() {
         warnings.push("Advisory: max_cost_usd budget is not yet enforced.".to_string());
     }
+    if let Some(max_latency_ms) = profile.budget.max_latency_ms {
+        warnings.push(format!(
+            "Advisory: max_latency_ms is configured to {} ms; timeout is adapter-level only and does not provide runtime cancellation guarantees.",
+            max_latency_ms
+        ));
+    }
 
     // 4. Response Contract (Advisory)
     if profile.response_contract.must_include_lineage {
@@ -534,6 +540,13 @@ pub fn provide_with_registry_and_sleeper(
     // Merge advisory warnings
     let mut final_warnings = policy_decision.advisory_warnings;
     final_warnings.extend(response.advisory_warnings.clone());
+    if effective_profile.budget.max_latency_ms.is_some()
+        && !response.metadata.contains_key("latency_ms")
+    {
+        final_warnings.push(
+            "Advisory: provider response did not report measured latency_ms; timeout compliance cannot be confirmed from runtime metadata.".to_string(),
+        );
+    }
 
     {
         let mut lock = provider_circuit_registry().lock().map_err(|_| {

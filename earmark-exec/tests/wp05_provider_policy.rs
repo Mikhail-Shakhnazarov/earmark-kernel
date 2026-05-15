@@ -149,6 +149,23 @@ fn test_advisory_warnings_for_unmeasurable_fields() {
 }
 
 #[test]
+fn test_latency_policy_warnings_distinguish_timeout_and_measurement() {
+    let registry = default_provider_registry();
+    let mut profile = mock_profile(vec!["transform"]);
+    profile.budget.max_latency_ms = Some(1500);
+
+    let outcome = provide_with_registry(&registry, &profile, mock_request(), "transform").unwrap();
+    let warnings = outcome.record.advisory_warnings;
+
+    assert!(warnings
+        .iter()
+        .any(|w| w.contains("max_latency_ms is configured to 1500 ms")));
+    assert!(warnings
+        .iter()
+        .any(|w| w.contains("did not report measured latency_ms")));
+}
+
+#[test]
 fn test_synthetic_marking_integrity() {
     let registry = default_provider_registry();
     let profile = mock_profile(vec!["transform"]);
