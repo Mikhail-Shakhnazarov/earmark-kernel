@@ -1,6 +1,7 @@
 use crate::error::ProviderFailure;
 use crate::provider::{
-    provider_record_from_response, provider_response_is_synthetic, MockAdapter, ProviderAdapter,
+    provider_circuit_registry, provider_record_from_response, provider_response_is_synthetic,
+    reset_provider_circuit_registry_for_tests, MockAdapter, ProviderAdapter,
     ProviderExecutionOutcome, ProviderService,
 };
 use earmark_core::{
@@ -103,6 +104,25 @@ fn test_async_prep_sequence_starts_with_provider_boundary() {
         sequence.first().copied(),
         Some("provider_service boundary (ProviderService + adapters)")
     );
+}
+
+#[test]
+fn test_provider_circuit_reset() {
+    reset_provider_circuit_registry_for_tests();
+    {
+        let mut lock = provider_circuit_registry().lock().unwrap();
+        lock.insert(
+            "mock-key".to_string(),
+            crate::provider::CircuitState {
+                consecutive_failures: 3,
+                open_until_epoch_ms: 12345,
+            },
+        );
+    }
+
+    reset_provider_circuit_registry_for_tests();
+    let lock = provider_circuit_registry().lock().unwrap();
+    assert!(lock.is_empty());
 }
 struct BrokenProvider;
 impl ProviderService for BrokenProvider {

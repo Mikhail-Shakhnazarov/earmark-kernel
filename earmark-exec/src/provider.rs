@@ -1,5 +1,5 @@
 use crate::error::{ProviderFailure, ProviderFailureKind};
-use crate::helpers::uuid_like;
+use crate::helpers::{estimate_tokens_approx, uuid_like};
 use chrono::Utc;
 use earmark_core::{
     InstructionPayload, ProviderProfile, ProviderRecord, ProviderRequest, ProviderResponse,
@@ -310,16 +310,7 @@ pub(crate) fn validate_provider_invocation(
         ));
     }
 
-    // 3. Budgets (Advisory)
-    if profile.budget.max_input_tokens.is_some() {
-        warnings.push("Advisory: max_input_tokens budget is not yet enforced.".to_string());
-    }
-    if profile.budget.max_output_tokens.is_some() {
-        warnings.push("Advisory: max_output_tokens budget is not yet enforced.".to_string());
-    }
-    if profile.budget.max_cost_usd.is_some() {
-        warnings.push("Advisory: max_cost_usd budget is not yet enforced.".to_string());
-    }
+    // 3. Budget/timeout posture
     if let Some(max_latency_ms) = profile.budget.max_latency_ms {
         warnings.push(format!(
             "Advisory: max_latency_ms is configured to {} ms; timeout is adapter-level only and does not provide runtime cancellation guarantees.",
@@ -352,12 +343,13 @@ pub struct CircuitState {
     pub open_until_epoch_ms: i64,
 }
 
-pub fn provider_circuit_registry() -> &'static Mutex<HashMap<String, CircuitState>> {
+pub(crate) fn provider_circuit_registry() -> &'static Mutex<HashMap<String, CircuitState>> {
     static REGISTRY: OnceLock<Mutex<HashMap<String, CircuitState>>> = OnceLock::new();
     REGISTRY.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-pub fn reset_provider_circuit_registry_for_tests() {
+#[cfg(test)]
+pub(crate) fn reset_provider_circuit_registry_for_tests() {
     if let Ok(mut lock) = provider_circuit_registry().lock() {
         lock.clear();
     }
@@ -420,6 +412,19 @@ pub fn provide_with_registry_and_sleeper(
     transition_operation: &str,
     sleeper: &dyn RetrySleeper,
 ) -> Result<ProviderExecutionOutcome, ProviderFailure> {
+    if let Some(max_input_tokens) = profile.budget.max_input_tokens {
+        let estimated_input_tokens = estimate_tokens_approx(&request.input_text);
+        if estimated_input_tokens > max_input_tokens {
+            return Err(ProviderFailure::new(
+                ProviderFailureKind::BudgetExceeded,
+                format!(
+                    "Estimated input tokens {} exceed max_input_tokens {}",
+                    estimated_input_tokens, max_input_tokens
+                ),
+            ));
+        }
+    }
+
     let circuit_key = provider_circuit_key(&request, profile);
     {
         let lock = provider_circuit_registry().lock().map_err(|_| {
@@ -461,6 +466,39 @@ pub fn provide_with_registry_and_sleeper(
             Ok(resp) => {
                 match validate_provider_response(&resp, &effective_profile.response_contract) {
                     Ok(()) => {
+                        if let Some(max_output_tokens) = effective_profile.budget.max_output_tokens
+                        {
+                            let estimated_output_tokens =
+                                estimate_tokens_approx(&resp.candidate_payload);
+                            if estimated_output_tokens > max_output_tokens {
+                                last_error = Some(ProviderFailure::new(
+                                    ProviderFailureKind::BudgetExceeded,
+                                    format!(
+                                        "Estimated output tokens {} exceed max_output_tokens {}",
+                                        estimated_output_tokens, max_output_tokens
+                                    ),
+                                ));
+                                break;
+                            }
+                        }
+
+                        if let Some(max_cost_usd) = effective_profile.budget.max_cost_usd {
+                            if let Some(usage) = &resp.usage {
+                                if let Some(estimated_cost_usd) = usage.estimated_cost_usd {
+                                    if estimated_cost_usd > max_cost_usd {
+                                        last_error = Some(ProviderFailure::new(
+                                            ProviderFailureKind::BudgetExceeded,
+                                            format!(
+                                                "Estimated cost ${:.4} exceeds max_cost_usd ${:.4}",
+                                                estimated_cost_usd, max_cost_usd
+                                            ),
+                                        ));
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+
                         response = Some(resp);
                         break;
                     }

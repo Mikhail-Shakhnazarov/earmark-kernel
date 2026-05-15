@@ -1,7 +1,4 @@
 use earmark_core::{Kind, Provenance};
-use earmark_exec::provider::{
-    provider_circuit_registry, reset_provider_circuit_registry_for_tests,
-};
 use earmark_store::{StoredObject, StoredPayload};
 
 #[test]
@@ -33,22 +30,4 @@ fn test_stored_object_builder_missing_provenance() {
 
     assert!(res.is_err());
     assert_eq!(res.unwrap_err(), "provenance is required");
-}
-
-#[test]
-fn test_provider_circuit_reset() {
-    reset_provider_circuit_registry_for_tests();
-
-    {
-        let mut lock = provider_circuit_registry().lock().unwrap();
-        lock.insert("test_key".to_string(), Default::default());
-        assert!(!lock.is_empty());
-    }
-
-    reset_provider_circuit_registry_for_tests();
-
-    {
-        let lock = provider_circuit_registry().lock().unwrap();
-        assert!(lock.is_empty());
-    }
 }

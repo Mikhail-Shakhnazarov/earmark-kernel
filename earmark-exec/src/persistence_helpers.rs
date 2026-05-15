@@ -19,8 +19,14 @@ pub fn write_object_and_index<S: CanonicalStore>(
     };
     index.mark_dirty(marker)?;
 
-    let guard = store.acquire_write_lock()?;
-    let version_ref = store.write_object_locked(&guard, object)?;
+    let guard = store.acquire_write_lock().map_err(|e| {
+        let _ = index.clear_dirty();
+        ExecError::Store(e)
+    })?;
+    let version_ref = store.write_object_locked(&guard, object).map_err(|e| {
+        let _ = index.clear_dirty();
+        ExecError::Store(e)
+    })?;
     if let Err(e) = index.upsert_head_object_from_store(store, &object.envelope.id) {
         return Err(ExecError::IndexUpdateFailure {
             object_id: object.envelope.id.as_str().to_string(),
@@ -65,8 +71,14 @@ pub fn write_batch_and_index<S: CanonicalStore>(
     };
     index.mark_dirty(marker)?;
 
-    let guard = store.acquire_write_lock()?;
-    let version_refs = store.write_batch_locked(&guard, batch)?;
+    let guard = store.acquire_write_lock().map_err(|e| {
+        let _ = index.clear_dirty();
+        ExecError::Store(e)
+    })?;
+    let version_refs = store.write_batch_locked(&guard, batch).map_err(|e| {
+        let _ = index.clear_dirty();
+        ExecError::Store(e)
+    })?;
     for object in &batch.objects {
         if let Err(e) = index.upsert_head_object_from_store(store, &object.envelope.id) {
             return Err(ExecError::IndexUpdateFailure {

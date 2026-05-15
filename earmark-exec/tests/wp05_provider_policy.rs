@@ -140,9 +140,23 @@ fn test_advisory_warnings_for_unmeasurable_fields() {
     assert!(warnings
         .iter()
         .any(|w| w.contains("allow_prose_objects is false")));
-    assert!(warnings
+    assert!(!warnings
         .iter()
         .any(|w| w.contains("max_input_tokens budget is not yet enforced")));
+}
+
+#[test]
+fn test_provider_boundary_enforces_input_budget() {
+    let registry = default_provider_registry();
+    let mut profile = mock_profile(vec!["transform"]);
+    profile.budget.max_input_tokens = Some(1);
+
+    let mut request = mock_request();
+    request.input_text = "this request should exceed one token".to_string();
+
+    let result = provide_with_registry(&registry, &profile, request, "transform");
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().kind, ProviderFailureKind::BudgetExceeded);
 }
 
 #[test]
