@@ -6,8 +6,8 @@ use earmark_core::{
     VersionRef,
 };
 use earmark_exec::{ExecutionEngine, ProviderRegistry, WorkflowRunRequest};
-use earmark_index::DerivedIndex;
-use earmark_store::{CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload};
+use earmark_index::{DerivedIndex, IndexDirtyMarker};
+use earmark_store::{GitCanonicalStore, ObjectStore, StoreScanner, StoredObject, StoredPayload};
 use serde_json::Value;
 use tempfile::tempdir;
 
@@ -418,11 +418,20 @@ fn artifact_explain_missing_id_fails_cleanly() {
 #[test]
 fn declare_new_scaffolds_file() {
     let dir = tempdir().unwrap();
+    Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(dir.path())
+        .arg("--json")
+        .arg("init")
+        .assert()
+        .success();
+
     let output_path = dir.path().join("declarations/workflows/sample_flow.yaml");
     let output = Command::cargo_bin("earmark-cli")
         .unwrap()
         .arg("--root")
-        .arg(workspace_root())
+        .arg(dir.path())
         .arg("--json")
         .arg("declare")
         .arg("new")
@@ -873,6 +882,137 @@ fn doctor_reports_index_missing_after_deletion() {
         parsed["data"]["canonical_object_count"].as_u64().unwrap(),
         0
     );
+}
+
+#[test]
+fn doctor_reports_dirty_index_without_implicit_repair() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(root)
+        .arg("--json")
+        .arg("init")
+        .assert()
+        .success();
+
+    Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(root)
+        .arg("--json")
+        .arg("deposit")
+        .arg("--class")
+        .arg("note")
+        .arg("--title")
+        .arg("dirty")
+        .arg("--body")
+        .arg("index marker")
+        .assert()
+        .success();
+
+    let index = DerivedIndex::open(root).unwrap();
+    index
+        .mark_dirty(IndexDirtyMarker {
+            schema_version: "v1".to_string(),
+            reason: "test_marker".to_string(),
+            operation: "test".to_string(),
+            timestamp: chrono::Utc::now(),
+            object_ids: vec![],
+            version_ids: vec![],
+        })
+        .unwrap();
+
+    let output = Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(root)
+        .arg("--json")
+        .arg("doctor")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(parsed["ok"], true);
+    assert_eq!(parsed["data"]["ok"], false);
+    assert_eq!(parsed["data"]["index_is_dirty"], true);
+
+    assert!(index.dirty_status().unwrap().is_some());
+}
+
+#[test]
+fn doctor_repair_index_rebuilds_and_clears_dirty_marker() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(root)
+        .arg("--json")
+        .arg("init")
+        .assert()
+        .success();
+
+    Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(root)
+        .arg("--json")
+        .arg("deposit")
+        .arg("--class")
+        .arg("note")
+        .arg("--title")
+        .arg("repair")
+        .arg("--body")
+        .arg("dirty index")
+        .assert()
+        .success();
+
+    let index = DerivedIndex::open(root).unwrap();
+    index
+        .mark_dirty(IndexDirtyMarker {
+            schema_version: "v1".to_string(),
+            reason: "test_repair".to_string(),
+            timestamp: chrono::Utc::now(),
+            operation: "test".to_string(),
+            object_ids: vec![],
+            version_ids: vec![],
+        })
+        .unwrap();
+    assert!(index.dirty_status().unwrap().is_some());
+
+    Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(root)
+        .arg("--json")
+        .arg("doctor")
+        .arg("--repair-index")
+        .assert()
+        .success();
+
+    let doctor_output = Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(root)
+        .arg("--json")
+        .arg("doctor")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&doctor_output).unwrap();
+    assert_eq!(parsed["ok"], true);
+    assert_eq!(parsed["data"]["index_is_dirty"], false);
+    assert_eq!(parsed["data"]["counts_match"], true);
 }
 
 #[test]
@@ -1630,7 +1770,7 @@ fn latest_run_resolves_correctly() {
     };
     use earmark_exec::{ExecutionEngine, ProviderRegistry, WorkflowRunRequest};
     use earmark_index::DerivedIndex;
-    use earmark_store::{GitCanonicalStore, StoredObject, StoredPayload};
+    use earmark_store::{GitCanonicalStore, ObjectStore, StoredObject, StoredPayload};
     use std::collections::BTreeMap;
 
     let store = GitCanonicalStore::new(dir.path());
@@ -1673,9 +1813,9 @@ version: "1"
 description: a simple flow
 operations:
   - id: op_one
-    kind: nop
+    kind: review
     input_contracts: [note]
-    output_contracts: [note]
+    output_contracts: []
 edges: []
 guards: []
 "#;
@@ -1786,7 +1926,7 @@ fn run_show_and_explain_are_distinct() {
     };
     use earmark_exec::{ExecutionEngine, ProviderRegistry, WorkflowRunRequest};
     use earmark_index::DerivedIndex;
-    use earmark_store::{GitCanonicalStore, StoredObject, StoredPayload};
+    use earmark_store::{GitCanonicalStore, ObjectStore, StoredObject, StoredPayload};
     use std::collections::BTreeMap;
 
     let store = GitCanonicalStore::new(dir.path());

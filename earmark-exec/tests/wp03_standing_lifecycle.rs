@@ -5,7 +5,7 @@ use earmark_core::{
 use earmark_exec::governance_ops::{apply_standing_request, approve_standing_request};
 use earmark_exec::persistence_helpers::write_object_and_index;
 use earmark_index::DerivedIndex;
-use earmark_store::{CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload};
+use earmark_store::{GitCanonicalStore, ObjectStore, StoredObject, StoredPayload, WorkspaceLayout};
 use std::collections::BTreeMap;
 use tempfile::tempdir;
 

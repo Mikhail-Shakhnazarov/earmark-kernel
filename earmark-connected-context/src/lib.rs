@@ -567,7 +567,7 @@ mod tests {
         CompiledContextExpansion, DimensionId, ExpansionObjectFilter, Kind, Provenance, Standing,
         TokenId,
     };
-    use earmark_store::{CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload};
+    use earmark_store::{GitCanonicalStore, ObjectStore, StoredObject, StoredPayload};
     use tempfile::tempdir;
 
     #[test]

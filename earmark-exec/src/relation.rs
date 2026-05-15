@@ -1,6 +1,6 @@
 use crate::error::ExecError;
 use earmark_core::{
-    HeaderValue, Kind, ObjectRef, Provenance, RelationCreationMode, RelationPayload, Standing,
+    HeaderValue, Kind, ObjectRef, Provenance, RelationCreationMode, RelationPayload,
 };
 use earmark_index::DerivedIndex;
 use earmark_store::{CanonicalStore, StoredObject, StoredPayload};
@@ -45,15 +45,14 @@ pub fn persist_relation_canonical<S: CanonicalStore>(
         }),
     );
 
-    let stored = StoredObject::new(
+    let stored = StoredObject::builder(
         Kind::Relation,
-        None,
-        Standing::default(),
-        provenance,
-        headers,
         StoredPayload::from_json_bytes(serde_json::to_vec_pretty(&payload)?),
-        vec![],
-    );
+    )
+    .provenance(provenance)
+    .headers(headers)
+    .build()
+    .map_err(ExecError::IncompleteExecution)?;
 
     use crate::persistence_helpers::write_object_and_index;
     let version_ref = write_object_and_index(store, index, &stored)?;

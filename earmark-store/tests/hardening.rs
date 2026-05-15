@@ -1,6 +1,7 @@
 use earmark_core::{Kind, Provenance, Standing};
 use earmark_store::{
-    BatchWrite, CanonicalStore, GitCanonicalStore, StoreError, StoredObject, StoredPayload,
+    BatchWrite, GitCanonicalStore, ObjectStore, StoreError, StoreScanner, StoredObject,
+    StoredPayload, WorkspaceLayout,
 };
 use std::collections::BTreeMap;
 use std::fs;

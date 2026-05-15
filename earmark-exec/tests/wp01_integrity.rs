@@ -1,5 +1,5 @@
 use earmark_connected_context::DEFAULT_COMPILED_CONTEXT_COMPILER;
-use earmark_core::{Kind, ObjectId, RunRecord};
+use earmark_core::{Kind, ObjectId, RunRecord, WorkflowOperationKind};
 use earmark_exec::engine::ExecutionEngine;
 use earmark_exec::helpers::store_work_packet;
 use earmark_exec::ir::{ExecutionIr, ExecutionTransition, WorkflowRunRequest};
@@ -7,7 +7,7 @@ use earmark_exec::persistence_helpers::write_object_and_index;
 use earmark_exec::provider::{ProviderExecutionOutcome, ProviderService};
 use earmark_exec::state::ExecutionState;
 use earmark_index::{DerivedIndex, QueryFilter};
-use earmark_store::{CanonicalStore, GitCanonicalStore, StoredObject};
+use earmark_store::{GitCanonicalStore, ObjectStore, StoredObject, WorkspaceLayout};
 use std::collections::BTreeMap;
 use tempfile::tempdir;
 
@@ -221,7 +221,7 @@ fn test_live_transition_indexing() {
     let ir = ExecutionIr {
         transitions: vec![ExecutionTransition {
             id: "t1".to_string(),
-            operation: "review".to_string(),
+            operation: WorkflowOperationKind::Review,
             input_contracts: vec![],
             output_contracts: vec![],
             instruction: None,

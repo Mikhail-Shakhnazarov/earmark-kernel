@@ -1,0 +1,14 @@
+name: claims_and_risks_for_assessment
+version: "1.0.0"
+description: All claims and risks for final assessment.
+select:
+  classes: ["claim", "risk"]
+  standing: {}
+  relations: []
+group_by: []
+render:
+  mode: prose
+visibility:
+  include_lineage: true
+  include_constraints: true
+  include_provenance: true

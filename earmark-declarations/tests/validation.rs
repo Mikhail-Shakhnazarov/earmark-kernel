@@ -5,15 +5,16 @@ use earmark_core::{
     CompiledContextSelect, CompiledContextTemplate, CompiledContextVisibility, DimensionId,
     EscalationRule, FlexibleVersionRef, InstructionPayload, JsonSchemaRef, MarkdownBody,
     OperationRequirement, ProviderBudget, ProviderExposure, ProviderProfile,
-    ProviderResponseContract, StandingPolicy, StandingRegistry, StandingTransitionRule, TokenId,
-    WorkflowDeclaration, WorkflowDeclarationOperation, WorkflowEdge, WorkflowGuard,
+    ProviderResponseContract, ProviderResponseFormat, StandingPolicy, StandingRegistry,
+    StandingTransitionRule, TokenId, WorkflowDeclaration, WorkflowDeclarationOperation,
+    WorkflowEdge, WorkflowGuard, WorkflowOperationKind,
 };
 use earmark_declarations::{
     validate_class_definition, validate_compiled_context_template, validate_instruction,
     validate_provider_profile, validate_standing_policy, validate_system_definition,
     validate_workflow_definition,
 };
-use earmark_store::{CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload};
+use earmark_store::{GitCanonicalStore, ObjectStore, StoredObject, StoredPayload, WorkspaceLayout};
 use tempfile::tempdir;
 
 fn base_workflow() -> WorkflowDeclaration {
@@ -23,7 +24,7 @@ fn base_workflow() -> WorkflowDeclaration {
         description: None,
         operations: vec![WorkflowDeclarationOperation {
             id: "op_a".to_string(),
-            kind: "transform".to_string(),
+            kind: WorkflowOperationKind::Transform,
             input_contracts: vec![],
             output_contracts: vec![],
             instruction: Some(FlexibleVersionRef::Ref(earmark_core::VersionRef::new(
@@ -153,7 +154,7 @@ fn system_validation_rejects_wrong_kind_reference() {
                 allow_export_requests: false,
             },
             response_contract: earmark_core::ProviderResponseContract {
-                format: "json".to_string(),
+                format: ProviderResponseFormat::Json,
                 must_return_candidate_only: false,
                 must_include_lineage: false,
             },
@@ -449,16 +450,21 @@ fn class_rejects_invalid_epistemic_token_in_standing_rules() {
 }
 
 #[test]
+#[should_panic(expected = "unknown variant `unknown_kind`")]
 fn workflow_rejects_invalid_operation_kind() {
-    let mut wf = base_workflow();
-    wf.operations[0].kind = "unknown_kind".to_string();
-    assert!(validate_workflow_definition(&wf).is_err());
+    let yaml = r#"name: wf_bad
+version: "1.0.0"
+operations:
+  - id: op_a
+    kind: unknown_kind
+"#;
+    let _wf: WorkflowDeclaration = earmark_core::parse_yaml(yaml).unwrap();
 }
 
 #[test]
 fn workflow_compile_context_requires_compiled_context() {
     let mut wf = base_workflow();
-    wf.operations[0].kind = "compile_context".to_string();
+    wf.operations[0].kind = WorkflowOperationKind::CompileContext;
     wf.operations[0].instruction = None;
     wf.operations[0].compiled_context = None;
     assert!(validate_workflow_definition(&wf).is_err());
@@ -484,36 +490,25 @@ fn workflow_rejects_invalid_contract_class_names() {
 }
 
 #[test]
-fn provider_profile_rejects_empty_response_format() {
-    let profile = ProviderProfile {
-        name: "test_provider".to_string(),
-        version: "1.0.0".to_string(),
-        description: None,
-        provider: "mock".to_string(),
-        model: "echo".to_string(),
-        endpoint_env: None,
-        auth_env: None,
-        budget: ProviderBudget {
-            max_input_tokens: None,
-            max_output_tokens: None,
-            max_cost_usd: None,
-            max_latency_ms: None,
-        },
-        allowed_operations: vec!["transform".to_string()],
-        exposure: ProviderExposure {
-            allow_prose_objects: true,
-            allow_structured_declarations: false,
-            allow_work_surface_only: false,
-            allow_export_requests: false,
-        },
-        response_contract: ProviderResponseContract {
-            format: "".to_string(),
-            must_return_candidate_only: true,
-            must_include_lineage: false,
-        },
-        http: None,
-    };
-    assert!(validate_provider_profile(&profile).is_err());
+fn provider_profile_rejects_unknown_response_format_at_parse_time() {
+    let yaml = r#"
+name: test_provider
+version: 1.0.0
+provider: mock
+model: echo
+allowed_operations: [transform]
+exposure:
+  allow_prose_objects: true
+  allow_structured_declarations: false
+  allow_work_surface_only: false
+  allow_export_requests: false
+response_contract:
+  format: unknown
+  must_return_candidate_only: true
+  must_include_lineage: false
+"#;
+    let parsed: Result<ProviderProfile, _> = earmark_core::parse_yaml(yaml);
+    assert!(parsed.is_err());
 }
 
 #[test]
@@ -540,7 +535,7 @@ fn provider_profile_rejects_negative_budget() {
             allow_export_requests: false,
         },
         response_contract: ProviderResponseContract {
-            format: "json".to_string(),
+            format: ProviderResponseFormat::Json,
             must_return_candidate_only: true,
             must_include_lineage: false,
         },
@@ -809,7 +804,7 @@ fn valid_workflow_example_passes() {
         operations: vec![
             WorkflowDeclarationOperation {
                 id: "compile_context".to_string(),
-                kind: "compile_context".to_string(),
+                kind: WorkflowOperationKind::CompileContext,
                 input_contracts: vec!["source_note".to_string()],
                 output_contracts: vec!["work_surface".to_string()],
                 instruction: None,
@@ -822,7 +817,7 @@ fn valid_workflow_example_passes() {
             },
             WorkflowDeclarationOperation {
                 id: "transform".to_string(),
-                kind: "transform".to_string(),
+                kind: WorkflowOperationKind::Transform,
                 input_contracts: vec!["source_note".to_string()],
                 output_contracts: vec!["finding".to_string()],
                 instruction: Some(FlexibleVersionRef::Ref(earmark_core::VersionRef::new(
@@ -869,7 +864,7 @@ fn valid_provider_profile_passes() {
             allow_export_requests: false,
         },
         response_contract: ProviderResponseContract {
-            format: "json".to_string(),
+            format: ProviderResponseFormat::Json,
             must_return_candidate_only: true,
             must_include_lineage: false,
         },

@@ -5,7 +5,9 @@ use earmark_core::{
     WorkflowDefinition,
 };
 use earmark_index::{DerivedIndex, IndexError, QueryFilter};
-use earmark_store::{CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload};
+use earmark_store::{
+    GitCanonicalStore, ObjectStore, StoreScanner, StoredObject, StoredPayload, WorkspaceLayout,
+};
 use tempfile::tempdir;
 
 #[test]

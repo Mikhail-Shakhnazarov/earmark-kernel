@@ -2,11 +2,14 @@ use chrono::Utc;
 use earmark_core::{
     ChangeSetId, DimensionId, FlexibleVersionRef, HandoffManifest, Kind, ObjectId, Standing,
     StandingConstraint, TokenId, WorkflowDeclaration, WorkflowDeclarationOperation,
+    WorkflowOperationKind,
 };
 use earmark_exec::handoff::reconstruct_successor_inputs_from_handoff;
 use earmark_exec::persistence_helpers::{write_batch_and_index, write_object_and_index};
 use earmark_index::DerivedIndex;
-use earmark_store::{BatchWrite, CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload};
+use earmark_store::{
+    BatchWrite, CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload, WorkspaceLayout,
+};
 use std::collections::BTreeMap;
 use tempfile::tempdir;
 
@@ -320,7 +323,7 @@ fn test_multi_output_transform_rejection() {
         description: None,
         operations: vec![WorkflowDeclarationOperation {
             id: "op1".to_string(),
-            kind: "transform".to_string(),
+            kind: WorkflowOperationKind::Transform,
             input_contracts: vec!["input".to_string()],
             output_contracts: vec!["out1".to_string(), "out2".to_string()], // TWO OUTPUTS
             instruction: Some(FlexibleVersionRef::Ref(earmark_core::VersionRef::new(

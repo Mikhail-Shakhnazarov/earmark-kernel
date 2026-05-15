@@ -435,7 +435,7 @@ pub struct HandoffManifest {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct ChangeSetDraft {
     #[serde(default)]
     pub created_objects: Vec<ObjectId>,
