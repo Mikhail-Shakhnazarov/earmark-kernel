@@ -4,7 +4,7 @@ use earmark_connected_context::{
 };
 use earmark_core::{Kind, RunStatus, ScalarOrRef, TokenRecord, VersionId, VersionRef};
 use earmark_index::DerivedIndex;
-use earmark_store::CanonicalStore;
+use earmark_store::{CanonicalStore, ObjectStore, WorkspaceLayout, StoreScanner, StoreWriteLocking};
 use std::collections::{BTreeSet, HashMap, VecDeque};
 
 use crate::error::ExecError;

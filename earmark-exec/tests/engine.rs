@@ -10,7 +10,10 @@ use earmark_core::{
 };
 use earmark_exec::{ExecError, ExecutionEngine, ProviderRegistry, WorkflowRunRequest};
 use earmark_index::DerivedIndex;
-use earmark_store::{CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload};
+use earmark_store::{
+    CanonicalStore, GitCanonicalStore, ObjectStore, StoreScanner, StoreWriteLocking, StoredObject,
+    StoredPayload, WorkspaceLayout,
+};
 use tempfile::tempdir;
 
 fn persist_transition_assignment(store: &GitCanonicalStore, assignment: &TransitionAssignment) {

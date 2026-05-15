@@ -14,7 +14,7 @@ use earmark_declarations::{
     validate_provider_profile, validate_standing_policy, validate_system_definition,
     validate_workflow_definition,
 };
-use earmark_store::{CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload};
+use earmark_store::{CanonicalStore, GitCanonicalStore, ObjectStore, WorkspaceLayout, StoreScanner, StoreWriteLocking, StoredObject, StoredPayload };
 use tempfile::tempdir;
 
 fn base_workflow() -> WorkflowDeclaration {

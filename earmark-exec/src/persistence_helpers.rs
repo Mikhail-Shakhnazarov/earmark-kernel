@@ -2,7 +2,7 @@ use chrono::Utc;
 use crate::error::ExecError;
 use earmark_core::VersionRef;
 use earmark_index::{DerivedIndex, IndexDirtyMarker};
-use earmark_store::{BatchWrite, CanonicalStore, StoredObject};
+use earmark_store::{BatchWrite, CanonicalStore, ObjectStore, WorkspaceLayout, StoreScanner, StoreWriteLocking, StoredObject};
 
 pub fn write_object_and_index<S: CanonicalStore>(
     store: &S,

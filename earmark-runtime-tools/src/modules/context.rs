@@ -6,7 +6,7 @@ use earmark_connected_context::{
 use earmark_core::{
     ClassFilter, ConnectedContextManifest, Kind, ObjectId, StandingFilter, VersionRef,
 };
-use earmark_store::{CanonicalStore, StoredObject};
+use earmark_store::{CanonicalStore, ObjectStore, WorkspaceLayout, StoreScanner, StoreWriteLocking, StoredObject};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {

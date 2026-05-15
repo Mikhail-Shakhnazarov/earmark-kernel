@@ -7,7 +7,7 @@ use earmark_exec::persistence_helpers::write_object_and_index;
 use earmark_exec::provider::{ProviderExecutionOutcome, ProviderService};
 use earmark_exec::state::ExecutionState;
 use earmark_index::{DerivedIndex, QueryFilter};
-use earmark_store::{CanonicalStore, GitCanonicalStore, StoredObject};
+use earmark_store::{CanonicalStore, GitCanonicalStore, ObjectStore, WorkspaceLayout, StoreScanner, StoreWriteLocking, StoredObject };
 use std::collections::BTreeMap;
 use tempfile::tempdir;
 

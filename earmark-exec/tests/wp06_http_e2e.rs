@@ -8,7 +8,7 @@ use earmark_core::{
 };
 use earmark_exec::{HttpGenerationAdapter, ProviderRegistry, ProviderService};
 use earmark_index::DerivedIndex;
-use earmark_store::{CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload};
+use earmark_store::{CanonicalStore, GitCanonicalStore, ObjectStore, WorkspaceLayout, StoreScanner, StoreWriteLocking, StoredObject, StoredPayload };
 use httpmock::MockServer;
 use std::collections::BTreeMap;
 use std::sync::Arc;

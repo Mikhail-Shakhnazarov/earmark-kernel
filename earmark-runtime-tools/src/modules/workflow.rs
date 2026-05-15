@@ -7,7 +7,7 @@ use earmark_core::{
 };
 use earmark_exec::persistence_helpers::write_object_and_index;
 use earmark_exec::{ExecutionEngine, WorkflowRunOutcome, WorkflowRunRequest};
-use earmark_store::{CanonicalStore, StoredObject, StoredPayload};
+use earmark_store::{CanonicalStore, ObjectStore, WorkspaceLayout, StoreScanner, StoreWriteLocking, StoredObject, StoredPayload};
 use std::collections::BTreeMap;
 use std::time::Duration;
 

@@ -10,7 +10,7 @@ use earmark_core::{
     WorkflowDeclaration, WorkflowDefinition,
 };
 use earmark_index::{ActiveSystemRecord, DerivedIndex};
-use earmark_store::CanonicalStore;
+use earmark_store::{CanonicalStore, ObjectStore, WorkspaceLayout, StoreScanner, StoreWriteLocking};
 use thiserror::Error;
 
 pub fn load_class_definition(path: impl AsRef<Path>) -> Result<ClassDefinition, DeriveError> {

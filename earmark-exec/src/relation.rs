@@ -3,7 +3,7 @@ use earmark_core::{
     HeaderValue, Kind, ObjectRef, Provenance, RelationCreationMode, RelationPayload,
 };
 use earmark_index::DerivedIndex;
-use earmark_store::{CanonicalStore, StoredObject, StoredPayload};
+use earmark_store::{CanonicalStore, ObjectStore, WorkspaceLayout, StoreScanner, StoreWriteLocking, StoredObject, StoredPayload};
 use std::collections::BTreeMap;
 
 /// Persists a relation to the canonical store and updates the index.

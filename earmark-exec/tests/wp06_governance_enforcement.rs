@@ -11,7 +11,10 @@ use earmark_exec::persistence_helpers::write_object_and_index;
 use earmark_exec::validation::validate_transition_change_set;
 use earmark_exec::ExecutionTransition;
 use earmark_index::DerivedIndex;
-use earmark_store::{CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload};
+use earmark_store::{
+    CanonicalStore, GitCanonicalStore, ObjectStore, StoreScanner, StoreWriteLocking, StoredObject,
+    StoredPayload, WorkspaceLayout,
+};
 use tempfile::TempDir;
 
 fn setup_store(root: &Path) -> (GitCanonicalStore, DerivedIndex) {

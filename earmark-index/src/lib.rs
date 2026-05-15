@@ -7,7 +7,7 @@ use earmark_core::{
     InstructionPayload, Kind, ObjectId, ProviderProfile, RelationPayload, StandingPolicy,
     SystemDefinition, TokenId, UndoRecord, VersionRef, WorkflowDefinition,
 };
-use earmark_store::CanonicalStore;
+use earmark_store::{CanonicalStore, ObjectStore, WorkspaceLayout, StoreScanner, StoreWriteLocking};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;

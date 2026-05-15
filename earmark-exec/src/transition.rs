@@ -8,7 +8,7 @@ use earmark_core::{
     WorkPacketConstraints, WorkflowOperationKind,
 };
 use earmark_governance::{escalation_for_trigger, export_allowed, GovernanceService};
-use earmark_store::{CanonicalStore, StoredObject, StoredPayload};
+use earmark_store::{CanonicalStore, ObjectStore, WorkspaceLayout, StoreScanner, StoreWriteLocking, StoredObject, StoredPayload};
 
 use crate::engine::ExecutionEngine;
 use crate::error::{ExecError, ProviderFailure, ProviderFailureKind};

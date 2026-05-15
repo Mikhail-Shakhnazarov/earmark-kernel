@@ -2,7 +2,7 @@ use crate::modules::error::RuntimeToolError;
 use crate::modules::surface::RuntimeToolSurface;
 use earmark_declarations::activate_system_definition;
 use earmark_index::{ActiveSystemRecord, ObjectSummary, QueryFilter};
-use earmark_store::CanonicalStore;
+use earmark_store::{CanonicalStore, ObjectStore, WorkspaceLayout, StoreScanner, StoreWriteLocking};
 
 impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
     pub fn query(&self, filter: QueryFilter) -> Result<Vec<ObjectSummary>, RuntimeToolError> {

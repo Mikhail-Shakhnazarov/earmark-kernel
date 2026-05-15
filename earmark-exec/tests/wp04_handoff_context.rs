@@ -7,7 +7,7 @@ use earmark_core::{
 use earmark_exec::handoff::reconstruct_successor_inputs_from_handoff;
 use earmark_exec::persistence_helpers::{write_batch_and_index, write_object_and_index};
 use earmark_index::DerivedIndex;
-use earmark_store::{BatchWrite, CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload};
+use earmark_store::{BatchWrite, CanonicalStore, GitCanonicalStore, ObjectStore, WorkspaceLayout, StoreScanner, StoreWriteLocking, StoredObject, StoredPayload };
 use std::collections::BTreeMap;
 use tempfile::tempdir;
 

@@ -1,7 +1,10 @@
 use chrono::Utc;
 use earmark_core::Kind;
 use earmark_index::{DerivedIndex, IndexDirtyMarker};
-use earmark_store::{CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload};
+use earmark_store::{
+    CanonicalStore, GitCanonicalStore, ObjectStore, StoreScanner, StoreWriteLocking, StoredObject,
+    StoredPayload, WorkspaceLayout,
+};
 use std::collections::BTreeMap;
 use tempfile::tempdir;
 

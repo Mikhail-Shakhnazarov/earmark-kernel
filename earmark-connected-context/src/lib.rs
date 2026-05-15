@@ -13,7 +13,9 @@ use earmark_core::{
     VersionRef,
 };
 use earmark_index::{DerivedIndex, ObjectSummary, QueryFilter};
-use earmark_store::CanonicalStore;
+use earmark_store::{
+    CanonicalStore, ObjectStore, StoreScanner, StoreWriteLocking, WorkspaceLayout,
+};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -567,7 +569,9 @@ mod tests {
         CompiledContextExpansion, DimensionId, ExpansionObjectFilter, Kind, Provenance, Standing,
         TokenId,
     };
-    use earmark_store::{CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload};
+    use earmark_store::{
+        CanonicalStore, GitCanonicalStore, ObjectStore, StoredObject, StoredPayload, WorkspaceLayout,
+    };
     use tempfile::tempdir;
 
     #[test]

@@ -6,7 +6,7 @@ use crate::cli::Cli;
 use crate::config::{load_config, resolve_json, resolve_root};
 use earmark_exec::default_provider_registry;
 use earmark_index::DerivedIndex;
-use earmark_store::{CanonicalStore, GitCanonicalStore};
+use earmark_store::{CanonicalStore, GitCanonicalStore, ObjectStore, WorkspaceLayout, StoreScanner, StoreWriteLocking };
 
 pub(crate) fn bootstrap(cli: &Cli) -> Result<BootstrappedServices, CliError> {
     // 1. Load config (handles CLI flag, ENV, and default paths)

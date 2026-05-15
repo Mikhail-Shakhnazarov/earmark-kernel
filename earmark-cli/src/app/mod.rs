@@ -21,7 +21,8 @@ use earmark_declarations::{
 };
 use earmark_index::DerivedIndex;
 use earmark_store::{
-    CanonicalStore, GitCanonicalStore, PayloadEncoding, StoredObject, StoredPayload,
+    CanonicalStore, GitCanonicalStore, ObjectStore, PayloadEncoding, StoreScanner,
+    StoreWriteLocking, StoredObject, StoredPayload, WorkspaceLayout,
 };
 use serde::Deserialize;
 use serde_json::json;

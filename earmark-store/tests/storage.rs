@@ -1,7 +1,10 @@
 use std::collections::BTreeMap;
 
 use earmark_core::{HeaderValue, Kind, Provenance, Standing};
-use earmark_store::{BatchWrite, CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload};
+use earmark_store::{
+    BatchWrite, CanonicalStore, GitCanonicalStore, ObjectStore, StoreScanner, StoreWriteLocking,
+    StoredObject, StoredPayload, WorkspaceLayout,
+};
 use gix::bstr::ByteSlice;
 use tempfile::tempdir;
 

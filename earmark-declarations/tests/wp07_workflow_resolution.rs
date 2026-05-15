@@ -113,3 +113,33 @@ fn test_resolve_mixed_references() {
     assert_eq!(resolved.operations[0].instruction, Some(vref_path));
     assert_eq!(resolved.operations[0].compiled_context, Some(vref_durable));
 }
+
+#[test]
+fn test_flexible_ref_deserialization_failure() {
+    // Missing 'id' field
+    let yaml = r#"
+name: test
+version: "1.0.0"
+operations:
+  - id: op1
+    kind: transform
+    instruction:
+      version_id: ver_1234567890abcdef1234567890abcdef
+"#;
+    let err = earmark_core::parse_yaml::<WorkflowDeclaration>(yaml).unwrap_err().to_string();
+    assert!(err.contains("missing 'id' field"));
+
+    // Malformed 'id' field
+    let yaml2 = r#"
+name: test
+version: "1.0.0"
+operations:
+  - id: op1
+    kind: transform
+    instruction:
+      id: not_an_obj_id
+      version_id: ver_1234567890abcdef1234567890abcdef
+"#;
+    let err2 = earmark_core::parse_yaml::<WorkflowDeclaration>(yaml2).unwrap_err().to_string();
+    assert!(err2.contains("must start with obj_"));
+}

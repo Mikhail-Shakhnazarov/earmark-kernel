@@ -1,6 +1,6 @@
 use earmark_exec::ProviderService;
 use earmark_index::DerivedIndex;
-use earmark_store::CanonicalStore;
+use earmark_store::{CanonicalStore, ObjectStore, WorkspaceLayout, StoreScanner, StoreWriteLocking};
 
 pub struct RuntimeToolSurface<'a, S: CanonicalStore> {
     pub store: &'a S,

@@ -295,9 +295,13 @@ pub struct BatchWrite {
     pub objects: Vec<StoredObject>,
 }
 
-pub trait CanonicalStore {
+pub trait WorkspaceLayout {
     fn root(&self) -> &Path;
     fn init_layout(&self) -> Result<(), StoreError>;
+    fn version_path(&self, version: &VersionRef) -> PathBuf;
+}
+
+pub trait ObjectStore {
     fn write_object(&self, object: &StoredObject) -> Result<VersionRef, StoreError>;
     fn write_batch(&self, batch: &BatchWrite) -> Result<Vec<VersionRef>, StoreError>;
     fn read_version(&self, version: &VersionRef) -> Result<StoredObject, StoreError>;
@@ -305,9 +309,13 @@ pub trait CanonicalStore {
     fn read_head_ref(&self, object_id: &ObjectId) -> Result<Option<VersionRef>, StoreError>;
     fn list_versions(&self, object_id: &ObjectId) -> Result<Vec<VersionRef>, StoreError>;
     fn resolve_payload(&self, payload_ref: &PayloadRef) -> Result<StoredPayload, StoreError>;
-    fn scan_objects(&self) -> Result<Vec<StoredObject>, StoreError>;
-    fn version_path(&self, version: &VersionRef) -> PathBuf;
+}
 
+pub trait StoreScanner {
+    fn scan_objects(&self) -> Result<Vec<StoredObject>, StoreError>;
+}
+
+pub trait StoreWriteLocking {
     fn acquire_write_lock(&self) -> Result<WorkspaceWriteGuard, StoreError>;
     fn write_batch_locked(
         &self,
@@ -335,6 +343,10 @@ pub trait CanonicalStore {
         .ok_or_else(|| StoreError::Invariant("batch write returned no refs".to_string()))
     }
 }
+
+pub trait CanonicalStore:
+    WorkspaceLayout + ObjectStore + StoreScanner + StoreWriteLocking
+{}
 
 #[derive(Debug, Clone)]
 pub struct GitCanonicalStore {
@@ -486,13 +498,9 @@ pub struct WorkspaceWriteGuard {
     _file: fs::File,
 }
 
-impl CanonicalStore for GitCanonicalStore {
+impl WorkspaceLayout for GitCanonicalStore {
     fn root(&self) -> &Path {
         &self.root
-    }
-
-    fn acquire_write_lock(&self) -> Result<WorkspaceWriteGuard, StoreError> {
-        self.acquire_write_lock()
     }
 
     fn init_layout(&self) -> Result<(), StoreError> {
@@ -500,14 +508,14 @@ impl CanonicalStore for GitCanonicalStore {
         self.init_layout_unlocked()
     }
 
-    fn write_object(&self, object: &StoredObject) -> Result<VersionRef, StoreError> {
-        let guard = self.acquire_write_lock()?;
-        self.write_object_locked(&guard, object)
+    fn version_path(&self, version: &VersionRef) -> PathBuf {
+        self.version_dir(&version.id, &version.version_id)
     }
+}
 
-    fn write_batch(&self, batch: &BatchWrite) -> Result<Vec<VersionRef>, StoreError> {
-        let guard = self.acquire_write_lock()?;
-        self.write_batch_locked(&guard, batch)
+impl StoreWriteLocking for GitCanonicalStore {
+    fn acquire_write_lock(&self) -> Result<WorkspaceWriteGuard, StoreError> {
+        self.acquire_write_lock()
     }
 
     fn write_batch_locked(
@@ -640,6 +648,18 @@ impl CanonicalStore for GitCanonicalStore {
         }
         Ok(written)
     }
+}
+
+impl ObjectStore for GitCanonicalStore {
+    fn write_object(&self, object: &StoredObject) -> Result<VersionRef, StoreError> {
+        let guard = self.acquire_write_lock()?;
+        self.write_object_locked(&guard, object)
+    }
+
+    fn write_batch(&self, batch: &BatchWrite) -> Result<Vec<VersionRef>, StoreError> {
+        let guard = self.acquire_write_lock()?;
+        self.write_batch_locked(&guard, batch)
+    }
 
     fn read_version(&self, version: &VersionRef) -> Result<StoredObject, StoreError> {
         let version_dir = self.version_dir(&version.id, &version.version_id);
@@ -712,7 +732,9 @@ impl CanonicalStore for GitCanonicalStore {
         }
         Err(StoreError::MissingPayload(payload_ref.0.clone()))
     }
+}
 
+impl StoreScanner for GitCanonicalStore {
     fn scan_objects(&self) -> Result<Vec<StoredObject>, StoreError> {
         let mut objects = Vec::new();
         for entry in WalkDir::new(self.objects_dir())
@@ -746,11 +768,9 @@ impl CanonicalStore for GitCanonicalStore {
         }
         Ok(objects)
     }
-
-    fn version_path(&self, version: &VersionRef) -> PathBuf {
-        self.version_dir(&version.id, &version.version_id)
-    }
 }
+
+impl CanonicalStore for GitCanonicalStore {}
 
 #[derive(Debug, Error)]
 pub enum StoreError {
