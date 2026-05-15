@@ -23,7 +23,7 @@ pub struct Cli {
 #[derive(Subcommand)]
 pub enum Commands {
     Init,
-    Doctor,
+    Doctor(DoctorArgs),
     System(SystemCommand),
     Deposit(DepositArgs),
     Query(QueryArgs),
@@ -57,6 +57,12 @@ pub enum CompletionShell {
 pub struct SystemCommand {
     #[command(subcommand)]
     pub action: SystemAction,
+}
+
+#[derive(Args)]
+pub struct DoctorArgs {
+    #[arg(long, help = "rebuild the derived index from canonical store")]
+    pub repair_index: bool,
 }
 
 #[derive(Subcommand)]

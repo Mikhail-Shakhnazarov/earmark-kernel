@@ -1,6 +1,7 @@
 use crate::app::common::CommandContext;
 use crate::app::emit;
 use crate::app::CliError;
+use crate::cli::DoctorArgs;
 use earmark_index::DerivedIndex;
 use earmark_store::CanonicalStore;
 use serde_json::json;
@@ -33,8 +34,27 @@ pub(crate) fn handle_init(ctx: &CommandContext) -> Result<(), CliError> {
     Ok(())
 }
 
-pub(crate) fn handle_doctor(ctx: &CommandContext) -> Result<(), CliError> {
+pub(crate) fn handle_doctor(ctx: &CommandContext, args: &DoctorArgs) -> Result<(), CliError> {
     let store = ctx.store;
+
+    if args.repair_index {
+        let index = ctx
+            .index
+            .as_ref()
+            .ok_or_else(|| CliError::not_found("index available for workspace command"))?;
+        index.rebuild_from_store(store)?;
+        index.clear_dirty()?;
+        emit(
+            ctx.as_json,
+            json!({
+                "ok": true,
+                "summary": "index repaired successfully from canonical store",
+                "next_commands": ["em doctor", "em status"],
+            }),
+        );
+        return Ok(());
+    }
+
     let layout = store.layout_status();
     if !layout.is_initialized() {
         emit(
@@ -63,10 +83,17 @@ pub(crate) fn handle_doctor(ctx: &CommandContext) -> Result<(), CliError> {
     let index_exists = index_path.exists();
     let mut warnings: Vec<String> = Vec::new();
     let mut all_ok = store_scan_ok;
+    let mut dirty_marker = None;
 
     let (index_open_ok, indexed_count, indexed_head_count, counts_match) = if index_exists {
         match DerivedIndex::open_existing(store.root()) {
             Ok(idx) => {
+                dirty_marker = idx.dirty_status().unwrap_or(None);
+                if dirty_marker.is_some() {
+                    all_ok = false;
+                    warnings.push("index is marked dirty; repair required".to_string());
+                }
+
                 let obj_count = idx.object_count().unwrap_or(0);
                 let head_count = idx.head_count().unwrap_or(0);
                 let match_ok = obj_count == canonical_count;
@@ -114,6 +141,8 @@ pub(crate) fn handle_doctor(ctx: &CommandContext) -> Result<(), CliError> {
             "indexed_object_count": indexed_count,
             "indexed_head_count": indexed_head_count,
             "counts_match": counts_match,
+            "index_is_dirty": dirty_marker.is_some(),
+            "index_dirty_marker": dirty_marker,
             "provider_capabilities": earmark_exec::compiled_provider_capabilities(),
             "warnings": warnings,
             "next_commands": if all_ok {
@@ -123,9 +152,8 @@ pub(crate) fn handle_doctor(ctx: &CommandContext) -> Result<(), CliError> {
                 if !layout.is_initialized() {
                     cmds.push("em init");
                 }
-                if !index_exists || !index_open_ok || !counts_match {
-                    cmds.push("em system register <manifest>");
-                    cmds.push("no standalone index rebuild command exists yet; system registration triggers a full rebuild");
+                if !index_exists || !index_open_ok || !counts_match || dirty_marker.is_some() {
+                    cmds.push("em doctor --repair-index");
                 }
                 cmds.push("em status");
                 cmds

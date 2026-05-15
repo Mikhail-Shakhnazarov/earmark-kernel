@@ -14,7 +14,7 @@ use crate::persistence_helpers::write_object_and_index;
 use earmark_index::DerivedIndex;
 
 pub(crate) fn estimate_tokens_approx(text: &str) -> u32 {
-    ((text.chars().count() + 3) / 4) as u32
+    text.chars().count().div_ceil(4) as u32
 }
 
 pub(crate) fn compile_workflow(workflow: &WorkflowDefinition) -> Result<ExecutionIr, ExecError> {

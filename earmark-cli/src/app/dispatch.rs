@@ -14,7 +14,7 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
 
     match cli.command {
         Commands::Init => crate::app::commands::init_doctor::handle_init(ctx)?,
-        Commands::Doctor => crate::app::commands::init_doctor::handle_doctor(ctx)?,
+        Commands::Doctor(args) => crate::app::commands::init_doctor::handle_doctor(ctx, &args)?,
         Commands::System(command) => crate::app::commands::system::handle(ctx, &command)?,
         Commands::Deposit(args) => crate::app::commands::deposit::handle(ctx, &args)?,
         Commands::Query(args) => crate::app::commands::query::handle(ctx, &args)?,

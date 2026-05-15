@@ -1,7 +1,7 @@
 use chrono::Utc;
 use earmark_connected_context::DEFAULT_COMPILED_CONTEXT_COMPILER;
 use earmark_core::{
-    to_yaml, Kind, MarkdownBody, ObjectId, ProviderBudget, ProviderExposure,
+    to_yaml, Kind, ObjectId, ProviderBudget, ProviderExposure,
     ProviderProfile, ProviderRequest, ProviderResponse, ProviderResponseContract, ProviderUsage,
     RunRecord, SystemDefinition, VersionId, VersionRef, WorkflowOperationKind,
 };

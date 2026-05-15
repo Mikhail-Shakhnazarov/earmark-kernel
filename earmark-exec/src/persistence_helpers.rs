@@ -1,6 +1,7 @@
+use chrono::Utc;
 use crate::error::ExecError;
 use earmark_core::VersionRef;
-use earmark_index::DerivedIndex;
+use earmark_index::{DerivedIndex, IndexDirtyMarker};
 use earmark_store::{BatchWrite, CanonicalStore, StoredObject};
 
 pub fn write_object_and_index<S: CanonicalStore>(
@@ -8,6 +9,16 @@ pub fn write_object_and_index<S: CanonicalStore>(
     index: &DerivedIndex,
     object: &StoredObject,
 ) -> Result<VersionRef, ExecError> {
+    let marker = IndexDirtyMarker {
+        schema_version: "1.0".to_string(),
+        reason: "writing object".to_string(),
+        timestamp: Utc::now(),
+        operation: "write_object".to_string(),
+        object_ids: vec![object.envelope.id.as_str().to_string()],
+        version_ids: vec![object.envelope.version_id.as_str().to_string()],
+    };
+    index.mark_dirty(marker)?;
+
     let guard = store.acquire_write_lock()?;
     let version_ref = store.write_object_locked(&guard, object)?;
     if let Err(e) = index.upsert_head_object_from_store(store, &object.envelope.id) {
@@ -17,6 +28,8 @@ pub fn write_object_and_index<S: CanonicalStore>(
             error: e.to_string(),
         });
     }
+
+    index.clear_dirty()?;
     Ok(version_ref)
 }
 
@@ -34,6 +47,24 @@ pub fn write_batch_and_index<S: CanonicalStore>(
     index: &DerivedIndex,
     batch: &BatchWrite,
 ) -> Result<Vec<VersionRef>, ExecError> {
+    let marker = IndexDirtyMarker {
+        schema_version: "1.0".to_string(),
+        reason: "writing batch".to_string(),
+        timestamp: Utc::now(),
+        operation: "write_batch".to_string(),
+        object_ids: batch
+            .objects
+            .iter()
+            .map(|o| o.envelope.id.as_str().to_string())
+            .collect(),
+        version_ids: batch
+            .objects
+            .iter()
+            .map(|o| o.envelope.version_id.as_str().to_string())
+            .collect(),
+    };
+    index.mark_dirty(marker)?;
+
     let guard = store.acquire_write_lock()?;
     let version_refs = store.write_batch_locked(&guard, batch)?;
     for object in &batch.objects {
@@ -45,5 +76,7 @@ pub fn write_batch_and_index<S: CanonicalStore>(
             });
         }
     }
+
+    index.clear_dirty()?;
     Ok(version_refs)
 }

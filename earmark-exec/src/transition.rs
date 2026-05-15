@@ -652,6 +652,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
         Ok(event_object_ref)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn finalize_execution_failure(
         &self,
         record: &mut RunRecord,
