@@ -2,7 +2,7 @@ use crate::app::common::{CliError, CommandContext};
 use crate::app::*;
 use crate::cli::*;
 use earmark_core::Kind;
-use earmark_store::CanonicalStore;
+use earmark_store::{ObjectStore, StoreScanner, WorkspaceLayout};
 use serde_json::json;
 use std::collections::BTreeMap;
 use std::fs;
@@ -14,7 +14,7 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
 
     match cli.command {
         Commands::Init => crate::app::commands::init_doctor::handle_init(ctx)?,
-        Commands::Doctor => crate::app::commands::init_doctor::handle_doctor(ctx)?,
+        Commands::Doctor(args) => crate::app::commands::init_doctor::handle_doctor(ctx, &args)?,
         Commands::System(command) => crate::app::commands::system::handle(ctx, &command)?,
         Commands::Deposit(args) => crate::app::commands::deposit::handle(ctx, &args)?,
         Commands::Query(args) => crate::app::commands::query::handle(ctx, &args)?,

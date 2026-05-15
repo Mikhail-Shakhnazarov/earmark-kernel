@@ -3,7 +3,7 @@ use crate::relation_logic::{
 };
 use earmark_core::{
     ChangeSetDraft, ChangeSetValidationResult, ClassDefinition, Kind, ObjectId, ObjectRef,
-    Standing, SystemDefinition, VersionId, WorkflowGuard,
+    Standing, SystemDefinition, VersionId, WorkflowGuard, WorkflowOperationKind,
 };
 use earmark_index::DerivedIndex;
 use earmark_store::{CanonicalStore, StoredObject};
@@ -365,7 +365,9 @@ pub fn validate_transition_change_set<S: CanonicalStore>(
     }
 
     if !transition.output_contracts.is_empty() {
-        if created_output_classes.is_empty() && transition.operation == "transform" {
+        if created_output_classes.is_empty()
+            && transition.operation == WorkflowOperationKind::Transform
+        {
             failures.push(format!(
                 "transition {} declared output contract(s) {:?} but produced no object-class outputs",
                 transition.id, transition.output_contracts

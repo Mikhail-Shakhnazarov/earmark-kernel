@@ -1,0 +1,9 @@
+name: risk
+version: "1.0.0"
+kind: object
+required_headers: []
+payload_schema: "{}"
+standing_rules: {}
+relation_rules: []
+validators: []
+description: A potential hazard or negative outcome identified in a source note.

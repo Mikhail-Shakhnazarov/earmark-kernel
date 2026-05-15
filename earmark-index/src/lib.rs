@@ -45,6 +45,16 @@ pub struct ActiveSystemRecord {
     pub activated_at: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IndexDirtyMarker {
+    pub schema_version: String,
+    pub reason: String,
+    pub timestamp: chrono::DateTime<chrono::Utc>,
+    pub operation: String,
+    pub object_ids: Vec<String>,
+    pub version_ids: Vec<String>,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct QueryFilter {
     pub class: Option<String>,
@@ -91,6 +101,35 @@ impl DerivedIndex {
 
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    fn dirty_marker_path(&self) -> PathBuf {
+        self.path.with_file_name("index_dirty.json")
+    }
+
+    pub fn mark_dirty(&self, marker: IndexDirtyMarker) -> Result<(), IndexError> {
+        let path = self.dirty_marker_path();
+        let json = serde_json::to_string_pretty(&marker)?;
+        std::fs::write(path, json)?;
+        Ok(())
+    }
+
+    pub fn clear_dirty(&self) -> Result<(), IndexError> {
+        let path = self.dirty_marker_path();
+        if path.exists() {
+            std::fs::remove_file(path)?;
+        }
+        Ok(())
+    }
+
+    pub fn dirty_status(&self) -> Result<Option<IndexDirtyMarker>, IndexError> {
+        let path = self.dirty_marker_path();
+        if !path.exists() {
+            return Ok(None);
+        }
+        let json = std::fs::read_to_string(path)?;
+        let marker = serde_json::from_str(&json)?;
+        Ok(Some(marker))
     }
 
     pub fn is_run_undone(&self, run_id: &str) -> Result<Option<String>, IndexError> {
@@ -1049,4 +1088,6 @@ pub enum IndexError {
     Conflict(String),
     #[error("missing index: {0}")]
     MissingIndex(String),
+    #[error("serde error: {0}")]
+    Serde(#[from] serde_json::Error),
 }

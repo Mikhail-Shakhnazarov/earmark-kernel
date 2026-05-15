@@ -1,7 +1,9 @@
 use std::collections::BTreeMap;
 
 use earmark_core::{HeaderValue, Kind, Provenance, Standing};
-use earmark_store::{BatchWrite, CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload};
+use earmark_store::{
+    BatchWrite, GitCanonicalStore, ObjectStore, StoredObject, StoredPayload, WorkspaceLayout,
+};
 use gix::bstr::ByteSlice;
 use tempfile::tempdir;
 
@@ -367,6 +369,13 @@ fn signature_precedence_env_over_config_then_fallback() {
     let sig = commit.author().unwrap();
     assert_eq!(sig.name.to_str_lossy().to_string(), "earmark");
     assert_eq!(sig.email.to_str_lossy().to_string(), "earmark@local");
+}
+
+#[test]
+fn payload_utf8_accessors_support_borrowed_and_owned_views() {
+    let payload = StoredPayload::from_markdown("hello");
+    assert_eq!(payload.as_utf8_str().unwrap(), "hello");
+    assert_eq!(payload.as_utf8().unwrap(), "hello".to_string());
 }
 
 #[test]

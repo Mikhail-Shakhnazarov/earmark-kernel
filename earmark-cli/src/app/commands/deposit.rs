@@ -4,7 +4,7 @@ use crate::cli::DepositArgs;
 use crate::config::resolve_system_id;
 use earmark_core::{Kind, VersionRef};
 use earmark_runtime_tools::RuntimeToolSurface;
-use earmark_store::CanonicalStore;
+use earmark_store::ObjectStore;
 use serde_json::json;
 use std::fs;
 

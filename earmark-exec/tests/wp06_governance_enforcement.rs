@@ -4,14 +4,14 @@ use std::path::Path;
 use earmark_core::{
     AssignmentStatus, ChangeSetDraft, DimensionId, Kind, RuntimeProfile, Standing, StandingPolicy,
     StandingRegistry, StandingRequestStatus, StandingTransitionRule, SystemDefinition, TokenId,
-    TransitionAssignment, TransitionAssignmentId,
+    TransitionAssignment, TransitionAssignmentId, WorkflowOperationKind,
 };
 use earmark_exec::governance_ops::{apply_standing_request, approve_standing_request};
 use earmark_exec::persistence_helpers::write_object_and_index;
 use earmark_exec::validation::validate_transition_change_set;
 use earmark_exec::ExecutionTransition;
 use earmark_index::DerivedIndex;
-use earmark_store::{CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload};
+use earmark_store::{GitCanonicalStore, ObjectStore, StoredObject, StoredPayload, WorkspaceLayout};
 use tempfile::TempDir;
 
 fn setup_store(root: &Path) -> (GitCanonicalStore, DerivedIndex) {
@@ -313,7 +313,7 @@ fn test_initial_accepted_standing_fails_without_review_or_trusted_provenance() {
 
     let transition = ExecutionTransition {
         id: "test".to_string(),
-        operation: "test".to_string(),
+        operation: WorkflowOperationKind::Review,
         input_contracts: vec![],
         output_contracts: vec![],
         instruction: None,

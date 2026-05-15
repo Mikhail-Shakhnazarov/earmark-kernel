@@ -8,7 +8,9 @@ use earmark_core::{
 };
 use earmark_exec::ProviderRegistry;
 use earmark_index::DerivedIndex;
-use earmark_store::{CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload};
+use earmark_store::{
+    CanonicalStore, GitCanonicalStore, ObjectStore, StoredObject, StoredPayload, WorkspaceLayout,
+};
 use serde_json::json;
 use std::collections::BTreeMap;
 use tempfile::tempdir;

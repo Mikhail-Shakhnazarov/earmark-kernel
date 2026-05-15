@@ -1,3 +1,7 @@
+mod resolver;
+
+pub use resolver::resolve_workflow_declaration;
+
 use std::{fs, path::Path};
 
 use earmark_core::{
@@ -26,7 +30,15 @@ pub fn load_standing_policy(path: impl AsRef<Path>) -> Result<StandingPolicy, De
 pub fn load_workflow_definition(
     path: impl AsRef<Path>,
 ) -> Result<WorkflowDeclaration, DeriveError> {
-    Ok(parse_yaml(&fs::read_to_string(path)?)?)
+    let path = path.as_ref();
+    let content = fs::read_to_string(path)?;
+    parse_yaml(&content).map_err(|e| {
+        DeriveError::Validation(format!(
+            "failed to load workflow declaration from {}: {}",
+            path.display(),
+            e
+        ))
+    })
 }
 
 pub fn load_compiled_context_template(
@@ -377,39 +389,42 @@ pub fn validate_standing_policy_against_registry(
 pub fn validate_workflow_definition(value: &WorkflowDeclaration) -> Result<(), DeriveError> {
     earmark_core::validate_class_name(&value.name)
         .map_err(|e| DeriveError::Validation(e.to_string()))?;
-    let valid_kinds = ["compile_context", "transform", "nop"];
     let mut ids = std::collections::BTreeSet::new();
     for op in &value.operations {
         validate_workflow_token(&op.id, "operation id")?;
-        if !valid_kinds.contains(&op.kind.as_str()) {
-            return Err(DeriveError::Validation(format!(
-                "workflow operation '{}' has invalid kind '{}': expected compile_context, transform, or nop",
-                op.id, op.kind
-            )));
-        }
         if !ids.insert(op.id.as_str()) {
             return Err(DeriveError::Validation(format!(
                 "duplicate workflow operation id '{}'",
                 op.id
             )));
         }
-        if op.kind == "compile_context" && op.compiled_context.is_none() {
-            return Err(DeriveError::Validation(format!(
-                "workflow operation '{}' of kind compile_context requires a compiled_context reference",
-                op.id
-            )));
-        }
-        if op.kind == "transform" && op.instruction.is_none() {
-            return Err(DeriveError::Validation(format!(
-                "workflow operation '{}' of kind transform requires an instruction reference",
-                op.id
-            )));
-        }
-        if op.kind == "transform" && op.output_contracts.len() > 1 {
-            return Err(DeriveError::Validation(format!(
-                "multi-output transform operations are not implemented; declare one output contract for operation '{}'",
-                op.id
-            )));
+        match op.kind {
+            earmark_core::WorkflowOperationKind::CompileContext => {
+                if op.compiled_context.is_none() {
+                    return Err(DeriveError::Validation(format!(
+                        "workflow operation '{}' of kind compile_context requires a compiled_context reference",
+                        op.id
+                    )));
+                }
+            }
+            earmark_core::WorkflowOperationKind::Transform => {
+                if op.instruction.is_none() {
+                    return Err(DeriveError::Validation(format!(
+                        "workflow operation '{}' of kind transform requires an instruction reference",
+                        op.id
+                    )));
+                }
+                if op.output_contracts.len() > 1 {
+                    return Err(DeriveError::Validation(format!(
+                        "multi-output transform operations are not implemented; declare one output contract for operation '{}'",
+                        op.id
+                    )));
+                }
+            }
+            earmark_core::WorkflowOperationKind::Review
+            | earmark_core::WorkflowOperationKind::Export => {
+                // Future packet: validate review/export-specific requirements
+            }
         }
         for class in &op.input_contracts {
             earmark_core::validate_class_name(class).map_err(|e| {
@@ -601,11 +616,6 @@ pub fn validate_provider_profile(value: &ProviderProfile) -> Result<(), DeriveEr
     if value.provider.trim().is_empty() || value.model.trim().is_empty() {
         return Err(DeriveError::Validation(
             "provider profile requires provider and model".to_string(),
-        ));
-    }
-    if value.response_contract.format.trim().is_empty() {
-        return Err(DeriveError::Validation(
-            "provider profile response contract format must be non-empty".to_string(),
         ));
     }
     if let Some(max_cost) = value.budget.max_cost_usd {

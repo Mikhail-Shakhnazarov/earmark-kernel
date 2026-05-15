@@ -11,18 +11,18 @@ use crate::output;
 use clap_complete::{generate, shells};
 use earmark_core::{
     FlexibleVersionRef, HeaderValue, Kind, ObjectRef, Provenance, Standing, VersionRef,
-    WorkflowDeclaration, WorkflowDefinition, WorkflowOperation,
 };
 use earmark_declarations::{
     load_class_definition, load_compiled_context_template, load_instruction, load_provider_profile,
     load_standing_policy, load_system_definition, load_workflow_definition,
-    validate_class_definition, validate_compiled_context_template, validate_instruction,
-    validate_provider_profile, validate_standing_policy, validate_system_definition,
-    validate_workflow_definition,
+    resolve_workflow_declaration, validate_class_definition, validate_compiled_context_template,
+    validate_instruction, validate_provider_profile, validate_standing_policy,
+    validate_system_definition, validate_workflow_definition,
 };
 use earmark_index::DerivedIndex;
 use earmark_store::{
     CanonicalStore, GitCanonicalStore, PayloadEncoding, StoredObject, StoredPayload,
+    WorkspaceLayout,
 };
 use serde::Deserialize;
 use serde_json::json;
@@ -55,65 +55,6 @@ pub fn run(cli: Cli) -> Result<(), common::CliError> {
     let result = dispatch::dispatch(&ctx, cli);
     crate::metrics::record_command_result(command_name, result.is_ok(), started.elapsed());
     result
-}
-
-fn resolve_workflow_declaration(
-    workflow_path: &std::path::Path,
-    decl: WorkflowDeclaration,
-    registry: &BTreeMap<std::path::PathBuf, VersionRef>,
-) -> Result<WorkflowDefinition, CliError> {
-    let mut operations = Vec::new();
-    for op in decl.operations {
-        operations.push(WorkflowOperation {
-            id: op.id.clone(),
-            kind: op.kind.clone(),
-            input_contracts: op.input_contracts.clone(),
-            output_contracts: op.output_contracts.clone(),
-            instruction: resolve_flex_ref(workflow_path, op.instruction, registry)?,
-            compiled_context: resolve_flex_ref(workflow_path, op.compiled_context, registry)?,
-            policy: resolve_flex_ref(workflow_path, op.policy, registry)?,
-            provider_profile: resolve_flex_ref(workflow_path, op.provider_profile, registry)?,
-        });
-    }
-
-    Ok(WorkflowDefinition {
-        name: decl.name,
-        version: decl.version,
-        description: decl.description,
-        operations,
-        edges: decl.edges,
-        guards: decl.guards,
-        output_contracts: decl.output_contracts,
-    })
-}
-
-fn resolve_flex_ref(
-    workflow_path: &std::path::Path,
-    flex: Option<FlexibleVersionRef>,
-    registry: &BTreeMap<std::path::PathBuf, VersionRef>,
-) -> Result<Option<VersionRef>, CliError> {
-    match flex {
-        None => Ok(None),
-        Some(FlexibleVersionRef::Ref(r)) => Ok(Some(r)),
-        Some(FlexibleVersionRef::Path(p)) => {
-            let rel_path = std::path::PathBuf::from(&p);
-            let parent = workflow_path.parent().unwrap_or(workflow_path);
-            let abs_path = parent.join(&rel_path);
-
-            // Try to canonicalize for robust matching, but fall back to joined path
-            let lookup_path = abs_path.canonicalize().unwrap_or_else(|_| abs_path.clone());
-
-            if let Some(vref) = registry.get(&lookup_path) {
-                Ok(Some(vref.clone()))
-            } else {
-                Err(CliError::argument(format!(
-                    "unresolved path reference '{}' in workflow '{}'. Referenced declaration must be included in the system manifest.",
-                    p,
-                    workflow_path.display()
-                )))
-            }
-        }
-    }
 }
 
 impl DeclarationKind {
@@ -520,7 +461,7 @@ pub(crate) fn register_declaration_file<S: CanonicalStore>(
                 .iter()
                 .any(|opt| matches!(opt, Some(FlexibleVersionRef::Path(_))));
 
-                if has_paths {
+                if has_paths && registry.is_none() {
                     return Err(CliError::argument(format!(
                         "workflow path references require system-manifest registration (found in workflow '{}')",
                         decl.name
@@ -887,15 +828,25 @@ fn assemble_system_definition_from_manifest<S: CanonicalStore>(
     })
 }
 
-fn template_file_for_kind(kind: DeclarationKind) -> &'static str {
+fn template_contents_for_kind(kind: DeclarationKind) -> &'static str {
     match kind {
-        DeclarationKind::Class => "templates/classes/class.yaml",
-        DeclarationKind::Instruction => "templates/instructions/instruction.md",
-        DeclarationKind::StandingPolicy => "templates/standing_policies/standing_policy.yaml",
-        DeclarationKind::CompiledContext => "templates/compiled_contexts/compiled_context.yaml",
-        DeclarationKind::ProviderProfile => "templates/provider_profiles/provider_profile.yaml",
-        DeclarationKind::Workflow => "templates/workflows/workflow.yaml",
-        DeclarationKind::System => "templates/systems/system_path_manifest.yaml",
+        DeclarationKind::Class => include_str!("../../../templates/classes/class.yaml"),
+        DeclarationKind::Instruction => {
+            include_str!("../../../templates/instructions/instruction.md")
+        }
+        DeclarationKind::StandingPolicy => {
+            include_str!("../../../templates/standing_policies/standing_policy.yaml")
+        }
+        DeclarationKind::CompiledContext => {
+            include_str!("../../../templates/compiled_contexts/compiled_context.yaml")
+        }
+        DeclarationKind::ProviderProfile => {
+            include_str!("../../../templates/provider_profiles/provider_profile.yaml")
+        }
+        DeclarationKind::Workflow => include_str!("../../../templates/workflows/workflow.yaml"),
+        DeclarationKind::System => {
+            include_str!("../../../templates/systems/system_path_manifest.yaml")
+        }
     }
 }
 
@@ -919,8 +870,7 @@ fn scaffold_declaration(
     explicit_path: Option<&PathBuf>,
     force: bool,
 ) -> Result<PathBuf, CliError> {
-    let template_path = root.join(template_file_for_kind(kind));
-    let mut body = fs::read_to_string(&template_path)?;
+    let mut body = template_contents_for_kind(kind).to_string();
     body = body
         .replace("your_class_name", name)
         .replace("your_instruction_name", name)

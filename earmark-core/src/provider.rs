@@ -91,9 +91,27 @@ pub struct ProviderExposure {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ProviderResponseContract {
-    pub format: String,
+    pub format: ProviderResponseFormat,
     pub must_return_candidate_only: bool,
     pub must_include_lineage: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProviderResponseFormat {
+    Text,
+    Json,
+    Markdown,
+}
+
+impl ProviderResponseFormat {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Text => "text",
+            Self::Json => "json",
+            Self::Markdown => "markdown",
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -116,7 +134,7 @@ pub struct ProviderResponse {
     pub request_id: String,
     pub provider: String,
     pub model: String,
-    pub status: String,
+    pub status: ProviderResponseStatus,
     pub candidate_payload: String,
     pub metadata: BTreeMap<String, ScalarValue>,
     pub advisory_warnings: Vec<String>,
@@ -141,10 +159,18 @@ pub struct ProviderRecord {
     pub provider_profile: VersionRef,
     pub provider: String,
     pub model: String,
-    pub status: String,
+    pub status: ProviderResponseStatus,
     pub metadata: BTreeMap<String, ScalarValue>,
     pub advisory_warnings: Vec<String>,
     pub usage: Option<ProviderUsage>,
     pub message: Option<String>,
     pub recorded_at: Timestamp,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProviderResponseStatus {
+    Completed,
+    Failed,
+    Partial,
 }

@@ -9,9 +9,7 @@ operations:
     output_contracts:
       - work_surface
     instruction: null
-    compiled_context:
-      id: compiled_context_source_notes_for_extraction
-      version_id: latest
+    compiled_context: "../compiled_contexts/source_notes_for_extraction.yaml"
     policy: null
     provider_profile: null
   - id: extract_findings
@@ -20,9 +18,7 @@ operations:
       - source_note
     output_contracts:
       - finding
-    instruction:
-      id: instruction_source_to_finding
-      version_id: latest
+    instruction: "../instructions/source_to_finding.md"
     compiled_context: null
     policy: null
     provider_profile: null

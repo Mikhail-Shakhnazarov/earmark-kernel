@@ -5,7 +5,9 @@ use earmark_core::{
 };
 use earmark_exec::{ExecutionEngine, ProviderRegistry, WorkflowRunRequest};
 use earmark_index::DerivedIndex;
-use earmark_store::{CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload};
+use earmark_store::{
+    GitCanonicalStore, ObjectStore, StoreScanner, StoredObject, StoredPayload, WorkspaceLayout,
+};
 use std::collections::BTreeMap;
 use tempfile::tempdir;
 
