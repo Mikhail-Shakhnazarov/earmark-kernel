@@ -5,7 +5,10 @@ use earmark_core::{
     TokenRecord, TransitionAssignment, VersionRef, WorkPacket, WorkPacketConstraints,
     WorkSurfaceRef, WorkflowDefinition,
 };
-use earmark_store::{CanonicalStore, ObjectStore, WorkspaceLayout, StoreScanner, StoreWriteLocking, StoredObject, StoredPayload};
+use earmark_store::{
+    CanonicalStore, ObjectStore, StoreScanner, StoreWriteLocking, StoredObject, StoredPayload,
+    WorkspaceLayout,
+};
 use std::collections::BTreeSet;
 
 use crate::error::ExecError;
@@ -146,10 +149,7 @@ pub fn store_work_packet<S: CanonicalStore>(
     )
     .class("work_packet")
     .provenance(earmark_core::Provenance::direct_input("execution_engine"))
-    .header(
-        "title",
-        format!("WorkPacket for {}", work_packet.purpose),
-    )
+    .header("title", format!("WorkPacket for {}", work_packet.purpose))
     .build()
     .map_err(ExecError::IncompleteExecution)?;
     write_object_and_index(store, index, &stored)?;
@@ -352,9 +352,9 @@ pub fn render_provider_input<S: CanonicalStore>(
 
         // Second gate: provider profile exposure must also permit
         if profile_permits {
-            if let Ok(payload_str) = String::from_utf8(obj.payload.bytes.clone()) {
+            if let Ok(payload_str) = obj.payload.as_utf8_str() {
                 rendered.push_str("\nPayload:\n---\n");
-                rendered.push_str(&payload_str);
+                rendered.push_str(payload_str);
                 rendered.push_str("\n---\n");
             } else {
                 rendered.push_str("\n(Binary payload not displayed)\n");

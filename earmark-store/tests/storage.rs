@@ -373,6 +373,13 @@ fn signature_precedence_env_over_config_then_fallback() {
 }
 
 #[test]
+fn payload_utf8_accessors_support_borrowed_and_owned_views() {
+    let payload = StoredPayload::from_markdown("hello");
+    assert_eq!(payload.as_utf8_str().unwrap(), "hello");
+    assert_eq!(payload.as_utf8().unwrap(), "hello".to_string());
+}
+
+#[test]
 fn backend_contains_no_process_command_usage() {
     let src = include_str!("../src/backend.rs");
     assert!(!src.contains("std::process::Command"));

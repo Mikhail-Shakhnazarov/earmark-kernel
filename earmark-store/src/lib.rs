@@ -66,6 +66,10 @@ impl StoredPayload {
     pub fn as_utf8(&self) -> Result<String, StoreError> {
         Ok(String::from_utf8(self.bytes.clone())?)
     }
+
+    pub fn as_utf8_str(&self) -> Result<&str, StoreError> {
+        Ok(std::str::from_utf8(&self.bytes)?)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -164,7 +168,7 @@ impl StoredObjectBuilder {
             .ok_or_else(|| "provenance is required".to_string())?;
 
         Ok(StoredObject::new_with_id(
-            self.id.unwrap_or_else(ObjectId::new),
+            self.id.unwrap_or_default(),
             self.kind,
             self.class,
             self.standing,
@@ -344,9 +348,7 @@ pub trait StoreWriteLocking {
     }
 }
 
-pub trait CanonicalStore:
-    WorkspaceLayout + ObjectStore + StoreScanner + StoreWriteLocking
-{}
+pub trait CanonicalStore: WorkspaceLayout + ObjectStore + StoreScanner + StoreWriteLocking {}
 
 #[derive(Debug, Clone)]
 pub struct GitCanonicalStore {
@@ -786,6 +788,8 @@ pub enum StoreError {
     GitCommandFailed { command: String, stderr: String },
     #[error("utf8 error: {0}")]
     Utf8(#[from] std::string::FromUtf8Error),
+    #[error("utf8 error: {0}")]
+    Utf8Slice(#[from] std::str::Utf8Error),
     #[error("core error: {0}")]
     Core(#[from] earmark_core::CoreError),
     #[error("payload ref mismatch between envelope and stored bytes")]
