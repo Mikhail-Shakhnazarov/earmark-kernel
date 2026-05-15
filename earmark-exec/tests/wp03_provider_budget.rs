@@ -1,9 +1,9 @@
 use chrono::Utc;
 use earmark_connected_context::DEFAULT_COMPILED_CONTEXT_COMPILER;
 use earmark_core::{
-    to_yaml, Kind, ObjectId, ProviderBudget, ProviderExposure,
-    ProviderProfile, ProviderRequest, ProviderResponse, ProviderResponseContract, ProviderUsage,
-    RunRecord, SystemDefinition, VersionId, VersionRef, WorkflowOperationKind,
+    to_yaml, Kind, ObjectId, ProviderBudget, ProviderExposure, ProviderProfile, ProviderRequest,
+    ProviderResponse, ProviderResponseContract, ProviderUsage, RunRecord, SystemDefinition,
+    VersionId, VersionRef, WorkflowOperationKind,
 };
 use earmark_exec::{
     engine::ExecutionEngine, ir::ExecutionIr, provider_record_from_response, state::ExecutionState,
@@ -11,7 +11,10 @@ use earmark_exec::{
     WorkflowRunRequest,
 };
 use earmark_index::DerivedIndex;
-use earmark_store::{CanonicalStore, GitCanonicalStore, ObjectStore, WorkspaceLayout, StoreScanner, StoreWriteLocking, StoredObject, StoredPayload };
+use earmark_store::{
+    CanonicalStore, GitCanonicalStore, ObjectStore, StoreScanner, StoreWriteLocking, StoredObject,
+    StoredPayload, WorkspaceLayout,
+};
 use std::collections::BTreeMap;
 use tempfile::tempdir;
 
@@ -31,7 +34,7 @@ impl ProviderService for BudgetTestProvider {
             request_id: request.request_id.clone(),
             provider: profile.provider.clone(),
             model: profile.model.clone(),
-            status: "success".to_string(),
+            status: earmark_core::ProviderResponseStatus::Completed,
             candidate_payload: self.output_text.clone(),
             usage: Some(ProviderUsage {
                 input_tokens: Some(0),
@@ -78,7 +81,7 @@ fn mock_profile(budget: ProviderBudget) -> ProviderProfile {
             allow_export_requests: false,
         },
         response_contract: ProviderResponseContract {
-            format: "markdown".to_string(),
+            format: earmark_core::ProviderResponseFormat::Markdown,
             must_return_candidate_only: true,
             must_include_lineage: false,
         },
@@ -856,19 +859,30 @@ fn test_missing_cost_metadata_warning() {
     );
 
     assert!(result.is_ok());
-    
+
     // Check for warning in the record
-    let _provider_event = record.governance_events.iter().find(|e| e.class == Some("provider_record".to_string())).unwrap();
+    let _provider_event = record
+        .governance_events
+        .iter()
+        .find(|e| e.class == Some("provider_record".to_string()))
+        .unwrap();
     // We need to check the actual ProviderRecord object
     // In our test setup, emitted_objects contains the ProviderRecord (indirectly)
     // Actually, record.events has metadata? No.
     // I'll check emitted_objects for Kind::ProviderRecord if it exists.
-    // Wait, ProviderRecord is NOT an object in the store usually? 
+    // Wait, ProviderRecord is NOT an object in the store usually?
     // Yes, record_provider_event writes it.
-    
+
     let objects = store.scan_objects().unwrap();
-    let provider_rec_obj = objects.iter().find(|obj| obj.envelope.class == Some("provider_record".to_string())).unwrap();
-    let provider_rec: earmark_core::ProviderRecord = serde_json::from_slice(&provider_rec_obj.payload.bytes).unwrap();
-    
-    assert!(provider_rec.advisory_warnings.iter().any(|w| w.contains("Budget not enforceable")));
+    let provider_rec_obj = objects
+        .iter()
+        .find(|obj| obj.envelope.class == Some("provider_record".to_string()))
+        .unwrap();
+    let provider_rec: earmark_core::ProviderRecord =
+        serde_json::from_slice(&provider_rec_obj.payload.bytes).unwrap();
+
+    assert!(provider_rec
+        .advisory_warnings
+        .iter()
+        .any(|w| w.contains("Budget not enforceable")));
 }

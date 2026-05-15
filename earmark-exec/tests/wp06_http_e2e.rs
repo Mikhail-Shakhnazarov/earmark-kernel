@@ -8,7 +8,10 @@ use earmark_core::{
 };
 use earmark_exec::{HttpGenerationAdapter, ProviderRegistry, ProviderService};
 use earmark_index::DerivedIndex;
-use earmark_store::{CanonicalStore, GitCanonicalStore, ObjectStore, WorkspaceLayout, StoreScanner, StoreWriteLocking, StoredObject, StoredPayload };
+use earmark_store::{
+    CanonicalStore, GitCanonicalStore, ObjectStore, StoreScanner, StoreWriteLocking, StoredObject,
+    StoredPayload, WorkspaceLayout,
+};
 use httpmock::MockServer;
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -115,7 +118,7 @@ fn test_http_provider_e2e_content_rendering() {
             allow_export_requests: false,
         },
         response_contract: earmark_core::ProviderResponseContract {
-            format: "markdown".to_string(),
+            format: earmark_core::ProviderResponseFormat::Markdown,
             must_return_candidate_only: true,
             must_include_lineage: false,
         },
@@ -283,7 +286,7 @@ fn test_http_provider_rendering_with_manifest() {
             allow_export_requests: false,
         },
         response_contract: earmark_core::ProviderResponseContract {
-            format: "markdown".to_string(),
+            format: earmark_core::ProviderResponseFormat::Markdown,
             must_return_candidate_only: true,
             must_include_lineage: false,
         },
@@ -366,7 +369,7 @@ fn test_http_provider_exposure_structured_hiding() {
             allow_export_requests: false,
         },
         response_contract: earmark_core::ProviderResponseContract {
-            format: "markdown".to_string(),
+            format: earmark_core::ProviderResponseFormat::Markdown,
             must_return_candidate_only: true,
             must_include_lineage: false,
         },
@@ -446,7 +449,7 @@ fn test_http_provider_exposure_prose_hiding() {
             allow_export_requests: false,
         },
         response_contract: earmark_core::ProviderResponseContract {
-            format: "markdown".to_string(),
+            format: earmark_core::ProviderResponseFormat::Markdown,
             must_return_candidate_only: true,
             must_include_lineage: false,
         },
@@ -527,7 +530,7 @@ fn test_http_provider_exposure_class_definition_hiding() {
             allow_export_requests: false,
         },
         response_contract: earmark_core::ProviderResponseContract {
-            format: "markdown".to_string(),
+            format: earmark_core::ProviderResponseFormat::Markdown,
             must_return_candidate_only: true,
             must_include_lineage: false,
         },

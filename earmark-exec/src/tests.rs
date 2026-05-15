@@ -5,8 +5,8 @@ use crate::provider::{
 };
 use earmark_core::{
     Kind, ObjectId, ObjectRef, ProviderProfile, ProviderRequest, ProviderResponseContract,
-    ScalarValue, VersionId, VersionRef, WorkflowDefinition, WorkflowOperation,
-    WorkflowOperationKind,
+    ProviderResponseFormat, ProviderResponseStatus, ScalarValue, VersionId, VersionRef,
+    WorkflowDefinition, WorkflowOperation, WorkflowOperationKind,
 };
 use earmark_index::*;
 use earmark_store::GitCanonicalStore;
@@ -41,7 +41,10 @@ fn test_execution_ir_compilation() {
     let ir = crate::helpers::compile_workflow(&workflow).unwrap();
     assert_eq!(ir.transitions.len(), 1);
     assert_eq!(ir.transitions[0].id, "op1");
-    assert_eq!(ir.transitions[0].operation, WorkflowOperationKind::Transform);
+    assert_eq!(
+        ir.transitions[0].operation,
+        WorkflowOperationKind::Transform
+    );
 }
 
 #[test]
@@ -124,7 +127,7 @@ impl ProviderService for BrokenProvider {
                 provider_profile: VersionRef::new(ObjectId::new(), VersionId::new()),
                 provider: "broken".to_string(),
                 model: "broken".to_string(),
-                status: "ok".to_string(),
+                status: ProviderResponseStatus::Completed,
                 metadata: std::collections::BTreeMap::new(),
                 advisory_warnings: vec![],
                 usage: None,
@@ -154,7 +157,7 @@ fn mock_adapter_provide_sets_synthetic_metadata() {
         work_surface_manifest: None,
         inputs: vec![],
         response_contract: ProviderResponseContract {
-            format: "json".to_string(),
+            format: ProviderResponseFormat::Json,
             must_return_candidate_only: true,
             must_include_lineage: false,
         },
@@ -221,7 +224,7 @@ fn provider_record_from_response_preserves_synthetic_metadata() {
         work_surface_manifest: None,
         inputs: vec![],
         response_contract: ProviderResponseContract {
-            format: "json".to_string(),
+            format: ProviderResponseFormat::Json,
             must_return_candidate_only: true,
             must_include_lineage: false,
         },
@@ -255,7 +258,7 @@ fn provider_record_from_response_preserves_synthetic_metadata() {
         request_id: request.request_id.clone(),
         provider: "mock".to_string(),
         model: "echo".to_string(),
-        status: "completed".to_string(),
+        status: ProviderResponseStatus::Completed,
         candidate_payload: "{}".to_string(),
         metadata: BTreeMap::new(),
         advisory_warnings: vec![],
@@ -275,11 +278,14 @@ fn delegated_transform_output_sets_synthetic_headers() {
     let store = GitCanonicalStore::new(dir.path());
     store.init_layout().unwrap();
 
-    let input = StoredObject::builder(earmark_core::Kind::Object, StoredPayload::from_markdown("input"))
-        .class("note")
-        .provenance(earmark_core::Provenance::direct_input("test"))
-        .build()
-        .unwrap();
+    let input = StoredObject::builder(
+        earmark_core::Kind::Object,
+        StoredPayload::from_markdown("input"),
+    )
+    .class("note")
+    .provenance(earmark_core::Provenance::direct_input("test"))
+    .build()
+    .unwrap();
     let input_ref = store.write_object(&input).unwrap();
     let input_obj_ref = earmark_core::ObjectRef::new(
         input_ref.id.clone(),
@@ -303,7 +309,7 @@ fn delegated_transform_output_sets_synthetic_headers() {
         request_id: "req".to_string(),
         provider: "mock".to_string(),
         model: "echo".to_string(),
-        status: "completed".to_string(),
+        status: ProviderResponseStatus::Completed,
         candidate_payload: "fixture".to_string(),
         metadata: std::collections::BTreeMap::from([
             ("synthetic".to_string(), ScalarValue::Bool(true)),
@@ -318,11 +324,12 @@ fn delegated_transform_output_sets_synthetic_headers() {
         received_at: chrono::Utc::now(),
     };
 
-    let instr_stored = StoredObject::builder(Kind::Instruction, StoredPayload::from_markdown("extract"))
-        .class("instruction")
-        .provenance(earmark_core::Provenance::direct_input("test"))
-        .build()
-        .unwrap();
+    let instr_stored =
+        StoredObject::builder(Kind::Instruction, StoredPayload::from_markdown("extract"))
+            .class("instruction")
+            .provenance(earmark_core::Provenance::direct_input("test"))
+            .build()
+            .unwrap();
     let instr_ref = store.write_object(&instr_stored).unwrap();
 
     let index = DerivedIndex::open(dir.path()).unwrap();
@@ -382,7 +389,7 @@ fn test_delegated_outcome_with_none_response_returns_error_instead_of_panicking(
             allow_export_requests: false,
         },
         response_contract: earmark_core::ProviderResponseContract {
-            format: "json".to_string(),
+            format: ProviderResponseFormat::Json,
             must_return_candidate_only: true,
             must_include_lineage: true,
         },

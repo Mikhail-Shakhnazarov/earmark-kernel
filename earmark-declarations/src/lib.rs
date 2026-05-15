@@ -10,7 +10,9 @@ use earmark_core::{
     WorkflowDeclaration, WorkflowDefinition,
 };
 use earmark_index::{ActiveSystemRecord, DerivedIndex};
-use earmark_store::{CanonicalStore, ObjectStore, WorkspaceLayout, StoreScanner, StoreWriteLocking};
+use earmark_store::{
+    CanonicalStore, ObjectStore, StoreScanner, StoreWriteLocking, WorkspaceLayout,
+};
 use thiserror::Error;
 
 pub fn load_class_definition(path: impl AsRef<Path>) -> Result<ClassDefinition, DeriveError> {
@@ -429,7 +431,8 @@ pub fn validate_workflow_definition(value: &WorkflowDeclaration) -> Result<(), D
                     )));
                 }
             }
-            earmark_core::WorkflowOperationKind::Review | earmark_core::WorkflowOperationKind::Export => {
+            earmark_core::WorkflowOperationKind::Review
+            | earmark_core::WorkflowOperationKind::Export => {
                 // Future packet: validate review/export-specific requirements
             }
         }
@@ -623,11 +626,6 @@ pub fn validate_provider_profile(value: &ProviderProfile) -> Result<(), DeriveEr
     if value.provider.trim().is_empty() || value.model.trim().is_empty() {
         return Err(DeriveError::Validation(
             "provider profile requires provider and model".to_string(),
-        ));
-    }
-    if value.response_contract.format.trim().is_empty() {
-        return Err(DeriveError::Validation(
-            "provider profile response contract format must be non-empty".to_string(),
         ));
     }
     if let Some(max_cost) = value.budget.max_cost_usd {

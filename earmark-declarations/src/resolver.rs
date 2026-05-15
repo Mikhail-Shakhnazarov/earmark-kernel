@@ -1,7 +1,9 @@
+use crate::DeriveError;
+use earmark_core::{
+    FlexibleVersionRef, VersionRef, WorkflowDeclaration, WorkflowDefinition, WorkflowOperation,
+};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use earmark_core::{FlexibleVersionRef, VersionRef, WorkflowDeclaration, WorkflowDefinition, WorkflowOperation};
-use crate::DeriveError;
 
 pub fn resolve_workflow_declaration(
     workflow_path: &Path,
@@ -16,10 +18,28 @@ pub fn resolve_workflow_declaration(
             kind: op.kind.clone(),
             input_contracts: op.input_contracts.clone(),
             output_contracts: op.output_contracts.clone(),
-            instruction: resolve_flex_ref(workflow_path, &op_id, "instruction", op.instruction, registry)?,
-            compiled_context: resolve_flex_ref(workflow_path, &op_id, "compiled_context", op.compiled_context, registry)?,
+            instruction: resolve_flex_ref(
+                workflow_path,
+                &op_id,
+                "instruction",
+                op.instruction,
+                registry,
+            )?,
+            compiled_context: resolve_flex_ref(
+                workflow_path,
+                &op_id,
+                "compiled_context",
+                op.compiled_context,
+                registry,
+            )?,
             policy: resolve_flex_ref(workflow_path, &op_id, "policy", op.policy, registry)?,
-            provider_profile: resolve_flex_ref(workflow_path, &op_id, "provider_profile", op.provider_profile, registry)?,
+            provider_profile: resolve_flex_ref(
+                workflow_path,
+                &op_id,
+                "provider_profile",
+                op.provider_profile,
+                registry,
+            )?,
         });
     }
 

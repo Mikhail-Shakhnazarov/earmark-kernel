@@ -3,7 +3,9 @@ use crate::error::{ProviderFailure, ProviderFailureKind};
 #[cfg(feature = "http-provider")]
 use crate::provider::ProviderAdapter;
 #[cfg(feature = "http-provider")]
-use earmark_core::{ProviderProfile, ProviderRequest, ProviderResponse, ProviderUsage};
+use earmark_core::{
+    ProviderProfile, ProviderRequest, ProviderResponse, ProviderResponseStatus, ProviderUsage,
+};
 #[cfg(feature = "http-provider")]
 use std::collections::BTreeMap;
 #[cfg(feature = "http-provider")]
@@ -221,7 +223,7 @@ impl ProviderAdapter for HttpGenerationAdapter {
             request_id: request.request_id,
             provider: "http_generation".to_string(),
             model: profile.model.clone(),
-            status: "completed".to_string(),
+            status: ProviderResponseStatus::Completed,
             candidate_payload: text,
             metadata: BTreeMap::new(),
             advisory_warnings: vec![],
@@ -375,7 +377,7 @@ mod tests {
                 allow_export_requests: false,
             },
             response_contract: ProviderResponseContract {
-                format: "markdown".to_string(),
+                format: earmark_core::ProviderResponseFormat::Markdown,
                 must_return_candidate_only: true,
                 must_include_lineage: false,
             },
@@ -470,7 +472,7 @@ mod tests {
                 allow_export_requests: false,
             },
             response_contract: ProviderResponseContract {
-                format: "markdown".to_string(),
+                format: earmark_core::ProviderResponseFormat::Markdown,
                 must_return_candidate_only: true,
                 must_include_lineage: false,
             },

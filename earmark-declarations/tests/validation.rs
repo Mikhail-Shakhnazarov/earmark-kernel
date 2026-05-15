@@ -5,6 +5,7 @@ use earmark_core::{
     CompiledContextSelect, CompiledContextTemplate, CompiledContextVisibility, DimensionId,
     EscalationRule, FlexibleVersionRef, InstructionPayload, JsonSchemaRef, MarkdownBody,
     OperationRequirement, ProviderBudget, ProviderExposure, ProviderProfile,
+    ProviderResponseFormat,
     ProviderResponseContract, StandingPolicy, StandingRegistry, StandingTransitionRule, TokenId,
     WorkflowDeclaration, WorkflowDeclarationOperation, WorkflowEdge, WorkflowGuard,
     WorkflowOperationKind,
@@ -154,7 +155,7 @@ fn system_validation_rejects_wrong_kind_reference() {
                 allow_export_requests: false,
             },
             response_contract: earmark_core::ProviderResponseContract {
-                format: "json".to_string(),
+                format: ProviderResponseFormat::Json,
                 must_return_candidate_only: false,
                 must_include_lineage: false,
             },
@@ -490,36 +491,25 @@ fn workflow_rejects_invalid_contract_class_names() {
 }
 
 #[test]
-fn provider_profile_rejects_empty_response_format() {
-    let profile = ProviderProfile {
-        name: "test_provider".to_string(),
-        version: "1.0.0".to_string(),
-        description: None,
-        provider: "mock".to_string(),
-        model: "echo".to_string(),
-        endpoint_env: None,
-        auth_env: None,
-        budget: ProviderBudget {
-            max_input_tokens: None,
-            max_output_tokens: None,
-            max_cost_usd: None,
-            max_latency_ms: None,
-        },
-        allowed_operations: vec!["transform".to_string()],
-        exposure: ProviderExposure {
-            allow_prose_objects: true,
-            allow_structured_declarations: false,
-            allow_work_surface_only: false,
-            allow_export_requests: false,
-        },
-        response_contract: ProviderResponseContract {
-            format: "".to_string(),
-            must_return_candidate_only: true,
-            must_include_lineage: false,
-        },
-        http: None,
-    };
-    assert!(validate_provider_profile(&profile).is_err());
+fn provider_profile_rejects_unknown_response_format_at_parse_time() {
+    let yaml = r#"
+name: test_provider
+version: 1.0.0
+provider: mock
+model: echo
+allowed_operations: [transform]
+exposure:
+  allow_prose_objects: true
+  allow_structured_declarations: false
+  allow_work_surface_only: false
+  allow_export_requests: false
+response_contract:
+  format: unknown
+  must_return_candidate_only: true
+  must_include_lineage: false
+"#;
+    let parsed: Result<ProviderProfile, _> = earmark_core::parse_yaml(yaml);
+    assert!(parsed.is_err());
 }
 
 #[test]
@@ -546,7 +536,7 @@ fn provider_profile_rejects_negative_budget() {
             allow_export_requests: false,
         },
         response_contract: ProviderResponseContract {
-            format: "json".to_string(),
+            format: ProviderResponseFormat::Json,
             must_return_candidate_only: true,
             must_include_lineage: false,
         },
@@ -875,7 +865,7 @@ fn valid_provider_profile_passes() {
             allow_export_requests: false,
         },
         response_contract: ProviderResponseContract {
-            format: "json".to_string(),
+            format: ProviderResponseFormat::Json,
             must_return_candidate_only: true,
             must_include_lineage: false,
         },

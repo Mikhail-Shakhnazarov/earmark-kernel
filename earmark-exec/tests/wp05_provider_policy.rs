@@ -11,7 +11,10 @@ use earmark_exec::{
     WorkflowRunRequest,
 };
 use earmark_index::DerivedIndex;
-use earmark_store::{CanonicalStore, GitCanonicalStore, ObjectStore, WorkspaceLayout, StoreScanner, StoreWriteLocking, StoredObject, StoredPayload };
+use earmark_store::{
+    CanonicalStore, GitCanonicalStore, ObjectStore, StoreScanner, StoreWriteLocking, StoredObject,
+    StoredPayload, WorkspaceLayout,
+};
 use std::collections::BTreeMap;
 use tempfile::tempdir;
 
@@ -47,7 +50,7 @@ fn mock_profile(allowed_ops: Vec<&str>) -> ProviderProfile {
             allow_export_requests: false,
         },
         response_contract: ProviderResponseContract {
-            format: "markdown".to_string(),
+            format: earmark_core::ProviderResponseFormat::Markdown,
             must_return_candidate_only: true,
             must_include_lineage: false,
         },
@@ -67,7 +70,7 @@ fn mock_request() -> ProviderRequest {
         work_surface_manifest: None,
         inputs: vec![],
         response_contract: ProviderResponseContract {
-            format: "markdown".to_string(),
+            format: earmark_core::ProviderResponseFormat::Markdown,
             must_return_candidate_only: true,
             must_include_lineage: false,
         },
@@ -436,7 +439,7 @@ fn test_transition_preserves_provider_record_warnings() {
                 request_id: request.request_id.clone(),
                 provider: "mock".to_string(),
                 model: "warn".to_string(),
-                status: "ok".to_string(),
+                status: earmark_core::ProviderResponseStatus::Completed,
                 candidate_payload: "{}".to_string(),
                 metadata: BTreeMap::new(),
                 advisory_warnings: vec!["Provider-level warning".to_string()],
@@ -549,7 +552,7 @@ fn test_transition_preserves_provider_record_warnings() {
             allow_export_requests: true,
         },
         response_contract: earmark_core::ProviderResponseContract {
-            format: "json".to_string(),
+            format: earmark_core::ProviderResponseFormat::Json,
             must_return_candidate_only: false,
             must_include_lineage: false,
         },

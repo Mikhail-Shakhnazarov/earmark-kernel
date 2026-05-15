@@ -3,7 +3,8 @@ use crate::helpers::uuid_like;
 use chrono::Utc;
 use earmark_core::{
     InstructionPayload, ProviderProfile, ProviderRecord, ProviderRequest, ProviderResponse,
-    ProviderResponseContract, ScalarValue, VersionRef,
+    ProviderResponseContract, ProviderResponseFormat, ProviderResponseStatus, ScalarValue,
+    VersionRef,
 };
 use std::collections::{BTreeMap, HashMap};
 use std::env;
@@ -268,7 +269,7 @@ impl ProviderAdapter for MockAdapter {
             request_id: request.request_id,
             provider: "mock".to_string(),
             model: "echo".to_string(),
-            status: "completed".to_string(),
+            status: ProviderResponseStatus::Completed,
             candidate_payload: "[SYNTHETIC MOCK OUTPUT] Fixture response for extraction/synthesis tests. Federated graphs provide agile ownership but introduce heterogeneity costs.".to_string(),
             metadata,
             advisory_warnings: vec![],
@@ -562,7 +563,7 @@ pub(crate) fn validate_provider_response(
         ));
     }
 
-    if contract.format == "json" {
+    if contract.format == ProviderResponseFormat::Json {
         serde_json::from_str::<serde_json::Value>(&response.candidate_payload).map_err(
             |error| {
                 ProviderFailure::new(
@@ -631,7 +632,7 @@ pub fn provider_record_from_failure(
         provider_profile: request.provider_profile.clone(),
         provider: profile.provider.clone(),
         model: profile.model.clone(),
-        status: format!("{:?}", failure.kind).to_lowercase(),
+        status: ProviderResponseStatus::Failed,
         metadata,
         advisory_warnings: vec![],
         usage: None,
