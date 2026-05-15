@@ -418,11 +418,20 @@ fn artifact_explain_missing_id_fails_cleanly() {
 #[test]
 fn declare_new_scaffolds_file() {
     let dir = tempdir().unwrap();
+    Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(dir.path())
+        .arg("--json")
+        .arg("init")
+        .assert()
+        .success();
+
     let output_path = dir.path().join("declarations/workflows/sample_flow.yaml");
     let output = Command::cargo_bin("earmark-cli")
         .unwrap()
         .arg("--root")
-        .arg(workspace_root())
+        .arg(dir.path())
         .arg("--json")
         .arg("declare")
         .arg("new")

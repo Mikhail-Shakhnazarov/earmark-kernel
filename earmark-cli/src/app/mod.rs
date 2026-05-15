@@ -828,15 +828,25 @@ fn assemble_system_definition_from_manifest<S: CanonicalStore>(
     })
 }
 
-fn template_file_for_kind(kind: DeclarationKind) -> &'static str {
+fn template_contents_for_kind(kind: DeclarationKind) -> &'static str {
     match kind {
-        DeclarationKind::Class => "templates/classes/class.yaml",
-        DeclarationKind::Instruction => "templates/instructions/instruction.md",
-        DeclarationKind::StandingPolicy => "templates/standing_policies/standing_policy.yaml",
-        DeclarationKind::CompiledContext => "templates/compiled_contexts/compiled_context.yaml",
-        DeclarationKind::ProviderProfile => "templates/provider_profiles/provider_profile.yaml",
-        DeclarationKind::Workflow => "templates/workflows/workflow.yaml",
-        DeclarationKind::System => "templates/systems/system_path_manifest.yaml",
+        DeclarationKind::Class => include_str!("../../../templates/classes/class.yaml"),
+        DeclarationKind::Instruction => {
+            include_str!("../../../templates/instructions/instruction.md")
+        }
+        DeclarationKind::StandingPolicy => {
+            include_str!("../../../templates/standing_policies/standing_policy.yaml")
+        }
+        DeclarationKind::CompiledContext => {
+            include_str!("../../../templates/compiled_contexts/compiled_context.yaml")
+        }
+        DeclarationKind::ProviderProfile => {
+            include_str!("../../../templates/provider_profiles/provider_profile.yaml")
+        }
+        DeclarationKind::Workflow => include_str!("../../../templates/workflows/workflow.yaml"),
+        DeclarationKind::System => {
+            include_str!("../../../templates/systems/system_path_manifest.yaml")
+        }
     }
 }
 
@@ -860,8 +870,7 @@ fn scaffold_declaration(
     explicit_path: Option<&PathBuf>,
     force: bool,
 ) -> Result<PathBuf, CliError> {
-    let template_path = root.join(template_file_for_kind(kind));
-    let mut body = fs::read_to_string(&template_path)?;
+    let mut body = template_contents_for_kind(kind).to_string();
     body = body
         .replace("your_class_name", name)
         .replace("your_instruction_name", name)
