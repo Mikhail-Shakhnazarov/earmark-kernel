@@ -6,7 +6,7 @@ use earmark_core::{
     VersionRef,
 };
 use earmark_exec::{ExecutionEngine, ProviderRegistry, WorkflowRunRequest};
-use earmark_index::DerivedIndex;
+use earmark_index::{DerivedIndex, IndexDirtyMarker};
 use earmark_store::{
     CanonicalStore, GitCanonicalStore, ObjectStore, StoreScanner, StoreWriteLocking, StoredObject,
     StoredPayload, WorkspaceLayout,
@@ -876,6 +876,67 @@ fn doctor_reports_index_missing_after_deletion() {
         parsed["data"]["canonical_object_count"].as_u64().unwrap(),
         0
     );
+}
+
+#[test]
+fn doctor_reports_dirty_index_without_implicit_repair() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(root)
+        .arg("--json")
+        .arg("init")
+        .assert()
+        .success();
+
+    Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(root)
+        .arg("--json")
+        .arg("deposit")
+        .arg("--class")
+        .arg("note")
+        .arg("--title")
+        .arg("dirty")
+        .arg("--body")
+        .arg("index marker")
+        .assert()
+        .success();
+
+    let index = DerivedIndex::open(root).unwrap();
+    index
+        .mark_dirty(IndexDirtyMarker {
+            schema_version: "v1".to_string(),
+            reason: "test_marker".to_string(),
+            operation: "test".to_string(),
+            timestamp: chrono::Utc::now(),
+            object_ids: vec![],
+            version_ids: vec![],
+        })
+        .unwrap();
+
+    let output = Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(root)
+        .arg("--json")
+        .arg("doctor")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(parsed["ok"], true);
+    assert_eq!(parsed["data"]["ok"], false);
+    assert_eq!(parsed["data"]["index_is_dirty"], true);
+
+    assert!(index.dirty_status().unwrap().is_some());
 }
 
 #[test]
