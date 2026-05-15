@@ -373,6 +373,26 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                         issued_at: Utc::now(),
                     };
 
+                    // Input Budget Enforcement
+                    if let Some(max_input) = profile.budget.max_input_tokens {
+                        let mut input_text_to_estimate = provider_request.instruction_text.clone();
+                        if let Some(ctx) = &provider_request.context_text {
+                            input_text_to_estimate.push_str(ctx);
+                        }
+                        input_text_to_estimate.push_str(&provider_request.input_text);
+
+                        let estimated = crate::helpers::estimate_tokens_approx(&input_text_to_estimate);
+                        if estimated > max_input {
+                            return Err(ExecError::Provider(ProviderFailure::new(
+                                ProviderFailureKind::BudgetExceeded,
+                                format!(
+                                    "estimated input tokens {} exceeded budget of {}",
+                                    estimated, max_input
+                                ),
+                            )));
+                        }
+                    }
+
                     match self.provider_service.provide(
                         &profile,
                         provider_request.clone(),
@@ -386,6 +406,42 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                                 ))
                             })?;
 
+                            // Output Budget Enforcement
+                            if let Some(max_output) = profile.budget.max_output_tokens {
+                                let estimated = crate::helpers::estimate_tokens_approx(
+                                    &response.candidate_payload,
+                                );
+                                if estimated > max_output {
+                                    return Err(ExecError::Provider(ProviderFailure::new(
+                                        ProviderFailureKind::BudgetExceeded,
+                                        format!(
+                                            "estimated output tokens {} exceeded budget of {}",
+                                            estimated, max_output
+                                        ),
+                                    )));
+                                }
+                            }
+
+                            // Cost Budget Enforcement
+                            let mut budget_warning = None;
+                            if let Some(max_cost) = profile.budget.max_cost_usd {
+                                if let Some(estimated_cost) =
+                                    response.usage.as_ref().and_then(|u| u.estimated_cost_usd)
+                                {
+                                    if estimated_cost > max_cost {
+                                        return Err(ExecError::Provider(ProviderFailure::new(
+                                            ProviderFailureKind::BudgetExceeded,
+                                            format!(
+                                                "estimated cost {} USD exceeded budget of {} USD",
+                                                estimated_cost, max_cost
+                                            ),
+                                        )));
+                                    }
+                                } else {
+                                    budget_warning = Some("Budget not enforceable: provider response did not report estimated_cost_usd.".to_string());
+                                }
+                            }
+
                             if provider_response_is_synthetic(&response) {
                                 let source = provider_metadata_synthetic_source(&response.metadata)
                                     .unwrap_or_else(|| "mock_provider".to_string());
@@ -398,6 +454,9 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                             let mut provider_record = outcome.record;
                             if let Some(warning) = &synthetic_output_warning {
                                 provider_record.advisory_warnings.push(warning.clone());
+                            }
+                            if let Some(warning) = budget_warning {
+                                provider_record.advisory_warnings.push(warning);
                             }
 
                             let _event_ref = self.record_provider_event(
