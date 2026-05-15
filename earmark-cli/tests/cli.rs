@@ -514,15 +514,19 @@ fn declare_new_infers_instruction_and_workflow_contracts() {
         .assert()
         .success();
 
-    let instruction =
-        fs::read_to_string(dir.path().join(".earmark/declarations/instructions/bug_to_friction.md"))
-            .unwrap();
+    let instruction = fs::read_to_string(
+        dir.path()
+            .join(".earmark/declarations/instructions/bug_to_friction.md"),
+    )
+    .unwrap();
     assert!(instruction.contains("input_classes:\n  - bug"));
     assert!(instruction.contains("output_classes:\n  - friction"));
 
-    let workflow =
-        fs::read_to_string(dir.path().join(".earmark/declarations/workflows/bug_to_friction.yaml"))
-            .unwrap();
+    let workflow = fs::read_to_string(
+        dir.path()
+            .join(".earmark/declarations/workflows/bug_to_friction.yaml"),
+    )
+    .unwrap();
     assert!(workflow.contains("input_contracts:\n      - bug"));
     assert!(workflow.contains("output_contracts:\n      - friction"));
     assert!(workflow.contains("id: bug_to_friction"));
