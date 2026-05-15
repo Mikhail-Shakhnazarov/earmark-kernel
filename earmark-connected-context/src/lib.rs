@@ -13,9 +13,7 @@ use earmark_core::{
     VersionRef,
 };
 use earmark_index::{DerivedIndex, ObjectSummary, QueryFilter};
-use earmark_store::{
-    CanonicalStore, ObjectStore, StoreScanner, StoreWriteLocking, WorkspaceLayout,
-};
+use earmark_store::CanonicalStore;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 

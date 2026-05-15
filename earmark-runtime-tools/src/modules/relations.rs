@@ -4,7 +4,7 @@ use earmark_core::{
     ObjectId, ObjectRef, Provenance, RelationCreationMode, RelationFilter, RuntimeProvenance,
 };
 use earmark_exec::{persist_relation_canonical, RelationAuthorizationReason};
-use earmark_store::{CanonicalStore, ObjectStore, WorkspaceLayout, StoreScanner, StoreWriteLocking};
+use earmark_store::CanonicalStore;
 use serde_json::Value;
 use std::collections::BTreeMap;
 

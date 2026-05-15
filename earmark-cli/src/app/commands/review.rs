@@ -2,7 +2,7 @@ use crate::app::common::{CliError, CommandContext};
 use crate::app::{emit, mirror_surface, resolve_version_ref};
 use crate::cli::ReviewArgs;
 use earmark_governance::GovernanceService;
-use earmark_store::{CanonicalStore, ObjectStore, WorkspaceLayout, StoreScanner, StoreWriteLocking};
+use earmark_store::ObjectStore;
 use serde_json::json;
 
 pub fn handle(ctx: &CommandContext, args: &ReviewArgs) -> Result<(), CliError> {

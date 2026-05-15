@@ -5,7 +5,7 @@ use earmark_core::{
     VersionRef,
 };
 use earmark_exec::persistence_helpers::write_object_and_index;
-use earmark_store::{CanonicalStore, ObjectStore, WorkspaceLayout, StoreScanner, StoreWriteLocking, PayloadEncoding, StoredObject, StoredPayload};
+use earmark_store::{CanonicalStore, PayloadEncoding, StoredObject, StoredPayload};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 

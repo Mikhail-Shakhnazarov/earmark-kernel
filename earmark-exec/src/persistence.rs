@@ -12,7 +12,7 @@ use earmark_core::{
     REL_TYPE_RESULTED_IN_FAILURE,
 };
 use earmark_index::DerivedIndex;
-use earmark_store::{CanonicalStore, ObjectStore, WorkspaceLayout, StoreScanner, StoreWriteLocking, StoredObject, StoredPayload};
+use earmark_store::{CanonicalStore, StoredObject, StoredPayload};
 use std::collections::BTreeMap;
 
 pub(crate) struct ChangeSetPersistence<'a> {

@@ -3,7 +3,7 @@ use crate::app::emit;
 use crate::app::CliError;
 use crate::cli::DoctorArgs;
 use earmark_index::DerivedIndex;
-use earmark_store::{CanonicalStore, ObjectStore, WorkspaceLayout, StoreScanner, StoreWriteLocking};
+use earmark_store::{WorkspaceLayout, StoreScanner};
 use serde_json::json;
 
 pub(crate) fn handle_init(ctx: &CommandContext) -> Result<(), CliError> {

@@ -6,7 +6,7 @@ use earmark_core::{
     Standing, SystemDefinition, VersionId, WorkflowGuard, WorkflowOperationKind,
 };
 use earmark_index::DerivedIndex;
-use earmark_store::{CanonicalStore, ObjectStore, WorkspaceLayout, StoreScanner, StoreWriteLocking, StoredObject};
+use earmark_store::{CanonicalStore, StoredObject};
 use std::collections::{BTreeSet, HashMap, VecDeque};
 
 use crate::error::ExecError;

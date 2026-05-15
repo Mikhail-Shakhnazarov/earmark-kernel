@@ -2,7 +2,7 @@ use crate::cli::{Commands, DeclareAction, StandingRequestAction};
 use crate::config::CliConfig;
 use earmark_exec::ProviderRegistry;
 use earmark_index::DerivedIndex;
-use earmark_store::{GitCanonicalStore, ObjectStore, WorkspaceLayout, StoreScanner, StoreWriteLocking, WorkspaceLayoutStatus };
+use earmark_store::{GitCanonicalStore, WorkspaceLayoutStatus};
 use std::path::PathBuf;
 use thiserror::Error;
 

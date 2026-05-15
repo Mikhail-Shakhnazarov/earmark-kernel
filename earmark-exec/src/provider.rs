@@ -83,25 +83,6 @@ pub trait ProviderService: Send + Sync {
     ) -> Result<ProviderExecutionOutcome, ProviderFailure>;
 }
 
-pub(crate) trait AsyncProviderAdapter: Send + Sync {
-    fn provider_key(&self) -> &'static str;
-    fn provide_blocking_bridge(
-        &self,
-        request: ProviderRequest,
-        profile: &ProviderProfile,
-        transition_operation: &str,
-    ) -> Result<ProviderResponse, ProviderFailure>;
-}
-
-pub(crate) trait AsyncProviderService: Send + Sync {
-    fn provide_blocking_bridge(
-        &self,
-        profile: &ProviderProfile,
-        request: ProviderRequest,
-        transition_operation: &str,
-    ) -> Result<ProviderExecutionOutcome, ProviderFailure>;
-}
-
 #[derive(Default)]
 pub struct ProviderRegistry {
     pub adapters: HashMap<String, Arc<dyn ProviderAdapter>>,
@@ -109,17 +90,6 @@ pub struct ProviderRegistry {
 
 impl ProviderService for ProviderRegistry {
     fn provide(
-        &self,
-        profile: &ProviderProfile,
-        request: ProviderRequest,
-        transition_operation: &str,
-    ) -> Result<ProviderExecutionOutcome, ProviderFailure> {
-        provide_with_registry(self, profile, request, transition_operation)
-    }
-}
-
-impl AsyncProviderService for ProviderRegistry {
-    fn provide_blocking_bridge(
         &self,
         profile: &ProviderProfile,
         request: ProviderRequest,

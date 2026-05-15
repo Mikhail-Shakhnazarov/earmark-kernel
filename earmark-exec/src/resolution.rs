@@ -6,7 +6,7 @@ use earmark_core::{
     SystemDefinition, VersionRef, WorkflowDefinition,
 };
 use earmark_index::DerivedIndex;
-use earmark_store::{CanonicalStore, ObjectStore, WorkspaceLayout, StoreScanner, StoreWriteLocking};
+use earmark_store::CanonicalStore;
 
 pub(crate) fn resolve_version<S: CanonicalStore>(
     store: &S,

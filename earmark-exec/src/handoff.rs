@@ -9,7 +9,7 @@ use earmark_core::{
     REL_TYPE_REQUESTS_STANDING, REL_TYPE_USED_COMPILED_CONTEXT, REL_TYPE_USED_INSTRUCTION,
 };
 use earmark_index::{DerivedIndex, RelationEdge};
-use earmark_store::{CanonicalStore, ObjectStore, WorkspaceLayout, StoreScanner, StoreWriteLocking, StoredObject};
+use earmark_store::{CanonicalStore, StoredObject};
 use std::collections::{BTreeSet, VecDeque};
 
 /// Base set of relation types that are always carried across handoffs.

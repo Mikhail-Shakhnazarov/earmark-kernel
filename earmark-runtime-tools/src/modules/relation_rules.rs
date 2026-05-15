@@ -5,7 +5,7 @@ use earmark_exec::{
     RelationAuthorizationDecision, RelationAuthorizationReason, RelationAuthorizationResolver,
     RelationEndpointFacts,
 };
-use earmark_store::{CanonicalStore, ObjectStore, WorkspaceLayout, StoreScanner, StoreWriteLocking, StoredObject};
+use earmark_store::{CanonicalStore, StoredObject};
 
 pub(crate) fn authorize_relation_creation<S: CanonicalStore>(
     surface: &RuntimeToolSurface<'_, S>,

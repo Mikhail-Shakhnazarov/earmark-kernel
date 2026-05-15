@@ -6,8 +6,7 @@ use earmark_core::{
     WorkSurfaceRef, WorkflowDefinition,
 };
 use earmark_store::{
-    CanonicalStore, ObjectStore, StoreScanner, StoreWriteLocking, StoredObject, StoredPayload,
-    WorkspaceLayout,
+    CanonicalStore, StoredObject, StoredPayload,
 };
 use std::collections::BTreeSet;
 

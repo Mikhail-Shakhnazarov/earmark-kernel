@@ -9,7 +9,7 @@ use earmark_core::{
 };
 use earmark_governance::{check_immutability, validate_standing_transition, ReviewPayload};
 use earmark_index::DerivedIndex;
-use earmark_store::{CanonicalStore, ObjectStore, WorkspaceLayout, StoreScanner, StoreWriteLocking, StoredObject, StoredPayload};
+use earmark_store::{CanonicalStore, StoredObject, StoredPayload};
 
 pub fn approve_standing_request<S: CanonicalStore>(
     store: &S,
