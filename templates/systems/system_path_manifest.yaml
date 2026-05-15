@@ -2,17 +2,12 @@ system_id: your_system
 namespace: systems/your_system
 title: Your System
 description: Path-based system authoring manifest.
-classes:
-  - ../classes/your_input_class.yaml
-  - ../classes/your_output_class.yaml
-instructions:
-  - ../instructions/your_instruction_name.md
+classes: []
+instructions: []
 standing_policies: []
-compiled_contexts:
-  - ../compiled_contexts/your_compiled_context.yaml
+compiled_contexts: []
 provider_profiles: []
-workflows:
-  - ../workflows/your_workflow.yaml
+workflows: []
 runtime_profile:
   execution_surface: runtime_over_folder
   machine_output_default: json

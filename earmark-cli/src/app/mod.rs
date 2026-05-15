@@ -887,63 +887,27 @@ fn assemble_system_definition_from_manifest<S: CanonicalStore>(
     })
 }
 
-fn embedded_template_for_kind(kind: DeclarationKind) -> &'static str {
+fn template_file_for_kind(kind: DeclarationKind) -> &'static str {
     match kind {
-        DeclarationKind::Class => include_str!("../../../templates/classes/class.yaml"),
-        DeclarationKind::Instruction => {
-            include_str!("../../../templates/instructions/instruction.md")
-        }
-        DeclarationKind::StandingPolicy => {
-            include_str!("../../../templates/standing_policies/standing_policy.yaml")
-        }
-        DeclarationKind::CompiledContext => {
-            include_str!("../../../templates/compiled_contexts/compiled_context.yaml")
-        }
-        DeclarationKind::ProviderProfile => {
-            include_str!("../../../templates/provider_profiles/provider_profile.yaml")
-        }
-        DeclarationKind::Workflow => include_str!("../../../templates/workflows/workflow.yaml"),
-        DeclarationKind::System => {
-            include_str!("../../../templates/systems/system_path_manifest.yaml")
-        }
+        DeclarationKind::Class => "templates/classes/class.yaml",
+        DeclarationKind::Instruction => "templates/instructions/instruction.md",
+        DeclarationKind::StandingPolicy => "templates/standing_policies/standing_policy.yaml",
+        DeclarationKind::CompiledContext => "templates/compiled_contexts/compiled_context.yaml",
+        DeclarationKind::ProviderProfile => "templates/provider_profiles/provider_profile.yaml",
+        DeclarationKind::Workflow => "templates/workflows/workflow.yaml",
+        DeclarationKind::System => "templates/systems/system_path_manifest.yaml",
     }
-}
-
-fn infer_contract_classes(name: &str) -> (String, String) {
-    let token = |raw: &str| -> String {
-        let mut out = String::new();
-        for ch in raw.chars() {
-            if ch.is_ascii_alphanumeric() || ch == '_' {
-                out.push(ch.to_ascii_lowercase());
-            } else if (ch == '-' || ch == ' ') && !out.ends_with('_') {
-                out.push('_');
-            }
-        }
-        out.trim_matches('_').to_string()
-    };
-
-    for sep in ["_to_", "-to-", " to "] {
-        if let Some((left, right)) = name.split_once(sep) {
-            let input = token(left);
-            let output = token(right);
-            if !input.is_empty() && !output.is_empty() {
-                return (input, output);
-            }
-        }
-    }
-
-    ("input_object".to_string(), "output_object".to_string())
 }
 
 fn default_output_path(root: &std::path::Path, kind: DeclarationKind, name: &str) -> PathBuf {
     let (dir, ext) = match kind {
-        DeclarationKind::Class => (".earmark/declarations/classes", "yaml"),
-        DeclarationKind::Instruction => (".earmark/declarations/instructions", "md"),
-        DeclarationKind::StandingPolicy => (".earmark/declarations/standing_policies", "yaml"),
-        DeclarationKind::CompiledContext => (".earmark/declarations/compiled_contexts", "yaml"),
-        DeclarationKind::ProviderProfile => (".earmark/declarations/provider_profiles", "yaml"),
-        DeclarationKind::Workflow => (".earmark/declarations/workflows", "yaml"),
-        DeclarationKind::System => (".earmark/declarations/systems", "yaml"),
+        DeclarationKind::Class => ("declarations/classes", "yaml"),
+        DeclarationKind::Instruction => ("declarations/instructions", "md"),
+        DeclarationKind::StandingPolicy => ("declarations/standing_policies", "yaml"),
+        DeclarationKind::CompiledContext => ("declarations/compiled_contexts", "yaml"),
+        DeclarationKind::ProviderProfile => ("declarations/provider_profiles", "yaml"),
+        DeclarationKind::Workflow => ("declarations/workflows", "yaml"),
+        DeclarationKind::System => ("declarations/systems", "yaml"),
     };
     root.join(dir).join(format!("{name}.{ext}"))
 }
@@ -955,8 +919,8 @@ fn scaffold_declaration(
     explicit_path: Option<&PathBuf>,
     force: bool,
 ) -> Result<PathBuf, CliError> {
-    let mut body = embedded_template_for_kind(kind).to_string();
-    let (input_class, output_class) = infer_contract_classes(name);
+    let template_path = root.join(template_file_for_kind(kind));
+    let mut body = fs::read_to_string(&template_path)?;
     body = body
         .replace("your_class_name", name)
         .replace("your_instruction_name", name)
@@ -964,9 +928,7 @@ fn scaffold_declaration(
         .replace("your_compiled_context", name)
         .replace("your_provider_profile", name)
         .replace("your_workflow", name)
-        .replace("your_system", name)
-        .replace("your_input_class", &input_class)
-        .replace("your_output_class", &output_class);
+        .replace("your_system", name);
 
     let out_path = explicit_path
         .cloned()

@@ -3,10 +3,24 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+use crate::errors::CoreError;
 use crate::ids::VersionRef;
 use crate::relations::RelationRule;
 use crate::standing::ClassStandingRules;
 use crate::values::{JsonSchemaRef, MarkdownBody, ScalarValue};
+
+#[derive(Debug, Serialize, Deserialize)]
+pub(crate) struct InstructionFrontmatter {
+    pub name: String,
+    pub version: String,
+    pub purpose: String,
+    pub input_classes: Vec<String>,
+    pub output_classes: Vec<String>,
+    pub execution_policy: String,
+    pub provider_profile: Option<VersionRef>,
+    pub trace_policy: String,
+    pub register: String,
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ClassDefinition {
@@ -35,10 +49,9 @@ pub struct InstructionPayload {
 }
 
 impl InstructionPayload {
-    pub fn parse_markdown(input: &str) -> Result<Self, crate::errors::CoreError> {
-        let (frontmatter, body) = crate::serde_helpers::parse_markdown_frontmatter::<
-            crate::serde_helpers::InstructionFrontmatter,
-        >(input)?;
+    pub fn parse_markdown(input: &str) -> Result<Self, CoreError> {
+        let (frontmatter, body) =
+            crate::serde_helpers::parse_markdown_frontmatter::<InstructionFrontmatter>(input)?;
         Ok(Self {
             name: frontmatter.name,
             version: frontmatter.version,
@@ -53,8 +66,8 @@ impl InstructionPayload {
         })
     }
 
-    pub fn to_markdown(&self) -> Result<String, crate::errors::CoreError> {
-        let frontmatter = crate::serde_helpers::InstructionFrontmatter {
+    pub fn to_markdown(&self) -> Result<String, CoreError> {
+        let frontmatter = InstructionFrontmatter {
             name: self.name.clone(),
             version: self.version.clone(),
             purpose: self.purpose.clone(),
