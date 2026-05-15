@@ -3,16 +3,14 @@ version: 0.2.0
 description: Bounded context selection policy.
 select:
   classes:
-    - your_input_class
-  standing: {}
+    - source_note
   relations: []
-  time_range: null
-group_by: []
+  standing: []
 render:
-  mode: work_surface_compilation
-  manifest_format: json
+  mode: objects_and_relations
+  include_headers: true
+  include_payload: true
   prose_template: null
 visibility:
-  include_lineage: true
-  include_constraints: true
-  include_provenance: true
+  redact_headers: []
+  redact_payload_paths: []

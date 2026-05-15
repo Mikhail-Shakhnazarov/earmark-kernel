@@ -2,31 +2,15 @@ name: your_workflow
 version: 0.2.0
 description: Minimal staged workflow.
 operations:
-  - id: compile_inputs
-    kind: compile_context
-    input_contracts:
-      - your_input_class
-    output_contracts:
-      - your_compiled_context
-    compiled_context:
-      id: your_compiled_context
-      version_id: latest
-    instruction: null
-    policy: null
-    provider_profile: null
-  - id: transform_output
+  - id: op_1
     kind: transform
     input_contracts:
-      - your_compiled_context
+      - source_note
     output_contracts:
-      - your_output_class
-    instruction:
-      id: your_instruction_name
-      version_id: latest
+      - finding
+    instruction: null
     compiled_context: null
     policy: null
     provider_profile: null
-edges:
-  - from: compile_inputs
-    to: transform_output
+edges: []
 guards: []

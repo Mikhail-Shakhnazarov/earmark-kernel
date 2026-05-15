@@ -1,23 +1,9 @@
 //! Helpers for Markdown, YAML, and JSON serialization/deserialization.
 
 use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 use crate::errors::CoreError;
-use crate::ids::VersionRef;
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct InstructionFrontmatter {
-    pub name: String,
-    pub version: String,
-    pub purpose: String,
-    pub input_classes: Vec<String>,
-    pub output_classes: Vec<String>,
-    pub execution_policy: String,
-    pub provider_profile: Option<VersionRef>,
-    pub trace_policy: String,
-    pub register: String,
-}
 
 pub fn parse_markdown_frontmatter<T: DeserializeOwned>(
     input: &str,
