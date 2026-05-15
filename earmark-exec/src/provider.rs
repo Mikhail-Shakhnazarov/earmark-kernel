@@ -370,14 +370,20 @@ pub struct ProviderExecutionOutcome {
 }
 
 #[derive(Default, Clone, Copy)]
-pub(crate) struct CircuitState {
+pub struct CircuitState {
     pub consecutive_failures: u32,
     pub open_until_epoch_ms: i64,
 }
 
-pub(crate) fn provider_circuit_registry() -> &'static Mutex<HashMap<String, CircuitState>> {
+pub fn provider_circuit_registry() -> &'static Mutex<HashMap<String, CircuitState>> {
     static REGISTRY: OnceLock<Mutex<HashMap<String, CircuitState>>> = OnceLock::new();
     REGISTRY.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+pub fn reset_provider_circuit_registry_for_tests() {
+    if let Ok(mut lock) = provider_circuit_registry().lock() {
+        lock.clear();
+    }
 }
 
 pub(crate) fn resolved_endpoint_identity(profile: &ProviderProfile) -> String {

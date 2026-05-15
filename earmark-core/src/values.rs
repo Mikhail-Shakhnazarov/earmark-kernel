@@ -29,6 +29,18 @@ impl HeaderValue {
     }
 }
 
+impl From<String> for HeaderValue {
+    fn from(s: String) -> Self {
+        Self::String(s)
+    }
+}
+
+impl From<&str> for HeaderValue {
+    fn from(s: &str) -> Self {
+        Self::String(s.to_string())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum ScalarValue {

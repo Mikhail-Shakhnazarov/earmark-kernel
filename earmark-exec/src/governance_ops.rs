@@ -4,13 +4,12 @@ use crate::resolution::load_standing_policy;
 use chrono::Utc;
 use earmark_core::projection::project;
 use earmark_core::{
-    DimensionId, HeaderValue, Kind, ObjectId, Provenance, Standing, StandingRegistry,
+    DimensionId, Kind, ObjectId, Provenance, StandingRegistry,
     StandingRequestStatus, StandingTransitionRequest, TokenId, VersionRef,
 };
 use earmark_governance::{check_immutability, validate_standing_transition, ReviewPayload};
 use earmark_index::DerivedIndex;
 use earmark_store::{CanonicalStore, StoredObject, StoredPayload};
-use std::collections::BTreeMap;
 
 pub fn approve_standing_request<S: CanonicalStore>(
     store: &S,
@@ -205,22 +204,23 @@ fn persist_request_update<S: CanonicalStore>(
     parent_ref: &VersionRef,
     request: &StandingTransitionRequest,
 ) -> Result<VersionRef, ExecError> {
-    let stored = StoredObject::new_with_id(
-        parent_ref.id.clone(),
+    let stored = StoredObject::builder(
         Kind::Object,
-        Some("standing_transition_request".to_string()),
-        Standing::default(),
-        Provenance::direct_input("governance"),
-        BTreeMap::from([(
-            "title".to_string(),
-            HeaderValue::String(format!(
-                "Standing Request Update for {}",
-                request.target_object_id.as_str()
-            )),
-        )]),
         StoredPayload::from_json_bytes(serde_json::to_vec_pretty(request)?),
-        vec![parent_ref.clone()],
-    );
+    )
+    .id(parent_ref.id.clone())
+    .class("standing_transition_request")
+    .provenance(Provenance::direct_input("governance"))
+    .header(
+        "title",
+        format!(
+            "Standing Request Update for {}",
+            request.target_object_id.as_str()
+        ),
+    )
+    .parents(vec![parent_ref.clone()])
+    .build()
+    .map_err(ExecError::IncompleteExecution)?;
 
     write_object_and_index(store, index, &stored)
 }

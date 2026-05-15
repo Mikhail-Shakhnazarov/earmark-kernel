@@ -134,11 +134,46 @@ pub struct WorkflowDeclaration {
     pub output_contracts: Vec<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(untagged)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub enum FlexibleVersionRef {
     Ref(VersionRef),
     Path(String),
+}
+
+impl<'de> serde::Deserialize<'de> for FlexibleVersionRef {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::Error;
+        let value = serde_json::Value::deserialize(deserializer)?;
+        match value {
+            serde_json::Value::String(s) => Ok(FlexibleVersionRef::Path(s)),
+            serde_json::Value::Object(map) => {
+                let id_val = map.get("id").ok_or_else(|| {
+                    D::Error::custom("malformed version reference: missing 'id' field")
+                })?;
+                let vid_val = map.get("version_id").ok_or_else(|| {
+                    D::Error::custom("malformed version reference: missing 'version_id' field")
+                })?;
+
+                let id_str = id_val.as_str().ok_or_else(|| {
+                    D::Error::custom("malformed version reference: 'id' must be a string")
+                })?;
+                let vid_str = vid_val.as_str().ok_or_else(|| {
+                    D::Error::custom("malformed version reference: 'version_id' must be a string")
+                })?;
+
+                let id = crate::ids::ObjectId::parse(id_str).map_err(D::Error::custom)?;
+                let version_id = crate::ids::VersionId::parse(vid_str).map_err(D::Error::custom)?;
+
+                Ok(FlexibleVersionRef::Ref(VersionRef { id, version_id }))
+            }
+            _ => Err(D::Error::custom(
+                "invalid workflow reference: expected a path string or a durable reference map {id, version_id}",
+            )),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

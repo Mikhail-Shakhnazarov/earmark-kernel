@@ -1,3 +1,7 @@
+mod resolver;
+
+pub use resolver::resolve_workflow_declaration;
+
 use std::{fs, path::Path};
 
 use earmark_core::{
@@ -26,7 +30,15 @@ pub fn load_standing_policy(path: impl AsRef<Path>) -> Result<StandingPolicy, De
 pub fn load_workflow_definition(
     path: impl AsRef<Path>,
 ) -> Result<WorkflowDeclaration, DeriveError> {
-    Ok(parse_yaml(&fs::read_to_string(path)?)?)
+    let path = path.as_ref();
+    let content = fs::read_to_string(path)?;
+    parse_yaml(&content).map_err(|e| {
+        DeriveError::Validation(format!(
+            "failed to load workflow declaration from {}: {}",
+            path.display(),
+            e
+        ))
+    })
 }
 
 pub fn load_compiled_context_template(

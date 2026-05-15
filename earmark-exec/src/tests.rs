@@ -275,15 +275,11 @@ fn delegated_transform_output_sets_synthetic_headers() {
     let store = GitCanonicalStore::new(dir.path());
     store.init_layout().unwrap();
 
-    let input = StoredObject::new(
-        earmark_core::Kind::Object,
-        Some("note".to_string()),
-        earmark_core::Standing::default(),
-        earmark_core::Provenance::direct_input("test"),
-        std::collections::BTreeMap::new(),
-        StoredPayload::from_markdown("input"),
-        vec![],
-    );
+    let input = StoredObject::builder(earmark_core::Kind::Object, StoredPayload::from_markdown("input"))
+        .class("note")
+        .provenance(earmark_core::Provenance::direct_input("test"))
+        .build()
+        .unwrap();
     let input_ref = store.write_object(&input).unwrap();
     let input_obj_ref = earmark_core::ObjectRef::new(
         input_ref.id.clone(),
@@ -322,15 +318,11 @@ fn delegated_transform_output_sets_synthetic_headers() {
         received_at: chrono::Utc::now(),
     };
 
-    let instr_stored = StoredObject::new(
-        Kind::Instruction,
-        Some("instruction".to_string()),
-        earmark_core::Standing::default(),
-        earmark_core::Provenance::direct_input("test"),
-        BTreeMap::new(),
-        StoredPayload::from_markdown("extract"),
-        vec![],
-    );
+    let instr_stored = StoredObject::builder(Kind::Instruction, StoredPayload::from_markdown("extract"))
+        .class("instruction")
+        .provenance(earmark_core::Provenance::direct_input("test"))
+        .build()
+        .unwrap();
     let instr_ref = store.write_object(&instr_stored).unwrap();
 
     let index = DerivedIndex::open(dir.path()).unwrap();
@@ -396,15 +388,14 @@ fn test_delegated_outcome_with_none_response_returns_error_instead_of_panicking(
         },
         http: None,
     };
-    let prof_obj = StoredObject::new(
+    let prof_obj = StoredObject::builder(
         earmark_core::Kind::ProviderProfile,
-        Some("provider_profile".to_string()),
-        earmark_core::Standing::default(),
-        earmark_core::Provenance::direct_input("test"),
-        std::collections::BTreeMap::new(),
         StoredPayload::from_json_bytes(serde_json::to_vec(&prof).unwrap()),
-        vec![],
-    );
+    )
+    .class("provider_profile")
+    .provenance(earmark_core::Provenance::direct_input("test"))
+    .build()
+    .unwrap();
     let prof_ref = engine.store.write_object(&prof_obj).unwrap();
 
     let instruction = earmark_core::InstructionPayload {
@@ -420,30 +411,28 @@ fn test_delegated_outcome_with_none_response_returns_error_instead_of_panicking(
         body: earmark_core::MarkdownBody::new("test body"),
     };
 
-    let note = StoredObject::new(
+    let note = StoredObject::builder(
         earmark_core::Kind::Object,
-        Some("note".to_string()),
-        earmark_core::Standing::default(),
-        earmark_core::Provenance::direct_input("test"),
-        std::collections::BTreeMap::new(),
         StoredPayload::from_markdown("note content"),
-        vec![],
-    );
+    )
+    .class("note")
+    .provenance(earmark_core::Provenance::direct_input("test"))
+    .build()
+    .unwrap();
     let note_ref = engine.store.write_object(&note).unwrap();
 
     let instr_text = format!(
         "---\n{}---\ntest body",
         earmark_core::to_yaml(&instruction).unwrap()
     );
-    let instr_obj = StoredObject::new(
+    let instr_obj = StoredObject::builder(
         earmark_core::Kind::Instruction,
-        Some("instruction".to_string()),
-        earmark_core::Standing::default(),
-        earmark_core::Provenance::direct_input("test"),
-        std::collections::BTreeMap::new(),
         StoredPayload::from_markdown(instr_text),
-        vec![],
-    );
+    )
+    .class("instruction")
+    .provenance(earmark_core::Provenance::direct_input("test"))
+    .build()
+    .unwrap();
     let instr_ref = engine.store.write_object(&instr_obj).unwrap();
 
     engine.index.rebuild_from_store(engine.store).unwrap();
@@ -559,29 +548,27 @@ fn test_privileged_relation_creation_and_validation() {
     store.init_layout().unwrap();
     let index = DerivedIndex::open(dir.path()).unwrap();
 
-    let source = StoredObject::new(
+    let source = StoredObject::builder(
         earmark_core::Kind::Object,
-        Some("note".to_string()),
-        earmark_core::Standing::default(),
-        earmark_core::Provenance::direct_input("test"),
-        std::collections::BTreeMap::new(),
         StoredPayload::from_markdown("source"),
-        vec![],
-    );
+    )
+    .class("note")
+    .provenance(earmark_core::Provenance::direct_input("test"))
+    .build()
+    .unwrap();
     let source_ref = store.write_object(&source).unwrap();
     index
         .upsert_head_object_from_store(&store, &source_ref.id)
         .unwrap();
 
-    let target = StoredObject::new(
+    let target = StoredObject::builder(
         earmark_core::Kind::Object,
-        Some("finding".to_string()),
-        earmark_core::Standing::default(),
-        earmark_core::Provenance::direct_input("test"),
-        std::collections::BTreeMap::new(),
         StoredPayload::from_markdown("target"),
-        vec![],
-    );
+    )
+    .class("finding")
+    .provenance(earmark_core::Provenance::direct_input("test"))
+    .build()
+    .unwrap();
     let target_ref = store.write_object(&target).unwrap();
     index
         .upsert_head_object_from_store(&store, &target_ref.id)

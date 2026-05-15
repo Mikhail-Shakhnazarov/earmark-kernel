@@ -6,7 +6,7 @@ use earmark_core::{
     WorkSurfaceRef, WorkflowDefinition,
 };
 use earmark_store::{CanonicalStore, StoredObject, StoredPayload};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 use crate::error::ExecError;
 use crate::ir::{ExecutionEdge, ExecutionIr, ExecutionTransition, WorkflowRunRequest};
@@ -140,18 +140,18 @@ pub fn store_work_packet<S: CanonicalStore>(
     index: &DerivedIndex,
     work_packet: &WorkPacket,
 ) -> Result<StoredObject, ExecError> {
-    let stored = StoredObject::new(
+    let stored = StoredObject::builder(
         Kind::WorkPacket,
-        Some("work_packet".to_string()),
-        earmark_core::Standing::default(),
-        earmark_core::Provenance::direct_input("execution_engine"),
-        BTreeMap::from([(
-            "title".to_string(),
-            earmark_core::HeaderValue::String(format!("WorkPacket for {}", work_packet.purpose)),
-        )]),
-        StoredPayload::from_json_bytes(serde_json::to_vec_pretty(&work_packet)?),
-        vec![],
-    );
+        StoredPayload::from_json_bytes(serde_json::to_vec_pretty(work_packet)?),
+    )
+    .class("work_packet")
+    .provenance(earmark_core::Provenance::direct_input("execution_engine"))
+    .header(
+        "title",
+        format!("WorkPacket for {}", work_packet.purpose),
+    )
+    .build()
+    .map_err(ExecError::IncompleteExecution)?;
     write_object_and_index(store, index, &stored)?;
     Ok(stored)
 }

@@ -111,7 +111,85 @@ pub struct StoredObject {
     pub payload: StoredPayload,
 }
 
+pub struct StoredObjectBuilder {
+    id: Option<ObjectId>,
+    kind: Kind,
+    class: Option<String>,
+    standing: Standing,
+    provenance: Option<Provenance>,
+    headers: BTreeMap<String, HeaderValue>,
+    payload: StoredPayload,
+    parents: Vec<VersionRef>,
+}
+
+impl StoredObjectBuilder {
+    pub fn id(mut self, id: ObjectId) -> Self {
+        self.id = Some(id);
+        self
+    }
+
+    pub fn class(mut self, class: impl Into<String>) -> Self {
+        self.class = Some(class.into());
+        self
+    }
+
+    pub fn standing(mut self, standing: Standing) -> Self {
+        self.standing = standing;
+        self
+    }
+
+    pub fn provenance(mut self, provenance: Provenance) -> Self {
+        self.provenance = Some(provenance);
+        self
+    }
+
+    pub fn header(mut self, key: impl Into<String>, value: impl Into<HeaderValue>) -> Self {
+        self.headers.insert(key.into(), value.into());
+        self
+    }
+
+    pub fn headers(mut self, headers: BTreeMap<String, HeaderValue>) -> Self {
+        self.headers = headers;
+        self
+    }
+
+    pub fn parents(mut self, parents: Vec<VersionRef>) -> Self {
+        self.parents = parents;
+        self
+    }
+
+    pub fn build(self) -> Result<StoredObject, String> {
+        let provenance = self
+            .provenance
+            .ok_or_else(|| "provenance is required".to_string())?;
+
+        Ok(StoredObject::new_with_id(
+            self.id.unwrap_or_else(ObjectId::new),
+            self.kind,
+            self.class,
+            self.standing,
+            provenance,
+            self.headers,
+            self.payload,
+            self.parents,
+        ))
+    }
+}
+
 impl StoredObject {
+    pub fn builder(kind: Kind, payload: StoredPayload) -> StoredObjectBuilder {
+        StoredObjectBuilder {
+            id: None,
+            kind,
+            class: None,
+            standing: Standing::default(),
+            provenance: None,
+            headers: BTreeMap::new(),
+            payload,
+            parents: Vec::new(),
+        }
+    }
+
     pub fn new(
         kind: Kind,
         class: Option<String>,

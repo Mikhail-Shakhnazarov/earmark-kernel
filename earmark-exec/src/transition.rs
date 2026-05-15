@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use chrono::Utc;
 use earmark_connected_context::CompiledContextCompiler;
 use earmark_core::{
-    AssignmentStatus, ChangeSetDraft, ChangeSetId, ChangeSetValidationResult, Kind, ObjectId,
+    AssignmentStatus, ChangeSetDraft, ChangeSetId, ChangeSetValidationResult, Kind,
     ObjectRef, ProviderRequest, RunRecord, TransitionAssignment, TransitionAssignmentId,
     WorkPacketConstraints, WorkflowOperationKind,
 };
@@ -142,22 +142,19 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
             completed_at: None,
         };
 
-        let stored_assignment = StoredObject::new_with_id(
-            assignment.id.as_object_id(),
+        let stored_assignment = StoredObject::builder(
             Kind::TransitionAssignment,
-            Some("transition_assignment".to_string()),
-            earmark_core::Standing::default(),
-            earmark_core::Provenance::direct_input("execution_engine"),
-            BTreeMap::from([(
-                "title".to_string(),
-                earmark_core::HeaderValue::String(format!(
-                    "TransitionAssignment {}",
-                    assignment.id.as_str()
-                )),
-            )]),
             StoredPayload::from_json_bytes(serde_json::to_vec_pretty(&assignment)?),
-            vec![],
-        );
+        )
+        .id(assignment.id.as_object_id())
+        .class("transition_assignment")
+        .provenance(earmark_core::Provenance::direct_input("execution_engine"))
+        .header(
+            "title",
+            format!("TransitionAssignment {}", assignment.id.as_str()),
+        )
+        .build()
+        .map_err(ExecError::IncompleteExecution)?;
 
         write_object_and_index(self.store, self.index, &stored_assignment)?;
         record.assignments.push(assignment_id.clone());
@@ -621,22 +618,18 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
         change_set_draft: &mut ChangeSetDraft,
         provider_record: earmark_core::ProviderRecord,
     ) -> Result<ObjectRef, ExecError> {
-        let event = StoredObject::new_with_id(
-            ObjectId::new(),
+        let event = StoredObject::builder(
             Kind::Event,
-            Some("provider_record".to_string()),
-            earmark_core::Standing::default(),
-            earmark_core::Provenance::direct_input("runtime"),
-            BTreeMap::from([(
-                "title".to_string(),
-                earmark_core::HeaderValue::String(format!(
-                    "Provider result {}",
-                    provider_record.record_id
-                )),
-            )]),
             StoredPayload::from_json_bytes(serde_json::to_vec_pretty(&provider_record)?),
-            vec![],
-        );
+        )
+        .class("provider_record")
+        .provenance(earmark_core::Provenance::direct_input("runtime"))
+        .header(
+            "title",
+            format!("Provider result {}", provider_record.record_id),
+        )
+        .build()
+        .map_err(ExecError::IncompleteExecution)?;
         let event_ref = write_object_and_index(self.store, self.index, &event)?;
         change_set_draft
             .governance_events
@@ -884,22 +877,16 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                 created_at: now_end,
             };
 
-            let stored_handoff = StoredObject::new_with_id(
-                handoff.id.as_object_id(),
+            let stored_handoff = StoredObject::builder(
                 Kind::HandoffManifest,
-                Some("handoff_manifest".to_string()),
-                earmark_core::Standing::default(),
-                earmark_core::Provenance::direct_input("execution_engine"),
-                BTreeMap::from([(
-                    "title".to_string(),
-                    earmark_core::HeaderValue::String(format!(
-                        "HandoffManifest {}",
-                        handoff.id.as_str()
-                    )),
-                )]),
                 StoredPayload::from_json_bytes(serde_json::to_vec_pretty(&handoff)?),
-                vec![],
-            );
+            )
+            .id(handoff.id.as_object_id())
+            .class("handoff_manifest")
+            .provenance(earmark_core::Provenance::direct_input("execution_engine"))
+            .header("title", format!("HandoffManifest {}", handoff.id.as_str()))
+            .build()
+            .map_err(ExecError::IncompleteExecution)?;
             write_object_and_index(self.store, self.index, &stored_handoff)?;
             handoff_manifest_ids.push(handoff_manifest_id);
         }
