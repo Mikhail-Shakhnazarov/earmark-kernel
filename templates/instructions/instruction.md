@@ -4,18 +4,12 @@ version: 0.2.0
 description: Describe what this instruction does.
 purpose: Extract or transform bounded inputs into declared outputs.
 input_classes:
-  - source_note
+  - your_input_class
 output_classes:
-  - finding
-execution_policy:
-  mode: single
-  max_output_objects: 1
-trace_policy:
-  include_inputs: true
-  include_prompt: false
-register:
-  model_family: generic
-  prose_template: null
+  - your_output_class
+execution_policy: runtime_permitted
+trace_policy: summary
+register: your_output_class
 provider_profile: null
 ---
 
