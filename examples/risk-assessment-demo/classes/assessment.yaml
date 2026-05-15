@@ -1,0 +1,9 @@
+name: assessment
+version: "1.0.0"
+kind: object
+required_headers: []
+payload_schema: "{}"
+standing_rules: {}
+relation_rules: []
+validators: []
+description: A synthesized evaluation of claims and risks.

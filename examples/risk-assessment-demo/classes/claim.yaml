@@ -1,0 +1,9 @@
+name: claim
+version: "1.0.0"
+kind: object
+required_headers: []
+payload_schema: "{}"
+standing_rules: {}
+relation_rules: []
+validators: []
+description: A specific assertion extracted from a source note.

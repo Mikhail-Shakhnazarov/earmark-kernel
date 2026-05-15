@@ -1,0 +1,42 @@
+name: risk_assessment_workflow
+version: "1.0.0"
+description: A multi-stage workflow for risk assessment with branching and joining.
+operations:
+  - id: extract_claims
+    kind: transform
+    instruction: "../instructions/extract_claims.md"
+    compiled_context: "../contexts/claim_extraction.yaml"
+    output_contracts:
+      - claim
+  - id: extract_risks
+    kind: transform
+    instruction: "../instructions/extract_risks.md"
+    compiled_context: "../contexts/risk_extraction.yaml"
+    output_contracts:
+      - risk
+  - id: synthesize_assessment
+    kind: transform
+    instruction: "../instructions/synthesize_assessment.md"
+    compiled_context: "../contexts/assessment_synthesis.yaml"
+    output_contracts:
+      - assessment
+  - id: review_assessment
+    kind: review
+  - id: export_assessment
+    kind: export
+    policy: "../policies/export_policy.yaml"
+
+edges:
+  - from: extract_claims
+    to: synthesize_assessment
+  - from: extract_risks
+    to: synthesize_assessment
+  - from: synthesize_assessment
+    to: review_assessment
+  - from: review_assessment
+    to: export_assessment
+
+guards:
+  - id: min_assessment
+    expression: "assessment_count > 0"
+    message: "At least one assessment must be synthesized"

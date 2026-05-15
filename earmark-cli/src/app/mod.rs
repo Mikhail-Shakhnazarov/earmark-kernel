@@ -520,7 +520,7 @@ pub(crate) fn register_declaration_file<S: CanonicalStore>(
                 .iter()
                 .any(|opt| matches!(opt, Some(FlexibleVersionRef::Path(_))));
 
-                if has_paths {
+                if has_paths && registry.is_none() {
                     return Err(CliError::argument(format!(
                         "workflow path references require system-manifest registration (found in workflow '{}')",
                         decl.name
