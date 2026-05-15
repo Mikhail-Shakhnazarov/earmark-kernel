@@ -937,6 +937,76 @@ fn doctor_reports_dirty_index_without_implicit_repair() {
 }
 
 #[test]
+fn doctor_repair_index_rebuilds_and_clears_dirty_marker() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(root)
+        .arg("--json")
+        .arg("init")
+        .assert()
+        .success();
+
+    Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(root)
+        .arg("--json")
+        .arg("deposit")
+        .arg("--class")
+        .arg("note")
+        .arg("--title")
+        .arg("repair")
+        .arg("--body")
+        .arg("dirty index")
+        .assert()
+        .success();
+
+    let index = DerivedIndex::open(root).unwrap();
+    index
+        .mark_dirty(IndexDirtyMarker {
+            schema_version: "v1".to_string(),
+            reason: "test_repair".to_string(),
+            timestamp: chrono::Utc::now(),
+            operation: "test".to_string(),
+            object_ids: vec![],
+            version_ids: vec![],
+        })
+        .unwrap();
+    assert!(index.dirty_status().unwrap().is_some());
+
+    Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(root)
+        .arg("--json")
+        .arg("doctor")
+        .arg("--repair-index")
+        .assert()
+        .success();
+
+    let doctor_output = Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(root)
+        .arg("--json")
+        .arg("doctor")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&doctor_output).unwrap();
+    assert_eq!(parsed["ok"], true);
+    assert_eq!(parsed["data"]["index_is_dirty"], false);
+    assert_eq!(parsed["data"]["counts_match"], true);
+}
+
+#[test]
 fn demo_path_research_synthesis_full_workflow() {
     let dir = tempdir().unwrap();
     let root = dir.path();

@@ -23,11 +23,13 @@ pub(crate) fn bootstrap(cli: &Cli) -> Result<BootstrappedServices, CliError> {
         WorkspaceAccessMode::None => {}
         WorkspaceAccessMode::Init | WorkspaceAccessMode::Write => store.init_layout()?,
         WorkspaceAccessMode::ReadOnly => require_initialized_workspace(&store)?,
+        WorkspaceAccessMode::RepairIndex => require_initialized_workspace(&store)?,
     }
 
     let index = match mode {
         WorkspaceAccessMode::None => None,
         WorkspaceAccessMode::ReadOnly => Some(DerivedIndex::open_existing(&root)?),
+        WorkspaceAccessMode::RepairIndex => Some(DerivedIndex::open(&root)?),
         WorkspaceAccessMode::Init | WorkspaceAccessMode::Write => Some(DerivedIndex::open(&root)?),
     };
 

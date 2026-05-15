@@ -75,13 +75,20 @@ pub enum WorkspaceAccessMode {
     ReadOnly,
     Write,
     Init,
+    RepairIndex,
 }
 
 pub fn workspace_access_mode(command: &Commands) -> WorkspaceAccessMode {
     match command {
         Commands::Completions { .. } => WorkspaceAccessMode::None,
         Commands::Init => WorkspaceAccessMode::Init,
-        Commands::Doctor(_) => WorkspaceAccessMode::None,
+        Commands::Doctor(args) => {
+            if args.repair_index {
+                WorkspaceAccessMode::RepairIndex
+            } else {
+                WorkspaceAccessMode::None
+            }
+        }
         Commands::Status => WorkspaceAccessMode::ReadOnly,
         Commands::Query(_) => WorkspaceAccessMode::ReadOnly,
         Commands::Run(_) => WorkspaceAccessMode::ReadOnly,
