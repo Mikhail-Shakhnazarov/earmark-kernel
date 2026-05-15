@@ -156,7 +156,10 @@ fn test_provider_boundary_enforces_input_budget() {
 
     let result = provide_with_registry(&registry, &profile, request, "transform");
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err().kind, ProviderFailureKind::BudgetExceeded);
+    assert_eq!(
+        result.unwrap_err().kind,
+        ProviderFailureKind::BudgetExceeded
+    );
 }
 
 #[test]

@@ -17,7 +17,8 @@ fn test_topology_demo_declarations_validate_and_explain_topology() {
     let repo_root = workspace_root();
 
     let system_manifest = repo_root.join("examples/risk-assessment-demo/systems/system.yaml");
-    let workflow_manifest = repo_root.join("examples/risk-assessment-demo/workflows/risk_assessment_workflow.yaml");
+    let workflow_manifest =
+        repo_root.join("examples/risk-assessment-demo/workflows/risk_assessment_workflow.yaml");
 
     Command::cargo_bin("earmark-cli")
         .unwrap()
