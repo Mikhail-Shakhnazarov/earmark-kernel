@@ -6,8 +6,7 @@ use earmark_core::{
 };
 use earmark_index::{DerivedIndex, IndexError, QueryFilter};
 use earmark_store::{
-    CanonicalStore, GitCanonicalStore, ObjectStore, StoreScanner, StoreWriteLocking, StoredObject,
-    StoredPayload, WorkspaceLayout,
+    GitCanonicalStore, ObjectStore, StoreScanner, StoredObject, StoredPayload, WorkspaceLayout,
 };
 use tempfile::tempdir;
 

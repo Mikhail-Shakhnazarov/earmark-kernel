@@ -2,7 +2,7 @@ use crate::app::common::{CliError, CommandContext};
 use crate::app::*;
 use crate::cli::*;
 use earmark_core::Kind;
-use earmark_store::{ObjectStore, WorkspaceLayout, StoreScanner};
+use earmark_store::{ObjectStore, StoreScanner, WorkspaceLayout};
 use serde_json::json;
 use std::collections::BTreeMap;
 use std::fs;

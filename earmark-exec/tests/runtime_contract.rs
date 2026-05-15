@@ -8,10 +8,7 @@ use earmark_core::{
 use earmark_exec::{ProviderAdapter, ProviderFailure, ProviderRegistry, WorkflowRunRequest};
 use earmark_index::DerivedIndex;
 use earmark_runtime_tools::RuntimeToolSurface;
-use earmark_store::{
-    CanonicalStore, GitCanonicalStore, ObjectStore, StoreScanner, StoreWriteLocking, StoredObject,
-    StoredPayload, WorkspaceLayout,
-};
+use earmark_store::{GitCanonicalStore, ObjectStore, StoredObject, StoredPayload, WorkspaceLayout};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use tempfile::tempdir;

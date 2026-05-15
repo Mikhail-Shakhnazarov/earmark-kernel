@@ -3,8 +3,8 @@ use std::collections::BTreeMap;
 use chrono::Utc;
 use earmark_connected_context::CompiledContextCompiler;
 use earmark_core::{
-    AssignmentStatus, ChangeSetDraft, ChangeSetId, ChangeSetValidationResult, Kind,
-    ObjectRef, ProviderRequest, RunRecord, TransitionAssignment, TransitionAssignmentId,
+    AssignmentStatus, ChangeSetDraft, ChangeSetId, ChangeSetValidationResult, Kind, ObjectRef,
+    ProviderRequest, RunRecord, TransitionAssignment, TransitionAssignmentId,
     WorkPacketConstraints, WorkflowOperationKind,
 };
 use earmark_governance::{escalation_for_trigger, export_allowed, GovernanceService};
@@ -45,8 +45,8 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
         record: &mut RunRecord,
         context_compiler: &C,
     ) -> Result<(), ExecError> {
-
-        let (_assignment_id, stored_assignment_head) = self.initialize_assignment(record, transition)?;
+        let (_assignment_id, stored_assignment_head) =
+            self.initialize_assignment(record, transition)?;
         let mut assignment = serde_json::from_slice::<TransitionAssignment>(
             stored_assignment_head.payload.bytes.as_slice(),
         )?;
@@ -266,12 +266,16 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
 
         let res = (|| {
             if transition.output_contracts.len() > 1 {
-                return Err(ExecError::Validation(earmark_core::ChangeSetValidationResult {
-                    is_valid: false,
-                    failures: vec!["multi-output transform operations are not yet implemented".to_string()],
-                    warnings: vec![],
-                    info: vec![],
-                }));
+                return Err(ExecError::Validation(
+                    earmark_core::ChangeSetValidationResult {
+                        is_valid: false,
+                        failures: vec![
+                            "multi-output transform operations are not yet implemented".to_string()
+                        ],
+                        warnings: vec![],
+                        info: vec![],
+                    },
+                ));
             }
             let instruction_ref = transition.instruction.as_ref().ok_or_else(|| {
                 ExecError::InvalidWorkflow(format!(
@@ -378,7 +382,8 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                         }
                         input_text_to_estimate.push_str(&provider_request.input_text);
 
-                        let estimated = crate::helpers::estimate_tokens_approx(&input_text_to_estimate);
+                        let estimated =
+                            crate::helpers::estimate_tokens_approx(&input_text_to_estimate);
                         if estimated > max_input {
                             return Err(ExecError::Provider(ProviderFailure::new(
                                 ProviderFailureKind::BudgetExceeded,
@@ -475,11 +480,8 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                         }
                         Err(failure) => {
                             let failure_message = failure.message.clone();
-                            let provider_record = provider_record_from_failure(
-                                &provider_request,
-                                &profile,
-                                &failure,
-                            );
+                            let provider_record =
+                                provider_record_from_failure(&provider_request, &profile, &failure);
 
                             self.record_provider_event(
                                 record,
@@ -713,12 +715,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
             failure_ref.id.as_str()
         ));
         assignment.updated_at = Utc::now();
-        persist_assignment_update(
-            self.store,
-            self.index,
-            stored_assignment_head,
-            assignment,
-        )?;
+        persist_assignment_update(self.store, self.index, stored_assignment_head, assignment)?;
 
         record_transition(
             record,
@@ -807,12 +804,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                 failure_ref.id.as_str()
             ));
             assignment.updated_at = now_end;
-            persist_assignment_update(
-                self.store,
-                self.index,
-                stored_assignment_head,
-                assignment,
-            )?;
+            persist_assignment_update(self.store, self.index, stored_assignment_head, assignment)?;
             record_transition(
                 record,
                 transition.id.clone(),
@@ -863,7 +855,10 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                 source_change_set_id: change_set_id.clone(),
                 source_assignment_id: Some(assignment.id.clone()),
                 root_object_ids: root_object_ids.clone(),
-                inherited_input_object_ids: filtered_inputs.iter().map(|obj| obj.id.clone()).collect(),
+                inherited_input_object_ids: filtered_inputs
+                    .iter()
+                    .map(|obj| obj.id.clone())
+                    .collect(),
                 newly_created_object_ids: change_set_draft.created_objects.clone(),
                 newly_created_relation_ids: change_set_draft.created_relations.clone(),
                 allowed_input_classes: spec.allowed_input_classes,
@@ -909,12 +904,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
         assignment.status = AssignmentStatus::Completed;
         assignment.updated_at = now_end;
         assignment.completed_at = Some(now_end);
-        persist_assignment_update(
-            self.store,
-            self.index,
-            stored_assignment_head,
-            assignment,
-        )?;
+        persist_assignment_update(self.store, self.index, stored_assignment_head, assignment)?;
 
         Ok(())
     }

@@ -15,9 +15,9 @@ use earmark_core::{
 use earmark_declarations::{
     load_class_definition, load_compiled_context_template, load_instruction, load_provider_profile,
     load_standing_policy, load_system_definition, load_workflow_definition,
-    validate_class_definition, validate_compiled_context_template, validate_instruction,
-    validate_provider_profile, validate_standing_policy, validate_system_definition,
-    validate_workflow_definition, resolve_workflow_declaration,
+    resolve_workflow_declaration, validate_class_definition, validate_compiled_context_template,
+    validate_instruction, validate_provider_profile, validate_standing_policy,
+    validate_system_definition, validate_workflow_definition,
 };
 use earmark_index::DerivedIndex;
 use earmark_store::{
@@ -56,7 +56,6 @@ pub fn run(cli: Cli) -> Result<(), common::CliError> {
     crate::metrics::record_command_result(command_name, result.is_ok(), started.elapsed());
     result
 }
-
 
 impl DeclarationKind {
     fn as_str(self) -> &'static str {

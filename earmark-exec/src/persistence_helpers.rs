@@ -1,5 +1,5 @@
-use chrono::Utc;
 use crate::error::ExecError;
+use chrono::Utc;
 use earmark_core::VersionRef;
 use earmark_index::{DerivedIndex, IndexDirtyMarker};
 use earmark_store::{BatchWrite, CanonicalStore, StoredObject};

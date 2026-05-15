@@ -2,10 +2,7 @@ use earmark_core::RuntimeProvenance;
 use earmark_exec::ProviderRegistry;
 use earmark_index::DerivedIndex;
 use earmark_runtime_tools::{DepositValidationContext, RuntimeToolSurface};
-use earmark_store::{
-    CanonicalStore, GitCanonicalStore, ObjectStore, StoreScanner, StoreWriteLocking,
-    WorkspaceLayout,
-};
+use earmark_store::{GitCanonicalStore, WorkspaceLayout};
 use serde_json::json;
 use tempfile::tempdir;
 

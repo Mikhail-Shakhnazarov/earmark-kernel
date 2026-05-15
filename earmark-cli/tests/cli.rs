@@ -7,10 +7,7 @@ use earmark_core::{
 };
 use earmark_exec::{ExecutionEngine, ProviderRegistry, WorkflowRunRequest};
 use earmark_index::{DerivedIndex, IndexDirtyMarker};
-use earmark_store::{
-    CanonicalStore, GitCanonicalStore, ObjectStore, StoreScanner, StoreWriteLocking, StoredObject,
-    StoredPayload, WorkspaceLayout,
-};
+use earmark_store::{GitCanonicalStore, ObjectStore, StoreScanner, StoredObject, StoredPayload};
 use serde_json::Value;
 use tempfile::tempdir;
 
@@ -1694,7 +1691,7 @@ fn latest_run_resolves_correctly() {
     };
     use earmark_exec::{ExecutionEngine, ProviderRegistry, WorkflowRunRequest};
     use earmark_index::DerivedIndex;
-    use earmark_store::{GitCanonicalStore, ObjectStore, WorkspaceLayout, StoreScanner, StoreWriteLocking, StoredObject, StoredPayload };
+    use earmark_store::{GitCanonicalStore, ObjectStore, StoredObject, StoredPayload};
     use std::collections::BTreeMap;
 
     let store = GitCanonicalStore::new(dir.path());
@@ -1850,7 +1847,7 @@ fn run_show_and_explain_are_distinct() {
     };
     use earmark_exec::{ExecutionEngine, ProviderRegistry, WorkflowRunRequest};
     use earmark_index::DerivedIndex;
-    use earmark_store::{GitCanonicalStore, ObjectStore, WorkspaceLayout, StoreScanner, StoreWriteLocking, StoredObject, StoredPayload };
+    use earmark_store::{GitCanonicalStore, ObjectStore, StoredObject, StoredPayload};
     use std::collections::BTreeMap;
 
     let store = GitCanonicalStore::new(dir.path());

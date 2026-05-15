@@ -11,9 +11,9 @@ use std::collections::BTreeMap;
 #[cfg(feature = "http-provider")]
 use std::env;
 #[cfg(feature = "http-provider")]
-use std::time::Instant;
-#[cfg(feature = "http-provider")]
 use std::time::Duration;
+#[cfg(feature = "http-provider")]
+use std::time::Instant;
 
 #[cfg(feature = "http-provider")]
 pub struct HttpGenerationAdapter;
@@ -237,7 +237,7 @@ impl ProviderAdapter for HttpGenerationAdapter {
         metadata.insert(
             "configured_timeout_ms".to_string(),
             earmark_core::ScalarValue::Integer(
-                profile.budget.max_latency_ms.unwrap_or(30_000) as i64,
+                profile.budget.max_latency_ms.unwrap_or(30_000) as i64
             ),
         );
 

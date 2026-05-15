@@ -11,8 +11,7 @@ use earmark_core::{
 use earmark_exec::{ExecError, ExecutionEngine, ProviderRegistry, WorkflowRunRequest};
 use earmark_index::DerivedIndex;
 use earmark_store::{
-    CanonicalStore, GitCanonicalStore, ObjectStore, StoreScanner, StoreWriteLocking, StoredObject,
-    StoredPayload, WorkspaceLayout,
+    GitCanonicalStore, ObjectStore, StoreScanner, StoredObject, StoredPayload, WorkspaceLayout,
 };
 use tempfile::tempdir;
 

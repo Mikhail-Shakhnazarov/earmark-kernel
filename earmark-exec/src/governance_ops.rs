@@ -4,8 +4,8 @@ use crate::resolution::load_standing_policy;
 use chrono::Utc;
 use earmark_core::projection::project;
 use earmark_core::{
-    DimensionId, Kind, ObjectId, Provenance, StandingRegistry,
-    StandingRequestStatus, StandingTransitionRequest, TokenId, VersionRef,
+    DimensionId, Kind, ObjectId, Provenance, StandingRegistry, StandingRequestStatus,
+    StandingTransitionRequest, TokenId, VersionRef,
 };
 use earmark_governance::{check_immutability, validate_standing_transition, ReviewPayload};
 use earmark_index::DerivedIndex;

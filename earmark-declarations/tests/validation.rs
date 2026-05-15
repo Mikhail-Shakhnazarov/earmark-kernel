@@ -5,17 +5,16 @@ use earmark_core::{
     CompiledContextSelect, CompiledContextTemplate, CompiledContextVisibility, DimensionId,
     EscalationRule, FlexibleVersionRef, InstructionPayload, JsonSchemaRef, MarkdownBody,
     OperationRequirement, ProviderBudget, ProviderExposure, ProviderProfile,
-    ProviderResponseFormat,
-    ProviderResponseContract, StandingPolicy, StandingRegistry, StandingTransitionRule, TokenId,
-    WorkflowDeclaration, WorkflowDeclarationOperation, WorkflowEdge, WorkflowGuard,
-    WorkflowOperationKind,
+    ProviderResponseContract, ProviderResponseFormat, StandingPolicy, StandingRegistry,
+    StandingTransitionRule, TokenId, WorkflowDeclaration, WorkflowDeclarationOperation,
+    WorkflowEdge, WorkflowGuard, WorkflowOperationKind,
 };
 use earmark_declarations::{
     validate_class_definition, validate_compiled_context_template, validate_instruction,
     validate_provider_profile, validate_standing_policy, validate_system_definition,
     validate_workflow_definition,
 };
-use earmark_store::{CanonicalStore, GitCanonicalStore, ObjectStore, WorkspaceLayout, StoreScanner, StoreWriteLocking, StoredObject, StoredPayload };
+use earmark_store::{GitCanonicalStore, ObjectStore, StoredObject, StoredPayload, WorkspaceLayout};
 use tempfile::tempdir;
 
 fn base_workflow() -> WorkflowDeclaration {

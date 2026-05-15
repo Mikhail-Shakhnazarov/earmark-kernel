@@ -89,10 +89,7 @@ pub(crate) fn persist_change_set<S: CanonicalStore>(
         .provenance(Provenance::direct_input("execution_engine"))
         .header(
             "title",
-            format!(
-                "Standing Request for {}",
-                request.target_object_id.as_str()
-            ),
+            format!("Standing Request for {}", request.target_object_id.as_str()),
         )
         .build()
         .map_err(ExecError::IncompleteExecution)?;
@@ -171,10 +168,7 @@ pub(crate) fn persist_transformation_failure<S: CanonicalStore>(
     )
     .class("transformation_failure")
     .provenance(Provenance::direct_input("execution_engine"))
-    .header(
-        "title",
-        format!("Failure {}", assignment.transition_id),
-    )
+    .header("title", format!("Failure {}", assignment.transition_id))
     .build()
     .map_err(ExecError::IncompleteExecution)?;
     let version_ref = write_object_and_index(store, index, &stored)?;

@@ -3,10 +3,7 @@ use chrono::Utc;
 use earmark_core::{Kind, ObjectId, ObjectRef, Provenance, Standing, VersionId, VersionRef};
 use earmark_exec::persistence_helpers::write_object_and_index;
 use earmark_index::DerivedIndex;
-use earmark_store::{
-    GitCanonicalStore, ObjectStore, StoreScanner, StoreWriteLocking, StoredObject, StoredPayload,
-    WorkspaceLayout,
-};
+use earmark_store::{GitCanonicalStore, StoredObject, StoredPayload};
 use serde_json::Value;
 use std::collections::BTreeMap;
 use tempfile::tempdir;
