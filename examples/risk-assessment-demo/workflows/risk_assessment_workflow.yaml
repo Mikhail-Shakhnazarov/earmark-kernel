@@ -2,22 +2,28 @@ name: risk_assessment_workflow
 version: "1.0.0"
 description: A multi-stage workflow for risk assessment with branching and joining.
 operations:
+  - id: compile_claim_context
+    kind: compile_context
+    compiled_context: "../contexts/claim_extraction.yaml"
   - id: extract_claims
     kind: transform
     instruction: "../instructions/extract_claims.md"
-    compiled_context: "../contexts/claim_extraction.yaml"
     output_contracts:
       - claim
+  - id: compile_risk_context
+    kind: compile_context
+    compiled_context: "../contexts/risk_extraction.yaml"
   - id: extract_risks
     kind: transform
     instruction: "../instructions/extract_risks.md"
-    compiled_context: "../contexts/risk_extraction.yaml"
     output_contracts:
       - risk
+  - id: compile_assessment_context
+    kind: compile_context
+    compiled_context: "../contexts/assessment_synthesis.yaml"
   - id: synthesize_assessment
     kind: transform
     instruction: "../instructions/synthesize_assessment.md"
-    compiled_context: "../contexts/assessment_synthesis.yaml"
     output_contracts:
       - assessment
   - id: review_assessment
@@ -27,16 +33,17 @@ operations:
     policy: "../policies/export_policy.yaml"
 
 edges:
+  - from: compile_claim_context
+    to: extract_claims
+  - from: compile_risk_context
+    to: extract_risks
   - from: extract_claims
-    to: synthesize_assessment
+    to: compile_assessment_context
   - from: extract_risks
+    to: compile_assessment_context
+  - from: compile_assessment_context
     to: synthesize_assessment
   - from: synthesize_assessment
     to: review_assessment
   - from: review_assessment
     to: export_assessment
-
-guards:
-  - id: min_assessment
-    expression: "assessment_count > 0"
-    message: "At least one assessment must be synthesized"
