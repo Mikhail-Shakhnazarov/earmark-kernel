@@ -1813,9 +1813,9 @@ version: "1"
 description: a simple flow
 operations:
   - id: op_one
-    kind: nop
+    kind: review
     input_contracts: [note]
-    output_contracts: [note]
+    output_contracts: []
 edges: []
 guards: []
 "#;

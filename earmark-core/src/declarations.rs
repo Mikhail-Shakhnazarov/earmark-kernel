@@ -16,7 +16,6 @@ pub enum WorkflowOperationKind {
     Transform,
     Review,
     Export,
-    Nop,
 }
 
 impl WorkflowOperationKind {
@@ -26,7 +25,6 @@ impl WorkflowOperationKind {
             Self::Transform => "transform",
             Self::Review => "review",
             Self::Export => "export",
-            Self::Nop => "nop",
         }
     }
 }

@@ -86,7 +86,6 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
             WorkflowOperationKind::Export => {
                 self.handle_export(system, transition, state, record, &mut change_set_draft)
             }
-            WorkflowOperationKind::Nop => Ok(()),
         };
 
         if let Err(error) = exec_result {

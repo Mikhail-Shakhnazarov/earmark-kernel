@@ -313,7 +313,7 @@ fn test_initial_accepted_standing_fails_without_review_or_trusted_provenance() {
 
     let transition = ExecutionTransition {
         id: "test".to_string(),
-        operation: WorkflowOperationKind::Nop,
+        operation: WorkflowOperationKind::Review,
         input_contracts: vec![],
         output_contracts: vec![],
         instruction: None,

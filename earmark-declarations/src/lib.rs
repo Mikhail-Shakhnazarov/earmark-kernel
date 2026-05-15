@@ -421,14 +421,6 @@ pub fn validate_workflow_definition(value: &WorkflowDeclaration) -> Result<(), D
                     )));
                 }
             }
-            earmark_core::WorkflowOperationKind::Nop => {
-                if !op.output_contracts.is_empty() {
-                    return Err(DeriveError::Validation(format!(
-                        "operation '{}' of kind Nop cannot have output contracts",
-                        op.id
-                    )));
-                }
-            }
             earmark_core::WorkflowOperationKind::Review
             | earmark_core::WorkflowOperationKind::Export => {
                 // Future packet: validate review/export-specific requirements
