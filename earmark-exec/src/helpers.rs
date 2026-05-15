@@ -109,7 +109,7 @@ pub fn work_packet_from_compiled_context(
         work_packet_id: format!("wp_{}", uuid_like()),
         run_id: request.run_id.clone(),
         work_packet_type: "execution".to_string(),
-        purpose: transition.operation.clone(),
+        purpose: transition.operation.as_str().to_string(),
         system_definition: request.system_definition.clone(),
         workflow: Some(request.workflow.clone()),
         instruction: transition.instruction.clone(),

@@ -4,7 +4,7 @@ use std::path::Path;
 use earmark_core::{
     AssignmentStatus, ChangeSetDraft, DimensionId, Kind, RuntimeProfile, Standing, StandingPolicy,
     StandingRegistry, StandingRequestStatus, StandingTransitionRule, SystemDefinition, TokenId,
-    TransitionAssignment, TransitionAssignmentId,
+    TransitionAssignment, TransitionAssignmentId, WorkflowOperationKind,
 };
 use earmark_exec::governance_ops::{apply_standing_request, approve_standing_request};
 use earmark_exec::persistence_helpers::write_object_and_index;
@@ -313,7 +313,7 @@ fn test_initial_accepted_standing_fails_without_review_or_trusted_provenance() {
 
     let transition = ExecutionTransition {
         id: "test".to_string(),
-        operation: "test".to_string(),
+        operation: WorkflowOperationKind::Nop,
         input_contracts: vec![],
         output_contracts: vec![],
         instruction: None,

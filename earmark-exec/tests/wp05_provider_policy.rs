@@ -2,7 +2,7 @@ use earmark_connected_context::DEFAULT_COMPILED_CONTEXT_COMPILER;
 use earmark_core::{
     Kind, ObjectId, ObjectRef, ProviderBudget, ProviderExposure, ProviderProfile, ProviderRequest,
     ProviderResponseContract, RunRecord, RunStatus, RuntimeProfile, ScalarValue, SystemDefinition,
-    VersionId, VersionRef,
+    VersionId, VersionRef, WorkflowOperationKind,
 };
 use earmark_exec::{
     default_provider_registry, engine::ExecutionEngine, ir::ExecutionIr, provide_with_registry,
@@ -177,7 +177,7 @@ fn test_work_packet_honest_constraints() {
     };
     let transition = ExecutionTransition {
         id: "t1".to_string(),
-        operation: "transform".to_string(),
+        operation: WorkflowOperationKind::Transform,
         input_contracts: vec![],
         output_contracts: vec![],
         instruction: None,
@@ -289,7 +289,7 @@ fn test_transition_enforces_honest_work_packet_defaults() {
     let ir = ExecutionIr {
         transitions: vec![ExecutionTransition {
             id: "t1".to_string(),
-            operation: "compile_context".to_string(),
+            operation: WorkflowOperationKind::CompileContext,
             input_contracts: vec![],
             output_contracts: vec![],
             instruction: None,
@@ -570,7 +570,7 @@ fn test_transition_preserves_provider_record_warnings() {
     let ir = ExecutionIr {
         transitions: vec![ExecutionTransition {
             id: "t1".to_string(),
-            operation: "transform".to_string(),
+            operation: WorkflowOperationKind::Transform,
             input_contracts: vec![],
             output_contracts: vec![],
             instruction: Some(instr_ref),

@@ -64,7 +64,7 @@ proptest! {
     fn test_validate_workflow_operation_ids(id in "[a-z][a-z0-9_]{0,63}") {
         let op = WorkflowDeclarationOperation {
             id: id.clone(),
-            kind: "nop".to_string(),
+            kind: WorkflowOperationKind::Nop,
             input_contracts: vec![],
             output_contracts: vec![],
             instruction: None,

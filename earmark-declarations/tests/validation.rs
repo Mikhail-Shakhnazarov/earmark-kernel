@@ -7,6 +7,7 @@ use earmark_core::{
     OperationRequirement, ProviderBudget, ProviderExposure, ProviderProfile,
     ProviderResponseContract, StandingPolicy, StandingRegistry, StandingTransitionRule, TokenId,
     WorkflowDeclaration, WorkflowDeclarationOperation, WorkflowEdge, WorkflowGuard,
+    WorkflowOperationKind,
 };
 use earmark_declarations::{
     validate_class_definition, validate_compiled_context_template, validate_instruction,
@@ -23,7 +24,7 @@ fn base_workflow() -> WorkflowDeclaration {
         description: None,
         operations: vec![WorkflowDeclarationOperation {
             id: "op_a".to_string(),
-            kind: "transform".to_string(),
+            kind: WorkflowOperationKind::Transform,
             input_contracts: vec![],
             output_contracts: vec![],
             instruction: Some(FlexibleVersionRef::Ref(earmark_core::VersionRef::new(
@@ -449,16 +450,21 @@ fn class_rejects_invalid_epistemic_token_in_standing_rules() {
 }
 
 #[test]
+#[should_panic(expected = "unknown variant `unknown_kind`")]
 fn workflow_rejects_invalid_operation_kind() {
-    let mut wf = base_workflow();
-    wf.operations[0].kind = "unknown_kind".to_string();
-    assert!(validate_workflow_definition(&wf).is_err());
+    let yaml = r#"name: wf_bad
+version: "1.0.0"
+operations:
+  - id: op_a
+    kind: unknown_kind
+"#;
+    let _wf: WorkflowDeclaration = earmark_core::parse_yaml(yaml).unwrap();
 }
 
 #[test]
 fn workflow_compile_context_requires_compiled_context() {
     let mut wf = base_workflow();
-    wf.operations[0].kind = "compile_context".to_string();
+    wf.operations[0].kind = WorkflowOperationKind::CompileContext;
     wf.operations[0].instruction = None;
     wf.operations[0].compiled_context = None;
     assert!(validate_workflow_definition(&wf).is_err());
@@ -809,7 +815,7 @@ fn valid_workflow_example_passes() {
         operations: vec![
             WorkflowDeclarationOperation {
                 id: "compile_context".to_string(),
-                kind: "compile_context".to_string(),
+                kind: WorkflowOperationKind::CompileContext,
                 input_contracts: vec!["source_note".to_string()],
                 output_contracts: vec!["work_surface".to_string()],
                 instruction: None,
@@ -822,7 +828,7 @@ fn valid_workflow_example_passes() {
             },
             WorkflowDeclarationOperation {
                 id: "transform".to_string(),
-                kind: "transform".to_string(),
+                kind: WorkflowOperationKind::Transform,
                 input_contracts: vec!["source_note".to_string()],
                 output_contracts: vec!["finding".to_string()],
                 instruction: Some(FlexibleVersionRef::Ref(earmark_core::VersionRef::new(

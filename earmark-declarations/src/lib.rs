@@ -377,39 +377,49 @@ pub fn validate_standing_policy_against_registry(
 pub fn validate_workflow_definition(value: &WorkflowDeclaration) -> Result<(), DeriveError> {
     earmark_core::validate_class_name(&value.name)
         .map_err(|e| DeriveError::Validation(e.to_string()))?;
-    let valid_kinds = ["compile_context", "transform", "nop"];
     let mut ids = std::collections::BTreeSet::new();
     for op in &value.operations {
         validate_workflow_token(&op.id, "operation id")?;
-        if !valid_kinds.contains(&op.kind.as_str()) {
-            return Err(DeriveError::Validation(format!(
-                "workflow operation '{}' has invalid kind '{}': expected compile_context, transform, or nop",
-                op.id, op.kind
-            )));
-        }
         if !ids.insert(op.id.as_str()) {
             return Err(DeriveError::Validation(format!(
                 "duplicate workflow operation id '{}'",
                 op.id
             )));
         }
-        if op.kind == "compile_context" && op.compiled_context.is_none() {
-            return Err(DeriveError::Validation(format!(
-                "workflow operation '{}' of kind compile_context requires a compiled_context reference",
-                op.id
-            )));
-        }
-        if op.kind == "transform" && op.instruction.is_none() {
-            return Err(DeriveError::Validation(format!(
-                "workflow operation '{}' of kind transform requires an instruction reference",
-                op.id
-            )));
-        }
-        if op.kind == "transform" && op.output_contracts.len() > 1 {
-            return Err(DeriveError::Validation(format!(
-                "multi-output transform operations are not implemented; declare one output contract for operation '{}'",
-                op.id
-            )));
+        match op.kind {
+            earmark_core::WorkflowOperationKind::CompileContext => {
+                if op.compiled_context.is_none() {
+                    return Err(DeriveError::Validation(format!(
+                        "workflow operation '{}' of kind compile_context requires a compiled_context reference",
+                        op.id
+                    )));
+                }
+            }
+            earmark_core::WorkflowOperationKind::Transform => {
+                if op.instruction.is_none() {
+                    return Err(DeriveError::Validation(format!(
+                        "workflow operation '{}' of kind transform requires an instruction reference",
+                        op.id
+                    )));
+                }
+                if op.output_contracts.len() > 1 {
+                    return Err(DeriveError::Validation(format!(
+                        "multi-output transform operations are not implemented; declare one output contract for operation '{}'",
+                        op.id
+                    )));
+                }
+            }
+            earmark_core::WorkflowOperationKind::Nop => {
+                if !op.output_contracts.is_empty() {
+                    return Err(DeriveError::Validation(format!(
+                        "operation '{}' of kind Nop cannot have output contracts",
+                        op.id
+                    )));
+                }
+            }
+            earmark_core::WorkflowOperationKind::Review | earmark_core::WorkflowOperationKind::Export => {
+                // Future packet: validate review/export-specific requirements
+            }
         }
         for class in &op.input_contracts {
             earmark_core::validate_class_name(class).map_err(|e| {

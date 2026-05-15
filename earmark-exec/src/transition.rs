@@ -5,7 +5,7 @@ use earmark_connected_context::CompiledContextCompiler;
 use earmark_core::{
     AssignmentStatus, ChangeSetDraft, ChangeSetId, ChangeSetValidationResult, Kind, ObjectId,
     ObjectRef, ProviderRequest, RunRecord, TransitionAssignment, TransitionAssignmentId,
-    WorkPacketConstraints,
+    WorkPacketConstraints, WorkflowOperationKind,
 };
 use earmark_governance::{escalation_for_trigger, export_allowed, GovernanceService};
 use earmark_store::{CanonicalStore, StoredObject, StoredPayload};
@@ -56,8 +56,8 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
 
         let filtered_inputs = self.get_filtered_inputs(state, transition);
 
-        let exec_result: Result<(), ExecError> = match transition.operation.as_str() {
-            "compile_context" => self.handle_compile_context(
+        let exec_result: Result<(), ExecError> = match transition.operation {
+            WorkflowOperationKind::CompileContext => self.handle_compile_context(
                 request,
                 system,
                 transition,
@@ -67,7 +67,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                 &filtered_inputs,
                 &mut change_set_draft,
             ),
-            "transform" => {
+            WorkflowOperationKind::Transform => {
                 let (res, warning) = self.handle_transform(
                     request,
                     system,
@@ -80,11 +80,13 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                 synthetic_output_warning = warning;
                 res
             }
-            "review" => self.handle_review(request, transition, state, record, &mut change_set_draft),
-            "export" => {
+            WorkflowOperationKind::Review => {
+                self.handle_review(request, transition, state, record, &mut change_set_draft)
+            }
+            WorkflowOperationKind::Export => {
                 self.handle_export(system, transition, state, record, &mut change_set_draft)
             }
-            other => Err(ExecError::UnsupportedOperation(other.to_string())),
+            WorkflowOperationKind::Nop => Ok(()),
         };
 
         if let Err(error) = exec_result {
@@ -266,6 +268,14 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
         let mut synthetic_output_warning = None;
 
         let res = (|| {
+            if transition.output_contracts.len() > 1 {
+                return Err(ExecError::Validation(earmark_core::ChangeSetValidationResult {
+                    is_valid: false,
+                    failures: vec!["multi-output transform operations are not yet implemented".to_string()],
+                    warnings: vec![],
+                    info: vec![],
+                }));
+            }
             let instruction_ref = transition.instruction.as_ref().ok_or_else(|| {
                 ExecError::InvalidWorkflow(format!(
                     "transition {} requires an instruction reference",

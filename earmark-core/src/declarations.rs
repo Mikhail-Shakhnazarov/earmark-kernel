@@ -9,6 +9,28 @@ use crate::relations::RelationRule;
 use crate::standing::ClassStandingRules;
 use crate::values::{JsonSchemaRef, MarkdownBody, ScalarValue};
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowOperationKind {
+    CompileContext,
+    Transform,
+    Review,
+    Export,
+    Nop,
+}
+
+impl WorkflowOperationKind {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::CompileContext => "compile_context",
+            Self::Transform => "transform",
+            Self::Review => "review",
+            Self::Export => "export",
+            Self::Nop => "nop",
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct InstructionFrontmatter {
     pub name: String,
@@ -122,7 +144,7 @@ pub enum FlexibleVersionRef {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WorkflowOperation {
     pub id: String,
-    pub kind: String,
+    pub kind: WorkflowOperationKind,
     #[serde(default)]
     pub input_contracts: Vec<String>,
     #[serde(default)]
@@ -136,7 +158,7 @@ pub struct WorkflowOperation {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WorkflowDeclarationOperation {
     pub id: String,
-    pub kind: String,
+    pub kind: WorkflowOperationKind,
     #[serde(default)]
     pub input_contracts: Vec<String>,
     #[serde(default)]

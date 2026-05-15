@@ -6,6 +6,7 @@ use crate::provider::{
 use earmark_core::{
     Kind, ObjectId, ObjectRef, ProviderProfile, ProviderRequest, ProviderResponseContract,
     ScalarValue, VersionId, VersionRef, WorkflowDefinition, WorkflowOperation,
+    WorkflowOperationKind,
 };
 use earmark_index::*;
 use earmark_store::GitCanonicalStore;
@@ -21,7 +22,7 @@ fn test_execution_ir_compilation() {
         description: None,
         operations: vec![WorkflowOperation {
             id: "op1".to_string(),
-            kind: "transform".to_string(),
+            kind: WorkflowOperationKind::Transform,
             input_contracts: vec!["note".to_string()],
             output_contracts: vec!["finding".to_string()],
             instruction: Some(VersionRef::new(
@@ -40,7 +41,7 @@ fn test_execution_ir_compilation() {
     let ir = crate::helpers::compile_workflow(&workflow).unwrap();
     assert_eq!(ir.transitions.len(), 1);
     assert_eq!(ir.transitions[0].id, "op1");
-    assert_eq!(ir.transitions[0].operation, "transform");
+    assert_eq!(ir.transitions[0].operation, WorkflowOperationKind::Transform);
 }
 
 #[test]
@@ -450,7 +451,7 @@ fn test_delegated_outcome_with_none_response_returns_error_instead_of_panicking(
     let ir = crate::ir::ExecutionIr {
         transitions: vec![crate::ir::ExecutionTransition {
             id: "trans_1".to_string(),
-            operation: "transform".to_string(),
+            operation: WorkflowOperationKind::Transform,
             input_contracts: vec![],
             output_contracts: vec![],
             instruction: Some(instr_ref.clone()),
@@ -641,7 +642,7 @@ fn test_privileged_relation_creation_and_validation() {
         &system,
         &crate::ir::ExecutionTransition {
             id: "test".to_string(),
-            operation: "transform".to_string(),
+            operation: WorkflowOperationKind::Transform,
             input_contracts: vec![],
             output_contracts: vec![],
             instruction: None,
