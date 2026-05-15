@@ -32,6 +32,10 @@ operations:
     kind: export
     policy: "../policies/export_policy.yaml"
 
+guards:
+  - id: assessment_ready
+    expression: "has_contract:assessment"
+
 edges:
   - from: compile_claim_context
     to: extract_claims
@@ -45,5 +49,6 @@ edges:
     to: synthesize_assessment
   - from: synthesize_assessment
     to: review_assessment
+    condition: assessment_ready
   - from: review_assessment
     to: export_assessment

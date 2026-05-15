@@ -1,5 +1,6 @@
 use assert_cmd::Command;
 use serde_json::Value;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use tempfile::tempdir;
 
@@ -78,6 +79,16 @@ fn test_topology_demo_declarations_validate_and_explain_topology() {
         .as_array()
         .unwrap();
     let edges = parsed["data"]["explanation"]["edges"].as_array().unwrap();
+    let guards = parsed["data"]["explanation"]["guards"].as_array().unwrap();
+
+    assert!(
+        !guards.is_empty(),
+        "workflow should declare at least one guard"
+    );
+    assert!(
+        edges.iter().any(|e| e["condition"].is_string()),
+        "workflow should include at least one conditional edge"
+    );
 
     assert!(operations
         .iter()
@@ -88,7 +99,44 @@ fn test_topology_demo_declarations_validate_and_explain_topology() {
     assert!(operations
         .iter()
         .any(|op| op["id"] == "compile_assessment_context" && op["kind"] == "compile_context"));
-    assert!(edges.iter().any(|e| {
-        e["from"] == "compile_assessment_context" && e["to"] == "synthesize_assessment"
-    }));
+    assert!(operations
+        .iter()
+        .any(|op| op["id"] == "review_assessment" && op["kind"] == "review"));
+    assert!(operations
+        .iter()
+        .any(|op| op["id"] == "export_assessment" && op["kind"] == "export"));
+
+    let mut incoming_counts: HashMap<String, usize> = HashMap::new();
+    let mut outgoing_counts: HashMap<String, usize> = HashMap::new();
+    for edge in edges {
+        if let Some(from) = edge["from"].as_str() {
+            *outgoing_counts.entry(from.to_string()).or_insert(0) += 1;
+        }
+        if let Some(to) = edge["to"].as_str() {
+            *incoming_counts.entry(to.to_string()).or_insert(0) += 1;
+        }
+    }
+
+    let has_branch_node = outgoing_counts.values().any(|&count| count > 1);
+    let entry_branches = operations
+        .iter()
+        .filter(|op| {
+            op["id"]
+                .as_str()
+                .map(|id| incoming_counts.get(id).copied().unwrap_or(0) == 0)
+                .unwrap_or(false)
+        })
+        .count();
+    assert!(
+        has_branch_node || entry_branches >= 2,
+        "workflow should show branching via multi-outgoing node or multiple entry branches"
+    );
+    assert!(
+        incoming_counts
+            .get("compile_assessment_context")
+            .copied()
+            .unwrap_or(0)
+            >= 2,
+        "compile_assessment_context should join multiple incoming edges"
+    );
 }

@@ -412,8 +412,14 @@ pub fn provide_with_registry_and_sleeper(
     transition_operation: &str,
     sleeper: &dyn RetrySleeper,
 ) -> Result<ProviderExecutionOutcome, ProviderFailure> {
+    let budget_meter_text = format!(
+        "{}\n{}\n{}",
+        request.instruction_text,
+        request.context_text.clone().unwrap_or_default(),
+        request.input_text
+    );
     if let Some(max_input_tokens) = profile.budget.max_input_tokens {
-        let estimated_input_tokens = estimate_tokens_approx(&request.input_text);
+        let estimated_input_tokens = estimate_tokens_approx(&budget_meter_text);
         if estimated_input_tokens > max_input_tokens {
             return Err(ProviderFailure::new(
                 ProviderFailureKind::BudgetExceeded,
@@ -553,6 +559,17 @@ pub fn provide_with_registry_and_sleeper(
     {
         final_warnings.push(
             "Advisory: provider response did not report measured latency_ms; timeout compliance cannot be confirmed from runtime metadata.".to_string(),
+        );
+    }
+    if effective_profile.budget.max_cost_usd.is_some()
+        && response
+            .usage
+            .as_ref()
+            .and_then(|usage| usage.estimated_cost_usd)
+            .is_none()
+    {
+        final_warnings.push(
+            "Advisory: max_cost_usd is configured but provider response did not report usage.estimated_cost_usd; cost budget cannot be enforced for this invocation.".to_string(),
         );
     }
 
