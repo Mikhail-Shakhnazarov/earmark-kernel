@@ -26,3 +26,4 @@
 .orchestration/manifests/
 .orchestration/logs/
 .orchestration/reports/
+.opencode/
