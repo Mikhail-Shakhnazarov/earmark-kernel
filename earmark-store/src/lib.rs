@@ -7,6 +7,7 @@ use std::{
 use fs4::fs_std::FileExt;
 
 mod backend;
+pub mod authorization;
 
 use crate::backend::{GitBackend, GixBackend};
 use chrono::Utc;
@@ -366,14 +367,24 @@ pub trait CanonicalStore: WorkspaceLayout + ObjectStore + StoreScanner + StoreWr
 pub struct GitCanonicalStore {
     root: PathBuf,
     backend: GixBackend,
+    authorized_actors: Vec<String>,
 }
 
 impl GitCanonicalStore {
     pub fn new(root: impl AsRef<Path>) -> Self {
         let root = root.as_ref();
+        Self::with_authorized_actors(root, vec![])
+    }
+
+    pub fn with_authorized_actors(
+        root: impl AsRef<Path>,
+        authorized_actors: Vec<String>,
+    ) -> Self {
+        let root = root.as_ref();
         Self {
             root: root.canonicalize().unwrap_or_else(|_| root.to_path_buf()),
             backend: GixBackend,
+            authorized_actors,
         }
     }
 
@@ -537,6 +548,9 @@ impl StoreWriteLocking for GitCanonicalStore {
         _guard: &WorkspaceWriteGuard,
         batch: &BatchWrite,
     ) -> Result<Vec<VersionRef>, StoreError> {
+        for object in &batch.objects {
+            authorization::check_write_authorized(object, &self.authorized_actors)?;
+        }
         self.init_layout_unlocked()?;
         let mut written = Vec::with_capacity(batch.objects.len());
         let mut total_size = 0;
@@ -666,11 +680,15 @@ impl StoreWriteLocking for GitCanonicalStore {
 
 impl ObjectStore for GitCanonicalStore {
     fn write_object(&self, object: &StoredObject) -> Result<VersionRef, StoreError> {
+        authorization::check_write_authorized(object, &self.authorized_actors)?;
         let guard = self.acquire_write_lock()?;
         self.write_object_locked(&guard, object)
     }
 
     fn write_batch(&self, batch: &BatchWrite) -> Result<Vec<VersionRef>, StoreError> {
+        for object in &batch.objects {
+            authorization::check_write_authorized(object, &self.authorized_actors)?;
+        }
         let guard = self.acquire_write_lock()?;
         self.write_batch_locked(&guard, batch)
     }
@@ -861,4 +879,6 @@ pub enum StoreError {
         write_error: String,
         rollback_error: String,
     },
+    #[error("unauthorized: {0}")]
+    Unauthorized(String),
 }

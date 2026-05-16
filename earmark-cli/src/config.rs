@@ -11,6 +11,8 @@ pub struct CliConfig {
     pub default_system_id: Option<String>,
     pub json: Option<bool>,
     pub log_level: Option<String>,
+    pub actor: Option<String>,
+    pub trusted_actors: Option<Vec<String>>,
 }
 
 pub fn load_config(cli: &Cli) -> Result<CliConfig, CliError> {
@@ -85,6 +87,23 @@ pub fn resolve_json(cli: &Cli, config: &CliConfig) -> bool {
         resolved = true;
     }
     resolved
+}
+
+pub fn resolve_actor(_cli: &Cli, config: &CliConfig) -> String {
+    if let Ok(actor) = env::var("EM_ACTOR") {
+        return actor;
+    }
+    if let Some(actor) = &config.actor {
+        return actor.clone();
+    }
+    "operator".to_string()
+}
+
+pub fn resolve_trusted_actors(config: &CliConfig) -> Vec<String> {
+    if let Ok(actors) = env::var("EM_TRUSTED_ACTORS") {
+        return actors.split(',').map(|s| s.trim().to_string()).collect();
+    }
+    config.trusted_actors.clone().unwrap_or_default()
 }
 
 pub fn resolve_log_level(cli: &Cli, config: &CliConfig) -> Option<String> {

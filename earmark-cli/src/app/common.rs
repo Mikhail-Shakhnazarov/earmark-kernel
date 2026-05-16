@@ -58,6 +58,7 @@ pub struct CommandContext<'a> {
     pub config: &'a CliConfig,
     pub provider_registry: &'a ProviderRegistry,
     pub as_json: bool,
+    pub actor: &'a str,
 }
 
 pub struct BootstrappedServices {
@@ -67,6 +68,7 @@ pub struct BootstrappedServices {
     pub provider_registry: ProviderRegistry,
     pub as_json: bool,
     pub root: PathBuf,
+    pub actor: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

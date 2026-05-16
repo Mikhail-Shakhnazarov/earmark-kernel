@@ -135,6 +135,7 @@ pub(crate) fn handle_declare(ctx: &CommandContext, command: DeclareCommand) -> R
     let store = ctx.store;
     let index = ctx.index;
     let as_json = ctx.as_json;
+    let actor = ctx.actor;
 
     match command.action {
         DeclareAction::Validate(args) => {
@@ -186,7 +187,7 @@ pub(crate) fn handle_declare(ctx: &CommandContext, command: DeclareCommand) -> R
         DeclareAction::Register(args) => {
             tracing::info!(kind = %args.kind.as_str(), path = %args.path.display(), "registering declaration");
             let version_ref =
-                register_declaration_file(store, index.as_ref(), args.kind, &args.path, None)?;
+                register_declaration_file(store, index.as_ref(), args.kind, &args.path, None, actor)?;
             if matches!(args.kind, DeclarationKind::System) {
                 let idx = index.as_ref().ok_or_else(|| {
                     CliError::WorkspaceNotInitialized {
