@@ -786,6 +786,7 @@ dependencies = [
  "toml",
  "tracing",
  "tracing-subscriber",
+ "walkdir",
 ]
 
 [[package]]
@@ -911,6 +912,7 @@ dependencies = [
  "serde_yaml",
  "tempfile",
  "thiserror 1.0.69",
+ "tracing",
  "walkdir",
 ]
 

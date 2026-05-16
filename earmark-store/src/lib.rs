@@ -739,16 +739,31 @@ impl ObjectStore for GitCanonicalStore {
 impl StoreScanner for GitCanonicalStore {
     fn scan_objects(&self) -> Result<Vec<StoredObject>, StoreError> {
         let mut objects = Vec::new();
+        // Strict depth: objects/<obj_id>/<ver_id>/envelope.json
+        // objects_dir is depth 0. so envelope.json should be at depth 3.
         for entry in WalkDir::new(self.objects_dir())
+            .min_depth(2)
+            .max_depth(3)
             .into_iter()
             .filter_map(Result::ok)
         {
             if entry.file_name() == "envelope.json" {
-                let envelope: Envelope = serde_json::from_slice(&fs::read(entry.path())?)?;
+                let bytes = fs::read(entry.path())?;
+                if bytes.is_empty() {
+                    tracing::warn!("skipping empty envelope file: {}", entry.path().display());
+                    continue;
+                }
+                let envelope: Envelope = match serde_json::from_slice(&bytes) {
+                    Ok(env) => env,
+                    Err(e) => {
+                        tracing::warn!("skipping corrupted envelope file {}: {}", entry.path().display(), e);
+                        continue;
+                    }
+                };
                 let version_dir = entry.path().parent().ok_or_else(|| {
                     StoreError::Invariant("envelope file has no version directory".to_string())
                 })?;
-                let payload_path = fs::read_dir(version_dir)?
+                let payload_path = match fs::read_dir(version_dir)?
                     .filter_map(Result::ok)
                     .map(|e| e.path())
                     .find(|path| {
@@ -756,15 +771,21 @@ impl StoreScanner for GitCanonicalStore {
                             .and_then(|s| s.to_str())
                             .map(|s| s.starts_with("payload."))
                             .unwrap_or(false)
-                    })
-                    .ok_or_else(|| {
-                        StoreError::MissingPayload(envelope.version_id.as_str().to_string())
-                    })?;
+                    }) {
+                        Some(p) => p,
+                        None => {
+                            tracing::warn!("skipping object version {} due to missing payload", envelope.version_id.as_str());
+                            continue;
+                        }
+                    };
                 let payload = StoredPayload::new(
                     Self::infer_encoding(&payload_path)?,
                     fs::read(payload_path)?,
                 );
-                StoredObject::verify_payload_ref(&envelope, &payload)?;
+                if let Err(e) = StoredObject::verify_payload_ref(&envelope, &payload) {
+                    tracing::warn!("skipping object version {} due to integrity mismatch: {}", envelope.version_id.as_str(), e);
+                    continue;
+                }
                 objects.push(StoredObject { envelope, payload });
             }
         }

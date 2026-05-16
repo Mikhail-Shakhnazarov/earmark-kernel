@@ -23,6 +23,7 @@ toml = "0.8"
 clap_complete = "4.5"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+walkdir = "2"
 
 [dev-dependencies]
 assert_cmd.workspace = true

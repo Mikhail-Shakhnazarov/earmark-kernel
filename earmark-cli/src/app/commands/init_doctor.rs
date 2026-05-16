@@ -47,6 +47,7 @@ pub(crate) fn handle_doctor(ctx: &CommandContext, args: &DoctorArgs) -> Result<(
         emit(
             ctx.as_json,
             json!({
+                "kind": "doctor",
                 "ok": true,
                 "summary": "index repaired successfully from canonical store",
                 "next_commands": ["em doctor", "em status"],
@@ -85,7 +86,7 @@ pub(crate) fn handle_doctor(ctx: &CommandContext, args: &DoctorArgs) -> Result<(
     let mut all_ok = store_scan_ok;
     let mut dirty_marker = None;
 
-    let (index_open_ok, indexed_count, indexed_head_count, counts_match) = if index_exists {
+    let (index_open_ok, indexed_count, indexed_head_count, counts_match, index_stale) = if index_exists {
         match DerivedIndex::open_existing(store.root()) {
             Ok(idx) => {
                 dirty_marker = idx.dirty_status().unwrap_or(None);
@@ -103,13 +104,45 @@ pub(crate) fn handle_doctor(ctx: &CommandContext, args: &DoctorArgs) -> Result<(
                         canonical_count, obj_count
                     ));
                 }
-                all_ok = all_ok && match_ok;
-                (true, obj_count, head_count, match_ok)
+
+                // Check for staleness
+                let mut stale = false;
+                if let Ok(index_meta) = std::fs::metadata(&index_path) {
+                    if let Ok(index_mtime) = index_meta.modified() {
+                        // Find newest envelope.json mtime
+                        let mut max_mtime = None;
+                        for entry in walkdir::WalkDir::new(store.root().join(".earmark").join("canonical").join("objects"))
+                            .into_iter()
+                            .filter_map(|e| e.ok())
+                        {
+                            if entry.file_name() == "envelope.json" {
+                                if let Ok(meta) = entry.metadata() {
+                                    if let Ok(mtime) = meta.modified() {
+                                        if max_mtime.is_none() || mtime > max_mtime.unwrap() {
+                                            max_mtime = Some(mtime);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        if let Some(max) = max_mtime {
+                            if max > index_mtime {
+                                stale = true;
+                                warnings.push("index may be stale; canonical objects have been modified since last index update".to_string());
+                                all_ok = false;
+                            }
+                        }
+                    }
+                }
+
+                all_ok = all_ok && match_ok && !stale;
+                (true, obj_count, head_count, match_ok, stale)
             }
             Err(e) => {
                 warnings.push(format!("index open failed: {}", e));
                 all_ok = false;
-                (false, 0, 0, false)
+                (false, 0, 0, false, false)
             }
         }
     } else {
@@ -118,18 +151,20 @@ pub(crate) fn handle_doctor(ctx: &CommandContext, args: &DoctorArgs) -> Result<(
                 .to_string(),
         );
         all_ok = false;
-        (false, 0, 0, false)
+        (false, 0, 0, false, false)
     };
 
-    if !store_scan_ok {
-        warnings.push(
-            "canonical store scan failed; review .earmark/canonical for corruption".to_string(),
-        );
+    if let Err(e) = &store_scan {
+        warnings.push(format!(
+            "canonical store scan failed; review .earmark/canonical for corruption: {}",
+            e
+        ));
     }
 
     emit(
         ctx.as_json,
         json!({
+            "kind": "doctor",
             "ok": all_ok,
             "summary": if all_ok { "workspace health checks passed" } else { "workspace health checks reported issues" },
             "root": store.root().display().to_string(),
@@ -143,6 +178,7 @@ pub(crate) fn handle_doctor(ctx: &CommandContext, args: &DoctorArgs) -> Result<(
             "counts_match": counts_match,
             "index_is_dirty": dirty_marker.is_some(),
             "index_dirty_marker": dirty_marker,
+            "index_is_stale": index_stale,
             "provider_capabilities": earmark_exec::compiled_provider_capabilities(),
             "warnings": warnings,
             "next_commands": if all_ok {
@@ -152,7 +188,7 @@ pub(crate) fn handle_doctor(ctx: &CommandContext, args: &DoctorArgs) -> Result<(
                 if !layout.is_initialized() {
                     cmds.push("em init");
                 }
-                if !index_exists || !index_open_ok || !counts_match || dirty_marker.is_some() {
+                if !index_exists || !index_open_ok || !counts_match || dirty_marker.is_some() || index_stale {
                     cmds.push("em doctor --repair-index");
                 }
                 cmds.push("em status");
