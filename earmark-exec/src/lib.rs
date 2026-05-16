@@ -9,6 +9,7 @@ pub mod ir;
 pub(crate) mod persistence;
 pub mod persistence_helpers;
 pub mod provider;
+pub mod redaction;
 pub mod relation;
 pub mod relation_logic;
 pub(crate) mod resolution;
@@ -28,6 +29,7 @@ pub use provider::{
     ProviderExecutionOutcome, ProviderMode, ProviderRegistry, ProviderService, RetrySleeper,
     ThreadSleepSleeper,
 };
+pub use redaction::redact_sensitive;
 pub use relation::persist_relation_canonical;
 pub use relation_logic::{
     RelationAuthorizationDecision, RelationAuthorizationReason, RelationAuthorizationResolver,

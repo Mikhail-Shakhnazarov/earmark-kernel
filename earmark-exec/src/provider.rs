@@ -392,12 +392,29 @@ pub(crate) fn reset_provider_circuit_registry_for_tests() {
 pub(crate) fn resolved_endpoint_identity(profile: &ProviderProfile) -> String {
     match profile.endpoint_env.as_deref() {
         Some(env_name) => match env::var(env_name) {
-            Ok(value) if !value.trim().is_empty() => value,
+            Ok(value) if !value.trim().is_empty() => {
+                let trimmed = value.trim();
+                let prefix = if trimmed.contains("://") {
+                    "endpoint_url"
+                } else {
+                    "endpoint"
+                };
+                // Use a hash so the actual value never appears in logs/circuit keys
+                let hash = sha2_hex(trimmed);
+                format!("<{}:{}>", prefix, hash)
+            }
             Ok(_) => format!("<empty:{}>", env_name),
             Err(_) => format!("<unset:{}>", env_name),
         },
         None => "<default>".to_string(),
     }
+}
+
+fn sha2_hex(input: &str) -> String {
+    use sha2::Digest;
+    let mut hasher = sha2::Sha256::new();
+    hasher.update(input.as_bytes());
+    hex::encode(hasher.finalize())[..16].to_string()
 }
 
 pub(crate) fn provider_circuit_key(request: &ProviderRequest, profile: &ProviderProfile) -> String {
@@ -734,7 +751,7 @@ pub fn provider_record_from_failure(
         metadata,
         advisory_warnings: vec![],
         usage: None,
-        message: Some(failure.message.clone()),
+        message: Some(crate::redaction::Redactor::redact_failure_message(&failure.message)),
         recorded_at: Utc::now(),
     }
 }
