@@ -1,6 +1,6 @@
 mod resolver;
 
-pub use resolver::resolve_workflow_declaration;
+pub use resolver::{resolve_instruction_declaration, resolve_workflow_declaration};
 
 use std::{fs, path::Path};
 

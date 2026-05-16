@@ -165,6 +165,7 @@ pub(crate) fn handle_doctor(ctx: &CommandContext, args: &DoctorArgs) -> Result<(
         ctx.as_json,
         json!({
             "kind": "doctor",
+            "id": "workspace",
             "ok": all_ok,
             "summary": if all_ok { "workspace health checks passed" } else { "workspace health checks reported issues" },
             "root": store.root().display().to_string(),

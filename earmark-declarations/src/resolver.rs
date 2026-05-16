@@ -1,9 +1,26 @@
 use crate::DeriveError;
 use earmark_core::{
-    FlexibleVersionRef, VersionRef, WorkflowDeclaration, WorkflowDefinition, WorkflowOperation,
+    FlexibleVersionRef, InstructionPayload, VersionRef, WorkflowDeclaration, WorkflowDefinition,
+    WorkflowOperation,
 };
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+
+pub fn resolve_instruction_declaration(
+    instruction_path: &Path,
+    mut declaration: InstructionPayload,
+    registry: &BTreeMap<PathBuf, VersionRef>,
+) -> Result<InstructionPayload, DeriveError> {
+    declaration.provider_profile = resolve_flex_ref(
+        instruction_path,
+        &declaration.name,
+        "provider_profile",
+        declaration.provider_profile,
+        registry,
+    )?
+    .map(FlexibleVersionRef::from_version_ref);
+    Ok(declaration)
+}
 
 pub fn resolve_workflow_declaration(
     workflow_path: &Path,
@@ -22,22 +39,80 @@ pub fn resolve_workflow_declaration(
                 workflow_path,
                 &op_id,
                 "instruction",
-                op.instruction,
+                op.instruction
+                    .map(|v| {
+                        if let Some(s) = v.as_str() {
+                            Ok(FlexibleVersionRef::Path(s.to_string()))
+                        } else {
+                            let json_val = serde_json::to_value(v).map_err(|e| {
+                                DeriveError::Validation(format!("YAML conversion error: {}", e))
+                            })?;
+                            FlexibleVersionRef::from_value(json_val).map_err(|e| {
+                                DeriveError::Validation(format!("invalid instruction: {}", e))
+                            })
+                        }
+                    })
+                    .transpose()?,
                 registry,
             )?,
             compiled_context: resolve_flex_ref(
                 workflow_path,
                 &op_id,
                 "compiled_context",
-                op.compiled_context,
+                op.compiled_context
+                    .map(|v| {
+                        if let Some(s) = v.as_str() {
+                            Ok(FlexibleVersionRef::Path(s.to_string()))
+                        } else {
+                            let json_val = serde_json::to_value(v).map_err(|e| {
+                                DeriveError::Validation(format!("YAML conversion error: {}", e))
+                            })?;
+                            FlexibleVersionRef::from_value(json_val).map_err(|e| {
+                                DeriveError::Validation(format!("invalid compiled_context: {}", e))
+                            })
+                        }
+                    })
+                    .transpose()?,
                 registry,
             )?,
-            policy: resolve_flex_ref(workflow_path, &op_id, "policy", op.policy, registry)?,
+            policy: resolve_flex_ref(
+                workflow_path,
+                &op_id,
+                "policy",
+                op.policy
+                    .map(|v| {
+                        if let Some(s) = v.as_str() {
+                            Ok(FlexibleVersionRef::Path(s.to_string()))
+                        } else {
+                            let json_val = serde_json::to_value(v).map_err(|e| {
+                                DeriveError::Validation(format!("YAML conversion error: {}", e))
+                            })?;
+                            FlexibleVersionRef::from_value(json_val).map_err(|e| {
+                                DeriveError::Validation(format!("invalid policy: {}", e))
+                            })
+                        }
+                    })
+                    .transpose()?,
+                registry,
+            )?,
             provider_profile: resolve_flex_ref(
                 workflow_path,
                 &op_id,
                 "provider_profile",
-                op.provider_profile,
+                op.provider_profile
+                    .map(|v| {
+                        if let Some(s) = v.as_str() {
+                            Ok(FlexibleVersionRef::Path(s.to_string()))
+                        } else {
+                            let json_val = serde_json::to_value(v).map_err(|e| {
+                                DeriveError::Validation(format!("YAML conversion error: {}", e))
+                            })?;
+                            FlexibleVersionRef::from_value(json_val).map_err(|e| {
+                                DeriveError::Validation(format!("invalid provider_profile: {}", e))
+                            })
+                        }
+                    })
+                    .transpose()?,
                 registry,
             )?,
         });

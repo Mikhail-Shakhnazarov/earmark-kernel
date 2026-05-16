@@ -37,7 +37,8 @@ pub(crate) struct InstructionFrontmatter {
     pub input_classes: Vec<String>,
     pub output_classes: Vec<String>,
     pub execution_policy: String,
-    pub provider_profile: Option<VersionRef>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider_profile: Option<serde_yaml::Value>,
     pub trace_policy: String,
     pub register: String,
 }
@@ -62,7 +63,7 @@ pub struct InstructionPayload {
     pub input_classes: Vec<String>,
     pub output_classes: Vec<String>,
     pub execution_policy: String,
-    pub provider_profile: Option<VersionRef>,
+    pub provider_profile: Option<FlexibleVersionRef>,
     pub trace_policy: String,
     pub register: String,
     pub body: MarkdownBody,
@@ -72,14 +73,31 @@ impl InstructionPayload {
     pub fn parse_markdown(input: &str) -> Result<Self, CoreError> {
         let (frontmatter, body) =
             crate::serde_helpers::parse_markdown_frontmatter::<InstructionFrontmatter>(input)?;
-        Ok(Self {
+        Ok(InstructionPayload {
             name: frontmatter.name,
             version: frontmatter.version,
             purpose: frontmatter.purpose,
             input_classes: frontmatter.input_classes,
             output_classes: frontmatter.output_classes,
             execution_policy: frontmatter.execution_policy,
-            provider_profile: frontmatter.provider_profile,
+            provider_profile: frontmatter
+                .provider_profile
+                .filter(|v| !v.is_null())
+                .map(|v| {
+                    if let Some(s) = v.as_str() {
+                        Ok(FlexibleVersionRef::Path(s.to_string()))
+                    } else {
+                        // Convert to JSON Value for from_value helper
+                        let json_val = serde_json::to_value(v).map_err(|e| {
+                            CoreError::InvalidFrontmatter(format!(
+                                "invalid provider_profile YAML: {}",
+                                e
+                            ))
+                        })?;
+                        FlexibleVersionRef::from_value(json_val)
+                    }
+                })
+                .transpose()?,
             trace_policy: frontmatter.trace_policy,
             register: frontmatter.register,
             body: MarkdownBody::new(body),
@@ -94,7 +112,17 @@ impl InstructionPayload {
             input_classes: self.input_classes.clone(),
             output_classes: self.output_classes.clone(),
             execution_policy: self.execution_policy.clone(),
-            provider_profile: self.provider_profile.clone(),
+            provider_profile: self
+                .provider_profile
+                .as_ref()
+                .map(|v| {
+                    // Convert to YAML Value
+                    let json_val = v.to_value()?;
+                    serde_json::from_value(json_val).map_err(|e| {
+                        CoreError::InvalidFrontmatter(format!("YAML conversion error: {}", e))
+                    })
+                })
+                .transpose()?,
             trace_policy: self.trace_policy.clone(),
             register: self.register.clone(),
         };
@@ -132,10 +160,22 @@ pub struct WorkflowDeclaration {
     pub output_contracts: Vec<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FlexibleVersionRef {
-    Ref(VersionRef),
     Path(String),
+    Ref(VersionRef),
+}
+
+impl serde::Serialize for FlexibleVersionRef {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            FlexibleVersionRef::Path(p) => serializer.serialize_str(p),
+            FlexibleVersionRef::Ref(r) => r.serialize(serializer),
+        }
+    }
 }
 
 impl<'de> serde::Deserialize<'de> for FlexibleVersionRef {
@@ -143,34 +183,48 @@ impl<'de> serde::Deserialize<'de> for FlexibleVersionRef {
     where
         D: serde::Deserializer<'de>,
     {
-        use serde::de::Error;
         let value = serde_json::Value::deserialize(deserializer)?;
-        match value {
-            serde_json::Value::String(s) => Ok(FlexibleVersionRef::Path(s)),
-            serde_json::Value::Object(map) => {
-                let id_val = map.get("id").ok_or_else(|| {
-                    D::Error::custom("malformed version reference: missing 'id' field")
-                })?;
-                let vid_val = map.get("version_id").ok_or_else(|| {
-                    D::Error::custom("malformed version reference: missing 'version_id' field")
-                })?;
-
-                let id_str = id_val.as_str().ok_or_else(|| {
-                    D::Error::custom("malformed version reference: 'id' must be a string")
-                })?;
-                let vid_str = vid_val.as_str().ok_or_else(|| {
-                    D::Error::custom("malformed version reference: 'version_id' must be a string")
-                })?;
-
-                let id = crate::ids::ObjectId::parse(id_str).map_err(D::Error::custom)?;
-                let version_id = crate::ids::VersionId::parse(vid_str).map_err(D::Error::custom)?;
-
-                Ok(FlexibleVersionRef::Ref(VersionRef { id, version_id }))
-            }
-            _ => Err(D::Error::custom(
-                "invalid workflow reference: expected a path string or a durable reference map {id, version_id}",
-            )),
+        if let Some(s) = value.as_str() {
+            return Ok(FlexibleVersionRef::Path(s.to_string()));
         }
+
+        // Try to parse as VersionRef (flat)
+        if let Ok(vref) = serde_json::from_value::<VersionRef>(value.clone()) {
+            return Ok(FlexibleVersionRef::Ref(vref));
+        }
+
+        // Try to handle tagged variants produced by some YAML/JSON versions
+        if let Some(inner) = value.get("Ref").or(value.get("!Ref")) {
+            if let Ok(vref) = serde_json::from_value::<VersionRef>(inner.clone()) {
+                return Ok(FlexibleVersionRef::Ref(vref));
+            }
+        }
+
+        Err(serde::de::Error::custom(format!(
+            "invalid version reference: expected path string or {{id, version_id}} object, found {}",
+            value
+        )))
+    }
+}
+
+impl FlexibleVersionRef {
+    pub fn to_canonical(&self) -> Option<VersionRef> {
+        match self {
+            FlexibleVersionRef::Ref(r) => Some(r.clone()),
+            FlexibleVersionRef::Path(_) => None,
+        }
+    }
+
+    pub fn from_version_ref(vref: VersionRef) -> Self {
+        FlexibleVersionRef::Ref(vref)
+    }
+
+    pub fn from_value(value: serde_json::Value) -> Result<Self, CoreError> {
+        serde_json::from_value(value).map_err(|e| CoreError::InvalidFrontmatter(e.to_string()))
+    }
+
+    pub fn to_value(&self) -> Result<serde_json::Value, CoreError> {
+        serde_json::to_value(self).map_err(|e| CoreError::InvalidFrontmatter(e.to_string()))
     }
 }
 
@@ -196,10 +250,14 @@ pub struct WorkflowDeclarationOperation {
     pub input_contracts: Vec<String>,
     #[serde(default)]
     pub output_contracts: Vec<String>,
-    pub instruction: Option<FlexibleVersionRef>,
-    pub compiled_context: Option<FlexibleVersionRef>,
-    pub policy: Option<FlexibleVersionRef>,
-    pub provider_profile: Option<FlexibleVersionRef>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub instruction: Option<serde_yaml::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub compiled_context: Option<serde_yaml::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub policy: Option<serde_yaml::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider_profile: Option<serde_yaml::Value>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -1008,6 +1008,26 @@ impl DerivedIndex {
         )))
     }
 
+    pub fn get_active_systems(&self) -> Result<Vec<ActiveSystemRecord>, IndexError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT namespace, system_id, object_id, version_id, activated_at FROM active_systems",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(ActiveSystemRecord {
+                namespace: row.get(0)?,
+                system_id: row.get(1)?,
+                object_id: row.get(2)?,
+                version_id: row.get(3)?,
+                activated_at: row.get(4)?,
+            })
+        })?;
+        let mut results = Vec::new();
+        for row in rows {
+            results.push(row?);
+        }
+        Ok(results)
+    }
+
     pub fn counts(&self) -> Result<(u64, u64), IndexError> {
         let objects: u64 = self
             .conn

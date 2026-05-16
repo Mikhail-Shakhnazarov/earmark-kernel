@@ -15,9 +15,9 @@ use earmark_core::{
 use earmark_declarations::{
     load_class_definition, load_compiled_context_template, load_instruction, load_provider_profile,
     load_standing_policy, load_system_definition, load_workflow_definition,
-    resolve_workflow_declaration, validate_class_definition, validate_compiled_context_template,
-    validate_instruction, validate_provider_profile, validate_standing_policy,
-    validate_system_definition, validate_workflow_definition,
+    resolve_instruction_declaration, resolve_workflow_declaration, validate_class_definition,
+    validate_compiled_context_template, validate_instruction, validate_provider_profile,
+    validate_standing_policy, validate_system_definition, validate_workflow_definition,
 };
 use earmark_index::DerivedIndex;
 use earmark_store::{
@@ -295,10 +295,18 @@ fn explain_declaration_file<S: CanonicalStore>(
                     "has_compiled_context": operation.compiled_context.is_some(),
                     "has_policy": operation.policy.is_some(),
                     "has_provider_profile": operation.provider_profile.is_some(),
-                    "standing_implications": operation.policy.as_ref().map(|policy| {
-                        match policy {
-                            FlexibleVersionRef::Ref(r) => vec![format!("policy-bound: {}@{}", r.id.as_str(), r.version_id.as_str())],
-                            FlexibleVersionRef::Path(p) => vec![format!("policy-bound (path): {}", p)],
+                    "standing_implications": operation.policy.as_ref().and_then(|policy_val| {
+                        if let Some(s) = policy_val.as_str() {
+                            Some(vec![format!("policy-bound (path): {}", s)])
+                        } else {
+                            // Convert to JSON Value for from_value helper
+                            let json_val = serde_json::to_value(policy_val.clone()).ok()?;
+                            FlexibleVersionRef::from_value(json_val).ok().map(|policy| {
+                                match policy {
+                                    FlexibleVersionRef::Ref(r) => vec![format!("policy-bound: {}@{}", r.id.as_str(), r.version_id.as_str())],
+                                    FlexibleVersionRef::Path(p) => vec![format!("policy-bound (path): {}", p)],
+                                }
+                            })
                         }
                     }).unwrap_or_default(),
                 })).collect::<Vec<_>>(),
@@ -423,14 +431,28 @@ pub(crate) fn register_declaration_file<S: CanonicalStore>(
         DeclarationKind::Instruction => {
             let decl = load_instruction(path)?;
             validate_instruction(&decl)?;
+
+            // Resolve into strict InstructionPayload
+            let resolved = if let Some(reg) = registry {
+                resolve_instruction_declaration(path, decl, reg)?
+            } else {
+                if matches!(decl.provider_profile, Some(FlexibleVersionRef::Path(_))) {
+                    return Err(CliError::argument(format!(
+                        "instruction path references require system-manifest registration (found in instruction '{}')",
+                        decl.name
+                    )));
+                }
+                decl
+            };
+
             let mut headers = BTreeMap::new();
-            headers.insert("title".to_string(), HeaderValue::String(decl.name.clone()));
+            headers.insert("title".to_string(), HeaderValue::String(resolved.name.clone()));
             (
                 Kind::Instruction,
-                Some(decl.name.clone()),
-                StoredPayload::from_markdown(decl.to_markdown()?),
+                Some(resolved.name.clone()),
+                StoredPayload::from_markdown(resolved.to_markdown()?),
                 headers,
-                decl.name.clone(),
+                resolved.name.clone(),
             )
         }
         DeclarationKind::StandingPolicy => {
@@ -459,7 +481,7 @@ pub(crate) fn register_declaration_file<S: CanonicalStore>(
                     &op.provider_profile,
                 ]
                 .iter()
-                .any(|opt| matches!(opt, Some(FlexibleVersionRef::Path(_))));
+                .any(|opt| opt.as_ref().map(|v| v.is_string()).unwrap_or(false));
 
                 if has_paths && registry.is_none() {
                     return Err(CliError::argument(format!(
@@ -720,10 +742,29 @@ fn assemble_system_definition_from_manifest<S: CanonicalStore>(
             registry.insert(p, vref);
         }
     }
+    let mut provider_profiles = Vec::new();
+    for rel in &manifest.provider_profiles {
+        let p = resolve_manifest_path(path, rel);
+        let vref = register_declaration_file(
+            store,
+            None,
+            DeclarationKind::ProviderProfile,
+            &p,
+            Some(&registry),
+        )?;
+        provider_profiles.push(vref.clone());
+        if let Ok(abs) = p.canonicalize() {
+            registry.insert(abs, vref);
+        } else {
+            registry.insert(p, vref);
+        }
+    }
+
     let mut instructions = Vec::new();
     for rel in &manifest.instructions {
         let p = resolve_manifest_path(path, rel);
-        let vref = register_declaration_file(store, None, DeclarationKind::Instruction, &p, None)?;
+        let vref =
+            register_declaration_file(store, None, DeclarationKind::Instruction, &p, Some(&registry))?;
         instructions.push(vref.clone());
         if let Ok(abs) = p.canonicalize() {
             registry.insert(abs, vref);
@@ -734,8 +775,13 @@ fn assemble_system_definition_from_manifest<S: CanonicalStore>(
     let mut policies = Vec::new();
     for rel in &manifest.standing_policies {
         let p = resolve_manifest_path(path, rel);
-        let vref =
-            register_declaration_file(store, None, DeclarationKind::StandingPolicy, &p, None)?;
+        let vref = register_declaration_file(
+            store,
+            None,
+            DeclarationKind::StandingPolicy,
+            &p,
+            Some(&registry),
+        )?;
         policies.push(vref.clone());
         if let Ok(abs) = p.canonicalize() {
             registry.insert(abs, vref);
@@ -746,21 +792,14 @@ fn assemble_system_definition_from_manifest<S: CanonicalStore>(
     let mut compiled_contexts = Vec::new();
     for rel in &manifest.compiled_contexts {
         let p = resolve_manifest_path(path, rel);
-        let vref =
-            register_declaration_file(store, None, DeclarationKind::CompiledContext, &p, None)?;
+        let vref = register_declaration_file(
+            store,
+            None,
+            DeclarationKind::CompiledContext,
+            &p,
+            Some(&registry),
+        )?;
         compiled_contexts.push(vref.clone());
-        if let Ok(abs) = p.canonicalize() {
-            registry.insert(abs, vref);
-        } else {
-            registry.insert(p, vref);
-        }
-    }
-    let mut provider_profiles = Vec::new();
-    for rel in &manifest.provider_profiles {
-        let p = resolve_manifest_path(path, rel);
-        let vref =
-            register_declaration_file(store, None, DeclarationKind::ProviderProfile, &p, None)?;
-        provider_profiles.push(vref.clone());
         if let Ok(abs) = p.canonicalize() {
             registry.insert(abs, vref);
         } else {
@@ -1564,6 +1603,14 @@ fn render_explanation(value: &serde_json::Value) -> Option<String> {
             output.push_str("Workspace Overview:\n");
             output.push_str(&format!("  Objects: {}\n", value.get("object_count")?.as_u64()?));
             output.push_str(&format!("  Active Systems: {}\n", value.get("active_system_count")?.as_u64()?));
+            if let Some(systems) = value.get("active_systems").and_then(|v| v.as_array()) {
+                for s in systems {
+                    output.push_str(&format!("    - {} ({})\n", s.get("system_id")?.as_str()?, s.get("namespace")?.as_str()?));
+                }
+            }
+            if let Some(latest) = value.get("latest_run").and_then(|v| v.as_str()) {
+                output.push_str(&format!("  Latest Run: {}\n", latest));
+            }
             output.push_str(&format!("  Runs: {}\n", value.get("run_count")?.as_u64()?));
             output.push_str(&format!("  Change Sets: {}\n", value.get("change_set_count")?.as_u64()?));
             output.push_str(&format!("  Handoffs: {}\n", value.get("handoff_count")?.as_u64()?));
@@ -1610,6 +1657,29 @@ fn render_explanation(value: &serde_json::Value) -> Option<String> {
             let impact = value.get("impact")?;
             output.push_str(&format!("  Objects Hidden: {}\n", impact.get("objects_hidden")?.as_u64()?));
             output.push_str(&format!("  Relations Hidden: {}\n", impact.get("relations_hidden")?.as_u64()?));
+        }
+        "audit_failures" => {
+            output.push_str("Failure Audit:\n");
+            if let Some(failures) = value.get("failures").and_then(|v| v.as_array()) {
+                for f in failures {
+                    let fid = f.get("failure_id")?.as_str()?;
+                    let etype = f.get("error_type")?.as_str()?;
+                    let msg = f.get("message")?.as_str()?;
+                    let tid = f.get("transition_id")?.as_str()?;
+                    output.push_str(&format!("  - {} transition: {} error: {} \n    Message: {}\n", fid, tid, etype, msg));
+                }
+            }
+        }
+        "run_list" => {
+            output.push_str("Recent Runs:\n");
+            if let Some(runs) = value.get("runs").and_then(|v| v.as_array()) {
+                for r in runs {
+                    let run_id = r.get("run_id")?.as_str()?;
+                    let status = r.get("status")?.as_str()?;
+                    let started = r.get("started_at")?.as_str()?;
+                    output.push_str(&format!("  - {} [{}] (started {})\n", run_id, status, started));
+                }
+            }
         }
         "run" => {
             let artifact = value.get("artifact")?;
