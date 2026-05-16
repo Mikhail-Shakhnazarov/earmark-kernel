@@ -74,6 +74,14 @@ pub trait ProviderAdapter: Send + Sync {
             message: None,
         }
     }
+
+    fn can_satisfy_must_include_lineage(&self) -> bool {
+        false
+    }
+
+    fn can_satisfy_full_message_capture(&self) -> bool {
+        false
+    }
 }
 
 pub trait ProviderService: Send + Sync {
@@ -352,14 +360,6 @@ pub(crate) fn validate_provider_invocation(
         ));
     }
 
-    // 4. Response Contract (Advisory)
-    if profile.response_contract.must_include_lineage {
-        warnings.push("Advisory: must_include_lineage is true, but lineage capture is not yet enforced by all adapters.".to_string());
-    }
-    if !profile.response_contract.must_return_candidate_only {
-        warnings.push("Advisory: must_return_candidate_only is false, but full message capture is not yet supported in this path.".to_string());
-    }
-
     Ok(ProviderPolicyDecision {
         advisory_warnings: warnings,
     })
@@ -489,6 +489,32 @@ pub fn provide_with_registry_and_sleeper(
             format!("no adapter registered for provider {}", profile.provider),
         )
     })?;
+
+    // 3a. Contract capability enforcement
+    if profile.response_contract.must_include_lineage
+        && !adapter.can_satisfy_must_include_lineage()
+    {
+        return Err(ProviderFailure::new(
+            ProviderFailureKind::PolicyViolation,
+            format!(
+                "Provider profile '{}' requires must_include_lineage, but adapter '{}' does not support lineage capture.",
+                profile.name,
+                adapter.provider_key()
+            ),
+        ));
+    }
+    if !profile.response_contract.must_return_candidate_only
+        && !adapter.can_satisfy_full_message_capture()
+    {
+        return Err(ProviderFailure::new(
+            ProviderFailureKind::PolicyViolation,
+            format!(
+                "Provider profile '{}' requires full message capture (must_return_candidate_only=false), but adapter '{}' does not support it.",
+                profile.name,
+                adapter.provider_key()
+            ),
+        ));
+    }
 
     // Policy Gate
     let policy_decision = validate_provider_invocation(profile, transition_operation, &request)?;
