@@ -488,6 +488,177 @@ fn system_path_manifest_validates() {
 }
 
 #[test]
+fn path_manifest_without_schema_is_not_classified_as_path_manifest() {
+    let dir = tempdir().unwrap();
+    Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(dir.path())
+        .arg("--json")
+        .arg("init")
+        .assert()
+        .success();
+
+    let manifest = dir.path().join("manifest_without_schema.yaml");
+    fs::write(
+        &manifest,
+        r#"system_id: sys_no_schema
+namespace: demo.no_schema
+title: Missing Schema
+description: null
+classes:
+  - ../classes/source_note.yaml
+instructions: []
+standing_policies: []
+compiled_contexts: []
+provider_profiles: []
+workflows: []
+default_compiled_context: null
+default_provider_profile: null
+runtime_profile:
+  execution_surface: local
+  machine_output_default: markdown
+  work_surface_mode: persistent
+"#,
+    )
+    .unwrap();
+
+    let output = Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(dir.path())
+        .arg("--json")
+        .arg("declare")
+        .arg("validate")
+        .arg("--kind")
+        .arg("system")
+        .arg(&manifest)
+        .assert()
+        .failure()
+        .get_output()
+        .stderr
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(parsed["ok"], false);
+    assert_ne!(parsed["error"]["kind"], "path_system_manifest");
+}
+
+#[test]
+fn path_manifest_with_schema_accepts_empty_classes() {
+    let dir = tempdir().unwrap();
+    Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(dir.path())
+        .arg("--json")
+        .arg("init")
+        .assert()
+        .success();
+
+    let manifest = dir.path().join("manifest_with_schema.yaml");
+    fs::write(
+        &manifest,
+        r#"schema: earmark.path_system_manifest.v1
+system_id: sys_schema_empty
+namespace: demo.schema
+title: Empty classes
+description: null
+classes: []
+instructions: []
+standing_policies: []
+compiled_contexts: []
+provider_profiles: []
+workflows: []
+default_compiled_context: null
+default_provider_profile: null
+runtime_profile:
+  execution_surface: local
+  machine_output_default: markdown
+  work_surface_mode: persistent
+"#,
+    )
+    .unwrap();
+
+    let output = Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(dir.path())
+        .arg("--json")
+        .arg("declare")
+        .arg("validate")
+        .arg("--kind")
+        .arg("system")
+        .arg(&manifest)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(parsed["ok"], true);
+    assert_eq!(parsed["data"]["summary"]["kind"], "path_system_manifest");
+}
+
+#[test]
+fn canonical_system_definition_not_misclassified_as_path_manifest() {
+    let dir = tempdir().unwrap();
+    Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(dir.path())
+        .arg("--json")
+        .arg("init")
+        .assert()
+        .success();
+
+    let system = dir.path().join("canonical_system.yaml");
+    fs::write(
+        &system,
+        r#"system_id: canonical_sys
+namespace: demo.canonical
+title: Canonical System
+description: Example
+classes: []
+instructions: []
+policies: []
+workflows: []
+compiled_contexts: []
+provider_profiles: []
+default_compiled_context: null
+default_provider_profile: null
+runtime_profile:
+  execution_surface: local
+  machine_output_default: markdown
+  work_surface_mode: persistent
+activated_at: null
+"#,
+    )
+    .unwrap();
+
+    let output = Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(dir.path())
+        .arg("--json")
+        .arg("declare")
+        .arg("validate")
+        .arg("--kind")
+        .arg("system")
+        .arg(&system)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(parsed["ok"], true);
+    assert_eq!(parsed["data"]["summary"]["kind"], "canonical_system_definition");
+}
+
+#[test]
 fn completions_command_generates_bash_script() {
     let output = Command::cargo_bin("earmark-cli")
         .unwrap()

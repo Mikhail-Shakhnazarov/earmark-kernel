@@ -1,3 +1,4 @@
+schema: earmark.path_system_manifest.v1
 system_id: incident_response_v1
 namespace: operations
 title: Incident Response System
