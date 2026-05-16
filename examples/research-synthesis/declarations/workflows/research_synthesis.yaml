@@ -10,7 +10,7 @@ operations:
 
   - id: extract_findings
     kind: transform
-    input_contracts: [source_notes_for_extraction]
+    input_contracts: [work_packet]
     output_contracts: [finding]
     instruction: "../instructions/source_to_finding.md"
 
@@ -22,7 +22,7 @@ operations:
 
   - id: synthesize_summary
     kind: transform
-    input_contracts: [findings_for_summary]
+    input_contracts: [work_packet]
     output_contracts: [summary]
     instruction: "../instructions/finding_to_summary.md"
 

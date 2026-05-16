@@ -224,7 +224,7 @@ operations:
   - id: op_project
     kind: compile_context
     input_contracts: []
-    output_contracts: [work_surface]
+    output_contracts: [work_packet]
     instruction: null
     compiled_context:
       id: PLACEHOLDER_PROJ_ID
@@ -233,7 +233,7 @@ operations:
     provider_profile: null
   - id: op_transform
     kind: transform
-    input_contracts: [work_surface]
+    input_contracts: [work_packet]
     output_contracts: [status_summary]
     instruction:
       id: PLACEHOLDER_INSTR_ID
@@ -360,7 +360,7 @@ guards: []
             && manifest
                 .allowed_input_classes
                 .iter()
-                .any(|contract| contract == "work_surface")
+                .any(|contract| contract == "work_packet")
             && manifest
                 .allowed_output_classes
                 .iter()
@@ -474,7 +474,7 @@ operations:
   - id: op_project
     kind: compile_context
     input_contracts: []
-    output_contracts: [work_surface]
+    output_contracts: [work_packet]
     instruction: null
     compiled_context:
       id: PLACEHOLDER_PROJ_ID
@@ -483,7 +483,7 @@ operations:
     provider_profile: null
   - id: op_transform
     kind: transform
-    input_contracts: [work_surface]
+    input_contracts: [work_packet]
     output_contracts: [status_summary]
     instruction:
       id: PLACEHOLDER_INSTR_ID
@@ -619,7 +619,8 @@ guards: []
     let handoff_id = store
         .scan_objects()
         .unwrap()
-        .scanned_objects.iter()
+        .scanned_objects
+        .iter()
         .filter(|obj| obj.envelope.kind == Kind::HandoffManifest)
         .map(|obj| serde_json::from_slice::<HandoffManifest>(&obj.payload.bytes).unwrap())
         .find(|manifest| {
@@ -1036,7 +1037,7 @@ operations:
   - id: op_project
     kind: compile_context
     input_contracts: []
-    output_contracts: [work_surface]
+    output_contracts: [work_packet]
     instruction: null
     compiled_context:
       id: PLACEHOLDER_PROJ_ID
@@ -1045,7 +1046,7 @@ operations:
     provider_profile: null
   - id: op_transform
     kind: transform
-    input_contracts: [work_surface]
+    input_contracts: [work_packet]
     output_contracts: [status_summary]
     instruction:
       id: PLACEHOLDER_INSTR_ID
@@ -1324,7 +1325,7 @@ operations:
   - id: op_project
     kind: compile_context
     input_contracts: []
-    output_contracts: [work_surface]
+    output_contracts: [work_packet]
     instruction: null
     compiled_context:
       id: PLACEHOLDER_PROJ_ID
@@ -1333,7 +1334,7 @@ operations:
     provider_profile: null
   - id: op_transform
     kind: transform
-    input_contracts: [work_surface]
+    input_contracts: [work_packet]
     output_contracts: [status_summary]
     instruction:
       id: PLACEHOLDER_INSTR_ID
@@ -1555,7 +1556,7 @@ operations:
   - id: op_project
     kind: compile_context
     input_contracts: []
-    output_contracts: [work_surface]
+    output_contracts: [work_packet]
     instruction: null
     compiled_context:
       id: PLACEHOLDER_PROJ_ID
@@ -1564,7 +1565,7 @@ operations:
     provider_profile: null
   - id: op_transform
     kind: transform
-    input_contracts: [work_surface]
+    input_contracts: [work_packet]
     output_contracts: [status_summary]
     instruction:
       id: PLACEHOLDER_INSTR_ID

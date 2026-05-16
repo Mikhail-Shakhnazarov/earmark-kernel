@@ -398,7 +398,7 @@ fn parallel_transform_leak_bug() {
                 id: "project".to_string(),
                 kind: WorkflowOperationKind::CompileContext,
                 input_contracts: vec!["start_class".to_string()],
-                output_contracts: vec!["surface".to_string()],
+                output_contracts: vec!["work_packet".to_string()],
                 instruction: None,
                 compiled_context: Some(proj_ref),
                 policy: None,
@@ -407,7 +407,7 @@ fn parallel_transform_leak_bug() {
             earmark_core::WorkflowOperation {
                 id: "branch1".to_string(),
                 kind: WorkflowOperationKind::Transform,
-                input_contracts: vec!["surface".to_string()],
+                input_contracts: vec!["work_packet".to_string()],
                 output_contracts: vec!["out1".to_string()],
                 instruction: Some(instr1_ref),
                 compiled_context: None,
@@ -417,7 +417,7 @@ fn parallel_transform_leak_bug() {
             earmark_core::WorkflowOperation {
                 id: "branch2".to_string(),
                 kind: WorkflowOperationKind::Transform,
-                input_contracts: vec!["surface".to_string()],
+                input_contracts: vec!["work_packet".to_string()],
                 output_contracts: vec!["out2".to_string()],
                 instruction: Some(instr2_ref),
                 compiled_context: None,
@@ -574,7 +574,8 @@ fn parallel_transform_leak_bug() {
     let handoffs = store
         .scan_objects()
         .unwrap()
-        .scanned_objects.iter()
+        .scanned_objects
+        .iter()
         .filter(|obj| obj.envelope.kind == Kind::HandoffManifest)
         .map(|obj| {
             serde_json::from_slice::<earmark_core::HandoffManifest>(&obj.payload.bytes).unwrap()
@@ -584,13 +585,10 @@ fn parallel_transform_leak_bug() {
         })
         .collect::<Vec<_>>();
 
-    assert_eq!(b1.inputs[0], start_obj.object_ref());
-    // This is expected to FAIL if the bug exists
-    assert_eq!(
-        b2.inputs[0],
-        start_obj.object_ref(),
-        "Branch 2 should take start_obj, NOT branch 1 output"
-    );
+    assert_eq!(b1.inputs.len(), 1);
+    assert_eq!(b2.inputs.len(), 1);
+    assert_eq!(b1.inputs[0], b2.inputs[0]);
+    assert_eq!(b1.inputs[0].class.as_deref(), Some("work_packet"));
     assert_eq!(handoffs.len(), 2);
     assert!(handoffs
         .iter()
@@ -609,7 +607,7 @@ fn execution_error_persists_failed_delta() {
     let registry = ProviderRegistry::default();
 
     let instruction = create_simple_instruction(&store, &index, "fail", "fail", "always fail");
-    let instruction_ref = instruction.object_ref();
+    let instruction_ref = instruction;
 
     let workflow = earmark_core::WorkflowDefinition {
         name: "error-op".to_string(),
@@ -620,9 +618,9 @@ fn execution_error_persists_failed_delta() {
             kind: WorkflowOperationKind::Transform,
             input_contracts: vec!["s".to_string()],
             output_contracts: vec!["e1".to_string(), "e2".to_string()],
-            instruction: Some(InstructionRef {
+            instruction: Some(VersionRef {
                 id: instruction_ref.id.clone(),
-                version_id: Some(instruction_ref.version_id.clone()),
+                version_id: instruction_ref.version_id.clone(),
             }),
             compiled_context: None,
             policy: None,
@@ -739,4 +737,39 @@ fn execution_error_persists_failed_delta() {
         .as_ref()
         .unwrap()
         .contains(change_set.envelope.id.as_str()));
+}
+
+fn create_simple_instruction(
+    store: &GitCanonicalStore,
+    index: &DerivedIndex,
+    name: &str,
+    purpose: &str,
+    body: &str,
+) -> earmark_core::ObjectRef {
+    let instr = earmark_core::InstructionPayload {
+        name: name.to_string(),
+        version: "1.0.0".to_string(),
+        purpose: purpose.to_string(),
+        input_classes: vec!["s".to_string()],
+        output_classes: vec!["e1".to_string()],
+        execution_policy: "local".to_string(),
+        provider_profile: None,
+        trace_policy: "full".to_string(),
+        register: "user".to_string(),
+        body: earmark_core::MarkdownBody::new(body.to_string()),
+    };
+
+    let obj = StoredObject::new(
+        Kind::Instruction,
+        None,
+        Standing::default(),
+        Provenance::direct_input("test"),
+        BTreeMap::new(),
+        StoredPayload::from_markdown(instr.to_markdown().unwrap()),
+        vec![],
+    );
+    let vref = store.write_object(&obj).unwrap();
+    index.rebuild_from_store(store).unwrap();
+
+    earmark_core::ObjectRef::new(vref.id, vref.version_id, Kind::Instruction, None)
 }
