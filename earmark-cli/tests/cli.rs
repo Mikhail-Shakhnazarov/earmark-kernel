@@ -1191,6 +1191,96 @@ fn doctor_repair_index_rebuilds_and_clears_dirty_marker() {
 }
 
 #[test]
+fn doctor_repair_index_reports_partial_when_canonical_entries_are_skipped() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(root)
+        .arg("--json")
+        .arg("init")
+        .assert()
+        .success();
+
+    Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(root)
+        .arg("--json")
+        .arg("deposit")
+        .arg("--class")
+        .arg("note")
+        .arg("--title")
+        .arg("corrupt")
+        .arg("--body")
+        .arg("payload")
+        .assert()
+        .success();
+
+    let index = DerivedIndex::open(root).unwrap();
+    index
+        .mark_dirty(IndexDirtyMarker {
+            schema_version: "v1".to_string(),
+            reason: "partial_repair".to_string(),
+            timestamp: chrono::Utc::now(),
+            operation: "test".to_string(),
+            object_ids: vec![],
+            version_ids: vec![],
+        })
+        .unwrap();
+
+    let canonical_objects = root.join(".earmark").join("canonical").join("objects");
+    let envelope = walkdir::WalkDir::new(&canonical_objects)
+        .into_iter()
+        .filter_map(Result::ok)
+        .map(|e| e.path().to_path_buf())
+        .find(|p| p.file_name().and_then(|s| s.to_str()) == Some("envelope.json"))
+        .unwrap();
+    fs::write(envelope, "{not-json").unwrap();
+
+    let repair_output = Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(root)
+        .arg("--json")
+        .arg("doctor")
+        .arg("--repair-index")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&repair_output).unwrap();
+    assert_eq!(parsed["ok"], true);
+    assert_eq!(parsed["data"]["ok"], false);
+    assert_eq!(
+        parsed["data"]["summary"],
+        "index repaired partially; canonical store still has skipped entries"
+    );
+    assert!(parsed["data"]["skipped_canonical_entries"]
+        .as_array()
+        .unwrap()
+        .len()
+        > 0);
+
+    let doctor_output = Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(root)
+        .arg("--json")
+        .arg("doctor")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let doctor: Value = serde_json::from_slice(&doctor_output).unwrap();
+    assert_eq!(doctor["data"]["index_is_dirty"], true);
+}
+
+#[test]
 fn demo_path_research_synthesis_full_workflow() {
     let dir = tempdir().unwrap();
     let root = dir.path();
