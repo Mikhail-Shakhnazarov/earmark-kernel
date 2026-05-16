@@ -159,7 +159,7 @@ impl CompiledContextService {
                 Ok(WorkSurfaceObject {
                     object: loaded.envelope.object_ref(),
                     title: loaded.envelope.title(),
-                    path: store.version_path(&version).display().to_string(),
+                    path: store.version_path(&version).strip_prefix(store.root()).unwrap().display().to_string(),
                     excerpt_range: None,
                     lineage: loaded
                         .envelope
@@ -207,7 +207,7 @@ impl CompiledContextService {
                     target: payload.target,
                     included_endpoint,
                     excluded_endpoint,
-                    path: store.version_path(&relation_ref).display().to_string(),
+                    path: store.version_path(&relation_ref).strip_prefix(store.root()).unwrap().display().to_string(),
                 })
             })
             .collect::<Result<Vec<_>, ProjectError>>()?;
@@ -1192,6 +1192,17 @@ mod tests {
         assert_eq!(
             manifest.boundary_relations[0].excluded_endpoint.id,
             source_note.envelope.id
+        );
+
+        assert!(
+            std::path::Path::new(&manifest.objects[0].path).is_relative(),
+            "object path should be workspace-relative, got: {}",
+            manifest.objects[0].path
+        );
+        assert!(
+            std::path::Path::new(&manifest.boundary_relations[0].path).is_relative(),
+            "boundary relation path should be workspace-relative, got: {}",
+            manifest.boundary_relations[0].path
         );
 
         let evidence = render_evidence_pack(&manifest);
