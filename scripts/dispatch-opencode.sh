@@ -151,8 +151,16 @@ OPENCODE_ARGS+=(
 
 echo "dispatch-opencode: running $OPENCODE_CMD" | tee -a "$LOG"
 set +e
-"$OPENCODE_CMD" "${OPENCODE_ARGS[@]}" 2>&1 | tee -a "$LOG"
-OPENCODE_STATUS="${PIPESTATUS[0]}"
+HAS_JSON_ERROR=0
+while IFS= read -r line; do
+  echo "$line" | tee -a "$LOG"
+  if echo "$line" | grep -q '"type":"error"'; then
+    HAS_JSON_ERROR=1
+  fi
+done < <("$OPENCODE_CMD" "${OPENCODE_ARGS[@]}" 2>&1)
+OPENCODE_STATUS=$?
+# Wait for the process substitution to finish and get its exit code
+wait $! || OPENCODE_STATUS=$?
 set -e
 
 {
@@ -181,6 +189,17 @@ set -e
 if [[ "$OPENCODE_STATUS" -ne 0 ]]; then
   echo "dispatch-opencode: opencode exited non-zero; see $LOG" | tee -a "$LOG"
   exit "$OPENCODE_STATUS"
+fi
+
+if [[ "$HAS_JSON_ERROR" -ne 0 ]]; then
+  {
+    echo
+    echo "## JSON Error Events Detected"
+    echo
+    echo "Opencode output contained JSON error events."
+  } >> "$REPORT"
+  echo "dispatch-opencode: JSON error events detected in output; see $LOG" | tee -a "$LOG"
+  exit 1
 fi
 
 if [[ "$SKIP_GATES" != "1" ]]; then
@@ -228,3 +247,12 @@ fi
 echo "dispatch-opencode: complete" | tee -a "$LOG"
 echo "dispatch-opencode: report=$REPORT" | tee -a "$LOG"
 echo "dispatch-opencode: branch=$BRANCH" | tee -a "$LOG"
+
+CHANGED_FILES=$(git status --short | wc -l)
+if [[ "$CHANGED_FILES" -gt 0 ]]; then
+  echo "dispatch-opencode: files changed: $CHANGED_FILES" | tee -a "$LOG"
+  git status --short | head -10 | tee -a "$LOG"
+  if [[ "$CHANGED_FILES" -gt 10 ]]; then
+    echo "dispatch-opencode: ... and $((CHANGED_FILES - 10)) more" | tee -a "$LOG"
+  fi
+fi
