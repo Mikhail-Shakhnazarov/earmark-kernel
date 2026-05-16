@@ -147,8 +147,8 @@ impl ProviderAdapter for HttpGenerationAdapter {
             }
         }
 
-        // 2. Build URL
-        let url = render_template(&http.url_template, &vars);
+        // 2. Build URL (with percent-encoding to prevent URL injection)
+        let url = render_url_template(&http.url_template, &vars);
 
         // 2a. Domain safety check
         if !http.allowed_domains.is_empty() || !http.blocked_domains.is_empty() {
@@ -292,6 +292,31 @@ fn render_template(template: &str, vars: &BTreeMap<String, String>) -> String {
     let mut result = template.to_string();
     for (k, v) in vars {
         result = result.replace(&format!("{{{{{}}}}}", k), v);
+    }
+    result
+}
+
+#[cfg(feature = "http-provider")]
+fn url_encode(input: &str) -> String {
+    let mut result = String::new();
+    for byte in input.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                result.push(byte as char);
+            }
+            _ => {
+                result.push_str(&format!("%{:02X}", byte));
+            }
+        }
+    }
+    result
+}
+
+#[cfg(feature = "http-provider")]
+fn render_url_template(template: &str, vars: &BTreeMap<String, String>) -> String {
+    let mut result = template.to_string();
+    for (k, v) in vars {
+        result = result.replace(&format!("{{{{{}}}}}", k), &url_encode(v));
     }
     result
 }
@@ -858,6 +883,88 @@ mod tests {
         let err = adapter.provide(request, &profile, "transform").unwrap_err();
         assert_eq!(err.kind, ProviderFailureKind::PolicyViolation);
         assert!(err.message.contains("not in the allowed list"));
+    }
+
+    #[test]
+    fn test_url_encode_special_chars() {
+        assert_eq!(url_encode("hello world"), "hello%20world");
+        assert_eq!(url_encode("a&b=c"), "a%26b%3Dc");
+        assert_eq!(url_encode("path/to?query#frag"), "path%2Fto%3Fquery%23frag");
+        assert_eq!(url_encode("simple"), "simple");
+        assert_eq!(url_encode(""), "");
+        assert_eq!(url_encode("abc123-_."), "abc123-_.");
+    }
+
+    #[test]
+    fn test_render_url_template_encodes_values() {
+        let mut vars = BTreeMap::new();
+        vars.insert("input".to_string(), "hello world".to_string());
+        vars.insert("model".to_string(), "gpt-4".to_string());
+
+        let rendered = render_url_template(
+            "https://api.com/{{model}}?q={{input}}",
+            &vars,
+        );
+        assert_eq!(rendered, "https://api.com/gpt-4?q=hello%20world");
+    }
+
+    #[test]
+    fn test_render_url_template_prevents_query_injection() {
+        let mut vars = BTreeMap::new();
+        vars.insert("input".to_string(), "foo&bar=baz&malicious=1".to_string());
+
+        let rendered = render_url_template(
+            "https://api.com/search?q={{input}}",
+            &vars,
+        );
+        // & and = should be encoded so the injected params become part of the value
+        assert_eq!(
+            rendered,
+            "https://api.com/search?q=foo%26bar%3Dbaz%26malicious%3D1"
+        );
+        assert!(!rendered.contains("malicious=1"));
+    }
+
+    #[test]
+    fn test_render_url_template_prevents_path_traversal() {
+        let mut vars = BTreeMap::new();
+        vars.insert("model".to_string(), "../evil".to_string());
+
+        let rendered = render_url_template(
+            "https://api.com/models/{{model}}/details",
+            &vars,
+        );
+        // / and . are not encoded (dot is unreserved), but / IS encoded → %2F
+        assert_eq!(
+            rendered,
+            "https://api.com/models/..%2Fevil/details"
+        );
+        assert!(!rendered.contains("../evil"));
+    }
+
+    #[test]
+    fn test_render_url_template_does_not_affect_json_body() {
+        let mut vars = BTreeMap::new();
+        vars.insert("input".to_string(), "hello & goodbye".to_string());
+
+        let rendered = render_template("{\"msg\": \"{{input}}\"}", &vars);
+        assert_eq!(rendered, "{\"msg\": \"hello & goodbye\"}");
+    }
+
+    #[test]
+    fn test_render_url_template_encodes_fragment_injection() {
+        let mut vars = BTreeMap::new();
+        vars.insert("input".to_string(), "data#fragment".to_string());
+
+        let rendered = render_url_template(
+            "https://api.com/endpoint?q={{input}}",
+            &vars,
+        );
+        assert_eq!(
+            rendered,
+            "https://api.com/endpoint?q=data%23fragment"
+        );
+        assert!(!rendered.contains("#fragment"));
     }
 
     #[test]
