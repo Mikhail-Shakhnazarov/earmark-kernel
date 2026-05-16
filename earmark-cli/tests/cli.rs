@@ -60,7 +60,8 @@ fn query_outputs_machine_readable_json() {
         .arg("note");
     let output = query.assert().success().get_output().stdout.clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    assert_eq!(parsed["data"].as_array().unwrap().len(), 1);
+    println!("DEBUG QUERY OUTPUT: {}", serde_json::to_string_pretty(&parsed).unwrap());
+    assert_eq!(parsed["data"]["results"].as_array().unwrap().len(), 1);
 }
 
 #[test]
@@ -1139,7 +1140,7 @@ fn demo_path_research_synthesis_full_workflow() {
         .stdout
         .clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    let results = parsed["data"].as_array().unwrap();
+    let results = parsed["data"]["results"].as_array().unwrap();
     assert_eq!(results.len(), 2);
 
     // 7. workflow run
@@ -1228,7 +1229,7 @@ fn demo_path_research_synthesis_full_workflow() {
         .stdout
         .clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    let findings = parsed["data"].as_array().unwrap();
+    let findings = parsed["data"]["results"].as_array().unwrap();
     assert!(!findings.is_empty());
     let finding_id = findings[0]["object_id"].as_str().unwrap().to_string();
 
@@ -1247,7 +1248,7 @@ fn demo_path_research_synthesis_full_workflow() {
         .stdout
         .clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    let summaries = parsed["data"].as_array().unwrap();
+    let summaries = parsed["data"]["results"].as_array().unwrap();
     assert!(!summaries.is_empty());
     let summary_id = summaries[0]["object_id"].as_str().unwrap().to_string();
     assert_ne!(finding_id, summary_id);
@@ -1521,7 +1522,7 @@ guards: []
         });
         assert!(result.is_err());
 
-        let objects = store.scan_objects().unwrap();
+        let objects = store.scan_objects().unwrap().scanned_objects;
         let failure_obj = objects
             .iter()
             .find(|obj| obj.envelope.kind == Kind::TransformationFailure)

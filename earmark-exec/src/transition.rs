@@ -55,6 +55,16 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
         let mut synthetic_output_warning: Option<String> = None;
 
         let filtered_inputs = self.get_filtered_inputs(state, transition);
+        if !transition.input_contracts.is_empty() && filtered_inputs.is_empty() {
+            // Relaxed check: Transform operations can be satisfied by the active work surface manifest
+            // if explicit inputs are missing.
+            if transition.operation != WorkflowOperationKind::Transform || state.compiled_context.is_none() {
+                return Err(ExecError::MissingInput(format!(
+                    "operation '{}' requires objects matching contracts {:?}, but no active objects match in current run state",
+                    transition.id, transition.input_contracts
+                )));
+            }
+        }
 
         let exec_result: Result<(), ExecError> = match transition.operation {
             WorkflowOperationKind::CompileContext => self.handle_compile_context(
@@ -179,6 +189,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                 })
                 .cloned()
                 .collect::<Vec<_>>();
+
             if matching_objects.is_empty() {
                 state.active_objects.clone()
             } else {

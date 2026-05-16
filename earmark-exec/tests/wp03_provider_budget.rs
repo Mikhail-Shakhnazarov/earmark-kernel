@@ -872,7 +872,7 @@ fn test_missing_cost_metadata_warning() {
     // Wait, ProviderRecord is NOT an object in the store usually?
     // Yes, record_provider_event writes it.
 
-    let objects = store.scan_objects().unwrap();
+    let objects = store.scan_objects().unwrap().scanned_objects;
     let provider_rec_obj = objects
         .iter()
         .find(|obj| obj.envelope.class == Some("provider_record".to_string()))

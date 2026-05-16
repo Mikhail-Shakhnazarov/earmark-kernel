@@ -250,7 +250,10 @@ impl ProviderAdapter for MockAdapter {
             status: ProviderResponseStatus::Completed,
             candidate_payload,
             metadata,
-            advisory_warnings: vec![],
+            advisory_warnings: vec![
+                "Synthetic mock provider output; do not treat as model-derived evidence."
+                    .to_string(),
+            ],
             usage: None,
             received_at: Utc::now(),
         })

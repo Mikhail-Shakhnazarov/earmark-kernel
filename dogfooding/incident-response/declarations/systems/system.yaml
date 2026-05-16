@@ -18,5 +18,3 @@ runtime_profile:
   execution_surface: local
   machine_output_default: json
   work_surface_mode: local
-  max_recursion_depth: 3
-  budget_limit_usd: 1.00

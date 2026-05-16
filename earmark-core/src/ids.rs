@@ -10,7 +10,7 @@ use crate::kind::Kind;
 /// A canonical durable identifier for a kernel object.
 ///
 /// Pattern: `obj_[a-z0-9]{32}`
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 pub struct ObjectId(String);
 
 impl ObjectId {
@@ -51,6 +51,16 @@ impl ObjectId {
     }
 }
 
+impl<'de> serde::Deserialize<'de> for ObjectId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        ObjectId::parse(s).map_err(serde::de::Error::custom)
+    }
+}
+
 impl Default for ObjectId {
     fn default() -> Self {
         Self::new()
@@ -63,7 +73,7 @@ impl std::fmt::Display for ObjectId {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 pub struct VersionId(String);
 
 impl VersionId {
@@ -73,6 +83,11 @@ impl VersionId {
 
     pub fn parse(s: impl Into<String>) -> Result<Self, CoreError> {
         let s = s.into();
+
+        if s == "latest" {
+            return Ok(Self("ver_00000000000000000000000000000000".to_string()));
+        }
+
         if s.len() > 128 {
             return Err(CoreError::InvalidIdentifier(
                 "length exceeds 128 characters".to_string(),
@@ -110,6 +125,16 @@ impl VersionId {
     /// requiring a specific version lookup.
     pub fn is_latest_sentinel(&self) -> bool {
         self.0 == "ver_00000000000000000000000000000000"
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for VersionId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        VersionId::parse(s).map_err(serde::de::Error::custom)
     }
 }
 

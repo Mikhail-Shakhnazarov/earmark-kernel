@@ -28,7 +28,7 @@ pub(crate) fn load_handoff<S: CanonicalStore>(
     store: &S,
     handoff_manifest_id: &HandoffManifestId,
 ) -> Result<HandoffManifest, ExecError> {
-    for object in store.scan_objects()? {
+    for object in store.scan_objects()?.scanned_objects {
         if object.envelope.kind != Kind::HandoffManifest {
             continue;
         }
