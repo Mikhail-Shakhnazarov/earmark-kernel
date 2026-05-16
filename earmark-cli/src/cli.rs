@@ -4,7 +4,7 @@ use clap::{ArgAction, Args, CommandFactory, Parser, Subcommand, ValueEnum};
 
 #[derive(Parser)]
 #[command(name = "em")]
-#[command(about = "Earmark operator shell")]
+#[command(help = "Earmark operator shell")]
 pub struct Cli {
     #[arg(long)]
     pub root: Option<PathBuf>,
@@ -20,30 +20,90 @@ pub struct Cli {
     pub command: Commands,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CommandStability {
+    Stable,
+    Beta,
+    Experimental,
+}
+
 #[derive(Subcommand)]
 pub enum Commands {
+    #[command(help = "[STABLE] Initialize a new earmark workspace")]
     Init,
+    #[command(help = "[BETA] Diagnose and repair workspace issues")]
     Doctor(DoctorArgs),
+    #[command(help = "[EXPERIMENTAL] Manage system registration")]
     System(SystemCommand),
+    #[command(help = "[STABLE] Deposit an object into the store")]
     Deposit(DepositArgs),
+    #[command(help = "[STABLE] Query the object store")]
     Query(QueryArgs),
+    #[command(help = "[STABLE] Review an object")]
     Review(ReviewArgs),
+    #[command(help = "[STABLE] Manage workflows")]
     Workflow(WorkflowCommand),
+    #[command(help = "[STABLE] Manage runs")]
     Run(RunCommand),
+    #[command(help = "[BETA] Declare and register declarations")]
     Declare(DeclareCommand),
+    #[command(help = "[STABLE] Manage assignments")]
     Assignment(AssignmentCommand),
+    #[command(help = "[STABLE] Manage change sets")]
     ChangeSet(ChangeSetCommand),
+    #[command(help = "[STABLE] Manage handoffs")]
     Handoff(HandoffCommand),
+    #[command(help = "[STABLE] Manage failures")]
     Failure(FailureCommand),
+    #[command(help = "[EXPERIMENTAL] Compile context")]
     Context(ContextCommand),
+    #[command(help = "[BETA] Audit workspace events")]
     Audit(AuditCommand),
+    #[command(help = "[STABLE] Generate reports")]
     Report(ReportCommand),
+    #[command(help = "[BETA] Manage providers")]
     Provider(ProviderCommand),
+    #[command(help = "[BETA] Generate shell completions")]
     Completions { shell: CompletionShell },
+    #[command(help = "[STABLE] Show workspace status")]
     Status,
+    #[command(help = "[EXPERIMENTAL] Manage relations")]
     Relation(RelationCommand),
+    #[command(help = "[EXPERIMENTAL] Manage standing requests")]
     StandingRequest(StandingRequestCommand),
+    #[command(help = "[BETA] Undo a run")]
     Undo(UndoCommand),
+}
+
+impl Commands {
+    pub fn stability(&self) -> CommandStability {
+        match self {
+            Self::Init
+            | Self::Status
+            | Self::Query(_)
+            | Self::Deposit(_)
+            | Self::Run(_)
+            | Self::Workflow(_)
+            | Self::Assignment(_)
+            | Self::ChangeSet(_)
+            | Self::Handoff(_)
+            | Self::Failure(_)
+            | Self::Report(_)
+            | Self::Review(_) => CommandStability::Stable,
+
+            Self::Doctor(_)
+            | Self::Declare(_)
+            | Self::Audit(_)
+            | Self::Provider(_)
+            | Self::Completions { .. }
+            | Self::Undo(_) => CommandStability::Beta,
+
+            Self::System(_)
+            | Self::Context(_)
+            | Self::Relation(_)
+            | Self::StandingRequest(_) => CommandStability::Experimental,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
