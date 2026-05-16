@@ -2,7 +2,7 @@ use crate::error::ExecError;
 use crate::persistence_helpers::write_object_and_index;
 use crate::resolution::load_standing_policy;
 use chrono::Utc;
-use earmark_core::projection::project;
+use earmark_core::projection::project_review;
 use earmark_core::{
     DimensionId, Kind, ObjectId, Provenance, StandingRegistry, StandingRequestStatus,
     StandingTransitionRequest, TokenId, VersionRef,
@@ -216,9 +216,7 @@ pub fn apply_standing_request<S: CanonicalStore>(
     // 5b. Enforce existing version-matched accepted review evidence for transitions
     //     into accepted review projection.  Uses a global index scan (not same-change-set).
     //     See validate_transition_change_set in validation.rs for the same-change-set path.
-    let requested_projection = project(&next_standing, registry)
-        .map_err(|e| ExecError::Governance(GovernanceError::from(e)))?;
-    if requested_projection.review == Some(earmark_core::projection::ReviewProjection::Accepted) {
+    if project_review(&next_standing, registry) == Some(earmark_core::projection::ReviewProjection::Accepted) {
         let actor = target_head.envelope.provenance.actor.as_str();
         if !earmark_governance::is_trusted_actor(actor)
             && !has_accepted_review(store, index, &target_head_ref)?

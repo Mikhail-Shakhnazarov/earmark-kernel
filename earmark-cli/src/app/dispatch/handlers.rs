@@ -16,7 +16,9 @@ use crate::app::suggestions::{
     next_commands_for_assignment, next_commands_for_change_set, next_commands_for_failure,
     next_commands_for_handoff, next_commands_for_run,
 };
-use crate::app::{explain_declaration_file, register_declaration_file, resolve_system_version_ref, validate_declaration_file};
+use crate::app::commands::declarations::{
+    explain_declaration_file, register_declaration_file, validate_declaration_file,
+};
 use crate::cli::*;
 use earmark_core::Kind;
 use earmark_index::DerivedIndex;
