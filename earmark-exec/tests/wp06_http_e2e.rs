@@ -138,6 +138,8 @@ fn test_http_provider_e2e_content_rendering() {
                 input_tokens_path: Some("$.usage.total_tokens".to_string()),
                 ..Default::default()
             },
+            allowed_domains: vec![],
+            blocked_domains: vec![],
         }),
     };
 
@@ -539,6 +541,8 @@ fn test_http_provider_rejects_unsupported_lineage() {
                 text_path: "$.choices[0].message.content".to_string(),
                 ..Default::default()
             },
+            allowed_domains: vec![],
+            blocked_domains: vec![],
         }),
     };
 
@@ -616,6 +620,8 @@ fn test_http_provider_rejects_unsupported_full_message_capture() {
                 text_path: "$.choices[0].message.content".to_string(),
                 ..Default::default()
             },
+            allowed_domains: vec![],
+            blocked_domains: vec![],
         }),
     };
 
