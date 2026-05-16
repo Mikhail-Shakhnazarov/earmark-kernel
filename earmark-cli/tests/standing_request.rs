@@ -266,7 +266,7 @@ fn standing_request_show_missing_id_outputs_error_envelope() {
         .arg("show")
         .arg("obj_00000000000000000000000000000000");
 
-    let output = cmd.assert().failure().get_output().stderr.clone();
+    let output = cmd.assert().failure().get_output().stdout.clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
 
     assert_eq!(parsed["contract_version"], "0.2.0");
