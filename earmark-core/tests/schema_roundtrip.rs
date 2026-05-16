@@ -207,3 +207,29 @@ activated_at: null
     .unwrap();
     assert_eq!(system.system_id, "pkm-core");
 }
+
+#[test]
+fn runtime_profile_rejects_unknown_fields() {
+    let parsed = parse_yaml::<SystemDefinition>(
+        r#"system_id: pkm-core
+namespace: systems/pkm-core
+title: PKM Core
+description: Example
+classes: []
+instructions: []
+policies: []
+workflows: []
+compiled_contexts: []
+provider_profiles: []
+default_compiled_context: null
+default_provider_profile: null
+runtime_profile:
+  execution_surface: runtime_over_folder
+  machine_output_default: json
+  work_surface_mode: materialized_manifest
+  unknown_field: true
+activated_at: null
+"#,
+    );
+    assert!(parsed.is_err());
+}

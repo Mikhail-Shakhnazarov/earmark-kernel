@@ -3,7 +3,7 @@ use earmark_core::{
     RelationPayload, Standing, VersionId, VersionRef, REL_TYPE_USED_INSTRUCTION,
 };
 use earmark_index::DerivedIndex;
-use earmark_store::{CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload};
+use earmark_store::{GitCanonicalStore, ObjectStore, StoredObject, StoredPayload, WorkspaceLayout};
 use std::collections::{BTreeMap, HashMap};
 use tempfile::tempdir;
 

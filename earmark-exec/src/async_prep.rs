@@ -9,7 +9,7 @@
 /// At present, all provider dispatch and workflow execution is synchronous. These
 /// boundaries are catalogued so that future work can isolate each blocking call
 /// site and introduce async dispatch incrementally, starting with the provider
-/// adapter boundary (`ProviderService` / `AsyncProviderService`).
+/// adapter boundary (`ProviderService` with internal async bridge seam).
 ///
 /// This module is public but production code does not call it. It exists for
 /// documentation, planning, and seam testing.

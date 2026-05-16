@@ -24,9 +24,9 @@ pub use provider::{
     compiled_provider_capabilities, default_provider_registry, provide_with_registry,
     provider_metadata_synthetic_source, provider_record_from_failure,
     provider_record_from_response, provider_response_is_synthetic, resolve_provider_profile,
-    AsyncProviderAdapter, AsyncProviderService, MockAdapter, ProviderAdapter, ProviderCapability,
-    ProviderCapabilityStatus, ProviderExecutionOutcome, ProviderMode, ProviderRegistry,
-    ProviderService, RetrySleeper, ThreadSleepSleeper,
+    MockAdapter, ProviderAdapter, ProviderCapability, ProviderCapabilityStatus,
+    ProviderExecutionOutcome, ProviderMode, ProviderRegistry, ProviderService, RetrySleeper,
+    ThreadSleepSleeper,
 };
 pub use relation::persist_relation_canonical;
 pub use relation_logic::{

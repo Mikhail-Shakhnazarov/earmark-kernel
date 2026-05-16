@@ -4,7 +4,7 @@ use crate::cli::DepositArgs;
 use crate::config::resolve_system_id;
 use earmark_core::{Kind, VersionRef};
 use earmark_runtime_tools::RuntimeToolSurface;
-use earmark_store::CanonicalStore;
+use earmark_store::ObjectStore;
 use serde_json::json;
 use std::fs;
 
@@ -58,6 +58,20 @@ pub fn handle(ctx: &CommandContext, args: &DepositArgs) -> Result<(), CliError> 
         actor: "operator".to_string(),
         source_type: "cli".to_string(),
     };
+
+    for h in &args.headers {
+        if let Some((k, v)) = h.split_once('=') {
+            validation_context.headers.insert(
+                k.to_string(),
+                earmark_core::HeaderValue::String(v.to_string()),
+            );
+        } else {
+            return Err(CliError::argument(format!(
+                "invalid header format '{}', expected key=value",
+                h
+            )));
+        }
+    }
 
     let object_ref = runtime_surface.deposit_object(
         args.class.clone(),

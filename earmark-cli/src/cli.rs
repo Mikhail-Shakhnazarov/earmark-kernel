@@ -23,7 +23,7 @@ pub struct Cli {
 #[derive(Subcommand)]
 pub enum Commands {
     Init,
-    Doctor,
+    Doctor(DoctorArgs),
     System(SystemCommand),
     Deposit(DepositArgs),
     Query(QueryArgs),
@@ -57,6 +57,12 @@ pub enum CompletionShell {
 pub struct SystemCommand {
     #[command(subcommand)]
     pub action: SystemAction,
+}
+
+#[derive(Args)]
+pub struct DoctorArgs {
+    #[arg(long, help = "rebuild the derived index from canonical store")]
+    pub repair_index: bool,
 }
 
 #[derive(Subcommand)]
@@ -160,9 +166,11 @@ pub struct AssignmentCommand {
 #[derive(Subcommand)]
 pub enum AssignmentAction {
     Show {
+        #[arg(help = "durable ID of the assignment to display")]
         assignment_id: String,
     },
     Explain {
+        #[arg(help = "durable ID of the assignment to explain")]
         assignment_id: String,
     },
     List {
@@ -182,9 +190,11 @@ pub struct ChangeSetCommand {
 #[derive(Subcommand)]
 pub enum ChangeSetAction {
     Show {
+        #[arg(help = "durable ID of the change set to display")]
         change_set_id: String,
     },
     Explain {
+        #[arg(help = "durable ID of the change set to explain")]
         change_set_id: String,
     },
     List {
@@ -202,9 +212,11 @@ pub struct HandoffCommand {
 #[derive(Subcommand)]
 pub enum HandoffAction {
     Show {
+        #[arg(help = "durable ID of the handoff to display")]
         handoff_id: String,
     },
     Explain {
+        #[arg(help = "durable ID of the handoff to explain")]
         handoff_id: String,
     },
     List {
@@ -222,9 +234,11 @@ pub struct FailureCommand {
 #[derive(Subcommand)]
 pub enum FailureAction {
     Show {
+        #[arg(help = "durable ID of the failure to show")]
         failure_id: String,
     },
     Explain {
+        #[arg(help = "durable ID of the failure to explain")]
         failure_id: String,
     },
     List {
@@ -244,9 +258,11 @@ pub struct RelationCommand {
 #[derive(Subcommand)]
 pub enum RelationAction {
     Show {
+        #[arg(help = "durable ID of the relation to display")]
         relation_id: String,
     },
     Explain {
+        #[arg(help = "durable ID of the relation to explain")]
         relation_id: String,
     },
     List {
@@ -285,6 +301,7 @@ pub enum AuditAction {
         transition_id: Option<String>,
     },
     Show {
+        #[arg(help = "durable ID of the failure to show")]
         failure_id: String,
     },
 }
@@ -304,11 +321,13 @@ pub enum ReportAction {
         output: PathBuf,
     },
     Handoff {
+        #[arg(help = "handoff ID to report on")]
         target_id: String,
         #[arg(short, long)]
         output: PathBuf,
     },
     System {
+        #[arg(help = "system ID to report on")]
         target_id: String,
         #[arg(short, long)]
         output: PathBuf,
@@ -329,6 +348,8 @@ pub struct DepositArgs {
     pub payload_file: Option<PathBuf>,
     #[arg(long)]
     pub json_payload: Option<String>,
+    #[arg(long = "header", help = "custom header in key=value format")]
+    pub headers: Vec<String>,
 }
 
 #[derive(Args)]
@@ -345,6 +366,7 @@ pub struct QueryArgs {
 
 #[derive(Args)]
 pub struct ReviewArgs {
+    #[arg(help = "durable ID of the object to review")]
     pub object_id: String,
     #[arg(long)]
     pub version_id: Option<String>,
@@ -356,6 +378,7 @@ pub struct ReviewArgs {
 
 #[derive(Args)]
 pub struct RunWorkflowArgs {
+    #[arg(help = "symbolic name or durable ID of the workflow")]
     pub workflow_id: String,
     #[arg(long)]
     pub version_id: Option<String>,
@@ -411,19 +434,23 @@ pub enum StandingRequestAction {
         target: Option<String>,
     },
     Show {
+        #[arg(help = "durable ID of the standing request")]
         request_id: String,
     },
     Approve {
+        #[arg(help = "durable ID of the standing request")]
         request_id: String,
         #[arg(long)]
         reason: Option<String>,
     },
     Reject {
+        #[arg(help = "durable ID of the standing request")]
         request_id: String,
         #[arg(long)]
         reason: Option<String>,
     },
     Apply {
+        #[arg(help = "durable ID of the standing request")]
         request_id: String,
         #[arg(long)]
         policy: Option<String>,

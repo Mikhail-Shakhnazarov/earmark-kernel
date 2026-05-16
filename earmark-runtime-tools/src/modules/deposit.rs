@@ -12,6 +12,7 @@ use std::collections::BTreeMap;
 #[derive(Debug, Clone, Default)]
 pub struct DepositValidationContext {
     pub namespace: Option<String>,
+    pub headers: BTreeMap<String, HeaderValue>,
 }
 
 impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
@@ -103,6 +104,12 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
                         system_id: active.system_id,
                     });
                 }
+            } else {
+                return Err(RuntimeToolError::AdmissionError {
+                    requested_class: class,
+                    namespace: namespace.clone(),
+                    system_id: "none_active".to_string(),
+                });
             }
         }
 
@@ -127,6 +134,9 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
         let mut headers = BTreeMap::new();
         if let Some(title) = title {
             headers.insert("title".to_string(), HeaderValue::String(title));
+        }
+        for (k, v) in validation_context.headers {
+            headers.insert(k, v);
         }
         let k = kind
             .and_then(|k| k.parse::<Kind>().ok())
@@ -190,6 +200,16 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
                     }
                 };
                 earmark_core::validate_schema(&payload_json, &schema)?;
+            }
+
+            // Check required headers
+            for req in &class_def.required_headers {
+                if !headers.contains_key(req) {
+                    return Err(RuntimeToolError::InvalidPayloadShape(format!(
+                        "missing required header '{}' for class '{}'",
+                        req, class_def.name
+                    )));
+                }
             }
         }
 

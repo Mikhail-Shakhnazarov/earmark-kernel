@@ -8,7 +8,9 @@ use earmark_core::{
 };
 use earmark_exec::ProviderRegistry;
 use earmark_index::DerivedIndex;
-use earmark_store::{CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload};
+use earmark_store::{
+    CanonicalStore, GitCanonicalStore, ObjectStore, StoredObject, StoredPayload, WorkspaceLayout,
+};
 use serde_json::json;
 use std::collections::BTreeMap;
 use tempfile::tempdir;
@@ -1195,6 +1197,7 @@ fn test_deposit_admission_enforcement() {
             json!({"foo": "bar"}),
             provenance.clone(),
             DepositValidationContext {
+                headers: BTreeMap::new(),
                 namespace: Some("governed_ns".to_string()),
             },
         )
@@ -1209,6 +1212,7 @@ fn test_deposit_admission_enforcement() {
             json!({"foo": "bar"}),
             provenance.clone(),
             DepositValidationContext {
+                headers: BTreeMap::new(),
                 namespace: Some("governed_ns".to_string()),
             },
         )
@@ -1223,8 +1227,8 @@ fn test_deposit_admission_enforcement() {
         } if requested_class == "class_b" && namespace == "governed_ns" && system_id == "governed_system"
     ));
 
-    // Case 3: Deposit to different (scratch) namespace succeeds even if class not admitted in governed_ns
-    surface
+    // Case 3: Deposit to different namespace fails if no system active there
+    let err = surface
         .deposit_object(
             "class_b".to_string(),
             None,
@@ -1233,9 +1237,17 @@ fn test_deposit_admission_enforcement() {
             provenance.clone(),
             DepositValidationContext {
                 namespace: Some("scratch_ns".to_string()),
+                headers: BTreeMap::new(),
             },
         )
-        .expect("deposit to scratch namespace should be permissive");
+        .unwrap_err();
+    assert!(matches!(
+        err,
+        RuntimeToolError::AdmissionError {
+            ref system_id,
+            ..
+        } if system_id == "none_active"
+    ));
 
     // Case 4: Deposit without namespace succeeds (scratch behavior)
     surface
@@ -1293,6 +1305,7 @@ fn test_deposit_system_integrity_on_broken_class_ref() {
             },
             DepositValidationContext {
                 namespace: Some("broken_ns".to_string()),
+                headers: BTreeMap::new(),
             },
         )
         .unwrap_err();

@@ -1,11 +1,13 @@
 use earmark_core::{
     to_yaml, ClassDefinition, ClassStandingRules, CompiledContextExpansion, CompiledContextRender,
     CompiledContextSelect, CompiledContextTemplate, CompiledContextVisibility, JsonSchemaRef, Kind,
-    Provenance, RuntimeProfile, Standing, SystemDefinition, VersionRef,
+    Provenance, RuntimeProfile, Standing, SystemDefinition, VersionRef, WorkflowOperationKind,
 };
 use earmark_exec::{ExecutionEngine, ProviderRegistry, WorkflowRunRequest};
 use earmark_index::DerivedIndex;
-use earmark_store::{CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload};
+use earmark_store::{
+    GitCanonicalStore, ObjectStore, StoreScanner, StoredObject, StoredPayload, WorkspaceLayout,
+};
 use std::collections::BTreeMap;
 use tempfile::tempdir;
 
@@ -46,7 +48,7 @@ fn guarded_edge_blocking() {
         operations: vec![
             earmark_core::WorkflowOperation {
                 id: "start_op".to_string(),
-                kind: "review".to_string(),
+                kind: WorkflowOperationKind::Review,
                 input_contracts: vec!["start".to_string()],
                 output_contracts: vec!["middle".to_string()],
                 instruction: None,
@@ -56,7 +58,7 @@ fn guarded_edge_blocking() {
             },
             earmark_core::WorkflowOperation {
                 id: "guarded_op".to_string(),
-                kind: "review".to_string(),
+                kind: WorkflowOperationKind::Review,
                 input_contracts: vec!["middle".to_string()],
                 output_contracts: vec!["end".to_string()],
                 instruction: None,
@@ -137,7 +139,7 @@ fn guarded_edge_blocking() {
     assert!(transition_ids.contains(&"start_op"));
     assert!(!transition_ids.contains(&"guarded_op"));
 
-    let objects = store.scan_objects().unwrap();
+    let objects = store.scan_objects().unwrap().scanned_objects;
     let ledger_obj = objects
         .iter()
         .find(|obj| obj.envelope.kind == Kind::RunRecord)
@@ -189,7 +191,7 @@ fn branching_execution() {
         operations: vec![
             earmark_core::WorkflowOperation {
                 id: "root".to_string(),
-                kind: "review".to_string(),
+                kind: WorkflowOperationKind::Review,
                 input_contracts: vec!["start".to_string()],
                 output_contracts: vec!["fork".to_string()],
                 instruction: None,
@@ -199,7 +201,7 @@ fn branching_execution() {
             },
             earmark_core::WorkflowOperation {
                 id: "branch1".to_string(),
-                kind: "review".to_string(),
+                kind: WorkflowOperationKind::Review,
                 input_contracts: vec!["fork".to_string()],
                 output_contracts: vec!["end1".to_string()],
                 instruction: None,
@@ -209,7 +211,7 @@ fn branching_execution() {
             },
             earmark_core::WorkflowOperation {
                 id: "branch2".to_string(),
-                kind: "review".to_string(),
+                kind: WorkflowOperationKind::Review,
                 input_contracts: vec!["fork".to_string()],
                 output_contracts: vec!["end2".to_string()],
                 instruction: None,
@@ -394,9 +396,9 @@ fn parallel_transform_leak_bug() {
         operations: vec![
             earmark_core::WorkflowOperation {
                 id: "project".to_string(),
-                kind: "compile_context".to_string(),
+                kind: WorkflowOperationKind::CompileContext,
                 input_contracts: vec!["start_class".to_string()],
-                output_contracts: vec!["surface".to_string()],
+                output_contracts: vec!["work_packet".to_string()],
                 instruction: None,
                 compiled_context: Some(proj_ref),
                 policy: None,
@@ -404,8 +406,8 @@ fn parallel_transform_leak_bug() {
             },
             earmark_core::WorkflowOperation {
                 id: "branch1".to_string(),
-                kind: "transform".to_string(),
-                input_contracts: vec!["surface".to_string()],
+                kind: WorkflowOperationKind::Transform,
+                input_contracts: vec!["work_packet".to_string()],
                 output_contracts: vec!["out1".to_string()],
                 instruction: Some(instr1_ref),
                 compiled_context: None,
@@ -414,8 +416,8 @@ fn parallel_transform_leak_bug() {
             },
             earmark_core::WorkflowOperation {
                 id: "branch2".to_string(),
-                kind: "transform".to_string(),
-                input_contracts: vec!["surface".to_string()],
+                kind: WorkflowOperationKind::Transform,
+                input_contracts: vec!["work_packet".to_string()],
                 output_contracts: vec!["out2".to_string()],
                 instruction: Some(instr2_ref),
                 compiled_context: None,
@@ -572,6 +574,7 @@ fn parallel_transform_leak_bug() {
     let handoffs = store
         .scan_objects()
         .unwrap()
+        .scanned_objects
         .iter()
         .filter(|obj| obj.envelope.kind == Kind::HandoffManifest)
         .map(|obj| {
@@ -582,13 +585,10 @@ fn parallel_transform_leak_bug() {
         })
         .collect::<Vec<_>>();
 
-    assert_eq!(b1.inputs[0], start_obj.object_ref());
-    // This is expected to FAIL if the bug exists
-    assert_eq!(
-        b2.inputs[0],
-        start_obj.object_ref(),
-        "Branch 2 should take start_obj, NOT branch 1 output"
-    );
+    assert_eq!(b1.inputs.len(), 1);
+    assert_eq!(b2.inputs.len(), 1);
+    assert_eq!(b1.inputs[0], b2.inputs[0]);
+    assert_eq!(b1.inputs[0].class.as_deref(), Some("work_packet"));
     assert_eq!(handoffs.len(), 2);
     assert!(handoffs
         .iter()
@@ -606,16 +606,22 @@ fn execution_error_persists_failed_delta() {
     let index = DerivedIndex::open(dir.path()).unwrap();
     let registry = ProviderRegistry::default();
 
+    let instruction = create_simple_instruction(&store, &index, "fail", "fail", "always fail");
+    let instruction_ref = instruction;
+
     let workflow = earmark_core::WorkflowDefinition {
         name: "error-op".to_string(),
         version: "0.1.0".to_string(),
         description: None,
         operations: vec![earmark_core::WorkflowOperation {
             id: "fail".to_string(),
-            kind: "invalid".to_string(),
+            kind: WorkflowOperationKind::Transform,
             input_contracts: vec!["s".to_string()],
-            output_contracts: vec!["e".to_string()],
-            instruction: None,
+            output_contracts: vec!["e1".to_string(), "e2".to_string()],
+            instruction: Some(VersionRef {
+                id: instruction_ref.id.clone(),
+                version_id: instruction_ref.version_id.clone(),
+            }),
             compiled_context: None,
             policy: None,
             provider_profile: None,
@@ -699,7 +705,7 @@ fn execution_error_persists_failed_delta() {
     let result = engine.run_workflow(request);
     assert!(result.is_err());
 
-    let objects = store.scan_objects().unwrap();
+    let objects = store.scan_objects().unwrap().scanned_objects;
     let change_set = objects
         .iter()
         .find(|obj| obj.envelope.kind == Kind::ChangeSet)
@@ -707,12 +713,13 @@ fn execution_error_persists_failed_delta() {
 
     let payload: earmark_core::ChangeSet =
         serde_json::from_slice(&change_set.payload.bytes).unwrap();
+    println!("Validation Result: {:?}", payload.validation_results[0]);
     assert!(!payload.validation_results.is_empty());
     assert!(!payload.validation_results[0].is_valid);
     assert!(payload.validation_results[0]
         .failures
         .join(" ")
-        .contains("unsupported operation"));
+        .contains("multi-output transform operations are not yet implemented"));
 
     let claim_obj = objects
         .iter()
@@ -730,4 +737,39 @@ fn execution_error_persists_failed_delta() {
         .as_ref()
         .unwrap()
         .contains(change_set.envelope.id.as_str()));
+}
+
+fn create_simple_instruction(
+    store: &GitCanonicalStore,
+    index: &DerivedIndex,
+    name: &str,
+    purpose: &str,
+    body: &str,
+) -> earmark_core::ObjectRef {
+    let instr = earmark_core::InstructionPayload {
+        name: name.to_string(),
+        version: "1.0.0".to_string(),
+        purpose: purpose.to_string(),
+        input_classes: vec!["s".to_string()],
+        output_classes: vec!["e1".to_string()],
+        execution_policy: "local".to_string(),
+        provider_profile: None,
+        trace_policy: "full".to_string(),
+        register: "user".to_string(),
+        body: earmark_core::MarkdownBody::new(body.to_string()),
+    };
+
+    let obj = StoredObject::new(
+        Kind::Instruction,
+        None,
+        Standing::default(),
+        Provenance::direct_input("test"),
+        BTreeMap::new(),
+        StoredPayload::from_markdown(instr.to_markdown().unwrap()),
+        vec![],
+    );
+    let vref = store.write_object(&obj).unwrap();
+    index.rebuild_from_store(store).unwrap();
+
+    earmark_core::ObjectRef::new(vref.id, vref.version_id, Kind::Instruction, None)
 }

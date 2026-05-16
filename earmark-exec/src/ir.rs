@@ -1,9 +1,12 @@
-use earmark_core::{ObjectId, ObjectRef, RequiredCheck, RunRecord, StandingConstraint, VersionRef};
+use earmark_core::{
+    ObjectId, ObjectRef, RequiredCheck, RunRecord, StandingConstraint, VersionRef,
+    WorkflowOperationKind,
+};
 
 #[derive(Debug, Clone)]
 pub struct ExecutionTransition {
     pub id: String,
-    pub operation: String,
+    pub operation: WorkflowOperationKind,
     pub input_contracts: Vec<String>,
     pub output_contracts: Vec<String>,
     pub instruction: Option<VersionRef>,
@@ -58,6 +61,6 @@ pub struct SuccessorHandoffSpec {
 
 #[derive(Debug, Clone)]
 pub struct TransformArtifacts {
-    pub output: ObjectRef,
+    pub outputs: Vec<ObjectRef>,
     pub relation_ids: Vec<ObjectId>,
 }

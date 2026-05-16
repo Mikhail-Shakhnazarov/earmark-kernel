@@ -5,7 +5,9 @@ use earmark_core::{
 };
 use earmark_exec::{ExecutionEngine, ProviderRegistry, WorkflowRunRequest};
 use earmark_index::DerivedIndex;
-use earmark_store::{CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload};
+use earmark_store::{
+    GitCanonicalStore, ObjectStore, StoreScanner, StoredObject, StoredPayload, WorkspaceLayout,
+};
 use std::collections::BTreeMap;
 use tempfile::tempdir;
 
@@ -337,7 +339,7 @@ guards: []
 
     assert_eq!(outcome_a.record.status, earmark_core::RunStatus::Completed);
 
-    let objects = store.scan_objects().unwrap();
+    let objects = store.scan_objects().unwrap().scanned_objects;
     let handoffs = objects
         .iter()
         .filter(|o| o.envelope.kind == Kind::HandoffManifest)
@@ -372,7 +374,7 @@ guards: []
     assert_eq!(outcome_b.record.status, earmark_core::RunStatus::Completed);
 
     // Verify summary was created
-    let final_objects = store.scan_objects().unwrap();
+    let final_objects = store.scan_objects().unwrap().scanned_objects;
     let summary = final_objects
         .iter()
         .find(|o| o.envelope.class.as_deref() == Some("summary"))

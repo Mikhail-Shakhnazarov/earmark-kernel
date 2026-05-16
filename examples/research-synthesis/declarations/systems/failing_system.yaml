@@ -1,3 +1,4 @@
+schema: earmark.path_system_manifest.v1
 system_id: sys_research_synthesis_failing
 namespace: examples.research
 title: Research Synthesis Demo (Failing Provider)

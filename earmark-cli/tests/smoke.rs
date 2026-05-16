@@ -84,7 +84,7 @@ fn test_quickstart_smoke_path() {
         .clone();
 
     let parsed_query: Value = serde_json::from_slice(&query_output).unwrap();
-    let items = parsed_query["data"]
+    let items = parsed_query["data"]["results"]
         .as_array()
         .expect("query data not an array");
     assert!(!items.is_empty());

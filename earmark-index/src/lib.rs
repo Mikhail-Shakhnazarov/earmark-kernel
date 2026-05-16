@@ -7,7 +7,7 @@ use earmark_core::{
     InstructionPayload, Kind, ObjectId, ProviderProfile, RelationPayload, StandingPolicy,
     SystemDefinition, TokenId, UndoRecord, VersionRef, WorkflowDefinition,
 };
-use earmark_store::CanonicalStore;
+use earmark_store::{CanonicalStore, SkippedEntry};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -24,6 +24,8 @@ pub struct ObjectSummary {
     pub namespace: Option<String>,
     #[serde(default)]
     pub standing: BTreeMap<String, String>,
+    #[serde(default)]
+    pub headers: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -45,6 +47,16 @@ pub struct ActiveSystemRecord {
     pub activated_at: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IndexDirtyMarker {
+    pub schema_version: String,
+    pub reason: String,
+    pub timestamp: chrono::DateTime<chrono::Utc>,
+    pub operation: String,
+    pub object_ids: Vec<String>,
+    pub version_ids: Vec<String>,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct QueryFilter {
     pub class: Option<String>,
@@ -59,6 +71,12 @@ pub struct QueryFilter {
 pub struct DerivedIndex {
     conn: Connection,
     path: PathBuf,
+}
+
+#[derive(Debug, Clone)]
+pub struct IndexRebuildReport {
+    pub indexed_objects: usize,
+    pub skipped_entries: Vec<SkippedEntry>,
 }
 
 impl DerivedIndex {
@@ -93,6 +111,35 @@ impl DerivedIndex {
         &self.path
     }
 
+    fn dirty_marker_path(&self) -> PathBuf {
+        self.path.with_file_name("index_dirty.json")
+    }
+
+    pub fn mark_dirty(&self, marker: IndexDirtyMarker) -> Result<(), IndexError> {
+        let path = self.dirty_marker_path();
+        let json = serde_json::to_string_pretty(&marker)?;
+        std::fs::write(path, json)?;
+        Ok(())
+    }
+
+    pub fn clear_dirty(&self) -> Result<(), IndexError> {
+        let path = self.dirty_marker_path();
+        if path.exists() {
+            std::fs::remove_file(path)?;
+        }
+        Ok(())
+    }
+
+    pub fn dirty_status(&self) -> Result<Option<IndexDirtyMarker>, IndexError> {
+        let path = self.dirty_marker_path();
+        if !path.exists() {
+            return Ok(None);
+        }
+        let json = std::fs::read_to_string(path)?;
+        let marker = serde_json::from_str(&json)?;
+        Ok(Some(marker))
+    }
+
     pub fn is_run_undone(&self, run_id: &str) -> Result<Option<String>, IndexError> {
         let mut stmt = self
             .conn
@@ -119,7 +166,8 @@ impl DerivedIndex {
                 system_id TEXT,
                 namespace TEXT,
                 declaration_identity TEXT,
-                searchable_text TEXT
+                searchable_text TEXT,
+                headers TEXT
             );
 
             CREATE TABLE IF NOT EXISTS heads (
@@ -196,6 +244,16 @@ impl DerivedIndex {
                 _ => return Err(err.into()),
             }
         }
+        if let Err(err) = self
+            .conn
+            .execute("ALTER TABLE objects ADD COLUMN headers TEXT", [])
+        {
+            match err {
+                rusqlite::Error::SqliteFailure(_, Some(msg))
+                    if msg.contains("duplicate column name") => {}
+                _ => return Err(err.into()),
+            }
+        }
         self.conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_objects_kind_declaration_identity ON objects(kind, declaration_identity, updated_at)",
             [],
@@ -238,7 +296,10 @@ impl DerivedIndex {
         Ok(())
     }
 
-    pub fn rebuild_from_store<S: CanonicalStore>(&self, store: &S) -> Result<(), IndexError> {
+    pub fn rebuild_from_store<S: CanonicalStore>(
+        &self,
+        store: &S,
+    ) -> Result<IndexRebuildReport, IndexError> {
         store.init_layout()?;
         self.conn.execute("DELETE FROM objects", [])?;
         self.conn.execute("DELETE FROM heads", [])?;
@@ -248,9 +309,11 @@ impl DerivedIndex {
         self.conn.execute("DELETE FROM undone_objects", [])?;
         self.conn.execute("DELETE FROM undone_relations", [])?;
 
-        let objects = store.scan_objects()?;
+        let diagnostics = store.scan_objects()?;
+        let indexed_objects = diagnostics.scanned_objects.len();
+        let skipped_entries = diagnostics.skipped_entries.clone();
         let mut seen = std::collections::BTreeSet::new();
-        for stored in objects {
+        for stored in diagnostics.scanned_objects {
             let envelope = stored.envelope;
             let payload = stored.payload;
             seen.insert(envelope.id.as_str().to_string());
@@ -416,8 +479,8 @@ impl DerivedIndex {
             self.conn.execute(
                 "INSERT OR REPLACE INTO objects (
                     version_id, object_id, kind, class, title, summary,
-                    payload_ref, created_at, updated_at, system_id, namespace, declaration_identity, searchable_text
-                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+                    payload_ref, created_at, updated_at, system_id, namespace, declaration_identity, searchable_text, headers
+                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
                 params![
                     version_id,
                     object_id,
@@ -432,6 +495,7 @@ impl DerivedIndex {
                     namespace,
                     declaration_identity,
                     searchable_text,
+                    serde_json::to_string(&envelope.headers).unwrap_or_default(),
                 ],
             )?;
 
@@ -457,7 +521,10 @@ impl DerivedIndex {
                 )?;
             }
         }
-        Ok(())
+        Ok(IndexRebuildReport {
+            indexed_objects,
+            skipped_entries,
+        })
     }
 
     pub fn upsert_head_object_from_store<S: CanonicalStore>(
@@ -629,8 +696,8 @@ impl DerivedIndex {
         self.conn.execute(
             "INSERT OR REPLACE INTO objects (
                 version_id, object_id, kind, class, title, summary,
-                payload_ref, created_at, updated_at, system_id, namespace, declaration_identity, searchable_text
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+                payload_ref, created_at, updated_at, system_id, namespace, declaration_identity, searchable_text, headers
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
             params![
                 envelope.version_id.as_str().to_string(),
                 envelope.id.as_str().to_string(),
@@ -645,6 +712,7 @@ impl DerivedIndex {
                 namespace,
                 declaration_identity,
                 searchable_text,
+                serde_json::to_string(&envelope.headers).unwrap_or_default(),
             ],
         )?;
         self.conn.execute(
@@ -673,7 +741,7 @@ impl DerivedIndex {
 
     pub fn query_objects(&self, filter: &QueryFilter) -> Result<Vec<ObjectSummary>, IndexError> {
         let mut sql = String::from(
-            "SELECT o.object_id, o.version_id, o.kind, o.class, o.title, o.summary, o.system_id, o.namespace FROM objects o JOIN heads h ON o.object_id = h.object_id AND o.version_id = h.version_id WHERE 1=1",
+            "SELECT o.object_id, o.version_id, o.kind, o.class, o.title, o.summary, o.system_id, o.namespace, o.headers FROM objects o JOIN heads h ON o.object_id = h.object_id AND o.version_id = h.version_id WHERE 1=1",
         );
         let mut values: Vec<String> = Vec::new();
 
@@ -730,6 +798,7 @@ impl DerivedIndex {
                     system_id: row.get(6)?,
                     namespace: row.get(7)?,
                     standing: BTreeMap::new(),
+                    headers: serde_json::from_str(&row.get::<_, String>(8)?).unwrap_or_default(),
                 })
             })?;
             rows.collect::<Result<Vec<_>, _>>()?
@@ -953,6 +1022,26 @@ impl DerivedIndex {
         )))
     }
 
+    pub fn get_active_systems(&self) -> Result<Vec<ActiveSystemRecord>, IndexError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT namespace, system_id, object_id, version_id, activated_at FROM active_systems",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(ActiveSystemRecord {
+                namespace: row.get(0)?,
+                system_id: row.get(1)?,
+                object_id: row.get(2)?,
+                version_id: row.get(3)?,
+                activated_at: row.get(4)?,
+            })
+        })?;
+        let mut results = Vec::new();
+        for row in rows {
+            results.push(row?);
+        }
+        Ok(results)
+    }
+
     pub fn counts(&self) -> Result<(u64, u64), IndexError> {
         let objects: u64 = self
             .conn
@@ -1049,4 +1138,6 @@ pub enum IndexError {
     Conflict(String),
     #[error("missing index: {0}")]
     MissingIndex(String),
+    #[error("serde error: {0}")]
+    Serde(#[from] serde_json::Error),
 }

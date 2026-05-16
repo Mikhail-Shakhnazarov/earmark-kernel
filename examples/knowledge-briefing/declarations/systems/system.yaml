@@ -1,3 +1,4 @@
+schema: earmark.path_system_manifest.v1
 system_id: sys_knowledge_briefing
 namespace: examples.knowledge
 title: Knowledge Briefing Demo

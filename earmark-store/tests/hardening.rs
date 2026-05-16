@@ -1,6 +1,7 @@
 use earmark_core::{Kind, Provenance, Standing};
 use earmark_store::{
-    BatchWrite, CanonicalStore, GitCanonicalStore, StoreError, StoredObject, StoredPayload,
+    BatchWrite, GitCanonicalStore, ObjectStore, StoreError, StoreScanner, StoredObject,
+    StoredPayload, WorkspaceLayout,
 };
 use std::collections::BTreeMap;
 use std::fs;
@@ -65,12 +66,13 @@ fn test_payload_integrity_verification() {
         other => panic!("Expected PayloadIntegrityMismatch, got {:?}", other),
     }
 
-    // Scan should also fail
-    let scan_result = store.scan_objects();
-    match scan_result {
-        Err(StoreError::PayloadIntegrityMismatch { .. }) => {}
-        other => panic!("Expected PayloadIntegrityMismatch in scan, got {:?}", other),
-    }
+    // Scan should surface corruption structurally in skipped entries
+    let scan_result = store.scan_objects().unwrap();
+    assert!(scan_result.scanned_objects.is_empty());
+    assert_eq!(scan_result.skipped_entries.len(), 1);
+    assert!(scan_result.skipped_entries[0]
+        .reason
+        .contains("payload integrity mismatch"));
 }
 
 #[test]
