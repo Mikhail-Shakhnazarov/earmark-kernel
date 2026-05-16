@@ -2,7 +2,8 @@ use crate::app::common::{CliError, CommandContext};
 use crate::app::*;
 use crate::cli::*;
 use earmark_core::Kind;
-use earmark_store::{ObjectStore, StoreScanner, WorkspaceLayout};
+use earmark_index::DerivedIndex;
+use earmark_store::{ObjectStore, StoreScanner, WorkspaceLayout, WorkspaceLayoutStatus};
 use serde_json::json;
 use std::collections::BTreeMap;
 use std::fs;
@@ -171,10 +172,7 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
                 let version_ref =
                     register_declaration_file(store, index.as_ref(), args.kind, &args.path, None)?;
                 if matches!(args.kind, DeclarationKind::System) {
-                    index
-                        .as_ref()
-                        .expect("index available for workspace command")
-                        .rebuild_from_store(store)?;
+                    require_index(index)?.rebuild_from_store(store)?;
                 }
                 emit(
                     as_json,
@@ -521,10 +519,7 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
         },
         Commands::Completions { .. } => {}
         Commands::Status => {
-            let (object_count, active_system_count) = index
-                .as_ref()
-                .expect("index available for workspace command")
-                .counts()?;
+            let (object_count, active_system_count) = require_index(index)?.counts()?;
             let assignments = list_assignments(store)?;
             let change_sets = list_change_sets(store)?;
             let handoffs = list_handoffs(store)?;
@@ -535,10 +530,7 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
                 let key = format!("{:?}", assignment.status).to_lowercase();
                 *assignments_by_status.entry(key).or_insert(0) += 1;
             }
-            let active_systems = index
-                .as_ref()
-                .expect("index available for workspace command")
-                .get_active_systems()?;
+            let active_systems = require_index(index)?.get_active_systems()?;
             let latest_run = runs.last().map(|r| r.run_id.clone());
 
             emit(
@@ -665,7 +657,7 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
         },
         Commands::StandingRequest(command) => match command.action {
             StandingRequestAction::List { status, target } => {
-                let index = index.as_ref().unwrap();
+                let index = require_index(index)?;
                 let mut requests = Vec::new();
                 let objects = index.get_objects_by_kind(Kind::Object)?;
                 for obj_ref in objects {
@@ -695,7 +687,7 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
                 emit(as_json, serde_json::to_value(requests)?);
             }
             StandingRequestAction::Show { request_id } => {
-                let index = index.as_ref().unwrap();
+                let index = require_index(index)?;
                 let id = earmark_core::ObjectId::parse(&request_id)
                     .map_err(|e| CliError::argument(e.to_string()))?;
                 let head_ref = index
@@ -714,7 +706,7 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
                 );
             }
             StandingRequestAction::Approve { request_id, reason } => {
-                let index = index.as_ref().unwrap();
+                let index = require_index(index)?;
                 let id = earmark_core::ObjectId::parse(&request_id)
                     .map_err(|e| CliError::argument(e.to_string()))?;
                 let head_ref = index
@@ -733,7 +725,7 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
                 );
             }
             StandingRequestAction::Reject { request_id, reason } => {
-                let index = index.as_ref().unwrap();
+                let index = require_index(index)?;
                 let id = earmark_core::ObjectId::parse(&request_id)
                     .map_err(|e| CliError::argument(e.to_string()))?;
                 let head_ref = index
@@ -756,7 +748,7 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
                 policy,
                 reason,
             } => {
-                let index = index.as_ref().unwrap();
+                let index = require_index(index)?;
                 let id = earmark_core::ObjectId::parse(&request_id)
                     .map_err(|e| CliError::argument(e.to_string()))?;
                 let head_ref = index
@@ -788,4 +780,24 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
         },
     }
     Ok(())
+}
+
+fn require_index(index: &Option<DerivedIndex>) -> Result<&DerivedIndex, CliError> {
+    index.as_ref().ok_or_else(|| {
+        CliError::WorkspaceNotInitialized {
+            status: WorkspaceLayoutStatus {
+                root_exists: false,
+                git_exists: false,
+                manifest_exists: false,
+                canonical_dir_exists: false,
+                objects_dir_exists: false,
+                payloads_dir_exists: false,
+                heads_dir_exists: false,
+                derived_dir_exists: false,
+                work_surfaces_dir_exists: false,
+                declarations_dir_exists: false,
+                corpus_dir_exists: false,
+            },
+        }
+    })
 }
