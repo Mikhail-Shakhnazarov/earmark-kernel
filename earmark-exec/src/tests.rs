@@ -915,6 +915,143 @@ fn test_resolved_endpoint_identity_does_not_leak_raw_env_value() {
 }
 
 #[test]
+fn test_resolved_endpoint_identity_redacts_env_name_when_unset() {
+    let profile = ProviderProfile {
+        name: "redact_unset".to_string(),
+        version: "1".to_string(),
+        description: None,
+        provider: "test_provider".to_string(),
+        model: "test-model".to_string(),
+        endpoint_env: Some("EARMARK_TEST_REDACT_UNSET_API_KEY".to_string()),
+        auth_env: None,
+        budget: earmark_core::ProviderBudget::default(),
+        allowed_operations: vec!["transform".to_string()],
+        exposure: earmark_core::ProviderExposure {
+            allow_prose_objects: true,
+            allow_structured_declarations: true,
+            allow_work_surface_only: false,
+            allow_export_requests: false,
+        },
+        response_contract: ProviderResponseContract {
+            format: ProviderResponseFormat::Markdown,
+            must_return_candidate_only: true,
+            must_include_lineage: false,
+        },
+        http: None,
+    };
+    let identity = crate::provider::resolved_endpoint_identity(&profile);
+    assert!(
+        !identity.contains("EARMARK_TEST_REDACT_UNSET_API_KEY"),
+        "env name leaked when unset: {}",
+        identity
+    );
+    assert!(
+        identity.contains("[REDACTED_ENV]"),
+        "env name should be redacted when unset: {}",
+        identity
+    );
+}
+
+#[test]
+fn test_resolved_endpoint_identity_redacts_env_name_when_empty() {
+    std::env::set_var("EARMARK_TEST_REDACT_EMPTY_API_KEY", "");
+    let profile = ProviderProfile {
+        name: "redact_empty".to_string(),
+        version: "1".to_string(),
+        description: None,
+        provider: "test_provider".to_string(),
+        model: "test-model".to_string(),
+        endpoint_env: Some("EARMARK_TEST_REDACT_EMPTY_API_KEY".to_string()),
+        auth_env: None,
+        budget: earmark_core::ProviderBudget::default(),
+        allowed_operations: vec!["transform".to_string()],
+        exposure: earmark_core::ProviderExposure {
+            allow_prose_objects: true,
+            allow_structured_declarations: true,
+            allow_work_surface_only: false,
+            allow_export_requests: false,
+        },
+        response_contract: ProviderResponseContract {
+            format: ProviderResponseFormat::Markdown,
+            must_return_candidate_only: true,
+            must_include_lineage: false,
+        },
+        http: None,
+    };
+    let identity = crate::provider::resolved_endpoint_identity(&profile);
+    assert!(
+        !identity.contains("EARMARK_TEST_REDACT_EMPTY_API_KEY"),
+        "env name leaked when empty: {}",
+        identity
+    );
+    assert!(
+        identity.contains("[REDACTED_ENV]"),
+        "env name should be redacted when empty: {}",
+        identity
+    );
+}
+
+#[test]
+fn test_provider_circuit_key_redacts_sensitive_env_name() {
+    let request = ProviderRequest {
+        request_id: "req_circuit_redact".to_string(),
+        run_id: "run_circuit_redact".to_string(),
+        work_packet: ObjectRef::new(
+            ObjectId::new(),
+            VersionId::new(),
+            Kind::WorkPacket,
+            None,
+        ),
+        provider_profile: VersionRef::new(ObjectId::new(), VersionId::new()),
+        instruction_text: "do work".to_string(),
+        context_text: None,
+        input_text: "do work".to_string(),
+        work_surface_manifest: None,
+        inputs: vec![],
+        response_contract: ProviderResponseContract {
+            format: ProviderResponseFormat::Json,
+            must_return_candidate_only: true,
+            must_include_lineage: false,
+        },
+        issued_at: chrono::Utc::now(),
+    };
+    let profile = ProviderProfile {
+        name: "circuit_redact".to_string(),
+        version: "1".to_string(),
+        description: None,
+        provider: "test_provider".to_string(),
+        model: "test-model".to_string(),
+        endpoint_env: Some("EARMARK_TEST_CIRCUIT_KEY_SECRET".to_string()),
+        auth_env: None,
+        budget: earmark_core::ProviderBudget::default(),
+        allowed_operations: vec!["transform".to_string()],
+        exposure: earmark_core::ProviderExposure {
+            allow_prose_objects: true,
+            allow_structured_declarations: true,
+            allow_work_surface_only: false,
+            allow_export_requests: false,
+        },
+        response_contract: ProviderResponseContract {
+            format: ProviderResponseFormat::Markdown,
+            must_return_candidate_only: true,
+            must_include_lineage: false,
+        },
+        http: None,
+    };
+    let key = crate::provider::provider_circuit_key(&request, &profile);
+    assert!(
+        !key.contains("EARMARK_TEST_CIRCUIT_KEY_SECRET"),
+        "env name leaked in circuit key: {}",
+        key
+    );
+    assert!(
+        key.contains("[REDACTED_ENV]"),
+        "env name should be redacted in circuit key: {}",
+        key
+    );
+}
+
+#[test]
 fn test_fail_closed_blocked_domain_rejects_before_http() {
     // Test that blocked domains fail immediately without making HTTP requests
     // This validates fail-closed behavior
