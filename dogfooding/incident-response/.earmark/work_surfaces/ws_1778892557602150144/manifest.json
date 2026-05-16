@@ -1,0 +1,84 @@
+{
+  "surface_id": "ws_1778892557602150144",
+  "compiled_context": {
+    "id": "obj_7b60269f227748ef877f3b7c5881df82",
+    "version_id": "ver_943a942a268b4645a41066fb5b4dde31"
+  },
+  "work_packet": null,
+  "generated_at": "2026-05-16T00:49:17.602210849Z",
+  "objects": [
+    {
+      "object": {
+        "id": "obj_f893603e331044a4a6b416eb1a052449",
+        "version_id": "ver_754fbddbfef349aaaace5f7d0ad2fa01",
+        "kind": "object",
+        "class": "incident"
+      },
+      "title": null,
+      "path": "/home/m/GITHUB/earmark-workspace/dogfooding/incident-response/.earmark/canonical/objects/obj_f893603e331044a4a6b416eb1a052449/ver_754fbddbfef349aaaace5f7d0ad2fa01",
+      "excerpt_range": null,
+      "lineage": []
+    },
+    {
+      "object": {
+        "id": "obj_2215df09837b42949edf970e5e6fbb0f",
+        "version_id": "ver_ad92c8e613844ea3921a326d66a36650",
+        "kind": "object",
+        "class": "action"
+      },
+      "title": "analyze_incident candidate (action)",
+      "path": "/home/m/GITHUB/earmark-workspace/dogfooding/incident-response/.earmark/canonical/objects/obj_2215df09837b42949edf970e5e6fbb0f/ver_ad92c8e613844ea3921a326d66a36650",
+      "excerpt_range": null,
+      "lineage": [
+        {
+          "id": "obj_f893603e331044a4a6b416eb1a052449",
+          "version_id": "ver_754fbddbfef349aaaace5f7d0ad2fa01",
+          "kind": "object",
+          "class": "incident"
+        },
+        {
+          "id": "obj_33503be7f7b341ca9d930b3c53621ec3",
+          "version_id": "ver_d0d0550ea2f1480c9af688c7c6273384",
+          "kind": "instruction",
+          "class": null
+        }
+      ]
+    },
+    {
+      "object": {
+        "id": "obj_7d2af2fb97d34d4b960d0d76eef86e05",
+        "version_id": "ver_587093688ec6406098382c8663a4b326",
+        "kind": "object",
+        "class": "observation"
+      },
+      "title": "analyze_incident candidate (observation)",
+      "path": "/home/m/GITHUB/earmark-workspace/dogfooding/incident-response/.earmark/canonical/objects/obj_7d2af2fb97d34d4b960d0d76eef86e05/ver_587093688ec6406098382c8663a4b326",
+      "excerpt_range": null,
+      "lineage": [
+        {
+          "id": "obj_f893603e331044a4a6b416eb1a052449",
+          "version_id": "ver_754fbddbfef349aaaace5f7d0ad2fa01",
+          "kind": "object",
+          "class": "incident"
+        },
+        {
+          "id": "obj_33503be7f7b341ca9d930b3c53621ec3",
+          "version_id": "ver_d0d0550ea2f1480c9af688c7c6273384",
+          "kind": "instruction",
+          "class": null
+        }
+      ]
+    }
+  ],
+  "boundary_relations": [],
+  "constraints": {
+    "expansion_object_filter": "inherit",
+    "group_by_count": 0,
+    "include_boundary_relations": false,
+    "include_constraints": true,
+    "include_lineage": true,
+    "include_provenance": true,
+    "render_mode": "markdown"
+  },
+  "warnings": []
+}

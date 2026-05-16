@@ -10,7 +10,7 @@ output_classes:
 execution_policy: single
 trace_policy: full
 register: ""
-provider_profile: null
+provider_profile: ../profiles/mock_json.yaml
 ---
 
 # Instruction
