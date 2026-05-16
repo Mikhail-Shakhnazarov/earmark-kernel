@@ -10,7 +10,7 @@ operations:
     kind: transform
     instruction: ../instructions/analyze_incident.md
     input_contracts: ["incident"]
-    output_contracts: ["observation", "action"]
+    output_contracts: ["observation"]
 edges:
   - from: prepare
     to: analyze
