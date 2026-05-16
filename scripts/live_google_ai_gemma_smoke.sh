@@ -233,6 +233,30 @@ echo "$RUN_OUTPUT" | python3 -m json.tool 2>/dev/null || echo "$RUN_OUTPUT" | re
 RUN_ID=$(echo "$RUN_OUTPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('data',{}).get('run_id','unknown'))" 2>/dev/null || echo "unknown")
 echo "Run ID: $RUN_ID"
 
+FIRST_HANDOFF_ID=$(echo "$RUN_OUTPUT" | python3 -c "
+import sys, json
+data = json.load(sys.stdin).get('data', {})
+handoffs = data.get('created_handoffs', [])
+print(handoffs[0] if handoffs else '')
+" 2>/dev/null || echo "")
+
+FIRST_OUTPUT_COUNT=$(echo "$RUN_OUTPUT" | python3 -c "
+import sys, json
+print(json.load(sys.stdin).get('data', {}).get('output_count', 0))
+" 2>/dev/null || echo "0")
+
+if [[ -n "$FIRST_HANDOFF_ID" && "$FIRST_OUTPUT_COUNT" -eq 0 ]]; then
+  echo ""
+  echo "Continuing staged workflow via handoff: $FIRST_HANDOFF_ID"
+  track_call
+  RUN_OUTPUT_2=$(em --json workflow run google_ai_smoke \
+    --system-id sys_google_ai_smoke \
+    --handoff "$FIRST_HANDOFF_ID")
+
+  echo "Workflow continuation output:"
+  echo "$RUN_OUTPUT_2" | python3 -m json.tool 2>/dev/null || echo "$RUN_OUTPUT_2" | redact_key
+fi
+
 echo ""
 echo "================================================"
 echo "Phase 4: Verify Output"
@@ -249,8 +273,8 @@ echo "$QUERY_OUTPUT" | python3 -m json.tool 2>/dev/null || echo "$QUERY_OUTPUT" 
 OUTPUT_COUNT=$(echo "$QUERY_OUTPUT" | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
-items = data.get('data', {}).get('items', data.get('items', []))
-print(len(items))
+results = data.get('data', {}).get('results', data.get('results', []))
+print(len(results))
 " 2>/dev/null || echo "0")
 
 OUTPUT_BODY=""
@@ -259,9 +283,9 @@ if [[ "$OUTPUT_COUNT" -gt 0 ]]; then
   OUTPUT_BODY=$(echo "$QUERY_OUTPUT" | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
-items = data.get('data', {}).get('items', data.get('items', []))
-if items:
-    body = items[0].get('payload', items[0].get('body', ''))
+results = data.get('data', {}).get('results', data.get('results', []))
+if results:
+    body = results[0].get('summary', '')
     print(body)
 " 2>/dev/null || echo "")
   echo "Output body: $OUTPUT_BODY"
