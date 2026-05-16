@@ -6,33 +6,25 @@ operations:
     kind: compile_context
     input_contracts: [source_note]
     output_contracts: [source_notes_for_extraction]
-    compiled_context:
-      id: source_notes_for_extraction
-      version_id: latest
+    compiled_context: "../compiled_contexts/source_notes_for_extraction.yaml"
 
   - id: extract_findings
     kind: transform
-    input_contracts: [source_notes_for_extraction]
+    input_contracts: [work_packet]
     output_contracts: [finding]
-    instruction:
-      id: source_to_finding
-      version_id: latest
+    instruction: "../instructions/source_to_finding.md"
 
   - id: group_findings
     kind: compile_context
     input_contracts: [finding]
     output_contracts: [findings_for_summary]
-    compiled_context:
-      id: findings_for_summary
-      version_id: latest
+    compiled_context: "../compiled_contexts/findings_for_summary.yaml"
 
   - id: synthesize_summary
     kind: transform
-    input_contracts: [findings_for_summary]
+    input_contracts: [work_packet]
     output_contracts: [summary]
-    instruction:
-      id: finding_to_summary
-      version_id: latest
+    instruction: "../instructions/finding_to_summary.md"
 
 edges:
   - from: extract_from_all

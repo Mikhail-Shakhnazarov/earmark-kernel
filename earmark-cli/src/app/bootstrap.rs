@@ -6,7 +6,7 @@ use crate::cli::Cli;
 use crate::config::{load_config, resolve_json, resolve_root};
 use earmark_exec::default_provider_registry;
 use earmark_index::DerivedIndex;
-use earmark_store::{CanonicalStore, GitCanonicalStore};
+use earmark_store::{GitCanonicalStore, WorkspaceLayout};
 
 pub(crate) fn bootstrap(cli: &Cli) -> Result<BootstrappedServices, CliError> {
     // 1. Load config (handles CLI flag, ENV, and default paths)
@@ -23,11 +23,13 @@ pub(crate) fn bootstrap(cli: &Cli) -> Result<BootstrappedServices, CliError> {
         WorkspaceAccessMode::None => {}
         WorkspaceAccessMode::Init | WorkspaceAccessMode::Write => store.init_layout()?,
         WorkspaceAccessMode::ReadOnly => require_initialized_workspace(&store)?,
+        WorkspaceAccessMode::RepairIndex => require_initialized_workspace(&store)?,
     }
 
     let index = match mode {
         WorkspaceAccessMode::None => None,
         WorkspaceAccessMode::ReadOnly => Some(DerivedIndex::open_existing(&root)?),
+        WorkspaceAccessMode::RepairIndex => Some(DerivedIndex::open(&root)?),
         WorkspaceAccessMode::Init | WorkspaceAccessMode::Write => Some(DerivedIndex::open(&root)?),
     };
 

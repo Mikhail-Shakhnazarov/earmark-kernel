@@ -398,7 +398,7 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
         &self,
         assignment_id: &TransitionAssignmentId,
     ) -> Result<(StoredObject, TransitionAssignment), RuntimeToolError> {
-        for obj in self.store.scan_objects()? {
+        for obj in self.store.scan_objects()?.scanned_objects {
             if obj.envelope.kind == Kind::TransitionAssignment {
                 if let Ok(assignment) =
                     serde_json::from_slice::<TransitionAssignment>(&obj.payload.bytes)
@@ -422,7 +422,7 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
         &self,
         handoff_manifest_id: earmark_core::HandoffManifestId,
     ) -> Result<earmark_core::HandoffManifest, RuntimeToolError> {
-        for obj in self.store.scan_objects()? {
+        for obj in self.store.scan_objects()?.scanned_objects {
             if obj.envelope.kind == Kind::HandoffManifest {
                 if let Ok(manifest) =
                     serde_json::from_slice::<earmark_core::HandoffManifest>(&obj.payload.bytes)

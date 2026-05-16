@@ -1,9 +1,10 @@
 use crate::error::{ProviderFailure, ProviderFailureKind};
-use crate::helpers::uuid_like;
+use crate::helpers::{estimate_tokens_approx, uuid_like};
 use chrono::Utc;
 use earmark_core::{
     InstructionPayload, ProviderProfile, ProviderRecord, ProviderRequest, ProviderResponse,
-    ProviderResponseContract, ScalarValue, VersionRef,
+    ProviderResponseContract, ProviderResponseFormat, ProviderResponseStatus, ScalarValue,
+    VersionRef,
 };
 use std::collections::{BTreeMap, HashMap};
 use std::env;
@@ -44,7 +45,9 @@ pub fn resolve_provider_profile(
         return ProviderMode::Delegated(reference.clone());
     }
     if let Some(reference) = instruction.and_then(|i| i.provider_profile.as_ref()) {
-        return ProviderMode::Delegated(reference.clone());
+        if let Some(vref) = reference.to_canonical() {
+            return ProviderMode::Delegated(vref);
+        }
     }
     if let Some(reference) = system_definition_default {
         return ProviderMode::Delegated(reference.clone());
@@ -82,25 +85,6 @@ pub trait ProviderService: Send + Sync {
     ) -> Result<ProviderExecutionOutcome, ProviderFailure>;
 }
 
-pub trait AsyncProviderAdapter: Send + Sync {
-    fn provider_key(&self) -> &'static str;
-    fn provide_blocking_bridge(
-        &self,
-        request: ProviderRequest,
-        profile: &ProviderProfile,
-        transition_operation: &str,
-    ) -> Result<ProviderResponse, ProviderFailure>;
-}
-
-pub trait AsyncProviderService: Send + Sync {
-    fn provide_blocking_bridge(
-        &self,
-        profile: &ProviderProfile,
-        request: ProviderRequest,
-        transition_operation: &str,
-    ) -> Result<ProviderExecutionOutcome, ProviderFailure>;
-}
-
 #[derive(Default)]
 pub struct ProviderRegistry {
     pub adapters: HashMap<String, Arc<dyn ProviderAdapter>>,
@@ -108,17 +92,6 @@ pub struct ProviderRegistry {
 
 impl ProviderService for ProviderRegistry {
     fn provide(
-        &self,
-        profile: &ProviderProfile,
-        request: ProviderRequest,
-        transition_operation: &str,
-    ) -> Result<ProviderExecutionOutcome, ProviderFailure> {
-        provide_with_registry(self, profile, request, transition_operation)
-    }
-}
-
-impl AsyncProviderService for ProviderRegistry {
-    fn provide_blocking_bridge(
         &self,
         profile: &ProviderProfile,
         request: ProviderRequest,
@@ -264,14 +237,23 @@ impl ProviderAdapter for MockAdapter {
                     .to_string(),
             ),
         );
+        let candidate_payload = if profile.model == "json" {
+            r#"{"observation": {"id": "obs1", "detail": "Incident observation"}, "action": {"id": "act1", "description": "Remediation action"}}"#.to_string()
+        } else {
+            "[SYNTHETIC MOCK OUTPUT] Fixture response for extraction/synthesis tests. Federated graphs provide agile ownership but introduce heterogeneity costs.".to_string()
+        };
+
         Ok(ProviderResponse {
             request_id: request.request_id,
             provider: "mock".to_string(),
-            model: "echo".to_string(),
-            status: "completed".to_string(),
-            candidate_payload: "[SYNTHETIC MOCK OUTPUT] Fixture response for extraction/synthesis tests. Federated graphs provide agile ownership but introduce heterogeneity costs.".to_string(),
+            model: profile.model.clone(),
+            status: ProviderResponseStatus::Completed,
+            candidate_payload,
             metadata,
-            advisory_warnings: vec![],
+            advisory_warnings: vec![
+                "Synthetic mock provider output; do not treat as model-derived evidence."
+                    .to_string(),
+            ],
             usage: None,
             received_at: Utc::now(),
         })
@@ -339,15 +321,12 @@ pub(crate) fn validate_provider_invocation(
         ));
     }
 
-    // 3. Budgets (Advisory)
-    if profile.budget.max_input_tokens.is_some() {
-        warnings.push("Advisory: max_input_tokens budget is not yet enforced.".to_string());
-    }
-    if profile.budget.max_output_tokens.is_some() {
-        warnings.push("Advisory: max_output_tokens budget is not yet enforced.".to_string());
-    }
-    if profile.budget.max_cost_usd.is_some() {
-        warnings.push("Advisory: max_cost_usd budget is not yet enforced.".to_string());
+    // 3. Budget/timeout posture
+    if let Some(max_latency_ms) = profile.budget.max_latency_ms {
+        warnings.push(format!(
+            "Advisory: max_latency_ms is configured to {} ms; timeout is adapter-level only and does not provide runtime cancellation guarantees.",
+            max_latency_ms
+        ));
     }
 
     // 4. Response Contract (Advisory)
@@ -370,7 +349,7 @@ pub struct ProviderExecutionOutcome {
 }
 
 #[derive(Default, Clone, Copy)]
-pub(crate) struct CircuitState {
+pub struct CircuitState {
     pub consecutive_failures: u32,
     pub open_until_epoch_ms: i64,
 }
@@ -378,6 +357,13 @@ pub(crate) struct CircuitState {
 pub(crate) fn provider_circuit_registry() -> &'static Mutex<HashMap<String, CircuitState>> {
     static REGISTRY: OnceLock<Mutex<HashMap<String, CircuitState>>> = OnceLock::new();
     REGISTRY.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+#[cfg(test)]
+pub(crate) fn reset_provider_circuit_registry_for_tests() {
+    if let Ok(mut lock) = provider_circuit_registry().lock() {
+        lock.clear();
+    }
 }
 
 pub(crate) fn resolved_endpoint_identity(profile: &ProviderProfile) -> String {
@@ -437,6 +423,25 @@ pub fn provide_with_registry_and_sleeper(
     transition_operation: &str,
     sleeper: &dyn RetrySleeper,
 ) -> Result<ProviderExecutionOutcome, ProviderFailure> {
+    let budget_meter_text = format!(
+        "{}\n{}\n{}",
+        request.instruction_text,
+        request.context_text.clone().unwrap_or_default(),
+        request.input_text
+    );
+    if let Some(max_input_tokens) = profile.budget.max_input_tokens {
+        let estimated_input_tokens = estimate_tokens_approx(&budget_meter_text);
+        if estimated_input_tokens > max_input_tokens {
+            return Err(ProviderFailure::new(
+                ProviderFailureKind::BudgetExceeded,
+                format!(
+                    "Estimated input tokens {} exceed max_input_tokens {}",
+                    estimated_input_tokens, max_input_tokens
+                ),
+            ));
+        }
+    }
+
     let circuit_key = provider_circuit_key(&request, profile);
     {
         let lock = provider_circuit_registry().lock().map_err(|_| {
@@ -478,6 +483,39 @@ pub fn provide_with_registry_and_sleeper(
             Ok(resp) => {
                 match validate_provider_response(&resp, &effective_profile.response_contract) {
                     Ok(()) => {
+                        if let Some(max_output_tokens) = effective_profile.budget.max_output_tokens
+                        {
+                            let estimated_output_tokens =
+                                estimate_tokens_approx(&resp.candidate_payload);
+                            if estimated_output_tokens > max_output_tokens {
+                                last_error = Some(ProviderFailure::new(
+                                    ProviderFailureKind::BudgetExceeded,
+                                    format!(
+                                        "Estimated output tokens {} exceed max_output_tokens {}",
+                                        estimated_output_tokens, max_output_tokens
+                                    ),
+                                ));
+                                break;
+                            }
+                        }
+
+                        if let Some(max_cost_usd) = effective_profile.budget.max_cost_usd {
+                            if let Some(usage) = &resp.usage {
+                                if let Some(estimated_cost_usd) = usage.estimated_cost_usd {
+                                    if estimated_cost_usd > max_cost_usd {
+                                        last_error = Some(ProviderFailure::new(
+                                            ProviderFailureKind::BudgetExceeded,
+                                            format!(
+                                                "Estimated cost ${:.4} exceeds max_cost_usd ${:.4}",
+                                                estimated_cost_usd, max_cost_usd
+                                            ),
+                                        ));
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+
                         response = Some(resp);
                         break;
                     }
@@ -527,6 +565,24 @@ pub fn provide_with_registry_and_sleeper(
     // Merge advisory warnings
     let mut final_warnings = policy_decision.advisory_warnings;
     final_warnings.extend(response.advisory_warnings.clone());
+    if effective_profile.budget.max_latency_ms.is_some()
+        && !response.metadata.contains_key("latency_ms")
+    {
+        final_warnings.push(
+            "Advisory: provider response did not report measured latency_ms; timeout compliance cannot be confirmed from runtime metadata.".to_string(),
+        );
+    }
+    if effective_profile.budget.max_cost_usd.is_some()
+        && response
+            .usage
+            .as_ref()
+            .and_then(|usage| usage.estimated_cost_usd)
+            .is_none()
+    {
+        final_warnings.push(
+            "Advisory: max_cost_usd is configured but provider response did not report usage.estimated_cost_usd; cost budget cannot be enforced for this invocation.".to_string(),
+        );
+    }
 
     {
         let mut lock = provider_circuit_registry().lock().map_err(|_| {
@@ -556,7 +612,7 @@ pub(crate) fn validate_provider_response(
         ));
     }
 
-    if contract.format == "json" {
+    if contract.format == ProviderResponseFormat::Json {
         serde_json::from_str::<serde_json::Value>(&response.candidate_payload).map_err(
             |error| {
                 ProviderFailure::new(
@@ -625,7 +681,7 @@ pub fn provider_record_from_failure(
         provider_profile: request.provider_profile.clone(),
         provider: profile.provider.clone(),
         model: profile.model.clone(),
-        status: format!("{:?}", failure.kind).to_lowercase(),
+        status: ProviderResponseStatus::Failed,
         metadata,
         advisory_warnings: vec![],
         usage: None,

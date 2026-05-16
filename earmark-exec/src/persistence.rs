@@ -61,19 +61,17 @@ pub(crate) fn persist_change_set<S: CanonicalStore>(
         created_at: Utc::now(),
     };
 
-    let stored_change_set = StoredObject::new_with_id(
-        change_set_id.as_object_id(),
+    let stored_change_set = StoredObject::builder(
         Kind::ChangeSet,
-        Some("change_set".to_string()),
-        Standing::default(),
-        Provenance::direct_input("execution_engine"),
-        BTreeMap::from([(
-            "title".to_string(),
-            earmark_core::HeaderValue::String(format!("ChangeSet {}", change_set_id.as_str())),
-        )]),
         StoredPayload::from_json_bytes(serde_json::to_vec_pretty(&change_set)?),
-        vec![],
-    );
+    )
+    .id(change_set_id.as_object_id())
+    .class("change_set")
+    .provenance(Provenance::direct_input("execution_engine"))
+    .header("title", format!("ChangeSet {}", change_set_id.as_str()))
+    .build()
+    .map_err(ExecError::IncompleteExecution)?;
+
     write_object_and_index(store, index, &stored_change_set)?;
 
     // Link standing requests via Relations
@@ -83,21 +81,18 @@ pub(crate) fn persist_change_set<S: CanonicalStore>(
             continue;
         }
 
-        let stored_request = StoredObject::new(
+        let stored_request = StoredObject::builder(
             Kind::Object,
-            Some("standing_transition_request".to_string()),
-            Standing::default(),
-            Provenance::direct_input("execution_engine"),
-            BTreeMap::from([(
-                "title".to_string(),
-                earmark_core::HeaderValue::String(format!(
-                    "Standing Request for {}",
-                    request.target_object_id.as_str()
-                )),
-            )]),
             StoredPayload::from_json_bytes(serde_json::to_vec_pretty(request)?),
-            vec![],
-        );
+        )
+        .class("standing_transition_request")
+        .provenance(Provenance::direct_input("execution_engine"))
+        .header(
+            "title",
+            format!("Standing Request for {}", request.target_object_id.as_str()),
+        )
+        .build()
+        .map_err(ExecError::IncompleteExecution)?;
         let request_ref = write_object_and_index(store, index, &stored_request)?;
 
         let rel_payload = RelationPayload {
@@ -167,18 +162,15 @@ pub(crate) fn persist_transformation_failure<S: CanonicalStore>(
         created_at: Utc::now(),
     };
 
-    let stored = StoredObject::new(
+    let stored = StoredObject::builder(
         Kind::TransformationFailure,
-        Some("transformation_failure".to_string()),
-        Standing::default(),
-        Provenance::direct_input("execution_engine"),
-        BTreeMap::from([(
-            "title".to_string(),
-            earmark_core::HeaderValue::String(format!("Failure {}", assignment.transition_id)),
-        )]),
         StoredPayload::from_json_bytes(serde_json::to_vec_pretty(&failure)?),
-        vec![],
-    );
+    )
+    .class("transformation_failure")
+    .provenance(Provenance::direct_input("execution_engine"))
+    .header("title", format!("Failure {}", assignment.transition_id))
+    .build()
+    .map_err(ExecError::IncompleteExecution)?;
     let version_ref = write_object_and_index(store, index, &stored)?;
     let failure_ref = ObjectRef::new(
         version_ref.id.clone(),
@@ -211,62 +203,69 @@ pub(crate) fn create_local_transform_output<S: CanonicalStore>(
     store: &S,
     index: &DerivedIndex,
     instruction: &InstructionPayload,
-    output_class: &str,
+    output_classes: &[String],
     inputs: &[ObjectRef],
     instruction_ref: &earmark_core::VersionRef,
 ) -> Result<TransformArtifacts, ExecError> {
-    let body = format!(
-        "# Candidate Output\n\nInstruction: {}\n\nPurpose: {}\n\nInputs:\n{}\n",
-        instruction.name,
-        instruction.purpose,
-        inputs
-            .iter()
-            .map(|input| format!("- {}", input.id.as_str()))
-            .collect::<Vec<_>>()
-            .join("\n")
-    );
-    let stored = StoredObject::new(
-        Kind::Object,
-        Some(output_class.to_string()),
-        Standing::default(),
-        Provenance {
-            actor: "runtime".to_string(),
-            source_type: "local_transform".to_string(),
-            source_ref: None,
-            lineage: inputs
+    let mut outputs = Vec::new();
+    let mut all_relation_ids = Vec::new();
+
+    for class in output_classes {
+        let body = format!(
+            "# Candidate Output ({})\n\nInstruction: {}\n\nPurpose: {}\n\nInputs:\n{}\n",
+            class,
+            instruction.name,
+            instruction.purpose,
+            inputs
                 .iter()
-                .filter(|obj| obj.kind == Kind::Object)
-                .cloned()
-                .map(|object| earmark_core::LineageLink {
-                    rel: "derived_from".to_string(),
-                    object,
-                })
-                .chain(std::iter::once(earmark_core::LineageLink {
-                    rel: "used_instruction".to_string(),
-                    object: ObjectRef::new(
-                        instruction_ref.id.clone(),
-                        instruction_ref.version_id.clone(),
-                        Kind::Instruction,
-                        None,
-                    ),
-                }))
-                .collect(),
-            import_path: None,
-            captured_at: Utc::now(),
-        },
-        BTreeMap::from([(
-            "title".to_string(),
-            earmark_core::HeaderValue::String(format!("{} candidate", instruction.name)),
-        )]),
-        StoredPayload::from_markdown(body),
-        vec![],
-    );
-    write_object_and_index(store, index, &stored)?;
-    let relation_ids =
-        create_lineage_relations(store, index, &stored.object_ref(), inputs, instruction_ref)?;
+                .map(|input| format!("- {}", input.id.as_str()))
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
+        let stored = StoredObject::builder(Kind::Object, StoredPayload::from_markdown(body))
+            .class(class.to_string())
+            .provenance(Provenance {
+                actor: "runtime".to_string(),
+                source_type: "local_transform".to_string(),
+                source_ref: None,
+                lineage: inputs
+                    .iter()
+                    .filter(|obj| obj.kind == Kind::Object)
+                    .cloned()
+                    .map(|object| earmark_core::LineageLink {
+                        rel: "derived_from".to_string(),
+                        object,
+                    })
+                    .chain(std::iter::once(earmark_core::LineageLink {
+                        rel: "used_instruction".to_string(),
+                        object: ObjectRef::new(
+                            instruction_ref.id.clone(),
+                            instruction_ref.version_id.clone(),
+                            Kind::Instruction,
+                            None,
+                        ),
+                    }))
+                    .collect(),
+                import_path: None,
+                captured_at: Utc::now(),
+            })
+            .header(
+                "title",
+                format!("{} candidate ({})", instruction.name, class),
+            )
+            .build()
+            .map_err(ExecError::IncompleteExecution)?;
+        write_object_and_index(store, index, &stored)?;
+        let relation_ids =
+            create_lineage_relations(store, index, &stored.object_ref(), inputs, instruction_ref)?;
+
+        outputs.push(stored.object_ref());
+        all_relation_ids.extend(relation_ids);
+    }
+
     Ok(TransformArtifacts {
-        output: stored.object_ref(),
-        relation_ids,
+        outputs,
+        relation_ids: all_relation_ids,
     })
 }
 
@@ -274,7 +273,7 @@ pub(crate) fn create_delegated_transform_output<S: CanonicalStore>(
     store: &S,
     index: &DerivedIndex,
     instruction: &InstructionPayload,
-    output_class: &str,
+    output_classes: &[String],
     inputs: &[ObjectRef],
     instruction_ref: &earmark_core::VersionRef,
     response: ProviderResponse,
@@ -282,40 +281,67 @@ pub(crate) fn create_delegated_transform_output<S: CanonicalStore>(
     let is_synthetic = provider_response_is_synthetic(&response);
     let synthetic_source = provider_metadata_synthetic_source(&response.metadata)
         .unwrap_or_else(|| "mock_provider".to_string());
-    let mut headers = BTreeMap::from([
-        (
-            "title".to_string(),
-            earmark_core::HeaderValue::String(format!("{} candidate", instruction.name)),
-        ),
-        (
-            "provider".to_string(),
-            earmark_core::HeaderValue::String(response.provider.clone()),
-        ),
-        (
-            "model".to_string(),
-            earmark_core::HeaderValue::String(response.model.clone()),
-        ),
-    ]);
-    if is_synthetic {
-        headers.insert(
-            "synthetic".to_string(),
-            earmark_core::HeaderValue::Bool(true),
-        );
-        headers.insert(
-            "synthetic_source".to_string(),
-            earmark_core::HeaderValue::String(synthetic_source),
-        );
-        headers.insert(
-            "production_eligible".to_string(),
-            earmark_core::HeaderValue::Bool(false),
-        );
-    }
 
-    let stored = StoredObject::new(
-        Kind::Object,
-        Some(output_class.to_string()),
-        Standing::default(),
-        Provenance {
+    let mut outputs = Vec::new();
+    let mut all_relation_ids = Vec::new();
+
+    // If the response is a JSON object, we might want to split it by class.
+    // For now, we support the 'multi-object' case where the payload is replicated
+    // OR the provider returned a structured map.
+    let payload_json: Option<serde_json::Value> =
+        serde_json::from_str(&response.candidate_payload).ok();
+
+    for class in output_classes {
+        let mut headers = BTreeMap::from([
+            (
+                "title".to_string(),
+                earmark_core::HeaderValue::String(format!(
+                    "{} candidate ({})",
+                    instruction.name, class
+                )),
+            ),
+            (
+                "provider".to_string(),
+                earmark_core::HeaderValue::String(response.provider.clone()),
+            ),
+            (
+                "model".to_string(),
+                earmark_core::HeaderValue::String(response.model.clone()),
+            ),
+        ]);
+        if is_synthetic {
+            headers.insert(
+                "synthetic".to_string(),
+                earmark_core::HeaderValue::Bool(true),
+            );
+            headers.insert(
+                "synthetic_source".to_string(),
+                earmark_core::HeaderValue::String(synthetic_source.clone()),
+            );
+            headers.insert(
+                "production_eligible".to_string(),
+                earmark_core::HeaderValue::Bool(false),
+            );
+        }
+
+        // HEURISTIC: If payload is a JSON object and has a key matching the class name, use that sub-value.
+        // Otherwise, use the whole payload.
+        let final_payload_bytes = if let Some(serde_json::Value::Object(map)) = &payload_json {
+            if let Some(val) = map.get(class) {
+                serde_json::to_vec_pretty(val)?
+            } else {
+                response.candidate_payload.clone().into_bytes()
+            }
+        } else {
+            response.candidate_payload.clone().into_bytes()
+        };
+
+        let stored = StoredObject::builder(
+            Kind::Object,
+            StoredPayload::from_json_bytes(final_payload_bytes),
+        )
+        .class(class.to_string())
+        .provenance(Provenance {
             actor: "runtime".to_string(),
             source_type: "delegated_transform".to_string(),
             source_ref: None,
@@ -330,17 +356,21 @@ pub(crate) fn create_delegated_transform_output<S: CanonicalStore>(
                 .collect(),
             import_path: None,
             captured_at: Utc::now(),
-        },
-        headers,
-        StoredPayload::from_json_bytes(response.candidate_payload.into_bytes()),
-        vec![],
-    );
-    write_object_and_index(store, index, &stored)?;
-    let relation_ids =
-        create_lineage_relations(store, index, &stored.object_ref(), inputs, instruction_ref)?;
+        })
+        .headers(headers)
+        .build()
+        .map_err(ExecError::IncompleteExecution)?;
+        write_object_and_index(store, index, &stored)?;
+        let relation_ids =
+            create_lineage_relations(store, index, &stored.object_ref(), inputs, instruction_ref)?;
+
+        outputs.push(stored.object_ref());
+        all_relation_ids.extend(relation_ids);
+    }
+
     Ok(TransformArtifacts {
-        output: stored.object_ref(),
-        relation_ids,
+        outputs,
+        relation_ids: all_relation_ids,
     })
 }
 
@@ -349,18 +379,15 @@ pub(crate) fn persist_run_record<S: CanonicalStore>(
     index: &DerivedIndex,
     record: &RunRecord,
 ) -> Result<(), ExecError> {
-    let stored = StoredObject::new(
+    let stored = StoredObject::builder(
         Kind::RunRecord,
-        Some("run_record".to_string()),
-        Standing::default(),
-        Provenance::direct_input("runtime"),
-        BTreeMap::from([(
-            "title".to_string(),
-            earmark_core::HeaderValue::String(format!("Run {}", record.run_id)),
-        )]),
         StoredPayload::from_json_bytes(earmark_core::to_json_pretty(record)?.into_bytes()),
-        vec![],
-    );
+    )
+    .class("run_record")
+    .provenance(Provenance::direct_input("runtime"))
+    .header("title", format!("Run {}", record.run_id))
+    .build()
+    .map_err(ExecError::IncompleteExecution)?;
     // Run records are indexed so run list/show/latest inspection can discover them.
     write_object_and_index(store, index, &stored)?;
     Ok(())

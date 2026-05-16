@@ -5,7 +5,7 @@ use earmark_core::{
 };
 use earmark_exec::helpers::render_provider_input;
 use earmark_index::DerivedIndex;
-use earmark_store::{CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload};
+use earmark_store::{GitCanonicalStore, ObjectStore, StoredObject, StoredPayload, WorkspaceLayout};
 use std::collections::BTreeMap;
 use tempfile::tempdir;
 
@@ -36,7 +36,7 @@ fn default_profile() -> ProviderProfile {
             allow_export_requests: false,
         },
         response_contract: earmark_core::ProviderResponseContract {
-            format: "markdown".to_string(),
+            format: earmark_core::ProviderResponseFormat::Markdown,
             must_return_candidate_only: true,
             must_include_lineage: false,
         },

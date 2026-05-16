@@ -2,7 +2,7 @@ use crate::app::common::{CliError, CommandContext};
 use crate::app::*;
 use crate::cli::*;
 use earmark_core::Kind;
-use earmark_store::CanonicalStore;
+use earmark_store::{ObjectStore, StoreScanner, WorkspaceLayout};
 use serde_json::json;
 use std::collections::BTreeMap;
 use std::fs;
@@ -14,7 +14,7 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
 
     match cli.command {
         Commands::Init => crate::app::commands::init_doctor::handle_init(ctx)?,
-        Commands::Doctor => crate::app::commands::init_doctor::handle_doctor(ctx)?,
+        Commands::Doctor(args) => crate::app::commands::init_doctor::handle_doctor(ctx, &args)?,
         Commands::System(command) => crate::app::commands::system::handle(ctx, &command)?,
         Commands::Deposit(args) => crate::app::commands::deposit::handle(ctx, &args)?,
         Commands::Query(args) => crate::app::commands::query::handle(ctx, &args)?,
@@ -40,6 +40,7 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
                 emit(
                     as_json,
                     json!({
+                        "kind": "run_list",
                         "summary": format!("{} runs found", summaries.len()),
                         "runs": summaries,
                         "next_commands": ["em run show <run_id>", "em run timeline <run_id>"],
@@ -256,7 +257,7 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
             AssignmentAction::List { run_id, status } => {
                 let run_id = resolve_optional_run_id(store, run_id)?;
                 let mut assignments = Vec::new();
-                for object in store.scan_objects()? {
+                for object in store.scan_objects()?.scanned_objects {
                     if object.envelope.kind != Kind::TransitionAssignment {
                         continue;
                     }
@@ -315,7 +316,7 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
             ChangeSetAction::List { run_id } => {
                 let run_id = resolve_optional_run_id(store, run_id)?;
                 let mut change_sets = Vec::new();
-                for object in store.scan_objects()? {
+                for object in store.scan_objects()?.scanned_objects {
                     if object.envelope.kind != Kind::ChangeSet {
                         continue;
                     }
@@ -363,7 +364,7 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
             HandoffAction::List { run_id } => {
                 let run_id = resolve_optional_run_id(store, run_id)?;
                 let mut handoffs = Vec::new();
-                for object in store.scan_objects()? {
+                for object in store.scan_objects()?.scanned_objects {
                     if object.envelope.kind != Kind::HandoffManifest {
                         continue;
                     }
@@ -435,6 +436,7 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
                     as_json,
                     json!({
                         "kind": "audit_failures",
+                        "id": "search",
                         "summary": format!("{} failures found", failures.len()),
                         "failures": failures,
                         "next_commands": [
@@ -533,13 +535,22 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
                 let key = format!("{:?}", assignment.status).to_lowercase();
                 *assignments_by_status.entry(key).or_insert(0) += 1;
             }
+            let active_systems = index
+                .as_ref()
+                .expect("index available for workspace command")
+                .get_active_systems()?;
+            let latest_run = runs.last().map(|r| r.run_id.clone());
+
             emit(
                 as_json,
                 json!({
                     "kind": "status",
+                    "id": "workspace",
                     "summary": "workspace status",
                     "object_count": object_count,
                     "active_system_count": active_system_count,
+                    "active_systems": active_systems,
+                    "latest_run": latest_run,
                     "assignment_count_by_status": assignments_by_status,
                     "change_set_count": change_sets.len(),
                     "handoff_count": handoffs.len(),
@@ -621,7 +632,7 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
                 relation_type,
             } => {
                 let mut relations = Vec::new();
-                for object in store.scan_objects()? {
+                for object in store.scan_objects()?.scanned_objects {
                     if object.envelope.kind != Kind::Relation {
                         continue;
                     }

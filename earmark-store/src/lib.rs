@@ -66,6 +66,10 @@ impl StoredPayload {
     pub fn as_utf8(&self) -> Result<String, StoreError> {
         Ok(String::from_utf8(self.bytes.clone())?)
     }
+
+    pub fn as_utf8_str(&self) -> Result<&str, StoreError> {
+        Ok(std::str::from_utf8(&self.bytes)?)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -111,7 +115,97 @@ pub struct StoredObject {
     pub payload: StoredPayload,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StoreDiagnostics {
+    pub scanned_objects: Vec<StoredObject>,
+    pub skipped_entries: Vec<SkippedEntry>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SkippedEntry {
+    pub path: PathBuf,
+    pub reason: String,
+}
+
+pub struct StoredObjectBuilder {
+    id: Option<ObjectId>,
+    kind: Kind,
+    class: Option<String>,
+    standing: Standing,
+    provenance: Option<Provenance>,
+    headers: BTreeMap<String, HeaderValue>,
+    payload: StoredPayload,
+    parents: Vec<VersionRef>,
+}
+
+impl StoredObjectBuilder {
+    pub fn id(mut self, id: ObjectId) -> Self {
+        self.id = Some(id);
+        self
+    }
+
+    pub fn class(mut self, class: impl Into<String>) -> Self {
+        self.class = Some(class.into());
+        self
+    }
+
+    pub fn standing(mut self, standing: Standing) -> Self {
+        self.standing = standing;
+        self
+    }
+
+    pub fn provenance(mut self, provenance: Provenance) -> Self {
+        self.provenance = Some(provenance);
+        self
+    }
+
+    pub fn header(mut self, key: impl Into<String>, value: impl Into<HeaderValue>) -> Self {
+        self.headers.insert(key.into(), value.into());
+        self
+    }
+
+    pub fn headers(mut self, headers: BTreeMap<String, HeaderValue>) -> Self {
+        self.headers = headers;
+        self
+    }
+
+    pub fn parents(mut self, parents: Vec<VersionRef>) -> Self {
+        self.parents = parents;
+        self
+    }
+
+    pub fn build(self) -> Result<StoredObject, String> {
+        let provenance = self
+            .provenance
+            .ok_or_else(|| "provenance is required".to_string())?;
+
+        Ok(StoredObject::new_with_id(
+            self.id.unwrap_or_default(),
+            self.kind,
+            self.class,
+            self.standing,
+            provenance,
+            self.headers,
+            self.payload,
+            self.parents,
+        ))
+    }
+}
+
 impl StoredObject {
+    pub fn builder(kind: Kind, payload: StoredPayload) -> StoredObjectBuilder {
+        StoredObjectBuilder {
+            id: None,
+            kind,
+            class: None,
+            standing: Standing::default(),
+            provenance: None,
+            headers: BTreeMap::new(),
+            payload,
+            parents: Vec::new(),
+        }
+    }
+
     pub fn new(
         kind: Kind,
         class: Option<String>,
@@ -217,9 +311,13 @@ pub struct BatchWrite {
     pub objects: Vec<StoredObject>,
 }
 
-pub trait CanonicalStore {
+pub trait WorkspaceLayout {
     fn root(&self) -> &Path;
     fn init_layout(&self) -> Result<(), StoreError>;
+    fn version_path(&self, version: &VersionRef) -> PathBuf;
+}
+
+pub trait ObjectStore {
     fn write_object(&self, object: &StoredObject) -> Result<VersionRef, StoreError>;
     fn write_batch(&self, batch: &BatchWrite) -> Result<Vec<VersionRef>, StoreError>;
     fn read_version(&self, version: &VersionRef) -> Result<StoredObject, StoreError>;
@@ -227,9 +325,13 @@ pub trait CanonicalStore {
     fn read_head_ref(&self, object_id: &ObjectId) -> Result<Option<VersionRef>, StoreError>;
     fn list_versions(&self, object_id: &ObjectId) -> Result<Vec<VersionRef>, StoreError>;
     fn resolve_payload(&self, payload_ref: &PayloadRef) -> Result<StoredPayload, StoreError>;
-    fn scan_objects(&self) -> Result<Vec<StoredObject>, StoreError>;
-    fn version_path(&self, version: &VersionRef) -> PathBuf;
+}
 
+pub trait StoreScanner {
+    fn scan_objects(&self) -> Result<StoreDiagnostics, StoreError>;
+}
+
+pub trait StoreWriteLocking {
     fn acquire_write_lock(&self) -> Result<WorkspaceWriteGuard, StoreError>;
     fn write_batch_locked(
         &self,
@@ -257,6 +359,8 @@ pub trait CanonicalStore {
         .ok_or_else(|| StoreError::Invariant("batch write returned no refs".to_string()))
     }
 }
+
+pub trait CanonicalStore: WorkspaceLayout + ObjectStore + StoreScanner + StoreWriteLocking {}
 
 #[derive(Debug, Clone)]
 pub struct GitCanonicalStore {
@@ -408,13 +512,9 @@ pub struct WorkspaceWriteGuard {
     _file: fs::File,
 }
 
-impl CanonicalStore for GitCanonicalStore {
+impl WorkspaceLayout for GitCanonicalStore {
     fn root(&self) -> &Path {
         &self.root
-    }
-
-    fn acquire_write_lock(&self) -> Result<WorkspaceWriteGuard, StoreError> {
-        self.acquire_write_lock()
     }
 
     fn init_layout(&self) -> Result<(), StoreError> {
@@ -422,14 +522,14 @@ impl CanonicalStore for GitCanonicalStore {
         self.init_layout_unlocked()
     }
 
-    fn write_object(&self, object: &StoredObject) -> Result<VersionRef, StoreError> {
-        let guard = self.acquire_write_lock()?;
-        self.write_object_locked(&guard, object)
+    fn version_path(&self, version: &VersionRef) -> PathBuf {
+        self.version_dir(&version.id, &version.version_id)
     }
+}
 
-    fn write_batch(&self, batch: &BatchWrite) -> Result<Vec<VersionRef>, StoreError> {
-        let guard = self.acquire_write_lock()?;
-        self.write_batch_locked(&guard, batch)
+impl StoreWriteLocking for GitCanonicalStore {
+    fn acquire_write_lock(&self) -> Result<WorkspaceWriteGuard, StoreError> {
+        self.acquire_write_lock()
     }
 
     fn write_batch_locked(
@@ -562,6 +662,18 @@ impl CanonicalStore for GitCanonicalStore {
         }
         Ok(written)
     }
+}
+
+impl ObjectStore for GitCanonicalStore {
+    fn write_object(&self, object: &StoredObject) -> Result<VersionRef, StoreError> {
+        let guard = self.acquire_write_lock()?;
+        self.write_object_locked(&guard, object)
+    }
+
+    fn write_batch(&self, batch: &BatchWrite) -> Result<Vec<VersionRef>, StoreError> {
+        let guard = self.acquire_write_lock()?;
+        self.write_batch_locked(&guard, batch)
+    }
 
     fn read_version(&self, version: &VersionRef) -> Result<StoredObject, StoreError> {
         let version_dir = self.version_dir(&version.id, &version.version_id);
@@ -634,19 +746,43 @@ impl CanonicalStore for GitCanonicalStore {
         }
         Err(StoreError::MissingPayload(payload_ref.0.clone()))
     }
+}
 
-    fn scan_objects(&self) -> Result<Vec<StoredObject>, StoreError> {
-        let mut objects = Vec::new();
+impl StoreScanner for GitCanonicalStore {
+    fn scan_objects(&self) -> Result<StoreDiagnostics, StoreError> {
+        let mut scanned_objects = Vec::new();
+        let mut skipped_entries = Vec::new();
+
+        // Strict depth: objects/<obj_id>/<ver_id>/envelope.json
         for entry in WalkDir::new(self.objects_dir())
+            .min_depth(2)
+            .max_depth(3)
             .into_iter()
             .filter_map(Result::ok)
         {
             if entry.file_name() == "envelope.json" {
-                let envelope: Envelope = serde_json::from_slice(&fs::read(entry.path())?)?;
+                let bytes = fs::read(entry.path())?;
+                if bytes.is_empty() {
+                    skipped_entries.push(SkippedEntry {
+                        path: entry.path().to_path_buf(),
+                        reason: "empty envelope file".to_string(),
+                    });
+                    continue;
+                }
+                let envelope: Envelope = match serde_json::from_slice(&bytes) {
+                    Ok(env) => env,
+                    Err(e) => {
+                        skipped_entries.push(SkippedEntry {
+                            path: entry.path().to_path_buf(),
+                            reason: format!("corrupted envelope JSON: {}", e),
+                        });
+                        continue;
+                    }
+                };
                 let version_dir = entry.path().parent().ok_or_else(|| {
                     StoreError::Invariant("envelope file has no version directory".to_string())
                 })?;
-                let payload_path = fs::read_dir(version_dir)?
+                let payload_path = match fs::read_dir(version_dir)?
                     .filter_map(Result::ok)
                     .map(|e| e.path())
                     .find(|path| {
@@ -654,25 +790,38 @@ impl CanonicalStore for GitCanonicalStore {
                             .and_then(|s| s.to_str())
                             .map(|s| s.starts_with("payload."))
                             .unwrap_or(false)
-                    })
-                    .ok_or_else(|| {
-                        StoreError::MissingPayload(envelope.version_id.as_str().to_string())
-                    })?;
+                    }) {
+                    Some(p) => p,
+                    None => {
+                        skipped_entries.push(SkippedEntry {
+                            path: entry.path().to_path_buf(),
+                            reason: "missing payload file".to_string(),
+                        });
+                        continue;
+                    }
+                };
                 let payload = StoredPayload::new(
                     Self::infer_encoding(&payload_path)?,
                     fs::read(payload_path)?,
                 );
-                StoredObject::verify_payload_ref(&envelope, &payload)?;
-                objects.push(StoredObject { envelope, payload });
+                if let Err(e) = StoredObject::verify_payload_ref(&envelope, &payload) {
+                    skipped_entries.push(SkippedEntry {
+                        path: entry.path().to_path_buf(),
+                        reason: format!("integrity mismatch: {}", e),
+                    });
+                    continue;
+                }
+                scanned_objects.push(StoredObject { envelope, payload });
             }
         }
-        Ok(objects)
-    }
-
-    fn version_path(&self, version: &VersionRef) -> PathBuf {
-        self.version_dir(&version.id, &version.version_id)
+        Ok(StoreDiagnostics {
+            scanned_objects,
+            skipped_entries,
+        })
     }
 }
+
+impl CanonicalStore for GitCanonicalStore {}
 
 #[derive(Debug, Error)]
 pub enum StoreError {
@@ -688,6 +837,8 @@ pub enum StoreError {
     GitCommandFailed { command: String, stderr: String },
     #[error("utf8 error: {0}")]
     Utf8(#[from] std::string::FromUtf8Error),
+    #[error("utf8 error: {0}")]
+    Utf8Slice(#[from] std::str::Utf8Error),
     #[error("core error: {0}")]
     Core(#[from] earmark_core::CoreError),
     #[error("payload ref mismatch between envelope and stored bytes")]

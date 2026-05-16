@@ -6,33 +6,25 @@ operations:
     kind: compile_context
     input_contracts: [quellnotiz]
     output_contracts: [quellnotizen_fuer_extraktion]
-    compiled_context:
-      id: quellnotizen_fuer_extraktion
-      version_id: latest
+    compiled_context: "../compiled_contexts/quellnotizen_fuer_extraktion.yaml"
 
   - id: befunde_extrahieren
     kind: transform
     input_contracts: [quellnotizen_fuer_extraktion]
     output_contracts: [befund]
-    instruction:
-      id: quellnotiz_zu_befund
-      version_id: latest
+    instruction: "../instructions/quellnotiz_zu_befund.md"
 
   - id: befunde_kompilieren
     kind: compile_context
     input_contracts: [befund]
     output_contracts: [befunde_fuer_briefing]
-    compiled_context:
-      id: befunde_fuer_briefing
-      version_id: latest
+    compiled_context: "../compiled_contexts/befunde_fuer_briefing.yaml"
 
   - id: briefing_erstellen
     kind: transform
     input_contracts: [befunde_fuer_briefing]
     output_contracts: [briefingkarte]
-    instruction:
-      id: befund_zu_briefing
-      version_id: latest
+    instruction: "../instructions/befund_zu_briefing.md"
 
 edges:
   - from: quellnotizen_kompilieren

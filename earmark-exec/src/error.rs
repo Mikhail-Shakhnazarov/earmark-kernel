@@ -56,6 +56,8 @@ pub enum ExecError {
     IncompleteExecution(String),
     #[error("provider failure: {0}")]
     Provider(ProviderFailure),
+    #[error("transition failed validation: {0:?}")]
+    Validation(earmark_core::ChangeSetValidationResult),
     #[error("store error: {0}")]
     Store(#[from] earmark_store::StoreError),
     #[error("index error: {0}")]

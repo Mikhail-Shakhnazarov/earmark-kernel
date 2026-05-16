@@ -1,0 +1,16 @@
+schema: earmark.path_system_manifest.v1
+system_id: sys_cli_hardening
+namespace: earmark.internal
+title: "CLI Hardening System"
+description: "A dogfooding system to improve the Earmark CLI using Earmark."
+classes:
+  - ../classes/issue.yaml
+  - ../classes/fix_proposal.yaml
+instructions:
+  - ../instructions/analyze_and_propose.md
+workflows:
+  - ../workflows/hardening_flow.yaml
+runtime_profile:
+  execution_surface: local
+  machine_output_default: markdown
+  work_surface_mode: persistent

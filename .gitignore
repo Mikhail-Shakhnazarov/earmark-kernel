@@ -13,3 +13,11 @@
 
 # Local workspace state
 /.earmark/
+/.earmark_lock
+
+# Nested Earmark dogfooding/runtime state
+**/.earmark/
+**/.earmark_lock
+
+# Generated dogfooding corpus objects unless explicitly promoted to fixtures
+/dogfooding/**/corpus/obj_*.md

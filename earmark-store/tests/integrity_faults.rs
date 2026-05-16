@@ -1,5 +1,5 @@
 use earmark_core::{Kind, Provenance, Standing};
-use earmark_store::{CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload};
+use earmark_store::{GitCanonicalStore, ObjectStore, StoredObject, StoredPayload, WorkspaceLayout};
 use std::fs;
 use tempfile::tempdir;
 

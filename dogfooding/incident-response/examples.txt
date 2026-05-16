@@ -1,0 +1,6 @@
+{
+  "examples": [],
+  "examples_root": "/home/m/GITHUB/earmark-workspace/dogfooding/incident-response/docs/declarations/examples",
+  "next_commands": [],
+  "summary": "No workspace-local declaration examples found under docs/declarations/examples"
+}

@@ -2,7 +2,7 @@ use earmark_connected_context::DEFAULT_COMPILED_CONTEXT_COMPILER;
 use earmark_core::{
     Kind, ObjectId, ObjectRef, ProviderBudget, ProviderExposure, ProviderProfile, ProviderRequest,
     ProviderResponseContract, RunRecord, RunStatus, RuntimeProfile, ScalarValue, SystemDefinition,
-    VersionId, VersionRef,
+    VersionId, VersionRef, WorkflowOperationKind,
 };
 use earmark_exec::{
     default_provider_registry, engine::ExecutionEngine, ir::ExecutionIr, provide_with_registry,
@@ -11,7 +11,7 @@ use earmark_exec::{
     WorkflowRunRequest,
 };
 use earmark_index::DerivedIndex;
-use earmark_store::{CanonicalStore, GitCanonicalStore, StoredObject, StoredPayload};
+use earmark_store::{GitCanonicalStore, ObjectStore, StoredObject, StoredPayload, WorkspaceLayout};
 use std::collections::BTreeMap;
 use tempfile::tempdir;
 
@@ -47,7 +47,7 @@ fn mock_profile(allowed_ops: Vec<&str>) -> ProviderProfile {
             allow_export_requests: false,
         },
         response_contract: ProviderResponseContract {
-            format: "markdown".to_string(),
+            format: earmark_core::ProviderResponseFormat::Markdown,
             must_return_candidate_only: true,
             must_include_lineage: false,
         },
@@ -67,7 +67,7 @@ fn mock_request() -> ProviderRequest {
         work_surface_manifest: None,
         inputs: vec![],
         response_contract: ProviderResponseContract {
-            format: "markdown".to_string(),
+            format: earmark_core::ProviderResponseFormat::Markdown,
             must_return_candidate_only: true,
             must_include_lineage: false,
         },
@@ -140,9 +140,43 @@ fn test_advisory_warnings_for_unmeasurable_fields() {
     assert!(warnings
         .iter()
         .any(|w| w.contains("allow_prose_objects is false")));
-    assert!(warnings
+    assert!(!warnings
         .iter()
         .any(|w| w.contains("max_input_tokens budget is not yet enforced")));
+}
+
+#[test]
+fn test_provider_boundary_enforces_input_budget() {
+    let registry = default_provider_registry();
+    let mut profile = mock_profile(vec!["transform"]);
+    profile.budget.max_input_tokens = Some(1);
+
+    let mut request = mock_request();
+    request.input_text = "this request should exceed one token".to_string();
+
+    let result = provide_with_registry(&registry, &profile, request, "transform");
+    assert!(result.is_err());
+    assert_eq!(
+        result.unwrap_err().kind,
+        ProviderFailureKind::BudgetExceeded
+    );
+}
+
+#[test]
+fn test_latency_policy_warnings_distinguish_timeout_and_measurement() {
+    let registry = default_provider_registry();
+    let mut profile = mock_profile(vec!["transform"]);
+    profile.budget.max_latency_ms = Some(1500);
+
+    let outcome = provide_with_registry(&registry, &profile, mock_request(), "transform").unwrap();
+    let warnings = outcome.record.advisory_warnings;
+
+    assert!(warnings
+        .iter()
+        .any(|w| w.contains("max_latency_ms is configured to 1500 ms")));
+    assert!(warnings
+        .iter()
+        .any(|w| w.contains("did not report measured latency_ms")));
 }
 
 #[test]
@@ -177,7 +211,7 @@ fn test_work_packet_honest_constraints() {
     };
     let transition = ExecutionTransition {
         id: "t1".to_string(),
-        operation: "transform".to_string(),
+        operation: WorkflowOperationKind::Transform,
         input_contracts: vec![],
         output_contracts: vec![],
         instruction: None,
@@ -289,7 +323,7 @@ fn test_transition_enforces_honest_work_packet_defaults() {
     let ir = ExecutionIr {
         transitions: vec![ExecutionTransition {
             id: "t1".to_string(),
-            operation: "compile_context".to_string(),
+            operation: WorkflowOperationKind::CompileContext,
             input_contracts: vec![],
             output_contracts: vec![],
             instruction: None,
@@ -436,7 +470,7 @@ fn test_transition_preserves_provider_record_warnings() {
                 request_id: request.request_id.clone(),
                 provider: "mock".to_string(),
                 model: "warn".to_string(),
-                status: "ok".to_string(),
+                status: earmark_core::ProviderResponseStatus::Completed,
                 candidate_payload: "{}".to_string(),
                 metadata: BTreeMap::new(),
                 advisory_warnings: vec!["Provider-level warning".to_string()],
@@ -549,7 +583,7 @@ fn test_transition_preserves_provider_record_warnings() {
             allow_export_requests: true,
         },
         response_contract: earmark_core::ProviderResponseContract {
-            format: "json".to_string(),
+            format: earmark_core::ProviderResponseFormat::Json,
             must_return_candidate_only: false,
             must_include_lineage: false,
         },
@@ -570,7 +604,7 @@ fn test_transition_preserves_provider_record_warnings() {
     let ir = ExecutionIr {
         transitions: vec![ExecutionTransition {
             id: "t1".to_string(),
-            operation: "transform".to_string(),
+            operation: WorkflowOperationKind::Transform,
             input_contracts: vec![],
             output_contracts: vec![],
             instruction: Some(instr_ref),

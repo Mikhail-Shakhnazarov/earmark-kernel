@@ -75,13 +75,20 @@ pub enum WorkspaceAccessMode {
     ReadOnly,
     Write,
     Init,
+    RepairIndex,
 }
 
 pub fn workspace_access_mode(command: &Commands) -> WorkspaceAccessMode {
     match command {
         Commands::Completions { .. } => WorkspaceAccessMode::None,
         Commands::Init => WorkspaceAccessMode::Init,
-        Commands::Doctor => WorkspaceAccessMode::None,
+        Commands::Doctor(args) => {
+            if args.repair_index {
+                WorkspaceAccessMode::RepairIndex
+            } else {
+                WorkspaceAccessMode::None
+            }
+        }
         Commands::Status => WorkspaceAccessMode::ReadOnly,
         Commands::Query(_) => WorkspaceAccessMode::ReadOnly,
         Commands::Run(_) => WorkspaceAccessMode::ReadOnly,
@@ -127,7 +134,7 @@ pub fn require_initialized_workspace(store: &GitCanonicalStore) -> Result<(), Cl
 pub fn command_family_name(command: &Commands) -> &'static str {
     match command {
         Commands::Init => "init",
-        Commands::Doctor => "doctor",
+        Commands::Doctor(_) => "doctor",
         Commands::System(_) => "system",
         Commands::Deposit(_) => "deposit",
         Commands::Query(_) => "query",
