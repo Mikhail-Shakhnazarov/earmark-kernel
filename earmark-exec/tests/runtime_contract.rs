@@ -158,7 +158,7 @@ operations:
   - id: op_project
     kind: compile_context
     input_contracts: []
-    output_contracts: [work_surface]
+    output_contracts: [work_packet]
     instruction: null
     compiled_context:
       id: {}
@@ -167,7 +167,7 @@ operations:
     provider_profile: null
   - id: op_transform
     kind: transform
-    input_contracts: [work_surface]
+    input_contracts: [work_packet]
     output_contracts: [finding]
     instruction:
       id: {}

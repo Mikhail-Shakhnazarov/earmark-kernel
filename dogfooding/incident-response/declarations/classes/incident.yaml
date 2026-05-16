@@ -1,0 +1,26 @@
+name: incident
+kind: object
+version: "0.1.0"
+required_headers:
+  - severity
+  - component
+payload_schema: |
+  inline:{
+    "type": "object",
+    "required": ["description", "detected_at"],
+    "properties": {
+      "description": { "type": "string" },
+      "detected_at": { "type": "string" }
+    }
+  }
+relation_rules:
+  - relation_type: "evidence"
+    counterparty_classes: ["observation"]
+    direction: "outgoing"
+  - relation_type: "remediation"
+    counterparty_classes: ["action"]
+    direction: "outgoing"
+standing_rules:
+  allowed_standing: {}
+  required_protocols: {}
+validators: []

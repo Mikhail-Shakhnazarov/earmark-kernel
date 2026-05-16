@@ -15,9 +15,9 @@ use earmark_core::{
 use earmark_declarations::{
     load_class_definition, load_compiled_context_template, load_instruction, load_provider_profile,
     load_standing_policy, load_system_definition, load_workflow_definition,
-    resolve_workflow_declaration, validate_class_definition, validate_compiled_context_template,
-    validate_instruction, validate_provider_profile, validate_standing_policy,
-    validate_system_definition, validate_workflow_definition,
+    resolve_instruction_declaration, resolve_workflow_declaration, validate_class_definition,
+    validate_compiled_context_template, validate_instruction, validate_provider_profile,
+    validate_standing_policy, validate_system_definition, validate_workflow_definition,
 };
 use earmark_index::DerivedIndex;
 use earmark_store::{
@@ -423,14 +423,31 @@ pub(crate) fn register_declaration_file<S: CanonicalStore>(
         DeclarationKind::Instruction => {
             let decl = load_instruction(path)?;
             validate_instruction(&decl)?;
+
+            // Resolve into strict InstructionPayload
+            let resolved = if let Some(reg) = registry {
+                resolve_instruction_declaration(path, decl, reg)?
+            } else {
+                if matches!(decl.provider_profile, Some(FlexibleVersionRef::Path(_))) {
+                    return Err(CliError::argument(format!(
+                        "instruction path references require system-manifest registration (found in instruction '{}')",
+                        decl.name
+                    )));
+                }
+                decl
+            };
+
             let mut headers = BTreeMap::new();
-            headers.insert("title".to_string(), HeaderValue::String(decl.name.clone()));
+            headers.insert(
+                "title".to_string(),
+                HeaderValue::String(resolved.name.clone()),
+            );
             (
                 Kind::Instruction,
-                Some(decl.name.clone()),
-                StoredPayload::from_markdown(decl.to_markdown()?),
+                Some(resolved.name.clone()),
+                StoredPayload::from_markdown(resolved.to_markdown()?),
                 headers,
-                decl.name.clone(),
+                resolved.name.clone(),
             )
         }
         DeclarationKind::StandingPolicy => {
@@ -599,25 +616,28 @@ fn resolve_workflow_version_ref<S: CanonicalStore>(
 
 #[derive(Debug, Clone, Deserialize)]
 struct PathSystemManifest {
-    system_id: String,
-    namespace: String,
-    title: String,
-    description: Option<String>,
     #[serde(default)]
-    classes: Vec<String>,
+    #[allow(dead_code)]
+    pub schema: Option<String>,
+    pub system_id: String,
+    pub namespace: String,
+    pub title: String,
+    pub description: Option<String>,
     #[serde(default)]
-    instructions: Vec<String>,
+    pub classes: Vec<String>,
     #[serde(default)]
-    standing_policies: Vec<String>,
+    pub instructions: Vec<String>,
     #[serde(default)]
-    compiled_contexts: Vec<String>,
+    pub standing_policies: Vec<String>,
     #[serde(default)]
-    provider_profiles: Vec<String>,
+    pub compiled_contexts: Vec<String>,
     #[serde(default)]
-    workflows: Vec<String>,
-    default_compiled_context: Option<String>,
-    default_provider_profile: Option<String>,
-    runtime_profile: earmark_core::RuntimeProfile,
+    pub provider_profiles: Vec<String>,
+    #[serde(default)]
+    pub workflows: Vec<String>,
+    pub default_compiled_context: Option<String>,
+    pub default_provider_profile: Option<String>,
+    pub runtime_profile: earmark_core::RuntimeProfile,
 }
 
 fn try_load_path_system_manifest(
@@ -625,17 +645,13 @@ fn try_load_path_system_manifest(
 ) -> Result<Option<PathSystemManifest>, CliError> {
     let text = fs::read_to_string(path)?;
     let value: serde_yaml::Value = serde_yaml::from_str(&text)?;
-    let Some(classes) = value.get("classes").and_then(|v| v.as_sequence()) else {
-        return Ok(None);
-    };
-    if !classes.iter().all(|entry| {
-        entry
-            .as_str()
-            .map(|s| s.ends_with(".yaml") || s.ends_with(".md"))
-            .unwrap_or(false)
-    }) {
+
+    // Require explicit schema discriminator to classify as path-system manifest.
+    let schema = value.get("schema").and_then(|v| v.as_str());
+    if schema != Some("earmark.path_system_manifest.v1") {
         return Ok(None);
     }
+
     serde_yaml::from_str(&text).map(Some).map_err(|error| {
         CliError::argument(format!(
             "system manifest parse error in {}: {}",
@@ -720,10 +736,34 @@ fn assemble_system_definition_from_manifest<S: CanonicalStore>(
             registry.insert(p, vref);
         }
     }
+    let mut provider_profiles = Vec::new();
+    for rel in &manifest.provider_profiles {
+        let p = resolve_manifest_path(path, rel);
+        let vref = register_declaration_file(
+            store,
+            None,
+            DeclarationKind::ProviderProfile,
+            &p,
+            Some(&registry),
+        )?;
+        provider_profiles.push(vref.clone());
+        if let Ok(abs) = p.canonicalize() {
+            registry.insert(abs, vref);
+        } else {
+            registry.insert(p, vref);
+        }
+    }
+
     let mut instructions = Vec::new();
     for rel in &manifest.instructions {
         let p = resolve_manifest_path(path, rel);
-        let vref = register_declaration_file(store, None, DeclarationKind::Instruction, &p, None)?;
+        let vref = register_declaration_file(
+            store,
+            None,
+            DeclarationKind::Instruction,
+            &p,
+            Some(&registry),
+        )?;
         instructions.push(vref.clone());
         if let Ok(abs) = p.canonicalize() {
             registry.insert(abs, vref);
@@ -734,8 +774,13 @@ fn assemble_system_definition_from_manifest<S: CanonicalStore>(
     let mut policies = Vec::new();
     for rel in &manifest.standing_policies {
         let p = resolve_manifest_path(path, rel);
-        let vref =
-            register_declaration_file(store, None, DeclarationKind::StandingPolicy, &p, None)?;
+        let vref = register_declaration_file(
+            store,
+            None,
+            DeclarationKind::StandingPolicy,
+            &p,
+            Some(&registry),
+        )?;
         policies.push(vref.clone());
         if let Ok(abs) = p.canonicalize() {
             registry.insert(abs, vref);
@@ -746,21 +791,14 @@ fn assemble_system_definition_from_manifest<S: CanonicalStore>(
     let mut compiled_contexts = Vec::new();
     for rel in &manifest.compiled_contexts {
         let p = resolve_manifest_path(path, rel);
-        let vref =
-            register_declaration_file(store, None, DeclarationKind::CompiledContext, &p, None)?;
+        let vref = register_declaration_file(
+            store,
+            None,
+            DeclarationKind::CompiledContext,
+            &p,
+            Some(&registry),
+        )?;
         compiled_contexts.push(vref.clone());
-        if let Ok(abs) = p.canonicalize() {
-            registry.insert(abs, vref);
-        } else {
-            registry.insert(p, vref);
-        }
-    }
-    let mut provider_profiles = Vec::new();
-    for rel in &manifest.provider_profiles {
-        let p = resolve_manifest_path(path, rel);
-        let vref =
-            register_declaration_file(store, None, DeclarationKind::ProviderProfile, &p, None)?;
-        provider_profiles.push(vref.clone());
         if let Ok(abs) = p.canonicalize() {
             registry.insert(abs, vref);
         } else {
@@ -786,26 +824,29 @@ fn assemble_system_definition_from_manifest<S: CanonicalStore>(
         .default_compiled_context
         .as_ref()
         .map(|rel| {
-            register_declaration_file(
-                store,
-                None,
-                DeclarationKind::CompiledContext,
-                &resolve_manifest_path(path, rel),
-                None,
-            )
+            let p = resolve_manifest_path(path, rel);
+            let lookup_path = p.canonicalize().unwrap_or(p);
+            registry.get(&lookup_path).cloned().ok_or_else(|| {
+                CliError::argument(format!(
+                    "default_compiled_context '{}' must be listed in the 'compiled_contexts' section of the manifest",
+                    rel
+                ))
+            })
         })
         .transpose()?;
+
     let default_provider_profile = manifest
         .default_provider_profile
         .as_ref()
         .map(|rel| {
-            register_declaration_file(
-                store,
-                None,
-                DeclarationKind::ProviderProfile,
-                &resolve_manifest_path(path, rel),
-                None,
-            )
+            let p = resolve_manifest_path(path, rel);
+            let lookup_path = p.canonicalize().unwrap_or(p);
+            registry.get(&lookup_path).cloned().ok_or_else(|| {
+                CliError::argument(format!(
+                    "default_provider_profile '{}' must be listed in the 'provider_profiles' section of the manifest",
+                    rel
+                ))
+            })
         })
         .transpose()?;
 
@@ -957,7 +998,7 @@ fn list_run_records<S: CanonicalStore>(
     store: &S,
 ) -> Result<Vec<earmark_core::RunRecord>, CliError> {
     let mut ledgers = Vec::new();
-    for object in store.scan_objects()? {
+    for object in store.scan_objects()?.scanned_objects {
         if object.envelope.kind != Kind::RunRecord {
             continue;
         }
@@ -991,7 +1032,7 @@ fn list_assignments<S: CanonicalStore>(
     store: &S,
 ) -> Result<Vec<earmark_core::TransitionAssignment>, CliError> {
     let mut assignments = Vec::new();
-    for object in store.scan_objects()? {
+    for object in store.scan_objects()?.scanned_objects {
         if object.envelope.kind != Kind::TransitionAssignment {
             continue;
         }
@@ -1021,7 +1062,7 @@ fn list_change_sets<S: CanonicalStore>(
     store: &S,
 ) -> Result<Vec<earmark_core::ChangeSet>, CliError> {
     let mut change_sets = Vec::new();
-    for object in store.scan_objects()? {
+    for object in store.scan_objects()?.scanned_objects {
         if object.envelope.kind != Kind::ChangeSet {
             continue;
         }
@@ -1045,7 +1086,7 @@ fn list_handoffs<S: CanonicalStore>(
     store: &S,
 ) -> Result<Vec<earmark_core::HandoffManifest>, CliError> {
     let mut handoffs = Vec::new();
-    for object in store.scan_objects()? {
+    for object in store.scan_objects()?.scanned_objects {
         if object.envelope.kind != Kind::HandoffManifest {
             continue;
         }
@@ -1069,7 +1110,7 @@ fn list_failure_objects<S: CanonicalStore>(
     store: &S,
 ) -> Result<Vec<(String, earmark_core::TransformationFailure)>, CliError> {
     let mut failures = Vec::new();
-    for object in store.scan_objects()? {
+    for object in store.scan_objects()?.scanned_objects {
         if object.envelope.kind != Kind::TransformationFailure {
             continue;
         }
@@ -1164,7 +1205,7 @@ pub(crate) fn load_current_assignment_by_id<S: CanonicalStore>(
     store: &S,
     assignment_id: &str,
 ) -> Result<earmark_core::TransitionAssignment, CliError> {
-    for object in store.scan_objects()? {
+    for object in store.scan_objects()?.scanned_objects {
         if object.envelope.kind != Kind::TransitionAssignment {
             continue;
         }
@@ -1189,7 +1230,7 @@ pub(crate) fn load_change_set_by_id<S: CanonicalStore>(
     store: &S,
     change_set_id: &str,
 ) -> Result<earmark_core::ChangeSet, CliError> {
-    for object in store.scan_objects()? {
+    for object in store.scan_objects()?.scanned_objects {
         if object.envelope.kind != Kind::ChangeSet {
             continue;
         }
@@ -1232,7 +1273,7 @@ pub(crate) fn load_handoff_by_id<S: CanonicalStore>(
     store: &S,
     handoff_id: &str,
 ) -> Result<earmark_core::HandoffManifest, CliError> {
-    for object in store.scan_objects()? {
+    for object in store.scan_objects()?.scanned_objects {
         if object.envelope.kind != Kind::HandoffManifest {
             continue;
         }
@@ -1251,7 +1292,7 @@ pub(crate) fn load_failure_by_id<S: CanonicalStore>(
     store: &S,
     failure_id: &str,
 ) -> Result<earmark_core::TransformationFailure, CliError> {
-    for object in store.scan_objects()? {
+    for object in store.scan_objects()?.scanned_objects {
         if object.envelope.kind != Kind::TransformationFailure {
             continue;
         }
@@ -1525,7 +1566,10 @@ pub(crate) fn emit(as_json: bool, value: serde_json::Value) {
 
 fn render_explanation(value: &serde_json::Value) -> Option<String> {
     let kind = value.get("kind")?.as_str()?;
-    let id = value.get("id")?.as_str().unwrap_or("unknown");
+    let id = value
+        .get("id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown");
     let summary = value.get("summary")?.as_str().unwrap_or("");
     let next_commands = value.get("next_commands").and_then(|v| v.as_array());
 
@@ -1538,6 +1582,174 @@ fn render_explanation(value: &serde_json::Value) -> Option<String> {
     output.push_str(&format!("Summary: {}\n\n", summary));
 
     match kind {
+        "query_results" => {
+            let results = value.get("results")?.as_array()?;
+            output.push_str("Matches:\n");
+            for obj in results {
+                let object_id = obj.get("object_id")?.as_str()?;
+                let class = obj.get("class").and_then(|v| v.as_str()).unwrap_or("none");
+                let title = obj
+                    .get("title")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("no title");
+                output.push_str(&format!("- [{}] {} (class: {})\n", object_id, title, class));
+                if let Some(headers) = obj.get("headers").and_then(|v| v.as_object()) {
+                    if !headers.is_empty() {
+                        let h_strs: Vec<String> = headers
+                            .iter()
+                            .map(|(k, v)| format!("{}={}", k, v.as_str().unwrap_or("")))
+                            .collect();
+                        output.push_str(&format!("  Headers: {}\n", h_strs.join(", ")));
+                    }
+                }
+                if let Some(standing) = obj.get("standing").and_then(|v| v.as_object()) {
+                    if !standing.is_empty() {
+                        let s_strs: Vec<String> = standing
+                            .iter()
+                            .map(|(k, v)| format!("{}:{}", k, v.as_str().unwrap_or("")))
+                            .collect();
+                        output.push_str(&format!("  Standing: {}\n", s_strs.join(", ")));
+                    }
+                }
+            }
+        }
+        "status" => {
+            output.push_str("Workspace Overview:\n");
+            output.push_str(&format!(
+                "  Objects: {}\n",
+                value.get("object_count")?.as_u64()?
+            ));
+            output.push_str(&format!(
+                "  Active Systems: {}\n",
+                value.get("active_system_count")?.as_u64()?
+            ));
+            if let Some(systems) = value.get("active_systems").and_then(|v| v.as_array()) {
+                for s in systems {
+                    output.push_str(&format!(
+                        "    - {} ({})\n",
+                        s.get("system_id")?.as_str()?,
+                        s.get("namespace")?.as_str()?
+                    ));
+                }
+            }
+            if let Some(latest) = value.get("latest_run").and_then(|v| v.as_str()) {
+                output.push_str(&format!("  Latest Run: {}\n", latest));
+            }
+            output.push_str(&format!("  Runs: {}\n", value.get("run_count")?.as_u64()?));
+            output.push_str(&format!(
+                "  Change Sets: {}\n",
+                value.get("change_set_count")?.as_u64()?
+            ));
+            output.push_str(&format!(
+                "  Handoffs: {}\n",
+                value.get("handoff_count")?.as_u64()?
+            ));
+            output.push_str(&format!(
+                "  Failures: {}\n",
+                value.get("failure_count")?.as_u64()?
+            ));
+
+            output.push_str("\nPaths:\n");
+            let paths = value.get("paths")?;
+            output.push_str(&format!("  Root: {}\n", value.get("root")?.as_str()?));
+            output.push_str(&format!(
+                "  Declarations: {}\n",
+                paths.get("declarations_dir")?.as_str()?
+            ));
+
+            output.push_str("\nProvider Capabilities:\n");
+            if let Some(providers) = value
+                .get("provider_capabilities")
+                .and_then(|v| v.as_array())
+            {
+                for p in providers {
+                    let name = p.get("provider")?.as_str()?;
+                    let status = p.get("status")?.as_str()?;
+                    output.push_str(&format!("  - {}: {}\n", name, status));
+                }
+            }
+        }
+        "doctor" => {
+            let ok = value.get("ok")?.as_bool()?;
+            output.push_str(&format!(
+                "Health Status: {}\n",
+                if ok { "✅ PASS" } else { "❌ ISSUES FOUND" }
+            ));
+            output.push_str(&format!(
+                "Canonical Objects: {}\n",
+                value.get("canonical_object_count")?.as_u64()?
+            ));
+            output.push_str(&format!(
+                "Indexed Objects: {}\n",
+                value.get("indexed_object_count")?.as_u64()?
+            ));
+
+            if let Some(warnings) = value.get("warnings").and_then(|v| v.as_array()) {
+                if !warnings.is_empty() {
+                    output.push_str("\nWarnings:\n");
+                    for w in warnings {
+                        output.push_str(&format!("  ⚠️ {}\n", w.as_str()?));
+                    }
+                }
+            }
+        }
+        "review" => {
+            output.push_str("Review Results:\n");
+            output.push_str(&format!(
+                "  Target Object: {}\n",
+                value.get("target_object_id")?.as_str()?
+            ));
+            output.push_str(&format!("  Status: {}\n", value.get("status")?.as_str()?));
+            output.push_str(&format!(
+                "  Review Object: {}\n",
+                value.get("review_object_id")?.as_str()?
+            ));
+        }
+        "undo" => {
+            output.push_str("Undo Results:\n");
+            output.push_str(&format!(
+                "  Undo Record: {}\n",
+                value.get("undo_record_id")?.as_str()?
+            ));
+            let impact = value.get("impact")?;
+            output.push_str(&format!(
+                "  Objects Hidden: {}\n",
+                impact.get("objects_hidden")?.as_u64()?
+            ));
+            output.push_str(&format!(
+                "  Relations Hidden: {}\n",
+                impact.get("relations_hidden")?.as_u64()?
+            ));
+        }
+        "audit_failures" => {
+            output.push_str("Failure Audit:\n");
+            if let Some(failures) = value.get("failures").and_then(|v| v.as_array()) {
+                for f in failures {
+                    let fid = f.get("failure_id")?.as_str()?;
+                    let etype = f.get("error_type")?.as_str()?;
+                    let msg = f.get("message")?.as_str()?;
+                    let tid = f.get("transition_id")?.as_str()?;
+                    output.push_str(&format!(
+                        "  - {} transition: {} error: {} \n    Message: {}\n",
+                        fid, tid, etype, msg
+                    ));
+                }
+            }
+        }
+        "run_list" => {
+            output.push_str("Recent Runs:\n");
+            if let Some(runs) = value.get("runs").and_then(|v| v.as_array()) {
+                for r in runs {
+                    let run_id = r.get("run_id")?.as_str()?;
+                    let status = r.get("status")?.as_str()?;
+                    let started = r.get("started_at")?.as_str()?;
+                    output.push_str(&format!(
+                        "  - {} [{}] (started {})\n",
+                        run_id, status, started
+                    ));
+                }
+            }
+        }
         "run" => {
             let artifact = value.get("artifact")?;
             let related = value.get("related")?;

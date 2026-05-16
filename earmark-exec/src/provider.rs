@@ -45,7 +45,9 @@ pub fn resolve_provider_profile(
         return ProviderMode::Delegated(reference.clone());
     }
     if let Some(reference) = instruction.and_then(|i| i.provider_profile.as_ref()) {
-        return ProviderMode::Delegated(reference.clone());
+        if let Some(vref) = reference.to_canonical() {
+            return ProviderMode::Delegated(vref);
+        }
     }
     if let Some(reference) = system_definition_default {
         return ProviderMode::Delegated(reference.clone());
@@ -235,14 +237,23 @@ impl ProviderAdapter for MockAdapter {
                     .to_string(),
             ),
         );
+        let candidate_payload = if profile.model == "json" {
+            r#"{"observation": {"id": "obs1", "detail": "Incident observation"}, "action": {"id": "act1", "description": "Remediation action"}}"#.to_string()
+        } else {
+            "[SYNTHETIC MOCK OUTPUT] Fixture response for extraction/synthesis tests. Federated graphs provide agile ownership but introduce heterogeneity costs.".to_string()
+        };
+
         Ok(ProviderResponse {
             request_id: request.request_id,
             provider: "mock".to_string(),
-            model: "echo".to_string(),
+            model: profile.model.clone(),
             status: ProviderResponseStatus::Completed,
-            candidate_payload: "[SYNTHETIC MOCK OUTPUT] Fixture response for extraction/synthesis tests. Federated graphs provide agile ownership but introduce heterogeneity costs.".to_string(),
+            candidate_payload,
             metadata,
-            advisory_warnings: vec![],
+            advisory_warnings: vec![
+                "Synthetic mock provider output; do not treat as model-derived evidence."
+                    .to_string(),
+            ],
             usage: None,
             received_at: Utc::now(),
         })

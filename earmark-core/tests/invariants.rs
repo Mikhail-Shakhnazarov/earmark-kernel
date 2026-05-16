@@ -34,7 +34,7 @@ fn arb_instruction_payload() -> impl Strategy<Value = InstructionPayload> {
                     input_classes,
                     output_classes,
                     execution_policy: execution_policy.to_string(),
-                    provider_profile,
+                    provider_profile: provider_profile.map(FlexibleVersionRef::from_version_ref),
                     trace_policy: trace_policy.to_string(),
                     register: register.to_string(),
                     body: MarkdownBody::new(body.join("\n")),

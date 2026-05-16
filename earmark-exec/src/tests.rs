@@ -357,7 +357,7 @@ fn delegated_transform_output_sets_synthetic_headers() {
         &store,
         &index,
         &instruction,
-        "finding",
+        &["finding".to_string()],
         &[input_obj_ref],
         &instr_ref,
         response,
@@ -365,8 +365,8 @@ fn delegated_transform_output_sets_synthetic_headers() {
     .unwrap();
     let stored = store
         .read_version(&VersionRef::new(
-            artifacts.output.id.clone(),
-            artifacts.output.version_id.clone(),
+            artifacts.outputs[0].id.clone(),
+            artifacts.outputs[0].version_id.clone(),
         ))
         .unwrap();
     assert_eq!(
@@ -432,7 +432,7 @@ fn test_delegated_outcome_with_none_response_returns_error_instead_of_panicking(
         input_classes: vec!["note".to_string()],
         output_classes: vec!["summary".to_string()],
         execution_policy: "delegated".to_string(),
-        provider_profile: Some(prof_ref.clone()),
+        provider_profile: Some(prof_ref.clone().into()),
         trace_policy: "full".to_string(),
         register: "user".to_string(),
         body: earmark_core::MarkdownBody::new("test body"),

@@ -74,6 +74,7 @@ fn handle_undo_run(
     emit(
         ctx.as_json,
         json!({
+            "kind": "undo",
             "ok": true,
             "summary": format!("run {} undone", run_id),
             "undo_record_id": undo_record.id.as_str(),

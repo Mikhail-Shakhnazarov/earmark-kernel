@@ -224,7 +224,7 @@ operations:
   - id: op_project
     kind: compile_context
     input_contracts: []
-    output_contracts: [work_surface]
+    output_contracts: [work_packet]
     instruction: null
     compiled_context:
       id: PLACEHOLDER_PROJ_ID
@@ -233,7 +233,7 @@ operations:
     provider_profile: null
   - id: op_transform
     kind: transform
-    input_contracts: [work_surface]
+    input_contracts: [work_packet]
     output_contracts: [status_summary]
     instruction:
       id: PLACEHOLDER_INSTR_ID
@@ -345,7 +345,7 @@ guards: []
     assert!(!outcome.emitted_packets.is_empty());
     assert_eq!(outcome.emitted_objects.len(), 1);
 
-    let objects = store.scan_objects().unwrap();
+    let objects = store.scan_objects().unwrap().scanned_objects;
     assert!(objects
         .iter()
         .any(|obj| obj.envelope.kind == Kind::RunRecord));
@@ -360,7 +360,7 @@ guards: []
             && manifest
                 .allowed_input_classes
                 .iter()
-                .any(|contract| contract == "work_surface")
+                .any(|contract| contract == "work_packet")
             && manifest
                 .allowed_output_classes
                 .iter()
@@ -474,7 +474,7 @@ operations:
   - id: op_project
     kind: compile_context
     input_contracts: []
-    output_contracts: [work_surface]
+    output_contracts: [work_packet]
     instruction: null
     compiled_context:
       id: PLACEHOLDER_PROJ_ID
@@ -483,7 +483,7 @@ operations:
     provider_profile: null
   - id: op_transform
     kind: transform
-    input_contracts: [work_surface]
+    input_contracts: [work_packet]
     output_contracts: [status_summary]
     instruction:
       id: PLACEHOLDER_INSTR_ID
@@ -619,6 +619,7 @@ guards: []
     let handoff_id = store
         .scan_objects()
         .unwrap()
+        .scanned_objects
         .iter()
         .filter(|obj| obj.envelope.kind == Kind::HandoffManifest)
         .map(|obj| serde_json::from_slice::<HandoffManifest>(&obj.payload.bytes).unwrap())
@@ -1036,7 +1037,7 @@ operations:
   - id: op_project
     kind: compile_context
     input_contracts: []
-    output_contracts: [work_surface]
+    output_contracts: [work_packet]
     instruction: null
     compiled_context:
       id: PLACEHOLDER_PROJ_ID
@@ -1045,7 +1046,7 @@ operations:
     provider_profile: null
   - id: op_transform
     kind: transform
-    input_contracts: [work_surface]
+    input_contracts: [work_packet]
     output_contracts: [status_summary]
     instruction:
       id: PLACEHOLDER_INSTR_ID
@@ -1146,7 +1147,7 @@ guards: []
 
     assert!(matches!(error, ExecError::IncompleteExecution(_)));
 
-    let objects = store.scan_objects().unwrap();
+    let objects = store.scan_objects().unwrap().scanned_objects;
     let failed_deltas = objects
         .iter()
         .filter(|obj| obj.envelope.kind == Kind::ChangeSet)
@@ -1324,7 +1325,7 @@ operations:
   - id: op_project
     kind: compile_context
     input_contracts: []
-    output_contracts: [work_surface]
+    output_contracts: [work_packet]
     instruction: null
     compiled_context:
       id: PLACEHOLDER_PROJ_ID
@@ -1333,7 +1334,7 @@ operations:
     provider_profile: null
   - id: op_transform
     kind: transform
-    input_contracts: [work_surface]
+    input_contracts: [work_packet]
     output_contracts: [status_summary]
     instruction:
       id: PLACEHOLDER_INSTR_ID
@@ -1555,7 +1556,7 @@ operations:
   - id: op_project
     kind: compile_context
     input_contracts: []
-    output_contracts: [work_surface]
+    output_contracts: [work_packet]
     instruction: null
     compiled_context:
       id: PLACEHOLDER_PROJ_ID
@@ -1564,7 +1565,7 @@ operations:
     provider_profile: null
   - id: op_transform
     kind: transform
-    input_contracts: [work_surface]
+    input_contracts: [work_packet]
     output_contracts: [status_summary]
     instruction:
       id: PLACEHOLDER_INSTR_ID
@@ -1693,7 +1694,7 @@ guards: []
         .unwrap()
         .contains("1 transitions unreached"));
 
-    let objects = store.scan_objects().unwrap();
+    let objects = store.scan_objects().unwrap().scanned_objects;
     let ledgers = objects
         .iter()
         .filter(|obj| obj.envelope.kind == Kind::RunRecord)
@@ -1763,7 +1764,7 @@ fn test_mixed_source_rejection_no_side_effects() {
     assert!(result.is_err());
 
     // Assert no NEW assignments or change_sets were written
-    let objects = store.scan_objects().unwrap();
+    let objects = store.scan_objects().unwrap().scanned_objects;
     let claim_count = objects
         .iter()
         .filter(|obj| obj.envelope.kind == Kind::TransitionAssignment)
@@ -2069,7 +2070,7 @@ guards: []
     );
 
     // Find handoff from op_extract (should have to_transition_id = Some("op_summarize"))
-    let objects = store.scan_objects().unwrap();
+    let objects = store.scan_objects().unwrap().scanned_objects;
     let handoff_obj = objects
         .iter()
         .filter(|o| o.envelope.kind == Kind::HandoffManifest)
@@ -2179,7 +2180,7 @@ guards: []
     );
 
     // Verify no new findings were created by the handoff continuation run
-    let final_objects = store.scan_objects().unwrap();
+    let final_objects = store.scan_objects().unwrap().scanned_objects;
     let final_finding_count = final_objects
         .iter()
         .filter(|o| o.envelope.class.as_deref() == Some("finding"))
@@ -2319,7 +2320,7 @@ guards: []
     println!("Result: {:?}", result);
     assert!(result.is_err());
 
-    let objects = store.scan_objects().unwrap();
+    let objects = store.scan_objects().unwrap().scanned_objects;
     let failure_obj = objects
         .iter()
         .find(|obj| obj.envelope.kind == Kind::TransformationFailure)
@@ -2612,7 +2613,7 @@ guards: []
     println!("Pattern Run Result: {:?}", result);
     assert!(result.is_err()); // Should fail validation because standing is 'unresolved' but class requires 'supported'
 
-    let objects = store.scan_objects().unwrap();
+    let objects = store.scan_objects().unwrap().scanned_objects;
 
     // 6. Assert standing request recorded via relations
     let relations = objects

@@ -1,0 +1,21 @@
+schema: earmark.path_system_manifest.v1
+system_id: incident_response_v1
+namespace: operations
+title: Incident Response System
+description: A system for tracking and resolving operational incidents.
+classes:
+  - ../classes/incident.yaml
+  - ../classes/observation.yaml
+  - ../classes/action.yaml
+instructions:
+  - ../instructions/analyze_incident.md
+compiled_contexts:
+  - ../contexts/incident_context.yaml
+provider_profiles:
+  - ../profiles/mock_json.yaml
+workflows:
+  - ../workflows/analysis.yaml
+runtime_profile:
+  execution_surface: local
+  machine_output_default: json
+  work_surface_mode: local

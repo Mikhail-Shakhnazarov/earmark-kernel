@@ -344,7 +344,7 @@ fn test_multi_output_transform_rejection() {
     assert!(res
         .unwrap_err()
         .to_string()
-        .contains("multi-output transform operations are not implemented"));
+        .contains("multi-output transform operations are not yet implemented"));
 }
 
 #[test]

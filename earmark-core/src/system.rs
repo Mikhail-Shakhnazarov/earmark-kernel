@@ -27,6 +27,7 @@ pub struct SystemDefinition {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct RuntimeProfile {
     pub execution_surface: String,
     pub machine_output_default: String,

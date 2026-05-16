@@ -55,38 +55,56 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
         let mut synthetic_output_warning: Option<String> = None;
 
         let filtered_inputs = self.get_filtered_inputs(state, transition);
+        let exec_result: Result<(), ExecError> = (|| {
+            if !transition.input_contracts.is_empty() && filtered_inputs.is_empty() {
+                return Err(ExecError::MissingInput(format!(
+                    "operation '{}' requires objects matching contracts {:?}, but no active objects match in current run state",
+                    transition.id, transition.input_contracts
+                )));
+            }
 
-        let exec_result: Result<(), ExecError> = match transition.operation {
-            WorkflowOperationKind::CompileContext => self.handle_compile_context(
-                request,
-                system,
-                transition,
-                state,
-                record,
-                context_compiler,
-                &filtered_inputs,
-                &mut change_set_draft,
-            ),
-            WorkflowOperationKind::Transform => {
-                let (res, warning) = self.handle_transform(
+            match transition.operation {
+                WorkflowOperationKind::CompileContext => self.handle_compile_context(
                     request,
+                    system,
+                    transition,
+                    state,
+                    record,
+                    context_compiler,
+                    &filtered_inputs,
+                    &mut change_set_draft,
+                ),
+                WorkflowOperationKind::Transform => {
+                    let (res, warning) = self.handle_transform(
+                        request,
+                        system,
+                        transition,
+                        state,
+                        record,
+                        &filtered_inputs,
+                        &mut change_set_draft,
+                    );
+                    synthetic_output_warning = warning;
+                    res
+                }
+                WorkflowOperationKind::Review => self.handle_review(
+                    request,
+                    transition,
+                    state,
+                    record,
+                    &filtered_inputs,
+                    &mut change_set_draft,
+                ),
+                WorkflowOperationKind::Export => self.handle_export(
                     system,
                     transition,
                     state,
                     record,
                     &filtered_inputs,
                     &mut change_set_draft,
-                );
-                synthetic_output_warning = warning;
-                res
+                ),
             }
-            WorkflowOperationKind::Review => {
-                self.handle_review(request, transition, state, record, &mut change_set_draft)
-            }
-            WorkflowOperationKind::Export => {
-                self.handle_export(system, transition, state, record, &mut change_set_draft)
-            }
-        };
+        })();
 
         if let Err(error) = exec_result {
             return self.finalize_execution_failure(
@@ -168,7 +186,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
         if transition.input_contracts.is_empty() {
             state.active_objects.clone()
         } else {
-            let matching_objects = state
+            state
                 .active_objects
                 .iter()
                 .filter(|obj| {
@@ -178,12 +196,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                         .unwrap_or(false)
                 })
                 .cloned()
-                .collect::<Vec<_>>();
-            if matching_objects.is_empty() {
-                state.active_objects.clone()
-            } else {
-                matching_objects
-            }
+                .collect::<Vec<_>>()
         }
     }
 
@@ -237,6 +250,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
             .created_objects
             .push(work_packet_ref.id.clone());
         state.emitted_packets.push(work_packet_ref.clone());
+        state.active_objects.push(work_packet_ref.clone());
         record.work_packets.push(work_packet_ref.clone());
         *state.compiled_context = Some(manifest);
         record_transition(
@@ -265,15 +279,8 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
 
         let res = (|| {
             if transition.output_contracts.len() > 1 {
-                return Err(ExecError::Validation(
-                    earmark_core::ChangeSetValidationResult {
-                        is_valid: false,
-                        failures: vec![
-                            "multi-output transform operations are not yet implemented".to_string()
-                        ],
-                        warnings: vec![],
-                        info: vec![],
-                    },
+                return Err(ExecError::UnsupportedOperation(
+                    "multi-output transform operations are not yet implemented".to_string(),
                 ));
             }
             let instruction_ref = transition.instruction.as_ref().ok_or_else(|| {
@@ -321,14 +328,12 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
             state.emitted_packets.push(work_packet_ref.clone());
             record.work_packets.push(work_packet_ref.clone());
 
-            let output_class = if !instruction.register.is_empty() {
-                instruction.register.clone()
+            let output_classes = if !instruction.register.is_empty() {
+                vec![instruction.register.clone()]
+            } else if !transition.output_contracts.is_empty() {
+                transition.output_contracts.clone()
             } else {
-                transition
-                    .output_contracts
-                    .first()
-                    .cloned()
-                    .unwrap_or_else(|| "candidate_output".to_string())
+                vec!["candidate_output".to_string()]
             };
 
             let artifacts = match provider_mode {
@@ -336,7 +341,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                     self.store,
                     self.index,
                     &instruction,
-                    &output_class,
+                    &output_classes,
                     filtered_inputs,
                     &resolved_instruction_ref,
                 )?,
@@ -471,7 +476,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                                 self.store,
                                 self.index,
                                 &instruction,
-                                &output_class,
+                                &output_classes,
                                 filtered_inputs,
                                 &resolved_instruction_ref,
                                 response,
@@ -503,20 +508,21 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                 }
             };
 
-            *state.active_objects = vec![artifacts.output.clone()];
-            change_set_draft
-                .created_objects
-                .push(artifacts.output.id.clone());
+            state.active_objects.extend(artifacts.outputs.clone());
+            for output in &artifacts.outputs {
+                change_set_draft.created_objects.push(output.id.clone());
+                state.emitted_objects.push(output.clone());
+            }
             change_set_draft
                 .created_relations
-                .extend(artifacts.relation_ids);
-            state.emitted_objects.push(artifacts.output.clone());
+                .extend(artifacts.relation_ids.clone());
+
             record_transition(
                 record,
                 transition.id.clone(),
                 "transformed",
                 filtered_inputs.to_vec(),
-                vec![artifacts.output],
+                artifacts.outputs.clone(),
                 Some(format!("execution policy {}", instruction.execution_policy)),
             );
             Ok(())
@@ -531,9 +537,10 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
         transition: &ExecutionTransition,
         state: &mut ExecutionState,
         record: &mut RunRecord,
+        filtered_inputs: &[ObjectRef],
         change_set_draft: &mut ChangeSetDraft,
     ) -> Result<(), ExecError> {
-        let target = state.active_objects.first().cloned().ok_or_else(|| {
+        let target = filtered_inputs.first().cloned().ok_or_else(|| {
             ExecError::MissingInput("review requires a target object".to_string())
         })?;
         let review_object = GovernanceService::create_review_object(
@@ -545,6 +552,38 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
         let review_ref = review_object.object_ref();
         change_set_draft.created_objects.push(review_ref.id.clone());
         state.emitted_objects.push(review_ref.clone());
+        state.active_objects.push(review_ref.clone());
+
+        let target_object = self.store.read_version(&target.version_ref())?;
+
+        // Respect output contracts by emitting "forwarded" objects if requested
+        for class in &transition.output_contracts {
+            let forwarded = StoredObject::builder(Kind::Object, target_object.payload.clone())
+                .class(class.clone())
+                .provenance(earmark_core::Provenance {
+                    actor: "execution_engine".to_string(),
+                    source_type: "review_forward".to_string(),
+                    source_ref: Some(review_ref.clone()),
+                    lineage: vec![earmark_core::LineageLink {
+                        rel: "reviewed_version".to_string(),
+                        object: target.clone(),
+                    }],
+                    import_path: None,
+                    captured_at: Utc::now(),
+                })
+                .header(
+                    "title",
+                    format!("Forwarded {} via Review", target.id.as_str()),
+                )
+                .build()
+                .map_err(ExecError::IncompleteExecution)?;
+            write_object_and_index(self.store, self.index, &forwarded)?;
+            let forwarded_obj_ref = forwarded.object_ref();
+            change_set_draft
+                .created_objects
+                .push(forwarded_obj_ref.id.clone());
+            state.active_objects.push(forwarded_obj_ref);
+        }
         record_transition(
             record,
             transition.id.clone(),
@@ -566,6 +605,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
         transition: &ExecutionTransition,
         state: &mut ExecutionState,
         record: &mut RunRecord,
+        filtered_inputs: &[ObjectRef],
         change_set_draft: &mut ChangeSetDraft,
     ) -> Result<(), ExecError> {
         let policy_ref = transition.policy.as_ref().ok_or_else(|| {
@@ -575,7 +615,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
             ))
         })?;
         let policy = load_standing_policy(self.store, self.index, policy_ref)?;
-        let target = state.active_objects.first().cloned().ok_or_else(|| {
+        let target = filtered_inputs.first().cloned().ok_or_else(|| {
             ExecError::MissingInput("export requires an active object".to_string())
         })?;
         let target_object = self.store.read_version(&target.version_ref())?;

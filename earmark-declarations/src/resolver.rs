@@ -1,9 +1,26 @@
 use crate::DeriveError;
 use earmark_core::{
-    FlexibleVersionRef, VersionRef, WorkflowDeclaration, WorkflowDefinition, WorkflowOperation,
+    FlexibleVersionRef, InstructionPayload, VersionRef, WorkflowDeclaration, WorkflowDefinition,
+    WorkflowOperation,
 };
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+
+pub fn resolve_instruction_declaration(
+    instruction_path: &Path,
+    mut declaration: InstructionPayload,
+    registry: &BTreeMap<PathBuf, VersionRef>,
+) -> Result<InstructionPayload, DeriveError> {
+    declaration.provider_profile = resolve_flex_ref(
+        instruction_path,
+        &declaration.name,
+        "provider_profile",
+        declaration.provider_profile,
+        registry,
+    )?
+    .map(FlexibleVersionRef::from_version_ref);
+    Ok(declaration)
+}
 
 pub fn resolve_workflow_declaration(
     workflow_path: &Path,

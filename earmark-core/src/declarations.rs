@@ -37,7 +37,8 @@ pub(crate) struct InstructionFrontmatter {
     pub input_classes: Vec<String>,
     pub output_classes: Vec<String>,
     pub execution_policy: String,
-    pub provider_profile: Option<VersionRef>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider_profile: Option<FlexibleVersionRef>,
     pub trace_policy: String,
     pub register: String,
 }
@@ -62,7 +63,7 @@ pub struct InstructionPayload {
     pub input_classes: Vec<String>,
     pub output_classes: Vec<String>,
     pub execution_policy: String,
-    pub provider_profile: Option<VersionRef>,
+    pub provider_profile: Option<FlexibleVersionRef>,
     pub trace_policy: String,
     pub register: String,
     pub body: MarkdownBody,
@@ -72,7 +73,7 @@ impl InstructionPayload {
     pub fn parse_markdown(input: &str) -> Result<Self, CoreError> {
         let (frontmatter, body) =
             crate::serde_helpers::parse_markdown_frontmatter::<InstructionFrontmatter>(input)?;
-        Ok(Self {
+        Ok(InstructionPayload {
             name: frontmatter.name,
             version: frontmatter.version,
             purpose: frontmatter.purpose,
@@ -132,10 +133,28 @@ pub struct WorkflowDeclaration {
     pub output_contracts: Vec<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FlexibleVersionRef {
-    Ref(VersionRef),
     Path(String),
+    Ref(VersionRef),
+}
+
+impl From<VersionRef> for FlexibleVersionRef {
+    fn from(v: VersionRef) -> Self {
+        Self::Ref(v)
+    }
+}
+
+impl serde::Serialize for FlexibleVersionRef {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            FlexibleVersionRef::Path(p) => serializer.serialize_str(p),
+            FlexibleVersionRef::Ref(r) => r.serialize(serializer),
+        }
+    }
 }
 
 impl<'de> serde::Deserialize<'de> for FlexibleVersionRef {
@@ -143,34 +162,54 @@ impl<'de> serde::Deserialize<'de> for FlexibleVersionRef {
     where
         D: serde::Deserializer<'de>,
     {
-        use serde::de::Error;
         let value = serde_json::Value::deserialize(deserializer)?;
-        match value {
-            serde_json::Value::String(s) => Ok(FlexibleVersionRef::Path(s)),
-            serde_json::Value::Object(map) => {
-                let id_val = map.get("id").ok_or_else(|| {
-                    D::Error::custom("malformed version reference: missing 'id' field")
-                })?;
-                let vid_val = map.get("version_id").ok_or_else(|| {
-                    D::Error::custom("malformed version reference: missing 'version_id' field")
-                })?;
-
-                let id_str = id_val.as_str().ok_or_else(|| {
-                    D::Error::custom("malformed version reference: 'id' must be a string")
-                })?;
-                let vid_str = vid_val.as_str().ok_or_else(|| {
-                    D::Error::custom("malformed version reference: 'version_id' must be a string")
-                })?;
-
-                let id = crate::ids::ObjectId::parse(id_str).map_err(D::Error::custom)?;
-                let version_id = crate::ids::VersionId::parse(vid_str).map_err(D::Error::custom)?;
-
-                Ok(FlexibleVersionRef::Ref(VersionRef { id, version_id }))
-            }
-            _ => Err(D::Error::custom(
-                "invalid workflow reference: expected a path string or a durable reference map {id, version_id}",
-            )),
+        if let Some(s) = value.as_str() {
+            return Ok(FlexibleVersionRef::Path(s.to_string()));
         }
+
+        // Try to parse as VersionRef (flat)
+        match serde_json::from_value::<VersionRef>(value.clone()) {
+            Ok(vref) => return Ok(FlexibleVersionRef::Ref(vref)),
+            Err(e) => {
+                // If it looks like a Ref but failed validation, surface the specific error
+                if value.get("id").is_some() {
+                    return Err(serde::de::Error::custom(e));
+                }
+            }
+        }
+
+        // Try to handle tagged variants produced by some YAML/JSON versions
+        if let Some(inner) = value.get("Ref").or(value.get("!Ref")) {
+            return serde_json::from_value::<VersionRef>(inner.clone())
+                .map(FlexibleVersionRef::Ref)
+                .map_err(serde::de::Error::custom);
+        }
+
+        Err(serde::de::Error::custom(format!(
+            "invalid version reference: expected path string or {{id, version_id}} object, found {}",
+            value
+        )))
+    }
+}
+
+impl FlexibleVersionRef {
+    pub fn to_canonical(&self) -> Option<VersionRef> {
+        match self {
+            FlexibleVersionRef::Ref(r) => Some(r.clone()),
+            FlexibleVersionRef::Path(_) => None,
+        }
+    }
+
+    pub fn from_version_ref(vref: VersionRef) -> Self {
+        FlexibleVersionRef::Ref(vref)
+    }
+
+    pub fn from_value(value: serde_json::Value) -> Result<Self, CoreError> {
+        serde_json::from_value(value).map_err(|e| CoreError::InvalidFrontmatter(e.to_string()))
+    }
+
+    pub fn to_value(&self) -> Result<serde_json::Value, CoreError> {
+        serde_json::to_value(self).map_err(|e| CoreError::InvalidFrontmatter(e.to_string()))
     }
 }
 
@@ -196,9 +235,13 @@ pub struct WorkflowDeclarationOperation {
     pub input_contracts: Vec<String>,
     #[serde(default)]
     pub output_contracts: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub instruction: Option<FlexibleVersionRef>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub compiled_context: Option<FlexibleVersionRef>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub policy: Option<FlexibleVersionRef>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub provider_profile: Option<FlexibleVersionRef>,
 }
 

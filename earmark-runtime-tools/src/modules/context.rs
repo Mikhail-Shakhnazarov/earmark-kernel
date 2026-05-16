@@ -117,7 +117,7 @@ pub(crate) fn current_head_objects<S: CanonicalStore>(
     store: &S,
 ) -> Result<BTreeMap<ObjectId, StoredObject>, RuntimeToolError> {
     let mut heads = BTreeMap::new();
-    for object in store.scan_objects()? {
+    for object in store.scan_objects()?.scanned_objects {
         if let Some(head_ref) = store.read_head_ref(&object.envelope.id)? {
             if head_ref.version_id == object.envelope.version_id {
                 heads.insert(object.envelope.id.clone(), object);

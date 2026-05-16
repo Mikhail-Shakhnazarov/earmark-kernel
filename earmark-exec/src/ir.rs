@@ -61,6 +61,6 @@ pub struct SuccessorHandoffSpec {
 
 #[derive(Debug, Clone)]
 pub struct TransformArtifacts {
-    pub output: ObjectRef,
+    pub outputs: Vec<ObjectRef>,
     pub relation_ids: Vec<ObjectId>,
 }

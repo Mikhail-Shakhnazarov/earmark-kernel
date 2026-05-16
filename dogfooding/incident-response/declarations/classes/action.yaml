@@ -1,0 +1,12 @@
+name: action
+kind: object
+version: "0.1.0"
+required_headers:
+  - owner
+payload_schema: |
+  inline:{ "type": "object", "required": ["task"], "properties": { "task": { "type": "string" } } }
+standing_rules:
+  allowed_standing: {}
+  required_protocols: {}
+relation_rules: []
+validators: []
