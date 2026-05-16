@@ -4,7 +4,7 @@ use clap::{ArgAction, Args, CommandFactory, Parser, Subcommand, ValueEnum};
 
 #[derive(Parser)]
 #[command(name = "em")]
-#[command(help = "Earmark operator shell")]
+#[command(about = "Earmark operator shell")]
 pub struct Cli {
     #[arg(long)]
     pub root: Option<PathBuf>,
@@ -29,49 +29,49 @@ pub enum CommandStability {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    #[command(help = "[STABLE] Initialize a new earmark workspace")]
+    #[command(about = "[STABLE] Initialize a new earmark workspace")]
     Init,
-    #[command(help = "[BETA] Diagnose and repair workspace issues")]
+    #[command(about = "[BETA] Diagnose and repair workspace issues")]
     Doctor(DoctorArgs),
-    #[command(help = "[EXPERIMENTAL] Manage system registration")]
+    #[command(about = "[EXPERIMENTAL] Manage system registration")]
     System(SystemCommand),
-    #[command(help = "[STABLE] Deposit an object into the store")]
+    #[command(about = "[STABLE] Deposit an object into the store")]
     Deposit(DepositArgs),
-    #[command(help = "[STABLE] Query the object store")]
+    #[command(about = "[STABLE] Query the object store")]
     Query(QueryArgs),
-    #[command(help = "[STABLE] Review an object")]
+    #[command(about = "[STABLE] Review an object")]
     Review(ReviewArgs),
-    #[command(help = "[STABLE] Manage workflows")]
+    #[command(about = "[STABLE] Manage workflows")]
     Workflow(WorkflowCommand),
-    #[command(help = "[STABLE] Manage runs")]
+    #[command(about = "[STABLE] Manage runs")]
     Run(RunCommand),
-    #[command(help = "[BETA] Declare and register declarations")]
+    #[command(about = "[BETA] Declare and register declarations")]
     Declare(DeclareCommand),
-    #[command(help = "[STABLE] Manage assignments")]
+    #[command(about = "[STABLE] Manage assignments")]
     Assignment(AssignmentCommand),
-    #[command(help = "[STABLE] Manage change sets")]
+    #[command(about = "[STABLE] Manage change sets")]
     ChangeSet(ChangeSetCommand),
-    #[command(help = "[STABLE] Manage handoffs")]
+    #[command(about = "[STABLE] Manage handoffs")]
     Handoff(HandoffCommand),
-    #[command(help = "[STABLE] Manage failures")]
+    #[command(about = "[STABLE] Manage failures")]
     Failure(FailureCommand),
-    #[command(help = "[EXPERIMENTAL] Compile context")]
+    #[command(about = "[EXPERIMENTAL] Compile context")]
     Context(ContextCommand),
-    #[command(help = "[BETA] Audit workspace events")]
+    #[command(about = "[BETA] Audit workspace events")]
     Audit(AuditCommand),
-    #[command(help = "[STABLE] Generate reports")]
+    #[command(about = "[STABLE] Generate reports")]
     Report(ReportCommand),
-    #[command(help = "[BETA] Manage providers")]
+    #[command(about = "[BETA] Manage providers")]
     Provider(ProviderCommand),
-    #[command(help = "[BETA] Generate shell completions")]
+    #[command(about = "[BETA] Generate shell completions")]
     Completions { shell: CompletionShell },
-    #[command(help = "[STABLE] Show workspace status")]
+    #[command(about = "[STABLE] Show workspace status")]
     Status,
-    #[command(help = "[EXPERIMENTAL] Manage relations")]
+    #[command(about = "[EXPERIMENTAL] Manage relations")]
     Relation(RelationCommand),
-    #[command(help = "[EXPERIMENTAL] Manage standing requests")]
+    #[command(about = "[EXPERIMENTAL] Manage standing requests")]
     StandingRequest(StandingRequestCommand),
-    #[command(help = "[BETA] Undo a run")]
+    #[command(about = "[BETA] Undo a run")]
     Undo(UndoCommand),
 }
 
