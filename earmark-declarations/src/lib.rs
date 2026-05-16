@@ -414,6 +414,13 @@ pub fn validate_workflow_definition(value: &WorkflowDeclaration) -> Result<(), D
                         op.id
                     )));
                 }
+                if op.output_contracts.len() > 1 {
+                    return Err(DeriveError::Validation(format!(
+                        "workflow operation '{}' has {} output contracts: multi-output transform operations are not yet implemented",
+                        op.id,
+                        op.output_contracts.len()
+                    )));
+                }
             }
             earmark_core::WorkflowOperationKind::Review
             | earmark_core::WorkflowOperationKind::Export => {

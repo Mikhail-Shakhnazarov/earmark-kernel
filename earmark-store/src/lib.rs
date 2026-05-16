@@ -790,8 +790,7 @@ impl StoreScanner for GitCanonicalStore {
                             .and_then(|s| s.to_str())
                             .map(|s| s.starts_with("payload."))
                             .unwrap_or(false)
-                    })
-                {
+                    }) {
                     Some(p) => p,
                     None => {
                         skipped_entries.push(SkippedEntry {

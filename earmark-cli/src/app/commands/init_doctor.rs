@@ -74,7 +74,7 @@ pub(crate) fn handle_doctor(ctx: &CommandContext, args: &DoctorArgs) -> Result<(
 
     let store_scan = store.scan_objects();
     let store_scan_ok = store_scan.is_ok();
-    
+
     let mut warnings: Vec<String> = Vec::new();
     let mut all_ok = store_scan_ok;
 
@@ -102,74 +102,81 @@ pub(crate) fn handle_doctor(ctx: &CommandContext, args: &DoctorArgs) -> Result<(
     let index_exists = index_path.exists();
     let mut dirty_marker = None;
 
-    let (index_open_ok, indexed_count, indexed_head_count, counts_match, index_stale) = if index_exists {
-        match DerivedIndex::open_existing(store.root()) {
-            Ok(idx) => {
-                dirty_marker = idx.dirty_status().unwrap_or(None);
-                if dirty_marker.is_some() {
-                    all_ok = false;
-                    warnings.push("index is marked dirty; repair required".to_string());
-                }
+    let (index_open_ok, indexed_count, indexed_head_count, counts_match, index_stale) =
+        if index_exists {
+            match DerivedIndex::open_existing(store.root()) {
+                Ok(idx) => {
+                    dirty_marker = idx.dirty_status().unwrap_or(None);
+                    if dirty_marker.is_some() {
+                        all_ok = false;
+                        warnings.push("index is marked dirty; repair required".to_string());
+                    }
 
-                let obj_count = idx.object_count().unwrap_or(0);
-                let head_count = idx.head_count().unwrap_or(0);
-                let match_ok = obj_count == canonical_count;
-                if !match_ok {
-                    warnings.push(format!(
+                    let obj_count = idx.object_count().unwrap_or(0);
+                    let head_count = idx.head_count().unwrap_or(0);
+                    let match_ok = obj_count == canonical_count;
+                    if !match_ok {
+                        warnings.push(format!(
                         "store/index count mismatch: {} canonical objects vs {} indexed objects",
                         canonical_count, obj_count
                     ));
-                    all_ok = false;
-                }
+                        all_ok = false;
+                    }
 
-                // Check for staleness
-                let mut stale = false;
-                if let Ok(index_meta) = std::fs::metadata(&index_path) {
-                    if let Ok(index_mtime) = index_meta.modified() {
-                        // Find newest envelope.json mtime
-                        let mut max_mtime = None;
-                        for entry in walkdir::WalkDir::new(store.root().join(".earmark").join("canonical").join("objects"))
+                    // Check for staleness
+                    let mut stale = false;
+                    if let Ok(index_meta) = std::fs::metadata(&index_path) {
+                        if let Ok(index_mtime) = index_meta.modified() {
+                            // Find newest envelope.json mtime
+                            let mut max_mtime = None;
+                            for entry in walkdir::WalkDir::new(
+                                store
+                                    .root()
+                                    .join(".earmark")
+                                    .join("canonical")
+                                    .join("objects"),
+                            )
                             .into_iter()
                             .filter_map(|e| e.ok())
-                        {
-                            if entry.file_name() == "envelope.json" {
-                                if let Ok(meta) = entry.metadata() {
-                                    if let Ok(mtime) = meta.modified() {
-                                        if max_mtime.is_none() || mtime > max_mtime.unwrap() {
-                                            max_mtime = Some(mtime);
+                            {
+                                if entry.file_name() == "envelope.json" {
+                                    if let Ok(meta) = entry.metadata() {
+                                        if let Ok(mtime) = meta.modified() {
+                                            if max_mtime.is_none() || mtime > max_mtime.unwrap() {
+                                                max_mtime = Some(mtime);
+                                            }
                                         }
                                     }
                                 }
                             }
-                        }
 
-                        if let Some(max) = max_mtime {
-                            if max > index_mtime {
-                                stale = true;
-                                warnings.push("index may be stale; canonical objects have been modified since last index update".to_string());
-                                all_ok = false;
+                            if let Some(max) = max_mtime {
+                                if max > index_mtime {
+                                    stale = true;
+                                    warnings.push("index may be stale; canonical objects have been modified since last index update".to_string());
+                                    all_ok = false;
+                                }
                             }
                         }
                     }
-                }
 
-                all_ok = all_ok && match_ok && !stale;
-                (true, obj_count, head_count, match_ok, stale)
+                    all_ok = all_ok && match_ok && !stale;
+                    (true, obj_count, head_count, match_ok, stale)
+                }
+                Err(e) => {
+                    warnings.push(format!("index open failed: {}", e));
+                    all_ok = false;
+                    (false, 0, 0, false, false)
+                }
             }
-            Err(e) => {
-                warnings.push(format!("index open failed: {}", e));
-                all_ok = false;
-                (false, 0, 0, false, false)
-            }
-        }
-    } else {
-        warnings.push(
-            "derived index is missing; run a write command or system register to rebuild it"
-                .to_string(),
-        );
-        all_ok = false;
-        (false, 0, 0, false, false)
-    };
+        } else {
+            warnings.push(
+                "derived index is missing; run a write command or system register to rebuild it"
+                    .to_string(),
+            );
+            all_ok = false;
+            (false, 0, 0, false, false)
+        };
 
     if let Err(e) = &store_scan {
         warnings.push(format!(

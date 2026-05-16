@@ -249,13 +249,16 @@ pub(crate) fn create_local_transform_output<S: CanonicalStore>(
                 import_path: None,
                 captured_at: Utc::now(),
             })
-            .header("title", format!("{} candidate ({})", instruction.name, class))
+            .header(
+                "title",
+                format!("{} candidate ({})", instruction.name, class),
+            )
             .build()
             .map_err(ExecError::IncompleteExecution)?;
         write_object_and_index(store, index, &stored)?;
         let relation_ids =
             create_lineage_relations(store, index, &stored.object_ref(), inputs, instruction_ref)?;
-        
+
         outputs.push(stored.object_ref());
         all_relation_ids.extend(relation_ids);
     }
@@ -278,20 +281,24 @@ pub(crate) fn create_delegated_transform_output<S: CanonicalStore>(
     let is_synthetic = provider_response_is_synthetic(&response);
     let synthetic_source = provider_metadata_synthetic_source(&response.metadata)
         .unwrap_or_else(|| "mock_provider".to_string());
-    
+
     let mut outputs = Vec::new();
     let mut all_relation_ids = Vec::new();
 
     // If the response is a JSON object, we might want to split it by class.
     // For now, we support the 'multi-object' case where the payload is replicated
     // OR the provider returned a structured map.
-    let payload_json: Option<serde_json::Value> = serde_json::from_str(&response.candidate_payload).ok();
+    let payload_json: Option<serde_json::Value> =
+        serde_json::from_str(&response.candidate_payload).ok();
 
     for class in output_classes {
         let mut headers = BTreeMap::from([
             (
                 "title".to_string(),
-                earmark_core::HeaderValue::String(format!("{} candidate ({})", instruction.name, class)),
+                earmark_core::HeaderValue::String(format!(
+                    "{} candidate ({})",
+                    instruction.name, class
+                )),
             ),
             (
                 "provider".to_string(),
@@ -356,7 +363,7 @@ pub(crate) fn create_delegated_transform_output<S: CanonicalStore>(
         write_object_and_index(store, index, &stored)?;
         let relation_ids =
             create_lineage_relations(store, index, &stored.object_ref(), inputs, instruction_ref)?;
-        
+
         outputs.push(stored.object_ref());
         all_relation_ids.extend(relation_ids);
     }
