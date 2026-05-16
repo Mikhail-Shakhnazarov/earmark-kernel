@@ -1525,7 +1525,7 @@ pub(crate) fn emit(as_json: bool, value: serde_json::Value) {
 
 fn render_explanation(value: &serde_json::Value) -> Option<String> {
     let kind = value.get("kind")?.as_str()?;
-    let id = value.get("id")?.as_str().unwrap_or("unknown");
+    let id = value.get("id").and_then(|v| v.as_str()).unwrap_or("unknown");
     let summary = value.get("summary")?.as_str().unwrap_or("");
     let next_commands = value.get("next_commands").and_then(|v| v.as_array());
 
@@ -1538,6 +1538,79 @@ fn render_explanation(value: &serde_json::Value) -> Option<String> {
     output.push_str(&format!("Summary: {}\n\n", summary));
 
     match kind {
+        "query_results" => {
+            let results = value.get("results")?.as_array()?;
+            output.push_str("Matches:\n");
+            for obj in results {
+                let object_id = obj.get("object_id")?.as_str()?;
+                let class = obj.get("class").and_then(|v| v.as_str()).unwrap_or("none");
+                let title = obj.get("title").and_then(|v| v.as_str()).unwrap_or("no title");
+                output.push_str(&format!("- [{}] {} (class: {})\n", object_id, title, class));
+                if let Some(headers) = obj.get("headers").and_then(|v| v.as_object()) {
+                    if !headers.is_empty() {
+                         let h_strs: Vec<String> = headers.iter().map(|(k, v)| format!("{}={}", k, v.as_str().unwrap_or(""))).collect();
+                         output.push_str(&format!("  Headers: {}\n", h_strs.join(", ")));
+                    }
+                }
+                if let Some(standing) = obj.get("standing").and_then(|v| v.as_object()) {
+                    if !standing.is_empty() {
+                         let s_strs: Vec<String> = standing.iter().map(|(k, v)| format!("{}:{}", k, v.as_str().unwrap_or(""))).collect();
+                         output.push_str(&format!("  Standing: {}\n", s_strs.join(", ")));
+                    }
+                }
+            }
+        }
+        "status" => {
+            output.push_str("Workspace Overview:\n");
+            output.push_str(&format!("  Objects: {}\n", value.get("object_count")?.as_u64()?));
+            output.push_str(&format!("  Active Systems: {}\n", value.get("active_system_count")?.as_u64()?));
+            output.push_str(&format!("  Runs: {}\n", value.get("run_count")?.as_u64()?));
+            output.push_str(&format!("  Change Sets: {}\n", value.get("change_set_count")?.as_u64()?));
+            output.push_str(&format!("  Handoffs: {}\n", value.get("handoff_count")?.as_u64()?));
+            output.push_str(&format!("  Failures: {}\n", value.get("failure_count")?.as_u64()?));
+            
+            output.push_str("\nPaths:\n");
+            let paths = value.get("paths")?;
+            output.push_str(&format!("  Root: {}\n", value.get("root")?.as_str()?));
+            output.push_str(&format!("  Declarations: {}\n", paths.get("declarations_dir")?.as_str()?));
+            
+            output.push_str("\nProvider Capabilities:\n");
+            if let Some(providers) = value.get("provider_capabilities").and_then(|v| v.as_array()) {
+                for p in providers {
+                    let name = p.get("provider")?.as_str()?;
+                    let status = p.get("status")?.as_str()?;
+                    output.push_str(&format!("  - {}: {}\n", name, status));
+                }
+            }
+        }
+        "doctor" => {
+            let ok = value.get("ok")?.as_bool()?;
+            output.push_str(&format!("Health Status: {}\n", if ok { "✅ PASS" } else { "❌ ISSUES FOUND" }));
+            output.push_str(&format!("Canonical Objects: {}\n", value.get("canonical_object_count")?.as_u64()?));
+            output.push_str(&format!("Indexed Objects: {}\n", value.get("indexed_object_count")?.as_u64()?));
+            
+            if let Some(warnings) = value.get("warnings").and_then(|v| v.as_array()) {
+                if !warnings.is_empty() {
+                    output.push_str("\nWarnings:\n");
+                    for w in warnings {
+                        output.push_str(&format!("  ⚠️ {}\n", w.as_str()?));
+                    }
+                }
+            }
+        }
+        "review" => {
+            output.push_str("Review Results:\n");
+            output.push_str(&format!("  Target Object: {}\n", value.get("target_object_id")?.as_str()?));
+            output.push_str(&format!("  Status: {}\n", value.get("status")?.as_str()?));
+            output.push_str(&format!("  Review Object: {}\n", value.get("review_object_id")?.as_str()?));
+        }
+        "undo" => {
+            output.push_str("Undo Results:\n");
+            output.push_str(&format!("  Undo Record: {}\n", value.get("undo_record_id")?.as_str()?));
+            let impact = value.get("impact")?;
+            output.push_str(&format!("  Objects Hidden: {}\n", impact.get("objects_hidden")?.as_u64()?));
+            output.push_str(&format!("  Relations Hidden: {}\n", impact.get("relations_hidden")?.as_u64()?));
+        }
         "run" => {
             let artifact = value.get("artifact")?;
             let related = value.get("related")?;

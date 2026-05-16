@@ -24,6 +24,8 @@ pub struct ObjectSummary {
     pub namespace: Option<String>,
     #[serde(default)]
     pub standing: BTreeMap<String, String>,
+    #[serde(default)]
+    pub headers: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -158,7 +160,8 @@ impl DerivedIndex {
                 system_id TEXT,
                 namespace TEXT,
                 declaration_identity TEXT,
-                searchable_text TEXT
+                searchable_text TEXT,
+                headers TEXT
             );
 
             CREATE TABLE IF NOT EXISTS heads (
@@ -227,6 +230,16 @@ impl DerivedIndex {
         // Backfill for existing indexes created before declaration_identity existed.
         if let Err(err) = self.conn.execute(
             "ALTER TABLE objects ADD COLUMN declaration_identity TEXT",
+            [],
+        ) {
+            match err {
+                rusqlite::Error::SqliteFailure(_, Some(msg))
+                    if msg.contains("duplicate column name") => {}
+                _ => return Err(err.into()),
+            }
+        }
+        if let Err(err) = self.conn.execute(
+            "ALTER TABLE objects ADD COLUMN headers TEXT",
             [],
         ) {
             match err {
@@ -455,8 +468,8 @@ impl DerivedIndex {
             self.conn.execute(
                 "INSERT OR REPLACE INTO objects (
                     version_id, object_id, kind, class, title, summary,
-                    payload_ref, created_at, updated_at, system_id, namespace, declaration_identity, searchable_text
-                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+                    payload_ref, created_at, updated_at, system_id, namespace, declaration_identity, searchable_text, headers
+                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
                 params![
                     version_id,
                     object_id,
@@ -471,6 +484,7 @@ impl DerivedIndex {
                     namespace,
                     declaration_identity,
                     searchable_text,
+                    serde_json::to_string(&envelope.headers).unwrap_or_default(),
                 ],
             )?;
 
@@ -668,8 +682,8 @@ impl DerivedIndex {
         self.conn.execute(
             "INSERT OR REPLACE INTO objects (
                 version_id, object_id, kind, class, title, summary,
-                payload_ref, created_at, updated_at, system_id, namespace, declaration_identity, searchable_text
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+                payload_ref, created_at, updated_at, system_id, namespace, declaration_identity, searchable_text, headers
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
             params![
                 envelope.version_id.as_str().to_string(),
                 envelope.id.as_str().to_string(),
@@ -684,6 +698,7 @@ impl DerivedIndex {
                 namespace,
                 declaration_identity,
                 searchable_text,
+                serde_json::to_string(&envelope.headers).unwrap_or_default(),
             ],
         )?;
         self.conn.execute(
@@ -712,7 +727,7 @@ impl DerivedIndex {
 
     pub fn query_objects(&self, filter: &QueryFilter) -> Result<Vec<ObjectSummary>, IndexError> {
         let mut sql = String::from(
-            "SELECT o.object_id, o.version_id, o.kind, o.class, o.title, o.summary, o.system_id, o.namespace FROM objects o JOIN heads h ON o.object_id = h.object_id AND o.version_id = h.version_id WHERE 1=1",
+            "SELECT o.object_id, o.version_id, o.kind, o.class, o.title, o.summary, o.system_id, o.namespace, o.headers FROM objects o JOIN heads h ON o.object_id = h.object_id AND o.version_id = h.version_id WHERE 1=1",
         );
         let mut values: Vec<String> = Vec::new();
 
@@ -769,6 +784,7 @@ impl DerivedIndex {
                     system_id: row.get(6)?,
                     namespace: row.get(7)?,
                     standing: BTreeMap::new(),
+                    headers: serde_json::from_str(&row.get::<_, String>(8)?).unwrap_or_default(),
                 })
             })?;
             rows.collect::<Result<Vec<_>, _>>()?

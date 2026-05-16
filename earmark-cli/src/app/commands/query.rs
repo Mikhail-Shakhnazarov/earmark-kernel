@@ -2,6 +2,7 @@ use crate::app::common::{CliError, CommandContext};
 use crate::app::emit;
 use crate::cli::QueryArgs;
 use earmark_index::QueryFilter;
+use serde_json::json;
 
 pub fn handle(ctx: &CommandContext, args: &QueryArgs) -> Result<(), CliError> {
     let index = ctx.index.as_ref().expect("index required for query");
@@ -14,6 +15,14 @@ pub fn handle(ctx: &CommandContext, args: &QueryArgs) -> Result<(), CliError> {
         object_id: args.object_id.clone(),
         ..Default::default()
     })?;
-    emit(as_json, serde_json::to_value(rows)?);
+    emit(
+        as_json,
+        json!({
+            "kind": "query_results",
+            "id": "search",
+            "summary": format!("{} objects matched the query", rows.len()),
+            "results": rows,
+        }),
+    );
     Ok(())
 }
