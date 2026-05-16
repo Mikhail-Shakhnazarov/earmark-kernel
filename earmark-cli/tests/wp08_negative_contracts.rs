@@ -132,3 +132,23 @@ fn test_non_existent_run() {
     assert!(val["error"]["message"].as_str().unwrap().contains("not found")
         || val["error"]["message"].as_str().unwrap().contains("404"));
 }
+
+#[test]
+fn test_invalid_subcommand_emits_json_error_envelope() {
+    let output = Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--json")
+        .arg("workflow")
+        .arg("list")
+        .assert()
+        .failure()
+        .get_output()
+        .stdout
+        .clone();
+
+    let val = verify_error_envelope(&output);
+    assert!(val["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("unrecognized subcommand"));
+}
