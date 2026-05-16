@@ -860,6 +860,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "earmark-core",
+ "earmark-index",
  "earmark-store",
  "serde",
  "serde_json",
