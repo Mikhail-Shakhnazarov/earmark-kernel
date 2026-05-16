@@ -660,6 +660,21 @@ pub fn validate_provider_profile(value: &ProviderProfile) -> Result<(), DeriveEr
             }
         }
 
+        for domain in &http.allowed_domains {
+            if domain.trim().is_empty() {
+                return Err(DeriveError::Validation(
+                    "http allowed_domains cannot contain empty values".to_string(),
+                ));
+            }
+        }
+        for domain in &http.blocked_domains {
+            if domain.trim().is_empty() {
+                return Err(DeriveError::Validation(
+                    "http blocked_domains cannot contain empty values".to_string(),
+                ));
+            }
+        }
+
         match http.auth.kind {
             earmark_core::HttpAuthKind::None => {}
             earmark_core::HttpAuthKind::Header => {

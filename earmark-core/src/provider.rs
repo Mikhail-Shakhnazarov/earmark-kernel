@@ -54,6 +54,10 @@ pub struct HttpGenerationProfile {
     pub auth: HttpAuthConfig,
     pub request: HttpRequestTemplate,
     pub response: HttpResponseExtraction,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub allowed_domains: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub blocked_domains: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
