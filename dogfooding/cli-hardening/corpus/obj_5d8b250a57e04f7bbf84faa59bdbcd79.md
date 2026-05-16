@@ -1,1 +1,0 @@
-The 'deposit_object' function in runtime-tools does not check for 'required_headers' defined in the class, allowing objects with missing metadata to be admitted.
