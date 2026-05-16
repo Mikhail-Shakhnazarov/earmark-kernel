@@ -42,15 +42,37 @@ pub(crate) fn handle_doctor(ctx: &CommandContext, args: &DoctorArgs) -> Result<(
             .index
             .as_ref()
             .ok_or_else(|| CliError::not_found("index available for workspace command"))?;
-        index.rebuild_from_store(store)?;
-        index.clear_dirty()?;
+        let report = index.rebuild_from_store(store)?;
+        let partial = !report.skipped_entries.is_empty();
+        if !partial {
+            index.clear_dirty()?;
+        }
         emit(
             ctx.as_json,
             json!({
                 "kind": "doctor",
-                "ok": true,
-                "summary": "index repaired successfully from canonical store",
-                "next_commands": ["em doctor", "em status"],
+                "ok": !partial,
+                "summary": if partial {
+                    "index repaired partially; canonical store still has skipped entries"
+                } else {
+                    "index repaired successfully from canonical store"
+                },
+                "indexed_object_count": report.indexed_objects,
+                "skipped_canonical_entries": report.skipped_entries.iter().map(|entry| {
+                    json!({
+                        "path": entry.path.display().to_string(),
+                        "reason": entry.reason,
+                    })
+                }).collect::<Vec<_>>(),
+                "next_commands": if partial {
+                    vec![
+                        "repair canonical store entries listed in skipped_canonical_entries",
+                        "em doctor --repair-index",
+                        "em doctor",
+                    ]
+                } else {
+                    vec!["em doctor", "em status"]
+                },
             }),
         );
         return Ok(());

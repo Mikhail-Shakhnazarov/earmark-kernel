@@ -7,7 +7,7 @@ use earmark_core::{
     InstructionPayload, Kind, ObjectId, ProviderProfile, RelationPayload, StandingPolicy,
     SystemDefinition, TokenId, UndoRecord, VersionRef, WorkflowDefinition,
 };
-use earmark_store::CanonicalStore;
+use earmark_store::{CanonicalStore, SkippedEntry};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -71,6 +71,12 @@ pub struct QueryFilter {
 pub struct DerivedIndex {
     conn: Connection,
     path: PathBuf,
+}
+
+#[derive(Debug, Clone)]
+pub struct IndexRebuildReport {
+    pub indexed_objects: usize,
+    pub skipped_entries: Vec<SkippedEntry>,
 }
 
 impl DerivedIndex {
@@ -290,7 +296,10 @@ impl DerivedIndex {
         Ok(())
     }
 
-    pub fn rebuild_from_store<S: CanonicalStore>(&self, store: &S) -> Result<(), IndexError> {
+    pub fn rebuild_from_store<S: CanonicalStore>(
+        &self,
+        store: &S,
+    ) -> Result<IndexRebuildReport, IndexError> {
         store.init_layout()?;
         self.conn.execute("DELETE FROM objects", [])?;
         self.conn.execute("DELETE FROM heads", [])?;
@@ -301,6 +310,8 @@ impl DerivedIndex {
         self.conn.execute("DELETE FROM undone_relations", [])?;
 
         let diagnostics = store.scan_objects()?;
+        let indexed_objects = diagnostics.scanned_objects.len();
+        let skipped_entries = diagnostics.skipped_entries.clone();
         let mut seen = std::collections::BTreeSet::new();
         for stored in diagnostics.scanned_objects {
             let envelope = stored.envelope;
@@ -510,7 +521,10 @@ impl DerivedIndex {
                 )?;
             }
         }
-        Ok(())
+        Ok(IndexRebuildReport {
+            indexed_objects,
+            skipped_entries,
+        })
     }
 
     pub fn upsert_head_object_from_store<S: CanonicalStore>(
