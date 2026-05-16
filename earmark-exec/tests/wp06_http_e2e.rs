@@ -402,7 +402,7 @@ fn test_http_provider_exposure_structured_hiding() {
         _ => panic!("expected ExecError::Provider, got {:?}", err),
     };
     assert_eq!(provider_err.kind, ProviderFailureKind::PolicyViolation);
-    assert!(provider_err.message.contains("allow_structured_declarations is false"));
+    assert!(provider_err.message.contains("allow_prose_objects is false"));
 }
 
 #[test]
@@ -485,7 +485,161 @@ fn test_http_provider_exposure_prose_hiding() {
         _ => panic!("expected ExecError::Provider, got {:?}", err),
     };
     assert_eq!(provider_err.kind, ProviderFailureKind::PolicyViolation);
-    assert!(provider_err.message.contains("allow_prose_objects is false"));
+    assert!(provider_err.message.contains("allow_structured_declarations is false"));
+}
+
+#[test]
+#[cfg(feature = "http-provider")]
+fn test_http_provider_rejects_unsupported_lineage() {
+    let dir = tempdir().unwrap();
+    let store = GitCanonicalStore::new(dir.path());
+    let _index = DerivedIndex::open(dir.path()).unwrap();
+
+    let server = MockServer::start();
+    let _mock = server.mock(|when, then| {
+        when.method(httpmock::Method::POST).path("/v1/chat");
+        then.status(200).json_body(serde_json::json!({
+            "choices": [{ "message": { "content": "ok" } }]
+        }));
+    });
+
+    let profile = ProviderProfile {
+        name: "lineage_test".to_string(),
+        version: "1".to_string(),
+        description: None,
+        provider: "http_generation".to_string(),
+        model: "m".to_string(),
+        endpoint_env: None,
+        auth_env: None,
+        budget: earmark_core::ProviderBudget::default(),
+        allowed_operations: vec!["transform".to_string()],
+        exposure: earmark_core::ProviderExposure {
+            allow_prose_objects: true,
+            allow_structured_declarations: true,
+            allow_work_surface_only: false,
+            allow_export_requests: false,
+        },
+        response_contract: earmark_core::ProviderResponseContract {
+            format: earmark_core::ProviderResponseFormat::Markdown,
+            must_return_candidate_only: true,
+            must_include_lineage: true,
+        },
+        http: Some(HttpGenerationProfile {
+            method: Some("POST".to_string()),
+            url_template: format!("{}/v1/chat", server.base_url()),
+            auth: HttpAuthConfig {
+                kind: HttpAuthKind::None,
+                ..Default::default()
+            },
+            request: HttpRequestTemplate {
+                content_type: Some("application/json".to_string()),
+                body: serde_json::json!({ "prompt": "hi" }),
+            },
+            response: HttpResponseExtraction {
+                text_path: "$.choices[0].message.content".to_string(),
+                ..Default::default()
+            },
+        }),
+    };
+
+    let mut registry = ProviderRegistry::new();
+    registry.register(Arc::new(HttpGenerationAdapter));
+
+    let request = earmark_core::ProviderRequest {
+        request_id: "req_lineage_reject".to_string(),
+        run_id: "run_lineage_reject".to_string(),
+        work_packet: ObjectRef::new(ObjectId::new(), VersionId::new(), Kind::WorkPacket, None),
+        provider_profile: VersionRef::new(ObjectId::new(), VersionId::new()),
+        instruction_text: "hi".to_string(),
+        context_text: None,
+        input_text: "hi".to_string(),
+        work_surface_manifest: None,
+        inputs: vec![],
+        response_contract: profile.response_contract.clone(),
+        issued_at: chrono::Utc::now(),
+    };
+
+    let err = registry.provide(&profile, request, "transform").unwrap_err();
+    assert_eq!(err.kind, ProviderFailureKind::PolicyViolation);
+    assert!(err.message.contains("must_include_lineage"));
+    assert!(err.message.contains("http_generation"));
+}
+
+#[test]
+#[cfg(feature = "http-provider")]
+fn test_http_provider_rejects_unsupported_full_message_capture() {
+    let dir = tempdir().unwrap();
+    let store = GitCanonicalStore::new(dir.path());
+    let _index = DerivedIndex::open(dir.path()).unwrap();
+
+    let server = MockServer::start();
+    let _mock = server.mock(|when, then| {
+        when.method(httpmock::Method::POST).path("/v1/chat");
+        then.status(200).json_body(serde_json::json!({
+            "choices": [{ "message": { "content": "ok" } }]
+        }));
+    });
+
+    let profile = ProviderProfile {
+        name: "full_msg_test".to_string(),
+        version: "1".to_string(),
+        description: None,
+        provider: "http_generation".to_string(),
+        model: "m".to_string(),
+        endpoint_env: None,
+        auth_env: None,
+        budget: earmark_core::ProviderBudget::default(),
+        allowed_operations: vec!["transform".to_string()],
+        exposure: earmark_core::ProviderExposure {
+            allow_prose_objects: true,
+            allow_structured_declarations: true,
+            allow_work_surface_only: false,
+            allow_export_requests: false,
+        },
+        response_contract: earmark_core::ProviderResponseContract {
+            format: earmark_core::ProviderResponseFormat::Markdown,
+            must_return_candidate_only: false,
+            must_include_lineage: false,
+        },
+        http: Some(HttpGenerationProfile {
+            method: Some("POST".to_string()),
+            url_template: format!("{}/v1/chat", server.base_url()),
+            auth: HttpAuthConfig {
+                kind: HttpAuthKind::None,
+                ..Default::default()
+            },
+            request: HttpRequestTemplate {
+                content_type: Some("application/json".to_string()),
+                body: serde_json::json!({ "prompt": "hi" }),
+            },
+            response: HttpResponseExtraction {
+                text_path: "$.choices[0].message.content".to_string(),
+                ..Default::default()
+            },
+        }),
+    };
+
+    let mut registry = ProviderRegistry::new();
+    registry.register(Arc::new(HttpGenerationAdapter));
+
+    let request = earmark_core::ProviderRequest {
+        request_id: "req_full_msg_reject".to_string(),
+        run_id: "run_full_msg_reject".to_string(),
+        work_packet: ObjectRef::new(ObjectId::new(), VersionId::new(), Kind::WorkPacket, None),
+        provider_profile: VersionRef::new(ObjectId::new(), VersionId::new()),
+        instruction_text: "hi".to_string(),
+        context_text: None,
+        input_text: "hi".to_string(),
+        work_surface_manifest: None,
+        inputs: vec![],
+        response_contract: profile.response_contract.clone(),
+        issued_at: chrono::Utc::now(),
+    };
+
+    let err = registry.provide(&profile, request, "transform").unwrap_err();
+    assert_eq!(err.kind, ProviderFailureKind::PolicyViolation);
+    assert!(err.message.contains("must_return_candidate_only"));
+    assert!(err.message.contains("http_generation"));
 }
 
 #[test]
