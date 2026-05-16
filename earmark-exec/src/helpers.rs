@@ -8,7 +8,7 @@ use earmark_core::{
 use earmark_store::{CanonicalStore, StoredObject, StoredPayload};
 use std::collections::BTreeSet;
 
-use crate::error::ExecError;
+use crate::error::{ExecError, ProviderFailure, ProviderFailureKind};
 use crate::ir::{ExecutionEdge, ExecutionIr, ExecutionTransition, WorkflowRunRequest};
 use crate::persistence_helpers::write_object_and_index;
 use earmark_index::DerivedIndex;
@@ -358,11 +358,20 @@ pub fn render_provider_input<S: CanonicalStore>(
             }
         } else {
             let reason = if is_structured {
-                "Structured declarations hidden by exposure policy"
+                "allow_structured_declarations is false"
             } else {
-                "Payload content hidden by exposure policy"
+                "allow_prose_objects is false"
             };
-            rendered.push_str(&format!("\n({})\n", reason));
+            return Err(ExecError::Provider(ProviderFailure::new(
+                ProviderFailureKind::PolicyViolation,
+                format!(
+                    "Evidence item {} (kind: {}, class: {}) blocked by provider exposure policy: {}",
+                    obj_ref.id,
+                    obj_ref.kind.as_str(),
+                    obj_ref.class.as_deref().unwrap_or("none"),
+                    reason,
+                ),
+            )));
         }
         rendered.push('\n');
     }
