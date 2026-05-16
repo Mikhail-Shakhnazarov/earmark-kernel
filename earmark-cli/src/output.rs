@@ -22,12 +22,10 @@ pub fn emit_error_envelope(message: &str) {
             "message": message,
         }
     });
-    // For machine readability, even errors in JSON mode go to stdout
-    // if the user requested --json for orchestration.
-    // However, some prefer stderr for errors.
-    // Earmark CLI historically used stdout for the JSON envelope even for errors
-    // to keep the stream parseable.
-    eprintln!(
+    // For machine readability, all JSON envelopes (including errors) are emitted to stdout.
+    // This ensures that an orchestration pipeline can always parse the output as JSON
+    // without needing to redirect stderr.
+    println!(
         "{}",
         serde_json::to_string_pretty(&value).unwrap_or_else(|_| "{}".to_string())
     );
