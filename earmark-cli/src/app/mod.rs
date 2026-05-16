@@ -188,7 +188,11 @@ fn list_run_records<S: CanonicalStore>(
         let ledger: earmark_core::RunRecord = serde_json::from_slice(&object.payload.bytes)?;
         ledgers.push(ledger);
     }
-    ledgers.sort_by_key(|ledger| ledger.started_at);
+    ledgers.sort_by(|a, b| {
+        a.started_at
+            .cmp(&b.started_at)
+            .then_with(|| a.run_id.cmp(&b.run_id))
+    });
     Ok(ledgers)
 }
 
