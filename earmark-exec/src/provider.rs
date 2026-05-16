@@ -403,8 +403,8 @@ pub(crate) fn resolved_endpoint_identity(profile: &ProviderProfile) -> String {
                 let hash = sha2_hex(trimmed);
                 format!("<{}:{}>", prefix, hash)
             }
-            Ok(_) => format!("<empty:{}>", env_name),
-            Err(_) => format!("<unset:{}>", env_name),
+            Ok(_) => crate::redact_sensitive(&format!("<empty:{}>", env_name)),
+            Err(_) => crate::redact_sensitive(&format!("<unset:{}>", env_name)),
         },
         None => "<default>".to_string(),
     }
