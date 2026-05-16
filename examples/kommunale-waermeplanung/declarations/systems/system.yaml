@@ -1,3 +1,4 @@
+schema: earmark.path_system_manifest.v1
 system_id: sys_waermeplanung_briefing
 namespace: examples.waermeplanung
 title: Kommunale Wärmeplanung — Wissensbriefing

@@ -438,7 +438,10 @@ pub(crate) fn register_declaration_file<S: CanonicalStore>(
             };
 
             let mut headers = BTreeMap::new();
-            headers.insert("title".to_string(), HeaderValue::String(resolved.name.clone()));
+            headers.insert(
+                "title".to_string(),
+                HeaderValue::String(resolved.name.clone()),
+            );
             (
                 Kind::Instruction,
                 Some(resolved.name.clone()),
@@ -614,7 +617,8 @@ fn resolve_workflow_version_ref<S: CanonicalStore>(
 #[derive(Debug, Clone, Deserialize)]
 struct PathSystemManifest {
     #[serde(default)]
-    #[allow(dead_code)] pub schema: Option<String>,
+    #[allow(dead_code)]
+    pub schema: Option<String>,
     pub system_id: String,
     pub namespace: String,
     pub title: String,
@@ -642,29 +646,9 @@ fn try_load_path_system_manifest(
     let text = fs::read_to_string(path)?;
     let value: serde_yaml::Value = serde_yaml::from_str(&text)?;
 
-    // Use explicit schema discriminator if present
-    if let Some(schema) = value.get("schema").and_then(|v| v.as_str()) {
-        if schema == "earmark.path_system_manifest.v1" {
-            return serde_yaml::from_str(&text).map(Some).map_err(|error| {
-                CliError::argument(format!(
-                    "system manifest parse error in {}: {}",
-                    path.display(),
-                    error
-                ))
-            });
-        }
-    }
-
-    // Fallback to heuristic: if 'classes' contains relative paths, it's likely a path manifest
-    let Some(classes) = value.get("classes").and_then(|v| v.as_sequence()) else {
-        return Ok(None);
-    };
-    if !classes.iter().all(|entry| {
-        entry
-            .as_str()
-            .map(|s| s.ends_with(".yaml") || s.ends_with(".md"))
-            .unwrap_or(false)
-    }) {
+    // Require explicit schema discriminator to classify as path-system manifest.
+    let schema = value.get("schema").and_then(|v| v.as_str());
+    if schema != Some("earmark.path_system_manifest.v1") {
         return Ok(None);
     }
 
@@ -773,8 +757,13 @@ fn assemble_system_definition_from_manifest<S: CanonicalStore>(
     let mut instructions = Vec::new();
     for rel in &manifest.instructions {
         let p = resolve_manifest_path(path, rel);
-        let vref =
-            register_declaration_file(store, None, DeclarationKind::Instruction, &p, Some(&registry))?;
+        let vref = register_declaration_file(
+            store,
+            None,
+            DeclarationKind::Instruction,
+            &p,
+            Some(&registry),
+        )?;
         instructions.push(vref.clone());
         if let Ok(abs) = p.canonicalize() {
             registry.insert(abs, vref);
@@ -1577,7 +1566,10 @@ pub(crate) fn emit(as_json: bool, value: serde_json::Value) {
 
 fn render_explanation(value: &serde_json::Value) -> Option<String> {
     let kind = value.get("kind")?.as_str()?;
-    let id = value.get("id").and_then(|v| v.as_str()).unwrap_or("unknown");
+    let id = value
+        .get("id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown");
     let summary = value.get("summary")?.as_str().unwrap_or("");
     let next_commands = value.get("next_commands").and_then(|v| v.as_array());
 
@@ -1596,46 +1588,80 @@ fn render_explanation(value: &serde_json::Value) -> Option<String> {
             for obj in results {
                 let object_id = obj.get("object_id")?.as_str()?;
                 let class = obj.get("class").and_then(|v| v.as_str()).unwrap_or("none");
-                let title = obj.get("title").and_then(|v| v.as_str()).unwrap_or("no title");
+                let title = obj
+                    .get("title")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("no title");
                 output.push_str(&format!("- [{}] {} (class: {})\n", object_id, title, class));
                 if let Some(headers) = obj.get("headers").and_then(|v| v.as_object()) {
                     if !headers.is_empty() {
-                         let h_strs: Vec<String> = headers.iter().map(|(k, v)| format!("{}={}", k, v.as_str().unwrap_or(""))).collect();
-                         output.push_str(&format!("  Headers: {}\n", h_strs.join(", ")));
+                        let h_strs: Vec<String> = headers
+                            .iter()
+                            .map(|(k, v)| format!("{}={}", k, v.as_str().unwrap_or("")))
+                            .collect();
+                        output.push_str(&format!("  Headers: {}\n", h_strs.join(", ")));
                     }
                 }
                 if let Some(standing) = obj.get("standing").and_then(|v| v.as_object()) {
                     if !standing.is_empty() {
-                         let s_strs: Vec<String> = standing.iter().map(|(k, v)| format!("{}:{}", k, v.as_str().unwrap_or(""))).collect();
-                         output.push_str(&format!("  Standing: {}\n", s_strs.join(", ")));
+                        let s_strs: Vec<String> = standing
+                            .iter()
+                            .map(|(k, v)| format!("{}:{}", k, v.as_str().unwrap_or("")))
+                            .collect();
+                        output.push_str(&format!("  Standing: {}\n", s_strs.join(", ")));
                     }
                 }
             }
         }
         "status" => {
             output.push_str("Workspace Overview:\n");
-            output.push_str(&format!("  Objects: {}\n", value.get("object_count")?.as_u64()?));
-            output.push_str(&format!("  Active Systems: {}\n", value.get("active_system_count")?.as_u64()?));
+            output.push_str(&format!(
+                "  Objects: {}\n",
+                value.get("object_count")?.as_u64()?
+            ));
+            output.push_str(&format!(
+                "  Active Systems: {}\n",
+                value.get("active_system_count")?.as_u64()?
+            ));
             if let Some(systems) = value.get("active_systems").and_then(|v| v.as_array()) {
                 for s in systems {
-                    output.push_str(&format!("    - {} ({})\n", s.get("system_id")?.as_str()?, s.get("namespace")?.as_str()?));
+                    output.push_str(&format!(
+                        "    - {} ({})\n",
+                        s.get("system_id")?.as_str()?,
+                        s.get("namespace")?.as_str()?
+                    ));
                 }
             }
             if let Some(latest) = value.get("latest_run").and_then(|v| v.as_str()) {
                 output.push_str(&format!("  Latest Run: {}\n", latest));
             }
             output.push_str(&format!("  Runs: {}\n", value.get("run_count")?.as_u64()?));
-            output.push_str(&format!("  Change Sets: {}\n", value.get("change_set_count")?.as_u64()?));
-            output.push_str(&format!("  Handoffs: {}\n", value.get("handoff_count")?.as_u64()?));
-            output.push_str(&format!("  Failures: {}\n", value.get("failure_count")?.as_u64()?));
-            
+            output.push_str(&format!(
+                "  Change Sets: {}\n",
+                value.get("change_set_count")?.as_u64()?
+            ));
+            output.push_str(&format!(
+                "  Handoffs: {}\n",
+                value.get("handoff_count")?.as_u64()?
+            ));
+            output.push_str(&format!(
+                "  Failures: {}\n",
+                value.get("failure_count")?.as_u64()?
+            ));
+
             output.push_str("\nPaths:\n");
             let paths = value.get("paths")?;
             output.push_str(&format!("  Root: {}\n", value.get("root")?.as_str()?));
-            output.push_str(&format!("  Declarations: {}\n", paths.get("declarations_dir")?.as_str()?));
-            
+            output.push_str(&format!(
+                "  Declarations: {}\n",
+                paths.get("declarations_dir")?.as_str()?
+            ));
+
             output.push_str("\nProvider Capabilities:\n");
-            if let Some(providers) = value.get("provider_capabilities").and_then(|v| v.as_array()) {
+            if let Some(providers) = value
+                .get("provider_capabilities")
+                .and_then(|v| v.as_array())
+            {
                 for p in providers {
                     let name = p.get("provider")?.as_str()?;
                     let status = p.get("status")?.as_str()?;
@@ -1645,10 +1671,19 @@ fn render_explanation(value: &serde_json::Value) -> Option<String> {
         }
         "doctor" => {
             let ok = value.get("ok")?.as_bool()?;
-            output.push_str(&format!("Health Status: {}\n", if ok { "✅ PASS" } else { "❌ ISSUES FOUND" }));
-            output.push_str(&format!("Canonical Objects: {}\n", value.get("canonical_object_count")?.as_u64()?));
-            output.push_str(&format!("Indexed Objects: {}\n", value.get("indexed_object_count")?.as_u64()?));
-            
+            output.push_str(&format!(
+                "Health Status: {}\n",
+                if ok { "✅ PASS" } else { "❌ ISSUES FOUND" }
+            ));
+            output.push_str(&format!(
+                "Canonical Objects: {}\n",
+                value.get("canonical_object_count")?.as_u64()?
+            ));
+            output.push_str(&format!(
+                "Indexed Objects: {}\n",
+                value.get("indexed_object_count")?.as_u64()?
+            ));
+
             if let Some(warnings) = value.get("warnings").and_then(|v| v.as_array()) {
                 if !warnings.is_empty() {
                     output.push_str("\nWarnings:\n");
@@ -1660,16 +1695,31 @@ fn render_explanation(value: &serde_json::Value) -> Option<String> {
         }
         "review" => {
             output.push_str("Review Results:\n");
-            output.push_str(&format!("  Target Object: {}\n", value.get("target_object_id")?.as_str()?));
+            output.push_str(&format!(
+                "  Target Object: {}\n",
+                value.get("target_object_id")?.as_str()?
+            ));
             output.push_str(&format!("  Status: {}\n", value.get("status")?.as_str()?));
-            output.push_str(&format!("  Review Object: {}\n", value.get("review_object_id")?.as_str()?));
+            output.push_str(&format!(
+                "  Review Object: {}\n",
+                value.get("review_object_id")?.as_str()?
+            ));
         }
         "undo" => {
             output.push_str("Undo Results:\n");
-            output.push_str(&format!("  Undo Record: {}\n", value.get("undo_record_id")?.as_str()?));
+            output.push_str(&format!(
+                "  Undo Record: {}\n",
+                value.get("undo_record_id")?.as_str()?
+            ));
             let impact = value.get("impact")?;
-            output.push_str(&format!("  Objects Hidden: {}\n", impact.get("objects_hidden")?.as_u64()?));
-            output.push_str(&format!("  Relations Hidden: {}\n", impact.get("relations_hidden")?.as_u64()?));
+            output.push_str(&format!(
+                "  Objects Hidden: {}\n",
+                impact.get("objects_hidden")?.as_u64()?
+            ));
+            output.push_str(&format!(
+                "  Relations Hidden: {}\n",
+                impact.get("relations_hidden")?.as_u64()?
+            ));
         }
         "audit_failures" => {
             output.push_str("Failure Audit:\n");
@@ -1679,7 +1729,10 @@ fn render_explanation(value: &serde_json::Value) -> Option<String> {
                     let etype = f.get("error_type")?.as_str()?;
                     let msg = f.get("message")?.as_str()?;
                     let tid = f.get("transition_id")?.as_str()?;
-                    output.push_str(&format!("  - {} transition: {} error: {} \n    Message: {}\n", fid, tid, etype, msg));
+                    output.push_str(&format!(
+                        "  - {} transition: {} error: {} \n    Message: {}\n",
+                        fid, tid, etype, msg
+                    ));
                 }
             }
         }
@@ -1690,7 +1743,10 @@ fn render_explanation(value: &serde_json::Value) -> Option<String> {
                     let run_id = r.get("run_id")?.as_str()?;
                     let status = r.get("status")?.as_str()?;
                     let started = r.get("started_at")?.as_str()?;
-                    output.push_str(&format!("  - {} [{}] (started {})\n", run_id, status, started));
+                    output.push_str(&format!(
+                        "  - {} [{}] (started {})\n",
+                        run_id, status, started
+                    ));
                 }
             }
         }
