@@ -126,23 +126,76 @@ fn test_exposure_work_surface_only_enforcement() {
 }
 
 #[test]
-fn test_advisory_warnings_for_unmeasurable_fields() {
+fn test_dispatch_exposure_enforces_prose_block() {
     let registry = default_provider_registry();
     let mut profile = mock_profile(vec!["transform"]);
-
-    // Set some unmeasurable/unsupported fields
     profile.exposure.allow_prose_objects = false;
-    profile.budget.max_input_tokens = Some(1000);
 
-    let outcome = provide_with_registry(&registry, &profile, mock_request(), "transform").unwrap();
+    // Request with a prose input (Kind::Object, no special class)
+    let mut request = mock_request();
+    request.inputs = vec![ObjectRef::new(
+        ObjectId::new(),
+        VersionId::new(),
+        Kind::Object,
+        None,
+    )];
 
-    let warnings = outcome.record.advisory_warnings;
-    assert!(warnings
-        .iter()
-        .any(|w| w.contains("allow_prose_objects is false")));
-    assert!(!warnings
-        .iter()
-        .any(|w| w.contains("max_input_tokens budget is not yet enforced")));
+    let err = provide_with_registry(&registry, &profile, request, "transform").unwrap_err();
+    assert_eq!(err.kind, ProviderFailureKind::PolicyViolation);
+    assert!(err.message.contains("allow_prose_objects=false"));
+}
+
+#[test]
+fn test_dispatch_exposure_enforces_structured_block() {
+    let registry = default_provider_registry();
+    let mut profile = mock_profile(vec!["transform"]);
+    profile.exposure.allow_structured_declarations = false;
+
+    // Request with a structured input (Kind::Instruction)
+    let mut request = mock_request();
+    request.inputs = vec![ObjectRef::new(
+        ObjectId::new(),
+        VersionId::new(),
+        Kind::Instruction,
+        None,
+    )];
+
+    let err = provide_with_registry(&registry, &profile, request, "transform").unwrap_err();
+    assert_eq!(err.kind, ProviderFailureKind::PolicyViolation);
+    assert!(err.message.contains("allow_structured_declarations=false"));
+}
+
+#[test]
+fn test_dispatch_exposure_allows_when_no_violating_inputs() {
+    let registry = default_provider_registry();
+    let mut profile = mock_profile(vec!["transform"]);
+    profile.exposure.allow_prose_objects = false;
+    profile.exposure.allow_structured_declarations = false;
+
+    // Request with NO inputs at all — no violation
+    let request = mock_request(); // inputs is empty
+    let outcome = provide_with_registry(&registry, &profile, request, "transform").unwrap();
+    // Should succeed (only mock advisory warnings present)
+    assert!(outcome.response.is_some());
+}
+
+#[test]
+fn test_dispatch_exposure_allows_matching_inputs() {
+    let registry = default_provider_registry();
+    let mut profile = mock_profile(vec!["transform"]);
+    profile.exposure.allow_prose_objects = true;
+    profile.exposure.allow_structured_declarations = true;
+
+    let mut request = mock_request();
+    request.inputs = vec![ObjectRef::new(
+        ObjectId::new(),
+        VersionId::new(),
+        Kind::Object,
+        None,
+    )];
+
+    let outcome = provide_with_registry(&registry, &profile, request, "transform").unwrap();
+    assert!(outcome.response.is_some());
 }
 
 #[test]

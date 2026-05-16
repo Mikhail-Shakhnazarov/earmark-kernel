@@ -4,6 +4,7 @@ use earmark_core::{
     StandingRegistry, TokenId, VersionId, VersionRef,
 };
 use earmark_exec::helpers::render_provider_input;
+use earmark_exec::{ProviderFailureKind, ProviderFailure};
 use earmark_index::DerivedIndex;
 use earmark_store::{GitCanonicalStore, ObjectStore, StoredObject, StoredPayload, WorkspaceLayout};
 use std::collections::BTreeMap;
@@ -306,7 +307,7 @@ fn test_two_gate_standing_permits_but_profile_denies() {
     profile.exposure.allow_prose_objects = false;
 
     let registry = custom_visibility_registry();
-    let rendered = render_provider_input(
+    let err = render_provider_input(
         &store,
         &instruction(),
         Some(&manifest_with(vec![obj_ref])),
@@ -314,17 +315,14 @@ fn test_two_gate_standing_permits_but_profile_denies() {
         &profile,
         &registry,
     )
-    .unwrap();
+    .unwrap_err();
 
-    // Both gates must pass; profile denies, so payload hidden
-    assert!(
-        !rendered.contains(payload),
-        "profile denial should block payload even when standing permits"
-    );
-    assert!(
-        rendered.contains("Payload content hidden by exposure policy"),
-        "should show profile-based advisory"
-    );
+    let provider_err = match &err {
+        earmark_exec::ExecError::Provider(pf) => pf,
+        _ => panic!("expected ExecError::Provider, got {:?}", err),
+    };
+    assert_eq!(provider_err.kind, ProviderFailureKind::PolicyViolation);
+    assert!(provider_err.message.contains("allow_prose_objects is false"));
 }
 
 #[test]
@@ -420,7 +418,7 @@ fn test_expose_to_provider_true_still_blocked_by_structured_declaration_denial()
     profile.exposure.allow_structured_declarations = false;
 
     let registry = custom_visibility_registry();
-    let rendered = render_provider_input(
+    let err = render_provider_input(
         &store,
         &instruction(),
         Some(&manifest_with(vec![obj_ref])),
@@ -428,15 +426,12 @@ fn test_expose_to_provider_true_still_blocked_by_structured_declaration_denial()
         &profile,
         &registry,
     )
-    .unwrap();
+    .unwrap_err();
 
-    // Standing permits, but profile denies structured declarations
-    assert!(
-        !rendered.contains(body),
-        "profile structured-declaration denial should block"
-    );
-    assert!(
-        rendered.contains("Structured declarations hidden by exposure policy"),
-        "should show structured declaration advisory"
-    );
+    let provider_err = match &err {
+        earmark_exec::ExecError::Provider(pf) => pf,
+        _ => panic!("expected ExecError::Provider, got {:?}", err),
+    };
+    assert_eq!(provider_err.kind, ProviderFailureKind::PolicyViolation);
+    assert!(provider_err.message.contains("allow_structured_declarations is false"));
 }
