@@ -3,11 +3,11 @@ use std::path::{Path, PathBuf};
 
 use chrono::Utc;
 use earmark_core::{
-    parse_json, parse_yaml, ClassDefinition, CompiledContextTemplate, DimensionId,
+    parse_json, parse_yaml, ClassDefinition, CompiledContextTemplate, DimensionId, Envelope,
     InstructionPayload, Kind, ObjectId, ProviderProfile, RelationPayload, StandingPolicy,
     SystemDefinition, TokenId, UndoRecord, VersionRef, WorkflowDefinition,
 };
-use earmark_store::{CanonicalStore, SkippedEntry};
+use earmark_store::{CanonicalStore, SkippedEntry, StoredPayload};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -320,153 +320,7 @@ impl DerivedIndex {
 
             let title = envelope.title();
             let (summary, system_id, namespace, declaration_identity, searchable_text) =
-                match &envelope.kind {
-                    Kind::Instruction => {
-                        let text = payload.as_utf8()?;
-                        let parsed = InstructionPayload::parse_markdown(&text)?;
-                        let declaration_name = parsed.name.clone();
-                        (
-                            Some(snippet(parsed.body.as_str())),
-                            None,
-                            None,
-                            Some(declaration_name),
-                            Some(format!(
-                                "{} {} {}",
-                                parsed.name,
-                                parsed.purpose,
-                                parsed.body.as_str()
-                            )),
-                        )
-                    }
-                    Kind::SystemDefinition => {
-                        let text = payload.as_utf8()?;
-                        let parsed: SystemDefinition = parse_yaml(&text)?;
-                        (
-                            parsed
-                                .description
-                                .clone()
-                                .or_else(|| Some(parsed.title.clone())),
-                            Some(parsed.system_id.clone()),
-                            Some(parsed.namespace),
-                            Some(parsed.system_id),
-                            Some(text),
-                        )
-                    }
-                    Kind::Relation => {
-                        let text = payload.as_utf8()?;
-                        let parsed: RelationPayload = parse_json(&text)?;
-                        self.conn.execute(
-                        "INSERT OR REPLACE INTO relations (version_id, relation_object_id, source_object_id, target_object_id, relation_type, scope) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-                        params![
-                            envelope.version_id.as_str().to_string(),
-                            envelope.id.as_str().to_string(),
-                            parsed.source.id.as_str().to_string(),
-                            parsed.target.id.as_str().to_string(),
-                            parsed.relation_type,
-                            parsed.scope,
-                        ],
-                    )?;
-                        (Some("relation".to_string()), None, None, None, Some(text))
-                    }
-                    Kind::CompiledContextTemplate => {
-                        let text = payload.as_utf8()?;
-                        let parsed: CompiledContextTemplate = parse_yaml(&text)?;
-                        (
-                            parsed.description.clone(),
-                            None,
-                            None,
-                            Some(parsed.name),
-                            Some(text),
-                        )
-                    }
-                    Kind::Workflow => {
-                        let text = payload.as_utf8()?;
-                        let parsed: WorkflowDefinition = parse_yaml(&text)?;
-                        (
-                            parsed.description.clone(),
-                            None,
-                            None,
-                            Some(parsed.name),
-                            Some(text),
-                        )
-                    }
-                    Kind::Policy => {
-                        let text = payload.as_utf8()?;
-                        let parsed: StandingPolicy = parse_yaml(&text)?;
-                        (
-                            parsed.description.clone(),
-                            None,
-                            None,
-                            Some(parsed.name),
-                            Some(text),
-                        )
-                    }
-                    Kind::ProviderProfile => {
-                        let text = payload.as_utf8()?;
-                        let parsed: ProviderProfile = parse_yaml(&text)?;
-                        (
-                            parsed.description.clone(),
-                            None,
-                            None,
-                            Some(parsed.name),
-                            Some(text),
-                        )
-                    }
-                    Kind::Object if envelope.class.as_deref() == Some("class_definition") => {
-                        let text = payload.as_utf8()?;
-                        let parsed: ClassDefinition = parse_yaml(&text)?;
-                        (
-                            Some(snippet(&text)),
-                            None,
-                            None,
-                            Some(parsed.name),
-                            Some(text),
-                        )
-                    }
-                    Kind::UndoRecord => {
-                        let text = payload.as_utf8()?;
-                        let parsed: UndoRecord = parse_json(&text)?;
-                        self.conn.execute(
-                            "INSERT OR REPLACE INTO undo_records (undo_record_id, target_run_id, created_at) VALUES (?1, ?2, ?3)",
-                            params![
-                                envelope.id.as_str().to_string(),
-                                parsed.target_run_id.clone(),
-                                envelope.created_at.to_rfc3339(),
-                            ],
-                        )?;
-                        for oid in &parsed.created_object_ids {
-                            self.conn.execute(
-                                "INSERT OR REPLACE INTO undone_objects (object_id, undo_record_id, target_run_id) VALUES (?1, ?2, ?3)",
-                                params![
-                                    oid.as_str().to_string(),
-                                    envelope.id.as_str().to_string(),
-                                    parsed.target_run_id.clone(),
-                                ],
-                            )?;
-                        }
-                        for rid in &parsed.created_relation_ids {
-                            self.conn.execute(
-                                "INSERT OR REPLACE INTO undone_relations (relation_object_id, undo_record_id, target_run_id) VALUES (?1, ?2, ?3)",
-                                params![
-                                    rid.as_str().to_string(),
-                                    envelope.id.as_str().to_string(),
-                                    parsed.target_run_id.clone(),
-                                ],
-                            )?;
-                        }
-                        (
-                            Some("undo record".to_string()),
-                            None,
-                            None,
-                            None,
-                            Some(text),
-                        )
-                    }
-                    _ => {
-                        let text = payload.as_utf8().unwrap_or_default();
-                        (Some(snippet(&text)), None, None, None, Some(text))
-                    }
-                };
+                extract_object_metadata(&self.conn, &envelope, &payload)?;
 
             let version_id = envelope.version_id.as_str().to_string();
             let object_id = envelope.id.as_str().to_string();
@@ -543,155 +397,8 @@ impl DerivedIndex {
         let envelope = head.envelope.clone();
         let payload = head.payload.clone();
         let title = envelope.title();
-        let (summary, system_id, namespace, declaration_identity, searchable_text) = match &envelope
-            .kind
-        {
-            Kind::Instruction => {
-                let text = payload.as_utf8()?;
-                let parsed = InstructionPayload::parse_markdown(&text)?;
-                let declaration_name = parsed.name.clone();
-                (
-                    Some(snippet(parsed.body.as_str())),
-                    None,
-                    None,
-                    Some(declaration_name),
-                    Some(format!(
-                        "{} {} {}",
-                        parsed.name,
-                        parsed.purpose,
-                        parsed.body.as_str()
-                    )),
-                )
-            }
-            Kind::SystemDefinition => {
-                let text = payload.as_utf8()?;
-                let parsed: SystemDefinition = parse_yaml(&text)?;
-                (
-                    parsed
-                        .description
-                        .clone()
-                        .or_else(|| Some(parsed.title.clone())),
-                    Some(parsed.system_id.clone()),
-                    Some(parsed.namespace),
-                    Some(parsed.system_id),
-                    Some(text),
-                )
-            }
-            Kind::Relation => {
-                let text = payload.as_utf8()?;
-                let parsed: RelationPayload = parse_json(&text)?;
-                self.conn.execute(
-                        "INSERT OR REPLACE INTO relations (version_id, relation_object_id, source_object_id, target_object_id, relation_type, scope) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-                        params![
-                            envelope.version_id.as_str().to_string(),
-                            envelope.id.as_str().to_string(),
-                            parsed.source.id.as_str().to_string(),
-                            parsed.target.id.as_str().to_string(),
-                            parsed.relation_type,
-                            parsed.scope,
-                        ],
-                    )?;
-                (Some("relation".to_string()), None, None, None, Some(text))
-            }
-            Kind::CompiledContextTemplate => {
-                let text = payload.as_utf8()?;
-                let parsed: CompiledContextTemplate = parse_yaml(&text)?;
-                (
-                    parsed.description.clone(),
-                    None,
-                    None,
-                    Some(parsed.name),
-                    Some(text),
-                )
-            }
-            Kind::Workflow => {
-                let text = payload.as_utf8()?;
-                let parsed: WorkflowDefinition = parse_yaml(&text)?;
-                (
-                    parsed.description.clone(),
-                    None,
-                    None,
-                    Some(parsed.name),
-                    Some(text),
-                )
-            }
-            Kind::Policy => {
-                let text = payload.as_utf8()?;
-                let parsed: StandingPolicy = parse_yaml(&text)?;
-                (
-                    parsed.description.clone(),
-                    None,
-                    None,
-                    Some(parsed.name),
-                    Some(text),
-                )
-            }
-            Kind::ProviderProfile => {
-                let text = payload.as_utf8()?;
-                let parsed: ProviderProfile = parse_yaml(&text)?;
-                (
-                    parsed.description.clone(),
-                    None,
-                    None,
-                    Some(parsed.name),
-                    Some(text),
-                )
-            }
-            Kind::Object if envelope.class.as_deref() == Some("class_definition") => {
-                let text = payload.as_utf8()?;
-                let parsed: ClassDefinition = parse_yaml(&text)?;
-                (
-                    Some(snippet(&text)),
-                    None,
-                    None,
-                    Some(parsed.name),
-                    Some(text),
-                )
-            }
-            Kind::UndoRecord => {
-                let text = payload.as_utf8()?;
-                let parsed: UndoRecord = parse_json(&text)?;
-                self.conn.execute(
-                    "INSERT OR REPLACE INTO undo_records (undo_record_id, target_run_id, created_at) VALUES (?1, ?2, ?3)",
-                    params![
-                        envelope.id.as_str().to_string(),
-                        parsed.target_run_id.clone(),
-                        envelope.created_at.to_rfc3339(),
-                    ],
-                )?;
-                for oid in &parsed.created_object_ids {
-                    self.conn.execute(
-                        "INSERT OR REPLACE INTO undone_objects (object_id, undo_record_id, target_run_id) VALUES (?1, ?2, ?3)",
-                        params![
-                            oid.as_str().to_string(),
-                            envelope.id.as_str().to_string(),
-                            parsed.target_run_id.clone(),
-                        ],
-                    )?;
-                }
-                for rid in &parsed.created_relation_ids {
-                    self.conn.execute(
-                        "INSERT OR REPLACE INTO undone_relations (relation_object_id, undo_record_id, target_run_id) VALUES (?1, ?2, ?3)",
-                        params![
-                            rid.as_str().to_string(),
-                            envelope.id.as_str().to_string(),
-                            parsed.target_run_id.clone(),
-                        ],
-                    )?;
-                }
-                (
-                    Some("undo record".to_string()),
-                    None,
-                    None,
-                    None,
-                    Some(text),
-                )
-            }
-            _ => {
-                let text = payload.as_utf8().unwrap_or_default();
-                (Some(snippet(&text)), None, None, None, Some(text))
-            }
-        };
+        let (summary, system_id, namespace, declaration_identity, searchable_text) =
+            extract_object_metadata(&self.conn, &envelope, &payload)?;
 
         self.conn.execute(
             "INSERT OR REPLACE INTO objects (
@@ -1112,6 +819,169 @@ impl DerivedIndex {
             )
             .optional()
             .map_err(IndexError::from)
+    }
+}
+
+fn extract_object_metadata(
+    conn: &Connection,
+    envelope: &Envelope,
+    payload: &StoredPayload,
+) -> Result<
+    (
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+    ),
+    IndexError,
+> {
+    match &envelope.kind {
+        Kind::Instruction => {
+            let text = payload.as_utf8()?;
+            let parsed = InstructionPayload::parse_markdown(&text)?;
+            let declaration_name = parsed.name.clone();
+            Ok((
+                Some(snippet(parsed.body.as_str())),
+                None,
+                None,
+                Some(declaration_name),
+                Some(format!(
+                    "{} {} {}",
+                    parsed.name,
+                    parsed.purpose,
+                    parsed.body.as_str()
+                )),
+            ))
+        }
+        Kind::SystemDefinition => {
+            let text = payload.as_utf8()?;
+            let parsed: SystemDefinition = parse_yaml(&text)?;
+            Ok((
+                parsed
+                    .description
+                    .clone()
+                    .or_else(|| Some(parsed.title.clone())),
+                Some(parsed.system_id.clone()),
+                Some(parsed.namespace),
+                Some(parsed.system_id),
+                Some(text),
+            ))
+        }
+        Kind::Relation => {
+            let text = payload.as_utf8()?;
+            let parsed: RelationPayload = parse_json(&text)?;
+            conn.execute(
+                "INSERT OR REPLACE INTO relations (version_id, relation_object_id, source_object_id, target_object_id, relation_type, scope) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                params![
+                    envelope.version_id.as_str().to_string(),
+                    envelope.id.as_str().to_string(),
+                    parsed.source.id.as_str().to_string(),
+                    parsed.target.id.as_str().to_string(),
+                    parsed.relation_type,
+                    parsed.scope,
+                ],
+            )?;
+            Ok((Some("relation".to_string()), None, None, None, Some(text)))
+        }
+        Kind::CompiledContextTemplate => {
+            let text = payload.as_utf8()?;
+            let parsed: CompiledContextTemplate = parse_yaml(&text)?;
+            Ok((
+                parsed.description.clone(),
+                None,
+                None,
+                Some(parsed.name),
+                Some(text),
+            ))
+        }
+        Kind::Workflow => {
+            let text = payload.as_utf8()?;
+            let parsed: WorkflowDefinition = parse_yaml(&text)?;
+            Ok((
+                parsed.description.clone(),
+                None,
+                None,
+                Some(parsed.name),
+                Some(text),
+            ))
+        }
+        Kind::Policy => {
+            let text = payload.as_utf8()?;
+            let parsed: StandingPolicy = parse_yaml(&text)?;
+            Ok((
+                parsed.description.clone(),
+                None,
+                None,
+                Some(parsed.name),
+                Some(text),
+            ))
+        }
+        Kind::ProviderProfile => {
+            let text = payload.as_utf8()?;
+            let parsed: ProviderProfile = parse_yaml(&text)?;
+            Ok((
+                parsed.description.clone(),
+                None,
+                None,
+                Some(parsed.name),
+                Some(text),
+            ))
+        }
+        Kind::Object if envelope.class.as_deref() == Some("class_definition") => {
+            let text = payload.as_utf8()?;
+            let parsed: ClassDefinition = parse_yaml(&text)?;
+            Ok((
+                Some(snippet(&text)),
+                None,
+                None,
+                Some(parsed.name),
+                Some(text),
+            ))
+        }
+        Kind::UndoRecord => {
+            let text = payload.as_utf8()?;
+            let parsed: UndoRecord = parse_json(&text)?;
+            conn.execute(
+                "INSERT OR REPLACE INTO undo_records (undo_record_id, target_run_id, created_at) VALUES (?1, ?2, ?3)",
+                params![
+                    envelope.id.as_str().to_string(),
+                    parsed.target_run_id.clone(),
+                    envelope.created_at.to_rfc3339(),
+                ],
+            )?;
+            for oid in &parsed.created_object_ids {
+                conn.execute(
+                    "INSERT OR REPLACE INTO undone_objects (object_id, undo_record_id, target_run_id) VALUES (?1, ?2, ?3)",
+                    params![
+                        oid.as_str().to_string(),
+                        envelope.id.as_str().to_string(),
+                        parsed.target_run_id.clone(),
+                    ],
+                )?;
+            }
+            for rid in &parsed.created_relation_ids {
+                conn.execute(
+                    "INSERT OR REPLACE INTO undone_relations (relation_object_id, undo_record_id, target_run_id) VALUES (?1, ?2, ?3)",
+                    params![
+                        rid.as_str().to_string(),
+                        envelope.id.as_str().to_string(),
+                        parsed.target_run_id.clone(),
+                    ],
+                )?;
+            }
+            Ok((
+                Some("undo record".to_string()),
+                None,
+                None,
+                None,
+                Some(text),
+            ))
+        }
+        _ => {
+            let text = payload.as_utf8().unwrap_or_default();
+            Ok((Some(snippet(&text)), None, None, None, Some(text)))
+        }
     }
 }
 
