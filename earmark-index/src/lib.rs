@@ -238,10 +238,10 @@ impl DerivedIndex {
                 _ => return Err(err.into()),
             }
         }
-        if let Err(err) = self.conn.execute(
-            "ALTER TABLE objects ADD COLUMN headers TEXT",
-            [],
-        ) {
+        if let Err(err) = self
+            .conn
+            .execute("ALTER TABLE objects ADD COLUMN headers TEXT", [])
+        {
             match err {
                 rusqlite::Error::SqliteFailure(_, Some(msg))
                     if msg.contains("duplicate column name") => {}
