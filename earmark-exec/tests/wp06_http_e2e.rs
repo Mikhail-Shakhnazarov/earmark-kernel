@@ -6,7 +6,7 @@ use earmark_core::{
     HttpResponseExtraction, Kind, ObjectId, ObjectRef, ProviderProfile, Standing, StandingRegistry,
     TokenId, VersionId, VersionRef,
 };
-use earmark_exec::{HttpGenerationAdapter, ProviderRegistry, ProviderService};
+use earmark_exec::{ExecError, HttpGenerationAdapter, ProviderFailureKind, ProviderRegistry, ProviderService};
 use earmark_index::DerivedIndex;
 use earmark_store::{GitCanonicalStore, ObjectStore, StoredObject, StoredPayload};
 use httpmock::MockServer;
@@ -387,7 +387,7 @@ fn test_http_provider_exposure_structured_hiding() {
     };
 
     let registry = test_registry();
-    let rendered = earmark_exec::helpers::render_provider_input(
+    let err = earmark_exec::helpers::render_provider_input(
         &store,
         &instruction,
         None,
@@ -395,11 +395,14 @@ fn test_http_provider_exposure_structured_hiding() {
         &profile,
         &registry,
     )
-    .unwrap();
+    .unwrap_err();
 
-    assert!(!rendered.contains("SECRET_WORKFLOW_STEPS"));
-    assert!(rendered.contains("Structured declarations hidden by exposure policy"));
-    assert!(rendered.contains("Kind: workflow"));
+    let provider_err = match &err {
+        ExecError::Provider(pf) => pf,
+        _ => panic!("expected ExecError::Provider, got {:?}", err),
+    };
+    assert_eq!(provider_err.kind, ProviderFailureKind::PolicyViolation);
+    assert!(provider_err.message.contains("allow_structured_declarations is false"));
 }
 
 #[test]
@@ -467,7 +470,7 @@ fn test_http_provider_exposure_prose_hiding() {
     };
 
     let registry = test_registry();
-    let rendered = earmark_exec::helpers::render_provider_input(
+    let err = earmark_exec::helpers::render_provider_input(
         &store,
         &instruction,
         None,
@@ -475,11 +478,14 @@ fn test_http_provider_exposure_prose_hiding() {
         &profile,
         &registry,
     )
-    .unwrap();
+    .unwrap_err();
 
-    assert!(!rendered.contains("PRIVATE_PROSE_CONTENT"));
-    assert!(rendered.contains("Payload content hidden by exposure policy"));
-    assert!(rendered.contains("Private Doc")); // Metadata remains
+    let provider_err = match &err {
+        ExecError::Provider(pf) => pf,
+        _ => panic!("expected ExecError::Provider, got {:?}", err),
+    };
+    assert_eq!(provider_err.kind, ProviderFailureKind::PolicyViolation);
+    assert!(provider_err.message.contains("allow_prose_objects is false"));
 }
 
 #[test]
@@ -548,7 +554,7 @@ fn test_http_provider_exposure_class_definition_hiding() {
     };
 
     let registry = test_registry();
-    let rendered = earmark_exec::helpers::render_provider_input(
+    let err = earmark_exec::helpers::render_provider_input(
         &store,
         &instruction,
         None,
@@ -556,10 +562,12 @@ fn test_http_provider_exposure_class_definition_hiding() {
         &profile,
         &registry,
     )
-    .unwrap();
+    .unwrap_err();
 
-    assert!(!rendered.contains("SECRET_CLASS_SCHEMA"));
-    assert!(rendered.contains("Structured declarations hidden by exposure policy"));
-    assert!(rendered.contains("My Class")); // Metadata remains
-    assert!(rendered.contains("Class: class_definition"));
+    let provider_err = match &err {
+        ExecError::Provider(pf) => pf,
+        _ => panic!("expected ExecError::Provider, got {:?}", err),
+    };
+    assert_eq!(provider_err.kind, ProviderFailureKind::PolicyViolation);
+    assert!(provider_err.message.contains("allow_structured_declarations is false"));
 }

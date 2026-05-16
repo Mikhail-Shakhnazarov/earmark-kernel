@@ -2,7 +2,7 @@ use crate::error::{ProviderFailure, ProviderFailureKind};
 use crate::helpers::{estimate_tokens_approx, uuid_like};
 use chrono::Utc;
 use earmark_core::{
-    InstructionPayload, ProviderProfile, ProviderRecord, ProviderRequest, ProviderResponse,
+    InstructionPayload, Kind, ProviderProfile, ProviderRecord, ProviderRequest, ProviderResponse,
     ProviderResponseContract, ProviderResponseFormat, ProviderResponseStatus, ScalarValue,
     VersionRef,
 };
@@ -305,11 +305,34 @@ pub(crate) fn validate_provider_invocation(
         ));
     }
 
-    if !profile.exposure.allow_prose_objects {
-        warnings.push("Advisory: allow_prose_objects is false, but prose payload filtering is not yet enforced in this path.".to_string());
-    }
-    if !profile.exposure.allow_structured_declarations {
-        warnings.push("Advisory: allow_structured_declarations is false, but declaration filtering is not yet enforced in this path.".to_string());
+    for input in &request.inputs {
+        let is_structured = matches!(input.kind,
+            Kind::Instruction
+            | Kind::Policy
+            | Kind::Workflow
+            | Kind::CompiledContextTemplate
+            | Kind::ProviderProfile
+            | Kind::SystemDefinition
+        ) || (input.kind == Kind::Object && input.class.as_deref() == Some("class_definition"));
+
+        if is_structured && !profile.exposure.allow_structured_declarations {
+            return Err(ProviderFailure::new(
+                ProviderFailureKind::PolicyViolation,
+                format!(
+                    "Provider profile '{}' has allow_structured_declarations=false, input {} is a structured declaration (kind: {}, class: {})",
+                    profile.name, input.id, input.kind.as_str(), input.class.as_deref().unwrap_or("none")
+                ),
+            ));
+        }
+        if !is_structured && !profile.exposure.allow_prose_objects {
+            return Err(ProviderFailure::new(
+                ProviderFailureKind::PolicyViolation,
+                format!(
+                    "Provider profile '{}' has allow_prose_objects=false, input {} is a prose object (kind: {}, class: {})",
+                    profile.name, input.id, input.kind.as_str(), input.class.as_deref().unwrap_or("none")
+                ),
+            ));
+        }
     }
     if !profile.exposure.allow_export_requests && transition_operation == "export" {
         return Err(ProviderFailure::new(
