@@ -655,7 +655,10 @@ activated_at: null
 
     let parsed: Value = serde_json::from_slice(&output).unwrap();
     assert_eq!(parsed["ok"], true);
-    assert_eq!(parsed["data"]["summary"]["kind"], "canonical_system_definition");
+    assert_eq!(
+        parsed["data"]["summary"]["kind"],
+        "canonical_system_definition"
+    );
 }
 
 #[test]
@@ -1259,12 +1262,10 @@ fn doctor_repair_index_reports_partial_when_canonical_entries_are_skipped() {
         parsed["data"]["summary"],
         "index repaired partially; canonical store still has skipped entries"
     );
-    assert!(
-        !parsed["data"]["skipped_canonical_entries"]
-            .as_array()
-            .unwrap()
-            .is_empty()
-    );
+    assert!(!parsed["data"]["skipped_canonical_entries"]
+        .as_array()
+        .unwrap()
+        .is_empty());
 
     let doctor_output = Command::cargo_bin("earmark-cli")
         .unwrap()
