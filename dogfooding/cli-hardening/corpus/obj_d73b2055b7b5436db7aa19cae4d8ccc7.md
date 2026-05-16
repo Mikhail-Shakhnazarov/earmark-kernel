@@ -1,1 +1,0 @@
-Updated deposit_object in runtime-tools to iterate over required_headers from the resolved class definition and verify their presence in the provided headers map.
