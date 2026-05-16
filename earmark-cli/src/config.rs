@@ -66,6 +66,16 @@ pub fn resolve_system_id(cli_value: Option<&str>, config: &CliConfig) -> Option<
     config.default_system_id.clone()
 }
 
+pub fn resolve_json_early(cli: &Cli) -> bool {
+    if cli.json {
+        return true;
+    }
+    if let Ok(value) = env::var("EM_JSON") {
+        return matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES");
+    }
+    false
+}
+
 pub fn resolve_json(cli: &Cli, config: &CliConfig) -> bool {
     let mut resolved = config.json.unwrap_or(false);
     if let Ok(value) = env::var("EM_JSON") {

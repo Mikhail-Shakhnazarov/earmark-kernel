@@ -7,14 +7,20 @@ mod output;
 
 use clap::Parser;
 use cli::Cli;
-use config::{load_config, resolve_json, resolve_log_level};
+use config::{load_config, resolve_json, resolve_json_early, resolve_log_level};
 
 fn main() {
     let cli = Cli::parse();
+    let as_json_early = resolve_json_early(&cli);
+
     let config = match load_config(&cli) {
         Ok(config) => config,
         Err(error) => {
-            output::emit_error_envelope(&error.to_string());
+            if as_json_early {
+                output::emit_error_envelope(&error.to_string());
+            } else {
+                eprintln!("{}", error);
+            }
             std::process::exit(1);
         }
     };
