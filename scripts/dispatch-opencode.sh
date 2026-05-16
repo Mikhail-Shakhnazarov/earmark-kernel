@@ -12,6 +12,7 @@ AGENT="${OPENCODE_AGENT:-build}"
 USE_ATTACH="${OPENCODE_ATTACH_URL:-}"
 SKIP_GATES="${SKIP_GATES:-0}"
 KEEP_BRANCH="${KEEP_BRANCH:-1}"
+OPENCODE_SKIP_PERMS="${OPENCODE_SKIP_PERMS:-0}"
 
 usage() {
   cat <<'USAGE'
@@ -25,6 +26,7 @@ Environment:
   OPENCODE_AGENT         default build
   OPENCODE_ATTACH_URL    optional running opencode serve URL
   OPENCODE_CMD           path to the opencode binary; defaults to 'opencode'
+  OPENCODE_SKIP_PERMS    set 1 to pass --dangerously-skip-permissions
   SKIP_GATES             set 1 to skip local/global gates during smoke tests
   KEEP_BRANCH            default 1; leaves branch for inspection
 
@@ -136,6 +138,10 @@ fi
 git switch -c "$BRANCH" 2>&1 | tee -a "$LOG"
 
 OPENCODE_ARGS=(run --agent "$AGENT" --file "$MANIFEST" --format json)
+
+if [[ "$OPENCODE_SKIP_PERMS" == "1" ]]; then
+  OPENCODE_ARGS+=(--dangerously-skip-permissions)
+fi
 
 if [[ -n "$MODEL" ]]; then
   OPENCODE_ARGS+=(--model "$MODEL")
