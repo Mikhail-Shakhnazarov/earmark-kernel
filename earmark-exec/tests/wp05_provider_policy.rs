@@ -303,23 +303,37 @@ fn test_work_packet_honest_constraints() {
 }
 
 #[test]
-fn test_advisory_warnings_for_response_contract() {
+fn test_response_contract_enforcement_rejects_unsupported_lineage() {
     let registry = default_provider_registry();
     let mut profile = mock_profile(vec!["transform"]);
-
-    // Set unsupported response contract flags
     profile.response_contract.must_include_lineage = true;
+
+    let err =
+        provide_with_registry(&registry, &profile, mock_request(), "transform").unwrap_err();
+    assert_eq!(err.kind, ProviderFailureKind::PolicyViolation);
+    assert!(err.message.contains("must_include_lineage"));
+}
+
+#[test]
+fn test_response_contract_enforcement_rejects_full_message_capture() {
+    let registry = default_provider_registry();
+    let mut profile = mock_profile(vec!["transform"]);
     profile.response_contract.must_return_candidate_only = false;
 
-    let outcome = provide_with_registry(&registry, &profile, mock_request(), "transform").unwrap();
+    let err =
+        provide_with_registry(&registry, &profile, mock_request(), "transform").unwrap_err();
+    assert_eq!(err.kind, ProviderFailureKind::PolicyViolation);
+    assert!(err.message.contains("must_return_candidate_only"));
+}
 
-    let warnings = outcome.record.advisory_warnings;
-    assert!(warnings
-        .iter()
-        .any(|w| w.contains("must_include_lineage is true")));
-    assert!(warnings
-        .iter()
-        .any(|w| w.contains("must_return_candidate_only is false")));
+#[test]
+fn test_response_contract_enforcement_allows_defaults() {
+    let registry = default_provider_registry();
+    let profile = mock_profile(vec!["transform"]);
+    // Default values: must_include_lineage: false, must_return_candidate_only: true
+    let outcome =
+        provide_with_registry(&registry, &profile, mock_request(), "transform").unwrap();
+    assert!(outcome.response.is_some());
 }
 
 #[test]
