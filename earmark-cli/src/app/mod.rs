@@ -13,9 +13,7 @@ mod dispatch;
 use crate::cli::*;
 use crate::output;
 use clap_complete::{generate, shells};
-use earmark_core::{
-    HeaderValue, Kind, ObjectRef, VersionRef,
-};
+use earmark_core::{HeaderValue, Kind, ObjectRef, ProviderRecord, VersionRef};
 use earmark_index::DerivedIndex;
 use earmark_store::{
     CanonicalStore, GitCanonicalStore, PayloadEncoding, StoredObject, WorkspaceLayout,
@@ -386,6 +384,27 @@ fn run_related_artifacts<S: CanonicalStore>(
         "handoffs": handoffs,
         "failures": failures,
     }))
+}
+
+fn list_provider_records_by_run<S: CanonicalStore>(
+    store: &S,
+    run_id: &str,
+) -> Result<Vec<ProviderRecord>, CliError> {
+    let mut records = Vec::new();
+    for object in store.scan_objects()?.scanned_objects {
+        if object.envelope.kind != Kind::Event {
+            continue;
+        }
+        if object.envelope.class.as_deref() != Some("provider_record") {
+            continue;
+        }
+        let record: ProviderRecord = serde_json::from_slice(&object.payload.bytes)?;
+        if record.run_id == run_id {
+            records.push(record);
+        }
+    }
+    records.sort_by(|a, b| a.recorded_at.cmp(&b.recorded_at));
+    Ok(records)
 }
 
 pub(crate) fn load_current_assignment_by_id<S: CanonicalStore>(
@@ -1360,6 +1379,17 @@ fn generate_run_report<S: CanonicalStore>(store: &S, run_id: &str) -> Result<Str
         events = ledger.events.len()
     ));
 
+    let provider_records = list_provider_records_by_run(store, run_id)?;
+    content.push_str(&format!(
+        r#"<div class="summary-card">
+            <h2>Why This Matters</h2>
+            <p>This report is a durable audit artifact for run <code>{run_id}</code>. It captures execution status, lineage-relevant provider interactions, and failure outcomes so another engineer can review trust boundaries without re-running the workflow.</p>
+            <p><strong>Provider Records:</strong> {provider_record_count}</p>
+        </div>"#,
+        run_id = run_id,
+        provider_record_count = provider_records.len()
+    ));
+
     content.push_str("<h2>Artifact Relationship Graph</h2>");
     content.push_str("<div class=\"mermaid\">\ngraph TD\n");
     if let Some(edges) = graph.get("edges").and_then(|v| v.as_array()) {
@@ -1381,6 +1411,86 @@ fn generate_run_report<S: CanonicalStore>(store: &S, run_id: &str) -> Result<Str
             kind = event.event_type,
             msg = event.message.as_deref().unwrap_or_default()
         ));
+    }
+    content.push_str("</ul></div>");
+
+    content.push_str("<h2>Provider Records</h2>");
+    content.push_str("<div class=\"artifact-grid\">");
+    for record in &provider_records {
+        let warning_count = record.advisory_warnings.len();
+        let message = record.message.as_deref().unwrap_or("n/a");
+        content.push_str(&format!(
+            r#"<div class="card">
+                <h3>{provider} / {model}</h3>
+                <p><strong>Status:</strong> {status}</p>
+                <p><strong>Record ID:</strong> <code>{record_id}</code></p>
+                <p><strong>Warnings:</strong> {warning_count}</p>
+                <p><strong>Message:</strong> {message}</p>
+            </div>"#,
+            provider = record.provider.as_str(),
+            model = record.model.as_str(),
+            status = format!("{:?}", record.status).to_lowercase(),
+            record_id = record.record_id.as_str(),
+            warning_count = warning_count,
+            message = message
+        ));
+    }
+    if provider_records.is_empty() {
+        content.push_str(
+            r#"<div class="card"><h3>No Provider Records</h3><p>This run did not emit provider record events.</p></div>"#,
+        );
+    }
+    content.push_str("</div>");
+
+    content.push_str("<h2>Failure Details</h2>");
+    content.push_str("<div class=\"summary-card\"><ul>");
+    if let Some(failures) = related.get("failures").and_then(|v| v.as_array()) {
+        if failures.is_empty() {
+            content.push_str("<li>No failures recorded.</li>");
+        } else {
+            for failure in failures {
+                let transition_id = failure
+                    .get("transition_id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown");
+                let error_type = failure
+                    .get("error_type")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown");
+                let message = failure
+                    .get("message")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("n/a");
+                content.push_str(&format!(
+                    "<li><strong>{}</strong> ({}) - {}</li>",
+                    transition_id, error_type, message
+                ));
+            }
+        }
+    }
+    content.push_str("</ul></div>");
+
+    let visibility_warnings = ledger
+        .events
+        .iter()
+        .filter_map(|event| event.message.as_deref())
+        .filter(|message| {
+            message.contains("visibility")
+                || message.contains("work surface")
+                || message.contains("compiled context")
+                || message.contains("provider profile")
+        })
+        .collect::<Vec<_>>();
+    content.push_str("<h2>Visibility Boundaries</h2>");
+    content.push_str("<div class=\"summary-card\"><ul>");
+    if visibility_warnings.is_empty() {
+        content.push_str(
+            "<li>No explicit visibility-boundary warnings were recorded for this run.</li>",
+        );
+    } else {
+        for warning in visibility_warnings {
+            content.push_str(&format!("<li>{}</li>", warning));
+        }
     }
     content.push_str("</ul></div>");
 
