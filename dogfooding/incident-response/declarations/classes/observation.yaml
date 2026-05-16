@@ -1,0 +1,12 @@
+name: observation
+kind: object
+version: "0.1.0"
+required_headers:
+  - source
+payload_schema: |
+  inline:{ "type": "string" }
+standing_rules:
+  allowed_standing: {}
+  required_protocols: {}
+relation_rules: []
+validators: []

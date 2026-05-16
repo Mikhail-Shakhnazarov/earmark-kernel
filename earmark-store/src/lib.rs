@@ -115,6 +115,18 @@ pub struct StoredObject {
     pub payload: StoredPayload,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StoreDiagnostics {
+    pub scanned_objects: Vec<StoredObject>,
+    pub skipped_entries: Vec<SkippedEntry>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SkippedEntry {
+    pub path: PathBuf,
+    pub reason: String,
+}
+
 pub struct StoredObjectBuilder {
     id: Option<ObjectId>,
     kind: Kind,
@@ -316,7 +328,7 @@ pub trait ObjectStore {
 }
 
 pub trait StoreScanner {
-    fn scan_objects(&self) -> Result<Vec<StoredObject>, StoreError>;
+    fn scan_objects(&self) -> Result<StoreDiagnostics, StoreError>;
 }
 
 pub trait StoreWriteLocking {
@@ -737,18 +749,40 @@ impl ObjectStore for GitCanonicalStore {
 }
 
 impl StoreScanner for GitCanonicalStore {
-    fn scan_objects(&self) -> Result<Vec<StoredObject>, StoreError> {
-        let mut objects = Vec::new();
+    fn scan_objects(&self) -> Result<StoreDiagnostics, StoreError> {
+        let mut scanned_objects = Vec::new();
+        let mut skipped_entries = Vec::new();
+
+        // Strict depth: objects/<obj_id>/<ver_id>/envelope.json
         for entry in WalkDir::new(self.objects_dir())
+            .min_depth(2)
+            .max_depth(3)
             .into_iter()
             .filter_map(Result::ok)
         {
             if entry.file_name() == "envelope.json" {
-                let envelope: Envelope = serde_json::from_slice(&fs::read(entry.path())?)?;
+                let bytes = fs::read(entry.path())?;
+                if bytes.is_empty() {
+                    skipped_entries.push(SkippedEntry {
+                        path: entry.path().to_path_buf(),
+                        reason: "empty envelope file".to_string(),
+                    });
+                    continue;
+                }
+                let envelope: Envelope = match serde_json::from_slice(&bytes) {
+                    Ok(env) => env,
+                    Err(e) => {
+                        skipped_entries.push(SkippedEntry {
+                            path: entry.path().to_path_buf(),
+                            reason: format!("corrupted envelope JSON: {}", e),
+                        });
+                        continue;
+                    }
+                };
                 let version_dir = entry.path().parent().ok_or_else(|| {
                     StoreError::Invariant("envelope file has no version directory".to_string())
                 })?;
-                let payload_path = fs::read_dir(version_dir)?
+                let payload_path = match fs::read_dir(version_dir)?
                     .filter_map(Result::ok)
                     .map(|e| e.path())
                     .find(|path| {
@@ -756,19 +790,34 @@ impl StoreScanner for GitCanonicalStore {
                             .and_then(|s| s.to_str())
                             .map(|s| s.starts_with("payload."))
                             .unwrap_or(false)
-                    })
-                    .ok_or_else(|| {
-                        StoreError::MissingPayload(envelope.version_id.as_str().to_string())
-                    })?;
+                    }) {
+                    Some(p) => p,
+                    None => {
+                        skipped_entries.push(SkippedEntry {
+                            path: entry.path().to_path_buf(),
+                            reason: "missing payload file".to_string(),
+                        });
+                        continue;
+                    }
+                };
                 let payload = StoredPayload::new(
                     Self::infer_encoding(&payload_path)?,
                     fs::read(payload_path)?,
                 );
-                StoredObject::verify_payload_ref(&envelope, &payload)?;
-                objects.push(StoredObject { envelope, payload });
+                if let Err(e) = StoredObject::verify_payload_ref(&envelope, &payload) {
+                    skipped_entries.push(SkippedEntry {
+                        path: entry.path().to_path_buf(),
+                        reason: format!("integrity mismatch: {}", e),
+                    });
+                    continue;
+                }
+                scanned_objects.push(StoredObject { envelope, payload });
             }
         }
-        Ok(objects)
+        Ok(StoreDiagnostics {
+            scanned_objects,
+            skipped_entries,
+        })
     }
 }
 

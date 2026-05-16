@@ -1,6 +1,6 @@
 mod resolver;
 
-pub use resolver::resolve_workflow_declaration;
+pub use resolver::{resolve_instruction_declaration, resolve_workflow_declaration};
 
 use std::{fs, path::Path};
 
@@ -416,8 +416,9 @@ pub fn validate_workflow_definition(value: &WorkflowDeclaration) -> Result<(), D
                 }
                 if op.output_contracts.len() > 1 {
                     return Err(DeriveError::Validation(format!(
-                        "multi-output transform operations are not implemented; declare one output contract for operation '{}'",
-                        op.id
+                        "workflow operation '{}' has {} output contracts: multi-output transform operations are not yet implemented",
+                        op.id,
+                        op.output_contracts.len()
                     )));
                 }
             }

@@ -1,0 +1,19 @@
+name: incident_context
+version: "0.1.0"
+select:
+  classes: ["incident", "observation", "action"]
+  standing: {}
+  relations: []
+group_by: []
+render:
+  mode: markdown
+  prose_template: |
+    # Incident Analysis Context
+    {{#each objects}}
+    ## {{class}} ({{id}})
+    {{payload}}
+    {{/each}}
+visibility:
+  include_lineage: true
+  include_constraints: true
+  include_provenance: true

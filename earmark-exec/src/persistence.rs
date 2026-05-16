@@ -203,25 +203,147 @@ pub(crate) fn create_local_transform_output<S: CanonicalStore>(
     store: &S,
     index: &DerivedIndex,
     instruction: &InstructionPayload,
-    output_class: &str,
+    output_classes: &[String],
     inputs: &[ObjectRef],
     instruction_ref: &earmark_core::VersionRef,
 ) -> Result<TransformArtifacts, ExecError> {
-    let body = format!(
-        "# Candidate Output\n\nInstruction: {}\n\nPurpose: {}\n\nInputs:\n{}\n",
-        instruction.name,
-        instruction.purpose,
-        inputs
-            .iter()
-            .map(|input| format!("- {}", input.id.as_str()))
-            .collect::<Vec<_>>()
-            .join("\n")
-    );
-    let stored = StoredObject::builder(Kind::Object, StoredPayload::from_markdown(body))
-        .class(output_class.to_string())
+    let mut outputs = Vec::new();
+    let mut all_relation_ids = Vec::new();
+
+    for class in output_classes {
+        let body = format!(
+            "# Candidate Output ({})\n\nInstruction: {}\n\nPurpose: {}\n\nInputs:\n{}\n",
+            class,
+            instruction.name,
+            instruction.purpose,
+            inputs
+                .iter()
+                .map(|input| format!("- {}", input.id.as_str()))
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
+        let stored = StoredObject::builder(Kind::Object, StoredPayload::from_markdown(body))
+            .class(class.to_string())
+            .provenance(Provenance {
+                actor: "runtime".to_string(),
+                source_type: "local_transform".to_string(),
+                source_ref: None,
+                lineage: inputs
+                    .iter()
+                    .filter(|obj| obj.kind == Kind::Object)
+                    .cloned()
+                    .map(|object| earmark_core::LineageLink {
+                        rel: "derived_from".to_string(),
+                        object,
+                    })
+                    .chain(std::iter::once(earmark_core::LineageLink {
+                        rel: "used_instruction".to_string(),
+                        object: ObjectRef::new(
+                            instruction_ref.id.clone(),
+                            instruction_ref.version_id.clone(),
+                            Kind::Instruction,
+                            None,
+                        ),
+                    }))
+                    .collect(),
+                import_path: None,
+                captured_at: Utc::now(),
+            })
+            .header(
+                "title",
+                format!("{} candidate ({})", instruction.name, class),
+            )
+            .build()
+            .map_err(ExecError::IncompleteExecution)?;
+        write_object_and_index(store, index, &stored)?;
+        let relation_ids =
+            create_lineage_relations(store, index, &stored.object_ref(), inputs, instruction_ref)?;
+
+        outputs.push(stored.object_ref());
+        all_relation_ids.extend(relation_ids);
+    }
+
+    Ok(TransformArtifacts {
+        outputs,
+        relation_ids: all_relation_ids,
+    })
+}
+
+pub(crate) fn create_delegated_transform_output<S: CanonicalStore>(
+    store: &S,
+    index: &DerivedIndex,
+    instruction: &InstructionPayload,
+    output_classes: &[String],
+    inputs: &[ObjectRef],
+    instruction_ref: &earmark_core::VersionRef,
+    response: ProviderResponse,
+) -> Result<TransformArtifacts, ExecError> {
+    let is_synthetic = provider_response_is_synthetic(&response);
+    let synthetic_source = provider_metadata_synthetic_source(&response.metadata)
+        .unwrap_or_else(|| "mock_provider".to_string());
+
+    let mut outputs = Vec::new();
+    let mut all_relation_ids = Vec::new();
+
+    // If the response is a JSON object, we might want to split it by class.
+    // For now, we support the 'multi-object' case where the payload is replicated
+    // OR the provider returned a structured map.
+    let payload_json: Option<serde_json::Value> =
+        serde_json::from_str(&response.candidate_payload).ok();
+
+    for class in output_classes {
+        let mut headers = BTreeMap::from([
+            (
+                "title".to_string(),
+                earmark_core::HeaderValue::String(format!(
+                    "{} candidate ({})",
+                    instruction.name, class
+                )),
+            ),
+            (
+                "provider".to_string(),
+                earmark_core::HeaderValue::String(response.provider.clone()),
+            ),
+            (
+                "model".to_string(),
+                earmark_core::HeaderValue::String(response.model.clone()),
+            ),
+        ]);
+        if is_synthetic {
+            headers.insert(
+                "synthetic".to_string(),
+                earmark_core::HeaderValue::Bool(true),
+            );
+            headers.insert(
+                "synthetic_source".to_string(),
+                earmark_core::HeaderValue::String(synthetic_source.clone()),
+            );
+            headers.insert(
+                "production_eligible".to_string(),
+                earmark_core::HeaderValue::Bool(false),
+            );
+        }
+
+        // HEURISTIC: If payload is a JSON object and has a key matching the class name, use that sub-value.
+        // Otherwise, use the whole payload.
+        let final_payload_bytes = if let Some(serde_json::Value::Object(map)) = &payload_json {
+            if let Some(val) = map.get(class) {
+                serde_json::to_vec_pretty(val)?
+            } else {
+                response.candidate_payload.clone().into_bytes()
+            }
+        } else {
+            response.candidate_payload.clone().into_bytes()
+        };
+
+        let stored = StoredObject::builder(
+            Kind::Object,
+            StoredPayload::from_json_bytes(final_payload_bytes),
+        )
+        .class(class.to_string())
         .provenance(Provenance {
             actor: "runtime".to_string(),
-            source_type: "local_transform".to_string(),
+            source_type: "delegated_transform".to_string(),
             source_ref: None,
             lineage: inputs
                 .iter()
@@ -231,102 +353,24 @@ pub(crate) fn create_local_transform_output<S: CanonicalStore>(
                     rel: "derived_from".to_string(),
                     object,
                 })
-                .chain(std::iter::once(earmark_core::LineageLink {
-                    rel: "used_instruction".to_string(),
-                    object: ObjectRef::new(
-                        instruction_ref.id.clone(),
-                        instruction_ref.version_id.clone(),
-                        Kind::Instruction,
-                        None,
-                    ),
-                }))
                 .collect(),
             import_path: None,
             captured_at: Utc::now(),
         })
-        .header("title", format!("{} candidate", instruction.name))
+        .headers(headers)
         .build()
         .map_err(ExecError::IncompleteExecution)?;
-    write_object_and_index(store, index, &stored)?;
-    let relation_ids =
-        create_lineage_relations(store, index, &stored.object_ref(), inputs, instruction_ref)?;
-    Ok(TransformArtifacts {
-        output: stored.object_ref(),
-        relation_ids,
-    })
-}
+        write_object_and_index(store, index, &stored)?;
+        let relation_ids =
+            create_lineage_relations(store, index, &stored.object_ref(), inputs, instruction_ref)?;
 
-pub(crate) fn create_delegated_transform_output<S: CanonicalStore>(
-    store: &S,
-    index: &DerivedIndex,
-    instruction: &InstructionPayload,
-    output_class: &str,
-    inputs: &[ObjectRef],
-    instruction_ref: &earmark_core::VersionRef,
-    response: ProviderResponse,
-) -> Result<TransformArtifacts, ExecError> {
-    let is_synthetic = provider_response_is_synthetic(&response);
-    let synthetic_source = provider_metadata_synthetic_source(&response.metadata)
-        .unwrap_or_else(|| "mock_provider".to_string());
-    let mut headers = BTreeMap::from([
-        (
-            "title".to_string(),
-            earmark_core::HeaderValue::String(format!("{} candidate", instruction.name)),
-        ),
-        (
-            "provider".to_string(),
-            earmark_core::HeaderValue::String(response.provider.clone()),
-        ),
-        (
-            "model".to_string(),
-            earmark_core::HeaderValue::String(response.model.clone()),
-        ),
-    ]);
-    if is_synthetic {
-        headers.insert(
-            "synthetic".to_string(),
-            earmark_core::HeaderValue::Bool(true),
-        );
-        headers.insert(
-            "synthetic_source".to_string(),
-            earmark_core::HeaderValue::String(synthetic_source),
-        );
-        headers.insert(
-            "production_eligible".to_string(),
-            earmark_core::HeaderValue::Bool(false),
-        );
+        outputs.push(stored.object_ref());
+        all_relation_ids.extend(relation_ids);
     }
 
-    let stored = StoredObject::builder(
-        Kind::Object,
-        StoredPayload::from_json_bytes(response.candidate_payload.into_bytes()),
-    )
-    .class(output_class.to_string())
-    .provenance(Provenance {
-        actor: "runtime".to_string(),
-        source_type: "delegated_transform".to_string(),
-        source_ref: None,
-        lineage: inputs
-            .iter()
-            .filter(|obj| obj.kind == Kind::Object)
-            .cloned()
-            .map(|object| earmark_core::LineageLink {
-                rel: "derived_from".to_string(),
-                object,
-            })
-            .collect(),
-        import_path: None,
-        captured_at: Utc::now(),
-    })
-    .headers(headers)
-    .build()
-    .map_err(ExecError::IncompleteExecution)?;
-    write_object_and_index(store, index, &stored)?;
-    let relation_ids =
-        create_lineage_relations(store, index, &stored.object_ref(), inputs, instruction_ref)?;
     Ok(TransformArtifacts {
-        output: stored.object_ref(),
-        relation_ids,
+        outputs,
+        relation_ids: all_relation_ids,
     })
 }
 

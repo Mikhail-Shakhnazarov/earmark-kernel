@@ -584,6 +584,7 @@ mod tests {
             system_id: None,
             namespace: None,
             standing,
+            headers: BTreeMap::new(),
         };
 
         let mut filters = BTreeMap::new();
@@ -609,6 +610,7 @@ mod tests {
             system_id: None,
             namespace: None,
             standing: BTreeMap::new(),
+            headers: BTreeMap::new(),
         };
         let mut filters = BTreeMap::new();
         filters.insert("research:status".to_string(), vec!["verified".to_string()]);
@@ -630,6 +632,7 @@ mod tests {
             system_id: None,
             namespace: None,
             standing: BTreeMap::from([("research:status".to_string(), "verified".to_string())]),
+            headers: BTreeMap::new(),
         };
         let mut filters = BTreeMap::new();
         filters.insert("research:status".to_string(), vec![]);
@@ -651,6 +654,7 @@ mod tests {
             system_id: None,
             namespace: None,
             standing: BTreeMap::from([("research:status".to_string(), "demonstrated".to_string())]),
+            headers: BTreeMap::new(),
         };
         // Match via row.standing
         let filters = BTreeMap::from([(

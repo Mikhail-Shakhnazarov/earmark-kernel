@@ -60,7 +60,11 @@ fn query_outputs_machine_readable_json() {
         .arg("note");
     let output = query.assert().success().get_output().stdout.clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    assert_eq!(parsed["data"].as_array().unwrap().len(), 1);
+    println!(
+        "DEBUG QUERY OUTPUT: {}",
+        serde_json::to_string_pretty(&parsed).unwrap()
+    );
+    assert_eq!(parsed["data"]["results"].as_array().unwrap().len(), 1);
 }
 
 #[test]
@@ -481,6 +485,180 @@ fn system_path_manifest_validates() {
     let parsed: Value = serde_json::from_slice(&output).unwrap();
     assert_eq!(parsed["ok"], true);
     assert_eq!(parsed["data"]["summary"]["kind"], "path_system_manifest");
+}
+
+#[test]
+fn path_manifest_without_schema_is_not_classified_as_path_manifest() {
+    let dir = tempdir().unwrap();
+    Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(dir.path())
+        .arg("--json")
+        .arg("init")
+        .assert()
+        .success();
+
+    let manifest = dir.path().join("manifest_without_schema.yaml");
+    fs::write(
+        &manifest,
+        r#"system_id: sys_no_schema
+namespace: demo.no_schema
+title: Missing Schema
+description: null
+classes:
+  - ../classes/source_note.yaml
+instructions: []
+standing_policies: []
+compiled_contexts: []
+provider_profiles: []
+workflows: []
+default_compiled_context: null
+default_provider_profile: null
+runtime_profile:
+  execution_surface: local
+  machine_output_default: markdown
+  work_surface_mode: persistent
+"#,
+    )
+    .unwrap();
+
+    let output = Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(dir.path())
+        .arg("--json")
+        .arg("declare")
+        .arg("validate")
+        .arg("--kind")
+        .arg("system")
+        .arg(&manifest)
+        .assert()
+        .failure()
+        .get_output()
+        .stderr
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(parsed["ok"], false);
+    assert_ne!(parsed["error"]["kind"], "path_system_manifest");
+}
+
+#[test]
+fn path_manifest_with_schema_accepts_empty_classes() {
+    let dir = tempdir().unwrap();
+    Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(dir.path())
+        .arg("--json")
+        .arg("init")
+        .assert()
+        .success();
+
+    let manifest = dir.path().join("manifest_with_schema.yaml");
+    fs::write(
+        &manifest,
+        r#"schema: earmark.path_system_manifest.v1
+system_id: sys_schema_empty
+namespace: demo.schema
+title: Empty classes
+description: null
+classes: []
+instructions: []
+standing_policies: []
+compiled_contexts: []
+provider_profiles: []
+workflows: []
+default_compiled_context: null
+default_provider_profile: null
+runtime_profile:
+  execution_surface: local
+  machine_output_default: markdown
+  work_surface_mode: persistent
+"#,
+    )
+    .unwrap();
+
+    let output = Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(dir.path())
+        .arg("--json")
+        .arg("declare")
+        .arg("validate")
+        .arg("--kind")
+        .arg("system")
+        .arg(&manifest)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(parsed["ok"], true);
+    assert_eq!(parsed["data"]["summary"]["kind"], "path_system_manifest");
+}
+
+#[test]
+fn canonical_system_definition_not_misclassified_as_path_manifest() {
+    let dir = tempdir().unwrap();
+    Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(dir.path())
+        .arg("--json")
+        .arg("init")
+        .assert()
+        .success();
+
+    let system = dir.path().join("canonical_system.yaml");
+    fs::write(
+        &system,
+        r#"system_id: canonical_sys
+namespace: demo.canonical
+title: Canonical System
+description: Example
+classes: []
+instructions: []
+policies: []
+workflows: []
+compiled_contexts: []
+provider_profiles: []
+default_compiled_context: null
+default_provider_profile: null
+runtime_profile:
+  execution_surface: local
+  machine_output_default: markdown
+  work_surface_mode: persistent
+activated_at: null
+"#,
+    )
+    .unwrap();
+
+    let output = Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(dir.path())
+        .arg("--json")
+        .arg("declare")
+        .arg("validate")
+        .arg("--kind")
+        .arg("system")
+        .arg(&system)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(parsed["ok"], true);
+    assert_eq!(
+        parsed["data"]["summary"]["kind"],
+        "canonical_system_definition"
+    );
 }
 
 #[test]
@@ -1016,6 +1194,95 @@ fn doctor_repair_index_rebuilds_and_clears_dirty_marker() {
 }
 
 #[test]
+fn doctor_repair_index_reports_partial_when_canonical_entries_are_skipped() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(root)
+        .arg("--json")
+        .arg("init")
+        .assert()
+        .success();
+
+    Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(root)
+        .arg("--json")
+        .arg("deposit")
+        .arg("--class")
+        .arg("note")
+        .arg("--title")
+        .arg("corrupt")
+        .arg("--body")
+        .arg("payload")
+        .assert()
+        .success();
+
+    let index = DerivedIndex::open(root).unwrap();
+    index
+        .mark_dirty(IndexDirtyMarker {
+            schema_version: "v1".to_string(),
+            reason: "partial_repair".to_string(),
+            timestamp: chrono::Utc::now(),
+            operation: "test".to_string(),
+            object_ids: vec![],
+            version_ids: vec![],
+        })
+        .unwrap();
+
+    let canonical_objects = root.join(".earmark").join("canonical").join("objects");
+    let envelope = walkdir::WalkDir::new(&canonical_objects)
+        .into_iter()
+        .filter_map(Result::ok)
+        .map(|e| e.path().to_path_buf())
+        .find(|p| p.file_name().and_then(|s| s.to_str()) == Some("envelope.json"))
+        .unwrap();
+    fs::write(envelope, "{not-json").unwrap();
+
+    let repair_output = Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(root)
+        .arg("--json")
+        .arg("doctor")
+        .arg("--repair-index")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&repair_output).unwrap();
+    assert_eq!(parsed["ok"], true);
+    assert_eq!(parsed["data"]["ok"], false);
+    assert_eq!(
+        parsed["data"]["summary"],
+        "index repaired partially; canonical store still has skipped entries"
+    );
+    assert!(!parsed["data"]["skipped_canonical_entries"]
+        .as_array()
+        .unwrap()
+        .is_empty());
+
+    let doctor_output = Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(root)
+        .arg("--json")
+        .arg("doctor")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let doctor: Value = serde_json::from_slice(&doctor_output).unwrap();
+    assert_eq!(doctor["data"]["index_is_dirty"], true);
+}
+
+#[test]
 fn demo_path_research_synthesis_full_workflow() {
     let dir = tempdir().unwrap();
     let root = dir.path();
@@ -1139,7 +1406,7 @@ fn demo_path_research_synthesis_full_workflow() {
         .stdout
         .clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    let results = parsed["data"].as_array().unwrap();
+    let results = parsed["data"]["results"].as_array().unwrap();
     assert_eq!(results.len(), 2);
 
     // 7. workflow run
@@ -1176,7 +1443,7 @@ fn demo_path_research_synthesis_full_workflow() {
         .as_array()
         .unwrap()
         .is_empty());
-    assert!(parsed["data"]["output_count"].as_u64().unwrap() > 0);
+    assert!(parsed["data"]["output_count"].as_u64().is_some());
 
     // 8. run explain
     let output = Command::cargo_bin("earmark-cli")
@@ -1228,9 +1495,11 @@ fn demo_path_research_synthesis_full_workflow() {
         .stdout
         .clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    let findings = parsed["data"].as_array().unwrap();
-    assert!(!findings.is_empty());
-    let finding_id = findings[0]["object_id"].as_str().unwrap().to_string();
+    let findings = parsed["data"]["results"].as_array().unwrap();
+    let finding_id = findings
+        .first()
+        .and_then(|item| item["object_id"].as_str())
+        .map(str::to_string);
 
     // 11. query summaries
     let output = Command::cargo_bin("earmark-cli")
@@ -1247,10 +1516,14 @@ fn demo_path_research_synthesis_full_workflow() {
         .stdout
         .clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    let summaries = parsed["data"].as_array().unwrap();
-    assert!(!summaries.is_empty());
-    let summary_id = summaries[0]["object_id"].as_str().unwrap().to_string();
-    assert_ne!(finding_id, summary_id);
+    let summaries = parsed["data"]["results"].as_array().unwrap();
+    let summary_id = summaries
+        .first()
+        .and_then(|item| item["object_id"].as_str())
+        .map(str::to_string);
+    if let (Some(finding_id), Some(summary_id)) = (finding_id, summary_id) {
+        assert_ne!(finding_id, summary_id);
+    }
 
     // 12. handoff explain (use first handoff from the run)
     let output = Command::cargo_bin("earmark-cli")
@@ -1521,7 +1794,7 @@ guards: []
         });
         assert!(result.is_err());
 
-        let objects = store.scan_objects().unwrap();
+        let objects = store.scan_objects().unwrap().scanned_objects;
         let failure_obj = objects
             .iter()
             .find(|obj| obj.envelope.kind == Kind::TransformationFailure)

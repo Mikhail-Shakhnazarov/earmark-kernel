@@ -59,6 +59,20 @@ pub fn handle(ctx: &CommandContext, args: &DepositArgs) -> Result<(), CliError> 
         source_type: "cli".to_string(),
     };
 
+    for h in &args.headers {
+        if let Some((k, v)) = h.split_once('=') {
+            validation_context.headers.insert(
+                k.to_string(),
+                earmark_core::HeaderValue::String(v.to_string()),
+            );
+        } else {
+            return Err(CliError::argument(format!(
+                "invalid header format '{}', expected key=value",
+                h
+            )));
+        }
+    }
+
     let object_ref = runtime_surface.deposit_object(
         args.class.clone(),
         Some(args.kind.clone()),

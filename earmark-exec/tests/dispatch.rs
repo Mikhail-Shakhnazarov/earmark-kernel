@@ -271,7 +271,7 @@ fn dispatch_resolution_precedence() {
         input_classes: vec![],
         output_classes: vec![],
         execution_policy: "runtime_dispatch_permitted".to_string(),
-        provider_profile: Some(VersionRef::new(ObjectId::new(), VersionId::new())),
+        provider_profile: Some(VersionRef::new(ObjectId::new(), VersionId::new()).into()),
         trace_policy: "summary".to_string(),
         register: "machined".to_string(),
         body: earmark_core::MarkdownBody::new("body".to_string()),

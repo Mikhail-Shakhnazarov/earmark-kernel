@@ -159,7 +159,7 @@ pub(crate) fn reject_duplicate_active_assignment<S: CanonicalStore>(
     transition_id: &str,
 ) -> Result<(), ExecError> {
     let now = Utc::now();
-    for object in store.scan_objects()? {
+    for object in store.scan_objects()?.scanned_objects {
         if object.envelope.kind != Kind::TransitionAssignment {
             continue;
         }
@@ -196,7 +196,7 @@ pub(crate) fn load_current_transition_assignment<S: CanonicalStore>(
     store: &S,
     assignment_id: &earmark_core::TransitionAssignmentId,
 ) -> Result<(StoredObject, TransitionAssignment), ExecError> {
-    for object in store.scan_objects()? {
+    for object in store.scan_objects()?.scanned_objects {
         if object.envelope.kind != Kind::TransitionAssignment {
             continue;
         }

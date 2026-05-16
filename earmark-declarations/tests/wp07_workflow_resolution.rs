@@ -134,7 +134,8 @@ operations:
     let err = earmark_core::parse_yaml::<WorkflowDeclaration>(yaml)
         .unwrap_err()
         .to_string();
-    assert!(err.contains("missing 'id' field"));
+    assert!(err.contains("invalid version reference"));
+    assert!(err.contains("expected path string or {id, version_id} object"));
 
     // Malformed 'id' field
     let yaml2 = r#"
@@ -150,5 +151,6 @@ operations:
     let err2 = earmark_core::parse_yaml::<WorkflowDeclaration>(yaml2)
         .unwrap_err()
         .to_string();
+    println!("DEBUG ERROR MESSAGE: {}", err2);
     assert!(err2.contains("must start with obj_"));
 }
