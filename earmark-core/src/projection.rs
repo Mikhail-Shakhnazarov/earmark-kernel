@@ -209,6 +209,78 @@ pub fn project_visibility(
     resolve_visibility(&visibility_bindings)
 }
 
+/// Project review only (lightweight helper).
+///
+/// Unlike the full `project()`, this returns only the review projection
+/// and silently skips unknown dimension/token/protocol entries. Useful
+/// for callers that only need the review gate.
+pub fn project_review(
+    standing: &Standing,
+    registry: &StandingRegistry,
+) -> Option<ReviewProjection> {
+    let mut review_states: Vec<(String, DimensionId, TokenId)> = Vec::new();
+    for (dim_id, token_id) in &standing.values {
+        let Some(dim_def) = registry.dimensions.get(dim_id) else { continue; };
+        let Some(token_def) = dim_def.tokens.iter().find(|t| t.id == *token_id) else { continue; };
+        for binding in &token_def.implements {
+            if binding.protocol.as_str() == "kernel:review" {
+                if let Some(state) = &binding.state {
+                    review_states.push((state.clone(), dim_id.clone(), token_id.clone()));
+                }
+            }
+        }
+    }
+    let mut conflicts = Vec::new();
+    resolve_review(&review_states, &mut conflicts)
+}
+
+/// Project process only (lightweight helper).
+///
+/// Unlike the full `project()`, this returns only the process projection
+/// and silently skips unknown dimension/token/protocol entries.
+pub fn project_process(
+    standing: &Standing,
+    registry: &StandingRegistry,
+) -> Option<ProcessProjection> {
+    let mut process_states: Vec<(String, DimensionId, TokenId)> = Vec::new();
+    for (dim_id, token_id) in &standing.values {
+        let Some(dim_def) = registry.dimensions.get(dim_id) else { continue; };
+        let Some(token_def) = dim_def.tokens.iter().find(|t| t.id == *token_id) else { continue; };
+        for binding in &token_def.implements {
+            if binding.protocol.as_str() == "kernel:process" {
+                if let Some(state) = &binding.state {
+                    process_states.push((state.clone(), dim_id.clone(), token_id.clone()));
+                }
+            }
+        }
+    }
+    let mut conflicts = Vec::new();
+    resolve_process(&process_states, &mut conflicts)
+}
+
+/// Project immutability only (lightweight helper).
+///
+/// Unlike the full `project()`, this returns only the immutability projection
+/// and silently skips unknown dimension/token/protocol entries.
+pub fn project_immutability(
+    standing: &Standing,
+    registry: &StandingRegistry,
+) -> ImmutabilityProjection {
+    let mut immutability_states: Vec<(String, DimensionId, TokenId)> = Vec::new();
+    for (dim_id, token_id) in &standing.values {
+        let Some(dim_def) = registry.dimensions.get(dim_id) else { continue; };
+        let Some(token_def) = dim_def.tokens.iter().find(|t| t.id == *token_id) else { continue; };
+        for binding in &token_def.implements {
+            if binding.protocol.as_str() == "kernel:immutability" {
+                if let Some(state) = &binding.state {
+                    immutability_states.push((state.clone(), dim_id.clone(), token_id.clone()));
+                }
+            }
+        }
+    }
+    resolve_immutability(&immutability_states)
+}
+
 // ---------------------------------------------------------------------------
 // Per-protocol resolution helpers
 // ---------------------------------------------------------------------------
@@ -1153,5 +1225,207 @@ mod tests {
         let vis = project_visibility(&standing, &registry);
         assert!(!vis.include_in_standard_context);
         assert!(vis.expose_to_provider);
+    }
+
+    // --- Tests for lightweight project_review helper ---
+
+    #[test]
+    fn test_project_review_returns_accepted() {
+        let registry = kernel_registry();
+        let mut values = BTreeMap::new();
+        values.insert(
+            DimensionId::from_static("kernel:review"),
+            TokenId::from_static("accepted"),
+        );
+        values.insert(
+            DimensionId::from_static("kernel:epistemic"),
+            TokenId::from_static("working"),
+        );
+        values.insert(
+            DimensionId::from_static("kernel:process"),
+            TokenId::from_static("active"),
+        );
+        let standing = Standing { values };
+
+        let proj = project_review(&standing, &registry);
+        assert_eq!(proj, Some(ReviewProjection::Accepted));
+    }
+
+    #[test]
+    fn test_project_review_returns_none_for_no_bindings() {
+        let registry = kernel_registry();
+        let mut values = BTreeMap::new();
+        values.insert(
+            DimensionId::from_static("kernel:epistemic"),
+            TokenId::from_static("working"),
+        );
+        let standing = Standing { values };
+
+        let proj = project_review(&standing, &registry);
+        assert_eq!(proj, None);
+    }
+
+    #[test]
+    fn test_project_review_conflict_returns_none() {
+        let sys = SystemDefinition {
+            system_id: "sys_rev_conflict_lite".to_string(),
+            namespace: "systems/rev_conflict_lite".to_string(),
+            title: "RevConflictLite".to_string(),
+            description: None,
+            classes: vec![],
+            instructions: vec![],
+            policies: vec![],
+            workflows: vec![],
+            compiled_contexts: vec![],
+            provider_profiles: vec![],
+            default_compiled_context: None,
+            default_provider_profile: None,
+            standing_dimensions: vec![
+                crate::StandingDimensionDefinition {
+                    id: DimensionId::from_static("dim:rcl_a"),
+                    default: TokenId::from_static("accepted_tok"),
+                    tokens: vec![crate::StandingTokenDefinition {
+                        id: TokenId::from_static("accepted_tok"),
+                        implements: vec![crate::ProtocolBinding {
+                            protocol: KernelProtocolId::from_static("kernel:review"),
+                            state: Some("accepted".to_string()),
+                            properties: BTreeMap::new(),
+                        }],
+                    }],
+                },
+                crate::StandingDimensionDefinition {
+                    id: DimensionId::from_static("dim:rcl_b"),
+                    default: TokenId::from_static("rejected_tok"),
+                    tokens: vec![crate::StandingTokenDefinition {
+                        id: TokenId::from_static("rejected_tok"),
+                        implements: vec![crate::ProtocolBinding {
+                            protocol: KernelProtocolId::from_static("kernel:review"),
+                            state: Some("rejected".to_string()),
+                            properties: BTreeMap::new(),
+                        }],
+                    }],
+                },
+            ],
+            runtime_profile: crate::RuntimeProfile {
+                execution_surface: "local".to_string(),
+                machine_output_default: "json".to_string(),
+                work_surface_mode: "strict".to_string(),
+            },
+            activated_at: None,
+        };
+        let registry = StandingRegistry::from_system_definition(&sys).expect("conflict reg");
+        let mut values = BTreeMap::new();
+        values.insert(
+            DimensionId::from_static("dim:rcl_a"),
+            TokenId::from_static("accepted_tok"),
+        );
+        values.insert(
+            DimensionId::from_static("dim:rcl_b"),
+            TokenId::from_static("rejected_tok"),
+        );
+        let standing = Standing { values };
+
+        let proj = project_review(&standing, &registry);
+        assert_eq!(proj, None, "conflicting review should return None");
+    }
+
+    // --- Tests for lightweight project_process helper ---
+
+    #[test]
+    fn test_project_process_returns_active() {
+        let registry = kernel_registry();
+        let mut values = BTreeMap::new();
+        values.insert(
+            DimensionId::from_static("kernel:process"),
+            TokenId::from_static("active"),
+        );
+        values.insert(
+            DimensionId::from_static("kernel:epistemic"),
+            TokenId::from_static("working"),
+        );
+        values.insert(
+            DimensionId::from_static("kernel:review"),
+            TokenId::from_static("unreviewed"),
+        );
+        let standing = Standing { values };
+
+        let proj = project_process(&standing, &registry);
+        assert_eq!(proj, Some(ProcessProjection::Active));
+    }
+
+    #[test]
+    fn test_project_process_returns_none_for_no_bindings() {
+        let registry = kernel_registry();
+        let mut values = BTreeMap::new();
+        values.insert(
+            DimensionId::from_static("kernel:epistemic"),
+            TokenId::from_static("working"),
+        );
+        let standing = Standing { values };
+
+        let proj = project_process(&standing, &registry);
+        assert_eq!(proj, None);
+    }
+
+    // --- Tests for lightweight project_immutability helper ---
+
+    #[test]
+    fn test_project_immutability_returns_mutable_by_default() {
+        let registry = kernel_registry();
+        let mut values = BTreeMap::new();
+        values.insert(
+            DimensionId::from_static("kernel:epistemic"),
+            TokenId::from_static("working"),
+        );
+        let standing = Standing { values };
+
+        let imm = project_immutability(&standing, &registry);
+        assert_eq!(imm, ImmutabilityProjection::Mutable);
+    }
+
+    #[test]
+    fn test_project_immutability_returns_sealed() {
+        let sys = SystemDefinition {
+            system_id: "sys_immut_lite".to_string(),
+            namespace: "systems/immut_lite".to_string(),
+            title: "ImmutLite".to_string(),
+            description: None,
+            classes: vec![],
+            instructions: vec![],
+            policies: vec![],
+            workflows: vec![],
+            compiled_contexts: vec![],
+            provider_profiles: vec![],
+            default_compiled_context: None,
+            default_provider_profile: None,
+            standing_dimensions: vec![crate::StandingDimensionDefinition {
+                id: DimensionId::from_static("dim:seal"),
+                default: TokenId::from_static("sealed_token"),
+                tokens: vec![crate::StandingTokenDefinition {
+                    id: TokenId::from_static("sealed_token"),
+                    implements: vec![crate::ProtocolBinding {
+                        protocol: KernelProtocolId::from_static("kernel:immutability"),
+                        state: Some("sealed".to_string()),
+                        properties: BTreeMap::new(),
+                    }],
+                }],
+            }],
+            runtime_profile: crate::RuntimeProfile {
+                execution_surface: "local".to_string(),
+                machine_output_default: "json".to_string(),
+                work_surface_mode: "strict".to_string(),
+            },
+            activated_at: None,
+        };
+        let registry = StandingRegistry::from_system_definition(&sys).expect("immut reg");
+        let mut values = BTreeMap::new();
+        values.insert(
+            DimensionId::from_static("dim:seal"),
+            TokenId::from_static("sealed_token"),
+        );
+        let standing = Standing { values };
+
+        let imm = project_immutability(&standing, &registry);
+        assert_eq!(imm, ImmutabilityProjection::Sealed);
     }
 }

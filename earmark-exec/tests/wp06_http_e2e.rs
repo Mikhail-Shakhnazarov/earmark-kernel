@@ -404,7 +404,7 @@ fn test_http_provider_exposure_structured_hiding() {
         _ => panic!("expected ExecError::Provider, got {:?}", err),
     };
     assert_eq!(provider_err.kind, ProviderFailureKind::PolicyViolation);
-    assert!(provider_err.message.contains("allow_prose_objects is false"));
+    assert!(provider_err.message.contains("allow_structured_declarations is false"));
 }
 
 #[test]
@@ -487,7 +487,7 @@ fn test_http_provider_exposure_prose_hiding() {
         _ => panic!("expected ExecError::Provider, got {:?}", err),
     };
     assert_eq!(provider_err.kind, ProviderFailureKind::PolicyViolation);
-    assert!(provider_err.message.contains("allow_structured_declarations is false"));
+    assert!(provider_err.message.contains("allow_prose_objects is false"));
 }
 
 #[test]
