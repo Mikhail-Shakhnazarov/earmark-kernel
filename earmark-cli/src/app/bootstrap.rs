@@ -3,7 +3,9 @@ use crate::app::common::{
     WorkspaceAccessMode,
 };
 use crate::cli::Cli;
-use crate::config::{load_config, resolve_json, resolve_root};
+use crate::config::{
+    load_config, resolve_actor, resolve_json, resolve_root, resolve_trusted_actors,
+};
 use earmark_exec::default_provider_registry;
 use earmark_index::DerivedIndex;
 use earmark_store::{GitCanonicalStore, WorkspaceLayout};
@@ -15,7 +17,13 @@ pub(crate) fn bootstrap(cli: &Cli) -> Result<BootstrappedServices, CliError> {
     // 2. Resolve root using shared utility
     let root = resolve_root(cli, &config);
 
-    let store = GitCanonicalStore::new(&root);
+    let actor = resolve_actor(cli, &config);
+    let trusted_actors = resolve_trusted_actors(&config);
+    let store = if trusted_actors.is_empty() {
+        GitCanonicalStore::new(&root)
+    } else {
+        GitCanonicalStore::with_authorized_actors(&root, trusted_actors)
+    };
 
     let mode = workspace_access_mode(&cli.command);
 
@@ -44,5 +52,6 @@ pub(crate) fn bootstrap(cli: &Cli) -> Result<BootstrappedServices, CliError> {
         provider_registry,
         as_json,
         root,
+        actor,
     })
 }

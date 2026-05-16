@@ -365,6 +365,7 @@ pub(crate) fn register_declaration_file<S: CanonicalStore>(
     kind: DeclarationKind,
     path: &PathBuf,
     registry: Option<&BTreeMap<PathBuf, VersionRef>>,
+    actor: &str,
 ) -> Result<VersionRef, CliError> {
     let (stored_kind, name, payload, headers, explicit_symbolic_name) = match kind {
         DeclarationKind::Class => {
@@ -489,7 +490,7 @@ pub(crate) fn register_declaration_file<S: CanonicalStore>(
         DeclarationKind::System => {
             if let Some(manifest) = try_load_path_system_manifest(path)? {
                 validate_path_system_manifest(path, &manifest)?;
-                let decl = assemble_system_definition_from_manifest(store, path, &manifest)?;
+                let decl = assemble_system_definition_from_manifest(store, path, &manifest, actor)?;
                 let mut headers = BTreeMap::new();
                 headers.insert("title".to_string(), HeaderValue::String(decl.title.clone()));
                 (
@@ -519,7 +520,7 @@ pub(crate) fn register_declaration_file<S: CanonicalStore>(
         stored_kind,
         name,
         Standing::default(),
-        Provenance::direct_input("operator"),
+        Provenance::direct_input(actor),
         headers,
         payload,
         vec![],
@@ -677,13 +678,14 @@ fn assemble_system_definition_from_manifest<S: CanonicalStore>(
     store: &S,
     path: &std::path::Path,
     manifest: &PathSystemManifest,
+    actor: &str,
 ) -> Result<earmark_core::SystemDefinition, CliError> {
     let mut registry = BTreeMap::new();
 
     let mut classes = Vec::new();
     for rel in &manifest.classes {
         let p = resolve_manifest_path(path, rel);
-        let vref = register_declaration_file(store, None, DeclarationKind::Class, &p, None)?;
+        let vref = register_declaration_file(store, None, DeclarationKind::Class, &p, None, actor)?;
         classes.push(vref.clone());
         if let Ok(abs) = p.canonicalize() {
             registry.insert(abs, vref);
@@ -700,6 +702,7 @@ fn assemble_system_definition_from_manifest<S: CanonicalStore>(
             DeclarationKind::ProviderProfile,
             &p,
             Some(&registry),
+            actor,
         )?;
         provider_profiles.push(vref.clone());
         if let Ok(abs) = p.canonicalize() {
@@ -718,6 +721,7 @@ fn assemble_system_definition_from_manifest<S: CanonicalStore>(
             DeclarationKind::Instruction,
             &p,
             Some(&registry),
+            actor,
         )?;
         instructions.push(vref.clone());
         if let Ok(abs) = p.canonicalize() {
@@ -735,6 +739,7 @@ fn assemble_system_definition_from_manifest<S: CanonicalStore>(
             DeclarationKind::StandingPolicy,
             &p,
             Some(&registry),
+            actor,
         )?;
         policies.push(vref.clone());
         if let Ok(abs) = p.canonicalize() {
@@ -752,6 +757,7 @@ fn assemble_system_definition_from_manifest<S: CanonicalStore>(
             DeclarationKind::CompiledContext,
             &p,
             Some(&registry),
+            actor,
         )?;
         compiled_contexts.push(vref.clone());
         if let Ok(abs) = p.canonicalize() {
@@ -771,6 +777,7 @@ fn assemble_system_definition_from_manifest<S: CanonicalStore>(
                 DeclarationKind::Workflow,
                 &resolve_manifest_path(path, rel),
                 Some(&registry),
+                actor,
             )
         })
         .collect::<Result<Vec<_>, _>>()?;
