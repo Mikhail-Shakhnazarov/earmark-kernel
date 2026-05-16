@@ -414,12 +414,6 @@ pub fn validate_workflow_definition(value: &WorkflowDeclaration) -> Result<(), D
                         op.id
                     )));
                 }
-                if op.output_contracts.len() > 1 {
-                    return Err(DeriveError::Validation(format!(
-                        "multi-output transform operations are not implemented; declare one output contract for operation '{}'",
-                        op.id
-                    )));
-                }
             }
             earmark_core::WorkflowOperationKind::Review
             | earmark_core::WorkflowOperationKind::Export => {

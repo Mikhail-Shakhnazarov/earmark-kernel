@@ -1,0 +1,20 @@
+system_id: incident_response_v1
+namespace: operations
+title: Incident Response System
+description: A system for tracking and resolving operational incidents.
+classes:
+  - ../classes/incident.yaml
+  - ../classes/observation.yaml
+  - ../classes/action.yaml
+instructions:
+  - ../instructions/analyze_incident.md
+compiled_contexts:
+  - ../contexts/incident_context.yaml
+workflows:
+  - ../workflows/analysis.yaml
+runtime_profile:
+  execution_surface: local
+  machine_output_default: json
+  work_surface_mode: local
+  max_recursion_depth: 3
+  budget_limit_usd: 1.00

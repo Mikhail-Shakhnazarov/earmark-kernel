@@ -1,0 +1,34 @@
+{
+  "surface_id": "ws_1778891140530925871",
+  "compiled_context": {
+    "id": "obj_efa1ee6c2c1d4291a7c5d0c83cd0c34c",
+    "version_id": "ver_4bad5f965a7649c8bd828f2ba6ff9576"
+  },
+  "work_packet": null,
+  "generated_at": "2026-05-16T00:25:40.530988502Z",
+  "objects": [
+    {
+      "object": {
+        "id": "obj_f893603e331044a4a6b416eb1a052449",
+        "version_id": "ver_754fbddbfef349aaaace5f7d0ad2fa01",
+        "kind": "object",
+        "class": "incident"
+      },
+      "title": null,
+      "path": "/home/m/GITHUB/earmark-workspace/dogfooding/incident-response/.earmark/canonical/objects/obj_f893603e331044a4a6b416eb1a052449/ver_754fbddbfef349aaaace5f7d0ad2fa01",
+      "excerpt_range": null,
+      "lineage": []
+    }
+  ],
+  "boundary_relations": [],
+  "constraints": {
+    "expansion_object_filter": "inherit",
+    "group_by_count": 0,
+    "include_boundary_relations": false,
+    "include_constraints": true,
+    "include_lineage": true,
+    "include_provenance": true,
+    "render_mode": "markdown"
+  },
+  "warnings": []
+}

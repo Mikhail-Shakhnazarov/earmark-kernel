@@ -264,18 +264,6 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
         let mut synthetic_output_warning = None;
 
         let res = (|| {
-            if transition.output_contracts.len() > 1 {
-                return Err(ExecError::Validation(
-                    earmark_core::ChangeSetValidationResult {
-                        is_valid: false,
-                        failures: vec![
-                            "multi-output transform operations are not yet implemented".to_string()
-                        ],
-                        warnings: vec![],
-                        info: vec![],
-                    },
-                ));
-            }
             let instruction_ref = transition.instruction.as_ref().ok_or_else(|| {
                 ExecError::InvalidWorkflow(format!(
                     "transition {} requires an instruction reference",
@@ -321,14 +309,12 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
             state.emitted_packets.push(work_packet_ref.clone());
             record.work_packets.push(work_packet_ref.clone());
 
-            let output_class = if !instruction.register.is_empty() {
-                instruction.register.clone()
+            let output_classes = if !instruction.register.is_empty() {
+                vec![instruction.register.clone()]
+            } else if !transition.output_contracts.is_empty() {
+                transition.output_contracts.clone()
             } else {
-                transition
-                    .output_contracts
-                    .first()
-                    .cloned()
-                    .unwrap_or_else(|| "candidate_output".to_string())
+                vec!["candidate_output".to_string()]
             };
 
             let artifacts = match provider_mode {
@@ -336,7 +322,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                     self.store,
                     self.index,
                     &instruction,
-                    &output_class,
+                    &output_classes,
                     filtered_inputs,
                     &resolved_instruction_ref,
                 )?,
@@ -471,7 +457,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                                 self.store,
                                 self.index,
                                 &instruction,
-                                &output_class,
+                                &output_classes,
                                 filtered_inputs,
                                 &resolved_instruction_ref,
                                 response,
@@ -503,20 +489,23 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                 }
             };
 
-            *state.active_objects = vec![artifacts.output.clone()];
-            change_set_draft
-                .created_objects
-                .push(artifacts.output.id.clone());
+            *state.active_objects = artifacts.outputs.clone();
+            for output in &artifacts.outputs {
+                change_set_draft
+                    .created_objects
+                    .push(output.id.clone());
+                state.emitted_objects.push(output.clone());
+            }
             change_set_draft
                 .created_relations
-                .extend(artifacts.relation_ids);
-            state.emitted_objects.push(artifacts.output.clone());
+                .extend(artifacts.relation_ids.clone());
+
             record_transition(
                 record,
                 transition.id.clone(),
                 "transformed",
                 filtered_inputs.to_vec(),
-                vec![artifacts.output],
+                artifacts.outputs.clone(),
                 Some(format!("execution policy {}", instruction.execution_policy)),
             );
             Ok(())
