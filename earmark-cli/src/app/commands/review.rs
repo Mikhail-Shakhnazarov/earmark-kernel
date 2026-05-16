@@ -17,8 +17,9 @@ pub fn handle(ctx: &CommandContext, args: &ReviewArgs) -> Result<(), CliError> {
         !args.reject,
         args.reason.clone(),
     )?;
-    mirror_surface(store, &review)?;
+    // Persist first so mirror state cannot exist without durable canonical write/index.
     earmark_exec::persistence_helpers::write_object_and_index(store, index, &review)?;
+    mirror_surface(store, &review)?;
     emit(
         as_json,
         json!({

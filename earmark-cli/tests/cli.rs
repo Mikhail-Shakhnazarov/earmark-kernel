@@ -1259,11 +1259,12 @@ fn doctor_repair_index_reports_partial_when_canonical_entries_are_skipped() {
         parsed["data"]["summary"],
         "index repaired partially; canonical store still has skipped entries"
     );
-    assert!(parsed["data"]["skipped_canonical_entries"]
-        .as_array()
-        .unwrap()
-        .len()
-        > 0);
+    assert!(
+        !parsed["data"]["skipped_canonical_entries"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
 
     let doctor_output = Command::cargo_bin("earmark-cli")
         .unwrap()
