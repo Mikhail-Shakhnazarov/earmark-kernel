@@ -104,6 +104,12 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
                         system_id: active.system_id,
                     });
                 }
+            } else {
+                return Err(RuntimeToolError::AdmissionError {
+                    requested_class: class,
+                    namespace: namespace.clone(),
+                    system_id: "none_active".to_string(),
+                });
             }
         }
 

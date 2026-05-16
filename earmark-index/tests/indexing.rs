@@ -272,7 +272,7 @@ fn test_index_count_after_rebuild() {
     let index = DerivedIndex::open(dir.path()).unwrap();
     index.rebuild_from_store(&store).unwrap();
 
-    let canonical_count = store.scan_objects().unwrap().len() as u64;
+    let canonical_count = store.scan_objects().unwrap().scanned_objects.len() as u64;
     let indexed_count = index.object_count().unwrap();
     assert_eq!(
         indexed_count, canonical_count,

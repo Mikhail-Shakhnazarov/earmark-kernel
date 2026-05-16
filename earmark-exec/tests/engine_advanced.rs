@@ -139,7 +139,7 @@ fn guarded_edge_blocking() {
     assert!(transition_ids.contains(&"start_op"));
     assert!(!transition_ids.contains(&"guarded_op"));
 
-    let objects = store.scan_objects().unwrap();
+    let objects = store.scan_objects().unwrap().scanned_objects;
     let ledger_obj = objects
         .iter()
         .find(|obj| obj.envelope.kind == Kind::RunRecord)
@@ -574,7 +574,7 @@ fn parallel_transform_leak_bug() {
     let handoffs = store
         .scan_objects()
         .unwrap()
-        .iter()
+        .scanned_objects.iter()
         .filter(|obj| obj.envelope.kind == Kind::HandoffManifest)
         .map(|obj| {
             serde_json::from_slice::<earmark_core::HandoffManifest>(&obj.payload.bytes).unwrap()
@@ -608,6 +608,9 @@ fn execution_error_persists_failed_delta() {
     let index = DerivedIndex::open(dir.path()).unwrap();
     let registry = ProviderRegistry::default();
 
+    let instruction = create_simple_instruction(&store, &index, "fail", "fail", "always fail");
+    let instruction_ref = instruction.object_ref();
+
     let workflow = earmark_core::WorkflowDefinition {
         name: "error-op".to_string(),
         version: "0.1.0".to_string(),
@@ -617,7 +620,10 @@ fn execution_error_persists_failed_delta() {
             kind: WorkflowOperationKind::Transform,
             input_contracts: vec!["s".to_string()],
             output_contracts: vec!["e1".to_string(), "e2".to_string()],
-            instruction: None,
+            instruction: Some(InstructionRef {
+                id: instruction_ref.id.clone(),
+                version_id: Some(instruction_ref.version_id.clone()),
+            }),
             compiled_context: None,
             policy: None,
             provider_profile: None,
@@ -701,7 +707,7 @@ fn execution_error_persists_failed_delta() {
     let result = engine.run_workflow(request);
     assert!(result.is_err());
 
-    let objects = store.scan_objects().unwrap();
+    let objects = store.scan_objects().unwrap().scanned_objects;
     let change_set = objects
         .iter()
         .find(|obj| obj.envelope.kind == Kind::ChangeSet)
@@ -709,6 +715,7 @@ fn execution_error_persists_failed_delta() {
 
     let payload: earmark_core::ChangeSet =
         serde_json::from_slice(&change_set.payload.bytes).unwrap();
+    println!("Validation Result: {:?}", payload.validation_results[0]);
     assert!(!payload.validation_results.is_empty());
     assert!(!payload.validation_results[0].is_valid);
     assert!(payload.validation_results[0]

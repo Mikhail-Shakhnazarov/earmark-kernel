@@ -300,9 +300,9 @@ impl DerivedIndex {
         self.conn.execute("DELETE FROM undone_objects", [])?;
         self.conn.execute("DELETE FROM undone_relations", [])?;
 
-        let objects = store.scan_objects()?;
+        let diagnostics = store.scan_objects()?;
         let mut seen = std::collections::BTreeSet::new();
-        for stored in objects {
+        for stored in diagnostics.scanned_objects {
             let envelope = stored.envelope;
             let payload = stored.payload;
             seen.insert(envelope.id.as_str().to_string());

@@ -295,18 +295,10 @@ fn explain_declaration_file<S: CanonicalStore>(
                     "has_compiled_context": operation.compiled_context.is_some(),
                     "has_policy": operation.policy.is_some(),
                     "has_provider_profile": operation.provider_profile.is_some(),
-                    "standing_implications": operation.policy.as_ref().and_then(|policy_val| {
-                        if let Some(s) = policy_val.as_str() {
-                            Some(vec![format!("policy-bound (path): {}", s)])
-                        } else {
-                            // Convert to JSON Value for from_value helper
-                            let json_val = serde_json::to_value(policy_val.clone()).ok()?;
-                            FlexibleVersionRef::from_value(json_val).ok().map(|policy| {
-                                match policy {
-                                    FlexibleVersionRef::Ref(r) => vec![format!("policy-bound: {}@{}", r.id.as_str(), r.version_id.as_str())],
-                                    FlexibleVersionRef::Path(p) => vec![format!("policy-bound (path): {}", p)],
-                                }
-                            })
+                    "standing_implications": operation.policy.as_ref().map(|policy| {
+                        match policy {
+                            FlexibleVersionRef::Ref(r) => vec![format!("policy-bound: {}@{}", r.id.as_str(), r.version_id.as_str())],
+                            FlexibleVersionRef::Path(p) => vec![format!("policy-bound (path): {}", p)],
                         }
                     }).unwrap_or_default(),
                 })).collect::<Vec<_>>(),
@@ -481,7 +473,7 @@ pub(crate) fn register_declaration_file<S: CanonicalStore>(
                     &op.provider_profile,
                 ]
                 .iter()
-                .any(|opt| opt.as_ref().map(|v| v.is_string()).unwrap_or(false));
+                .any(|opt| matches!(opt, Some(FlexibleVersionRef::Path(_))));
 
                 if has_paths && registry.is_none() {
                     return Err(CliError::argument(format!(
@@ -621,25 +613,27 @@ fn resolve_workflow_version_ref<S: CanonicalStore>(
 
 #[derive(Debug, Clone, Deserialize)]
 struct PathSystemManifest {
-    system_id: String,
-    namespace: String,
-    title: String,
-    description: Option<String>,
     #[serde(default)]
-    classes: Vec<String>,
+    #[allow(dead_code)] pub schema: Option<String>,
+    pub system_id: String,
+    pub namespace: String,
+    pub title: String,
+    pub description: Option<String>,
     #[serde(default)]
-    instructions: Vec<String>,
+    pub classes: Vec<String>,
     #[serde(default)]
-    standing_policies: Vec<String>,
+    pub instructions: Vec<String>,
     #[serde(default)]
-    compiled_contexts: Vec<String>,
+    pub standing_policies: Vec<String>,
     #[serde(default)]
-    provider_profiles: Vec<String>,
+    pub compiled_contexts: Vec<String>,
     #[serde(default)]
-    workflows: Vec<String>,
-    default_compiled_context: Option<String>,
-    default_provider_profile: Option<String>,
-    runtime_profile: earmark_core::RuntimeProfile,
+    pub provider_profiles: Vec<String>,
+    #[serde(default)]
+    pub workflows: Vec<String>,
+    pub default_compiled_context: Option<String>,
+    pub default_provider_profile: Option<String>,
+    pub runtime_profile: earmark_core::RuntimeProfile,
 }
 
 fn try_load_path_system_manifest(
@@ -647,6 +641,21 @@ fn try_load_path_system_manifest(
 ) -> Result<Option<PathSystemManifest>, CliError> {
     let text = fs::read_to_string(path)?;
     let value: serde_yaml::Value = serde_yaml::from_str(&text)?;
+
+    // Use explicit schema discriminator if present
+    if let Some(schema) = value.get("schema").and_then(|v| v.as_str()) {
+        if schema == "earmark.path_system_manifest.v1" {
+            return serde_yaml::from_str(&text).map(Some).map_err(|error| {
+                CliError::argument(format!(
+                    "system manifest parse error in {}: {}",
+                    path.display(),
+                    error
+                ))
+            });
+        }
+    }
+
+    // Fallback to heuristic: if 'classes' contains relative paths, it's likely a path manifest
     let Some(classes) = value.get("classes").and_then(|v| v.as_sequence()) else {
         return Ok(None);
     };
@@ -658,6 +667,7 @@ fn try_load_path_system_manifest(
     }) {
         return Ok(None);
     }
+
     serde_yaml::from_str(&text).map(Some).map_err(|error| {
         CliError::argument(format!(
             "system manifest parse error in {}: {}",
@@ -825,26 +835,29 @@ fn assemble_system_definition_from_manifest<S: CanonicalStore>(
         .default_compiled_context
         .as_ref()
         .map(|rel| {
-            register_declaration_file(
-                store,
-                None,
-                DeclarationKind::CompiledContext,
-                &resolve_manifest_path(path, rel),
-                None,
-            )
+            let p = resolve_manifest_path(path, rel);
+            let lookup_path = p.canonicalize().unwrap_or(p);
+            registry.get(&lookup_path).cloned().ok_or_else(|| {
+                CliError::argument(format!(
+                    "default_compiled_context '{}' must be listed in the 'compiled_contexts' section of the manifest",
+                    rel
+                ))
+            })
         })
         .transpose()?;
+
     let default_provider_profile = manifest
         .default_provider_profile
         .as_ref()
         .map(|rel| {
-            register_declaration_file(
-                store,
-                None,
-                DeclarationKind::ProviderProfile,
-                &resolve_manifest_path(path, rel),
-                None,
-            )
+            let p = resolve_manifest_path(path, rel);
+            let lookup_path = p.canonicalize().unwrap_or(p);
+            registry.get(&lookup_path).cloned().ok_or_else(|| {
+                CliError::argument(format!(
+                    "default_provider_profile '{}' must be listed in the 'provider_profiles' section of the manifest",
+                    rel
+                ))
+            })
         })
         .transpose()?;
 
@@ -996,7 +1009,7 @@ fn list_run_records<S: CanonicalStore>(
     store: &S,
 ) -> Result<Vec<earmark_core::RunRecord>, CliError> {
     let mut ledgers = Vec::new();
-    for object in store.scan_objects()? {
+    for object in store.scan_objects()?.scanned_objects {
         if object.envelope.kind != Kind::RunRecord {
             continue;
         }
@@ -1030,7 +1043,7 @@ fn list_assignments<S: CanonicalStore>(
     store: &S,
 ) -> Result<Vec<earmark_core::TransitionAssignment>, CliError> {
     let mut assignments = Vec::new();
-    for object in store.scan_objects()? {
+    for object in store.scan_objects()?.scanned_objects {
         if object.envelope.kind != Kind::TransitionAssignment {
             continue;
         }
@@ -1060,7 +1073,7 @@ fn list_change_sets<S: CanonicalStore>(
     store: &S,
 ) -> Result<Vec<earmark_core::ChangeSet>, CliError> {
     let mut change_sets = Vec::new();
-    for object in store.scan_objects()? {
+    for object in store.scan_objects()?.scanned_objects {
         if object.envelope.kind != Kind::ChangeSet {
             continue;
         }
@@ -1084,7 +1097,7 @@ fn list_handoffs<S: CanonicalStore>(
     store: &S,
 ) -> Result<Vec<earmark_core::HandoffManifest>, CliError> {
     let mut handoffs = Vec::new();
-    for object in store.scan_objects()? {
+    for object in store.scan_objects()?.scanned_objects {
         if object.envelope.kind != Kind::HandoffManifest {
             continue;
         }
@@ -1108,7 +1121,7 @@ fn list_failure_objects<S: CanonicalStore>(
     store: &S,
 ) -> Result<Vec<(String, earmark_core::TransformationFailure)>, CliError> {
     let mut failures = Vec::new();
-    for object in store.scan_objects()? {
+    for object in store.scan_objects()?.scanned_objects {
         if object.envelope.kind != Kind::TransformationFailure {
             continue;
         }
@@ -1203,7 +1216,7 @@ pub(crate) fn load_current_assignment_by_id<S: CanonicalStore>(
     store: &S,
     assignment_id: &str,
 ) -> Result<earmark_core::TransitionAssignment, CliError> {
-    for object in store.scan_objects()? {
+    for object in store.scan_objects()?.scanned_objects {
         if object.envelope.kind != Kind::TransitionAssignment {
             continue;
         }
@@ -1228,7 +1241,7 @@ pub(crate) fn load_change_set_by_id<S: CanonicalStore>(
     store: &S,
     change_set_id: &str,
 ) -> Result<earmark_core::ChangeSet, CliError> {
-    for object in store.scan_objects()? {
+    for object in store.scan_objects()?.scanned_objects {
         if object.envelope.kind != Kind::ChangeSet {
             continue;
         }
@@ -1271,7 +1284,7 @@ pub(crate) fn load_handoff_by_id<S: CanonicalStore>(
     store: &S,
     handoff_id: &str,
 ) -> Result<earmark_core::HandoffManifest, CliError> {
-    for object in store.scan_objects()? {
+    for object in store.scan_objects()?.scanned_objects {
         if object.envelope.kind != Kind::HandoffManifest {
             continue;
         }
@@ -1290,7 +1303,7 @@ pub(crate) fn load_failure_by_id<S: CanonicalStore>(
     store: &S,
     failure_id: &str,
 ) -> Result<earmark_core::TransformationFailure, CliError> {
-    for object in store.scan_objects()? {
+    for object in store.scan_objects()?.scanned_objects {
         if object.envelope.kind != Kind::TransformationFailure {
             continue;
         }

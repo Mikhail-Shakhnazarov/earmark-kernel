@@ -74,7 +74,25 @@ pub(crate) fn handle_doctor(ctx: &CommandContext, args: &DoctorArgs) -> Result<(
 
     let store_scan = store.scan_objects();
     let store_scan_ok = store_scan.is_ok();
-    let canonical_count = store_scan.as_ref().map(|v| v.len() as u64).unwrap_or(0);
+    
+    let mut warnings: Vec<String> = Vec::new();
+    let mut all_ok = store_scan_ok;
+
+    let canonical_count = if let Ok(diag) = &store_scan {
+        if !diag.skipped_entries.is_empty() {
+            all_ok = false;
+            for skipped in &diag.skipped_entries {
+                warnings.push(format!(
+                    "skipped corrupted or incomplete object at {}: {}",
+                    skipped.path.display(),
+                    skipped.reason
+                ));
+            }
+        }
+        diag.scanned_objects.len() as u64
+    } else {
+        0
+    };
 
     let index_path = store
         .root()
@@ -82,8 +100,6 @@ pub(crate) fn handle_doctor(ctx: &CommandContext, args: &DoctorArgs) -> Result<(
         .join("derived")
         .join("index.sqlite");
     let index_exists = index_path.exists();
-    let mut warnings: Vec<String> = Vec::new();
-    let mut all_ok = store_scan_ok;
     let mut dirty_marker = None;
 
     let (index_open_ok, indexed_count, indexed_head_count, counts_match, index_stale) = if index_exists {
@@ -103,6 +119,7 @@ pub(crate) fn handle_doctor(ctx: &CommandContext, args: &DoctorArgs) -> Result<(
                         "store/index count mismatch: {} canonical objects vs {} indexed objects",
                         canonical_count, obj_count
                     ));
+                    all_ok = false;
                 }
 
                 // Check for staleness

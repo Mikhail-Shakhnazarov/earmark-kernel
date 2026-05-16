@@ -257,7 +257,7 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
             AssignmentAction::List { run_id, status } => {
                 let run_id = resolve_optional_run_id(store, run_id)?;
                 let mut assignments = Vec::new();
-                for object in store.scan_objects()? {
+                for object in store.scan_objects()?.scanned_objects {
                     if object.envelope.kind != Kind::TransitionAssignment {
                         continue;
                     }
@@ -316,7 +316,7 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
             ChangeSetAction::List { run_id } => {
                 let run_id = resolve_optional_run_id(store, run_id)?;
                 let mut change_sets = Vec::new();
-                for object in store.scan_objects()? {
+                for object in store.scan_objects()?.scanned_objects {
                     if object.envelope.kind != Kind::ChangeSet {
                         continue;
                     }
@@ -364,7 +364,7 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
             HandoffAction::List { run_id } => {
                 let run_id = resolve_optional_run_id(store, run_id)?;
                 let mut handoffs = Vec::new();
-                for object in store.scan_objects()? {
+                for object in store.scan_objects()?.scanned_objects {
                     if object.envelope.kind != Kind::HandoffManifest {
                         continue;
                     }
@@ -632,7 +632,7 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
                 relation_type,
             } => {
                 let mut relations = Vec::new();
-                for object in store.scan_objects()? {
+                for object in store.scan_objects()?.scanned_objects {
                     if object.envelope.kind != Kind::Relation {
                         continue;
                     }
