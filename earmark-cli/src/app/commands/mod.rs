@@ -2,6 +2,7 @@ pub mod context;
 pub mod declarations;
 pub mod deposit;
 pub mod init_doctor;
+pub mod orchestration;
 pub mod query;
 pub mod review;
 pub mod system;

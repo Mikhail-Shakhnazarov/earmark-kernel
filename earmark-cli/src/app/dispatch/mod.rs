@@ -27,6 +27,9 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
         Commands::Status => handlers::handle_status(ctx)?,
         Commands::Relation(command) => handlers::handle_relation(ctx, command)?,
         Commands::StandingRequest(command) => handlers::handle_standing_request(ctx, command)?,
+        Commands::Orchestration(command) => {
+            crate::app::commands::orchestration::handle(ctx, &command)?
+        }
     }
     Ok(())
 }
