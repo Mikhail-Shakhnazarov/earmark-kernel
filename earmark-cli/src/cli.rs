@@ -555,6 +555,7 @@ pub enum OrchestrationAction {
     Review(OrchReviewArgs),
     Show(ShowTaskArgs),
     List(ListOrchestrationArgs),
+    IngestTask(IngestTaskArgs),
 }
 
 #[derive(Args)]
@@ -635,6 +636,13 @@ pub struct ListOrchestrationArgs {
     pub status: Option<String>,
     #[arg(long)]
     pub include_closed: bool,
+}
+
+#[derive(Args)]
+pub struct IngestTaskArgs {
+    pub task_id: String,
+    #[arg(long, default_value = "engram")]
+    pub source: String,
 }
 
 pub fn command_for_completions() -> clap::Command {
