@@ -1,0 +1,33 @@
+schema: earmark.path_system_manifest.v1
+system_id: sys_earmark_dev_orchestration
+namespace: examples.earmark-dev
+title: Earmark Development Orchestration
+description: "An example system for the self-hosting Earmark development orchestration loop: tasks, manifests, reports, git state, gates, review decisions, and follow-ups."
+classes:
+  - classes/implementation_task.yaml
+  - classes/executor_manifest.yaml
+  - classes/executor_report.yaml
+  - classes/git_snapshot.yaml
+  - classes/git_change_summary.yaml
+  - classes/gate_result.yaml
+  - classes/review_decision.yaml
+  - classes/followup_task.yaml
+instructions:
+  - instructions/task_to_manifest.md
+  - instructions/report_to_review_summary.md
+  - instructions/failure_to_followup.md
+standing_policies:
+  - standing_policies/development_standing_policy.yaml
+compiled_contexts:
+  - compiled_contexts/task_execution_context.yaml
+  - compiled_contexts/review_context.yaml
+provider_profiles:
+  - provider_profiles/mock_provider.yaml
+workflows:
+  - workflows/self_hosting_development_loop.yaml
+default_compiled_context: compiled_contexts/task_execution_context.yaml
+default_provider_profile: provider_profiles/mock_provider.yaml
+runtime_profile:
+  execution_surface: local
+  machine_output_default: json
+  work_surface_mode: persistent

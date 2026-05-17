@@ -50,11 +50,7 @@ impl EarmarkWorkspace {
         path: impl AsRef<Path>,
     ) -> Result<(), EarmarkError> {
         let system_path = path.as_ref();
-        self.run_cli_json([
-            "system",
-            "register",
-            system_path.to_string_lossy().as_ref(),
-        ])?;
+        self.run_cli_json(["system", "register", system_path.to_string_lossy().as_ref()])?;
 
         let content = std::fs::read_to_string(system_path)?;
         let parsed: serde_yaml::Value = serde_yaml::from_str(&content)?;
@@ -94,7 +90,11 @@ impl EarmarkWorkspace {
         workflow_id: &str,
         inputs: impl IntoIterator<Item = impl AsRef<str>>,
     ) -> Result<WorkflowRun, EarmarkError> {
-        let mut args = vec!["workflow".to_string(), "run".to_string(), workflow_id.to_string()];
+        let mut args = vec![
+            "workflow".to_string(),
+            "run".to_string(),
+            workflow_id.to_string(),
+        ];
         if let Some(system_id) = &self.default_system_id {
             args.push("--system-id".to_string());
             args.push(system_id.clone());
@@ -139,10 +139,7 @@ impl EarmarkWorkspace {
 
     fn run_cli_json_refs(&self, args: &[&str]) -> Result<Value, EarmarkError> {
         let mut cmd = Command::new(resolve_cli_bin());
-        cmd.arg("--root")
-            .arg(&self.root)
-            .arg("--json")
-            .args(args);
+        cmd.arg("--root").arg(&self.root).arg("--json").args(args);
         let out = cmd.output()?;
         if !out.status.success() {
             return Err(EarmarkError::Command(

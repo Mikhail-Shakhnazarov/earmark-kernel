@@ -1,3 +1,6 @@
+use crate::app::commands::declarations::{
+    explain_declaration_file, register_declaration_file, validate_declaration_file,
+};
 use crate::app::common::{CliError, CommandContext};
 use crate::app::emitter::emit;
 use crate::app::graph::build_run_graph;
@@ -15,9 +18,6 @@ use crate::app::scaffold::{collect_paths_with_extensions, scaffold_declaration};
 use crate::app::suggestions::{
     next_commands_for_assignment, next_commands_for_change_set, next_commands_for_failure,
     next_commands_for_handoff, next_commands_for_run,
-};
-use crate::app::commands::declarations::{
-    explain_declaration_file, register_declaration_file, validate_declaration_file,
 };
 use crate::cli::*;
 use earmark_core::Kind;
@@ -131,7 +131,10 @@ pub(crate) fn handle_run(ctx: &CommandContext, command: RunCommand) -> Result<()
     Ok(())
 }
 
-pub(crate) fn handle_declare(ctx: &CommandContext, command: DeclareCommand) -> Result<(), CliError> {
+pub(crate) fn handle_declare(
+    ctx: &CommandContext,
+    command: DeclareCommand,
+) -> Result<(), CliError> {
     let store = ctx.store;
     let index = ctx.index;
     let as_json = ctx.as_json;
@@ -186,11 +189,18 @@ pub(crate) fn handle_declare(ctx: &CommandContext, command: DeclareCommand) -> R
         }
         DeclareAction::Register(args) => {
             tracing::info!(kind = %args.kind.as_str(), path = %args.path.display(), "registering declaration");
-            let version_ref =
-                register_declaration_file(store, index.as_ref(), args.kind, &args.path, None, actor)?;
+            let version_ref = register_declaration_file(
+                store,
+                index.as_ref(),
+                args.kind,
+                &args.path,
+                None,
+                actor,
+            )?;
             if matches!(args.kind, DeclarationKind::System) {
-                let idx = index.as_ref().ok_or_else(|| {
-                    CliError::WorkspaceNotInitialized {
+                let idx = index
+                    .as_ref()
+                    .ok_or_else(|| CliError::WorkspaceNotInitialized {
                         status: WorkspaceLayoutStatus {
                             root_exists: false,
                             git_exists: false,
@@ -204,8 +214,7 @@ pub(crate) fn handle_declare(ctx: &CommandContext, command: DeclareCommand) -> R
                             declarations_dir_exists: false,
                             corpus_dir_exists: false,
                         },
-                    }
-                })?;
+                    })?;
                 idx.rebuild_from_store(store)?;
             }
             emit(
@@ -265,7 +274,10 @@ pub(crate) fn handle_declare(ctx: &CommandContext, command: DeclareCommand) -> R
     Ok(())
 }
 
-pub(crate) fn handle_assignment(ctx: &CommandContext, command: AssignmentCommand) -> Result<(), CliError> {
+pub(crate) fn handle_assignment(
+    ctx: &CommandContext,
+    command: AssignmentCommand,
+) -> Result<(), CliError> {
     let store = ctx.store;
     let as_json = ctx.as_json;
 
@@ -327,7 +339,10 @@ pub(crate) fn handle_assignment(ctx: &CommandContext, command: AssignmentCommand
     Ok(())
 }
 
-pub(crate) fn handle_change_set(ctx: &CommandContext, command: ChangeSetCommand) -> Result<(), CliError> {
+pub(crate) fn handle_change_set(
+    ctx: &CommandContext,
+    command: ChangeSetCommand,
+) -> Result<(), CliError> {
     let store = ctx.store;
     let as_json = ctx.as_json;
 
@@ -338,8 +353,7 @@ pub(crate) fn handle_change_set(ctx: &CommandContext, command: ChangeSetCommand)
         }
         ChangeSetAction::Explain { change_set_id } => {
             let change_set = load_change_set_by_id(store, &change_set_id)?;
-            let (synthetic, synthetic_source) =
-                change_set_synthetic_marker(store, &change_set)?;
+            let (synthetic, synthetic_source) = change_set_synthetic_marker(store, &change_set)?;
             emit(
                 as_json,
                 json!({
@@ -381,7 +395,10 @@ pub(crate) fn handle_change_set(ctx: &CommandContext, command: ChangeSetCommand)
     Ok(())
 }
 
-pub(crate) fn handle_handoff(ctx: &CommandContext, command: HandoffCommand) -> Result<(), CliError> {
+pub(crate) fn handle_handoff(
+    ctx: &CommandContext,
+    command: HandoffCommand,
+) -> Result<(), CliError> {
     let store = ctx.store;
     let as_json = ctx.as_json;
 
@@ -436,7 +453,10 @@ pub(crate) fn handle_handoff(ctx: &CommandContext, command: HandoffCommand) -> R
     Ok(())
 }
 
-pub(crate) fn handle_failure(ctx: &CommandContext, command: FailureCommand) -> Result<(), CliError> {
+pub(crate) fn handle_failure(
+    ctx: &CommandContext,
+    command: FailureCommand,
+) -> Result<(), CliError> {
     let store = ctx.store;
     let as_json = ctx.as_json;
 
@@ -586,7 +606,10 @@ pub(crate) fn handle_report(ctx: &CommandContext, command: ReportCommand) -> Res
     Ok(())
 }
 
-pub(crate) fn handle_provider(ctx: &CommandContext, command: ProviderCommand) -> Result<(), CliError> {
+pub(crate) fn handle_provider(
+    ctx: &CommandContext,
+    command: ProviderCommand,
+) -> Result<(), CliError> {
     let as_json = ctx.as_json;
 
     match command.action {
@@ -651,7 +674,10 @@ pub(crate) fn handle_status(ctx: &CommandContext) -> Result<(), CliError> {
     Ok(())
 }
 
-pub(crate) fn handle_relation(ctx: &CommandContext, command: RelationCommand) -> Result<(), CliError> {
+pub(crate) fn handle_relation(
+    ctx: &CommandContext,
+    command: RelationCommand,
+) -> Result<(), CliError> {
     let store = ctx.store;
     let as_json = ctx.as_json;
 
@@ -753,7 +779,10 @@ pub(crate) fn handle_relation(ctx: &CommandContext, command: RelationCommand) ->
     Ok(())
 }
 
-pub(crate) fn handle_standing_request(ctx: &CommandContext, command: StandingRequestCommand) -> Result<(), CliError> {
+pub(crate) fn handle_standing_request(
+    ctx: &CommandContext,
+    command: StandingRequestCommand,
+) -> Result<(), CliError> {
     let store = ctx.store;
     let index = ctx.index;
     let as_json = ctx.as_json;
@@ -859,15 +888,14 @@ pub(crate) fn handle_standing_request(ctx: &CommandContext, command: StandingReq
                 .ok_or_else(|| CliError::not_found(format!("request {}", request_id)))?;
 
             let registry = earmark_core::StandingRegistry::kernel_defaults();
-            let (target_ref, request_ref) =
-                earmark_exec::governance_ops::apply_standing_request(
-                    store,
-                    index,
-                    &head_ref,
-                    policy.as_deref(),
-                    reason,
-                    &registry,
-                )?;
+            let (target_ref, request_ref) = earmark_exec::governance_ops::apply_standing_request(
+                store,
+                index,
+                &head_ref,
+                policy.as_deref(),
+                reason,
+                &registry,
+            )?;
 
             emit(
                 as_json,
@@ -885,8 +913,9 @@ pub(crate) fn handle_standing_request(ctx: &CommandContext, command: StandingReq
 }
 
 fn require_index(index: &Option<DerivedIndex>) -> Result<&DerivedIndex, CliError> {
-    index.as_ref().ok_or_else(|| {
-        CliError::WorkspaceNotInitialized {
+    index
+        .as_ref()
+        .ok_or_else(|| CliError::WorkspaceNotInitialized {
             status: WorkspaceLayoutStatus {
                 root_exists: false,
                 git_exists: false,
@@ -900,6 +929,5 @@ fn require_index(index: &Option<DerivedIndex>) -> Result<&DerivedIndex, CliError
                 declarations_dir_exists: false,
                 corpus_dir_exists: false,
             },
-        }
-    })
+        })
 }

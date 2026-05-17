@@ -13,7 +13,8 @@ fn beginner_facade_workflow_roundtrip() {
         .parent()
         .expect("workspace root")
         .to_path_buf();
-    let system_manifest = repo_root.join("examples/research-synthesis/declarations/systems/system.yaml");
+    let system_manifest =
+        repo_root.join("examples/research-synthesis/declarations/systems/system.yaml");
     workspace
         .register_system_from_path(&system_manifest)
         .expect("register system");
