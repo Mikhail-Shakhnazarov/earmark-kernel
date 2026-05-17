@@ -1,6 +1,8 @@
 use crate::app::common::CliError;
 use crate::app::graph::build_run_graph;
-use crate::app::listing::{list_provider_records_by_run, load_run_record_by_id, run_related_artifacts};
+use crate::app::listing::{
+    list_provider_records_by_run, load_run_record_by_id, run_related_artifacts,
+};
 use crate::app::loaders::load_handoff_by_id;
 use crate::app::resolve::resolve_system_version_ref;
 use earmark_index::DerivedIndex;
@@ -123,7 +125,10 @@ fn html_wrap(title: &str, content: &str) -> String {
     )
 }
 
-pub(crate) fn generate_run_report<S: CanonicalStore>(store: &S, run_id: &str) -> Result<String, CliError> {
+pub(crate) fn generate_run_report<S: CanonicalStore>(
+    store: &S,
+    run_id: &str,
+) -> Result<String, CliError> {
     let ledger = load_run_record_by_id(store, run_id)?;
     let related = run_related_artifacts(store, run_id)?;
     let graph = build_run_graph(store, run_id)?;

@@ -220,8 +220,12 @@ pub fn project_review(
 ) -> Option<ReviewProjection> {
     let mut review_states: Vec<(String, DimensionId, TokenId)> = Vec::new();
     for (dim_id, token_id) in &standing.values {
-        let Some(dim_def) = registry.dimensions.get(dim_id) else { continue; };
-        let Some(token_def) = dim_def.tokens.iter().find(|t| t.id == *token_id) else { continue; };
+        let Some(dim_def) = registry.dimensions.get(dim_id) else {
+            continue;
+        };
+        let Some(token_def) = dim_def.tokens.iter().find(|t| t.id == *token_id) else {
+            continue;
+        };
         for binding in &token_def.implements {
             if binding.protocol.as_str() == "kernel:review" {
                 if let Some(state) = &binding.state {
@@ -244,8 +248,12 @@ pub fn project_process(
 ) -> Option<ProcessProjection> {
     let mut process_states: Vec<(String, DimensionId, TokenId)> = Vec::new();
     for (dim_id, token_id) in &standing.values {
-        let Some(dim_def) = registry.dimensions.get(dim_id) else { continue; };
-        let Some(token_def) = dim_def.tokens.iter().find(|t| t.id == *token_id) else { continue; };
+        let Some(dim_def) = registry.dimensions.get(dim_id) else {
+            continue;
+        };
+        let Some(token_def) = dim_def.tokens.iter().find(|t| t.id == *token_id) else {
+            continue;
+        };
         for binding in &token_def.implements {
             if binding.protocol.as_str() == "kernel:process" {
                 if let Some(state) = &binding.state {
@@ -268,8 +276,12 @@ pub fn project_immutability(
 ) -> ImmutabilityProjection {
     let mut immutability_states: Vec<(String, DimensionId, TokenId)> = Vec::new();
     for (dim_id, token_id) in &standing.values {
-        let Some(dim_def) = registry.dimensions.get(dim_id) else { continue; };
-        let Some(token_def) = dim_def.tokens.iter().find(|t| t.id == *token_id) else { continue; };
+        let Some(dim_def) = registry.dimensions.get(dim_id) else {
+            continue;
+        };
+        let Some(token_def) = dim_def.tokens.iter().find(|t| t.id == *token_id) else {
+            continue;
+        };
         for binding in &token_def.implements {
             if binding.protocol.as_str() == "kernel:immutability" {
                 if let Some(state) = &binding.state {

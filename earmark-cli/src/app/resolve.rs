@@ -14,7 +14,10 @@ pub(crate) fn resolve_object_ref<S: CanonicalStore>(
     Ok(head.object_ref())
 }
 
-pub(crate) fn resolve_run_id<S: CanonicalStore>(store: &S, run_id: &str) -> Result<String, CliError> {
+pub(crate) fn resolve_run_id<S: CanonicalStore>(
+    store: &S,
+    run_id: &str,
+) -> Result<String, CliError> {
     if run_id == "latest" {
         let ledgers = list_run_records(store)?;
         return ledgers

@@ -2,9 +2,7 @@ use std::{collections::BTreeMap, fs, path::PathBuf};
 
 use crate::app::common::CliError;
 use crate::cli::DeclarationKind;
-use earmark_core::{
-    FlexibleVersionRef, HeaderValue, Kind, Provenance, Standing, VersionRef,
-};
+use earmark_core::{FlexibleVersionRef, HeaderValue, Kind, Provenance, Standing, VersionRef};
 use earmark_declarations::{
     load_class_definition, load_compiled_context_template, load_instruction, load_provider_profile,
     load_standing_policy, load_system_definition, load_workflow_definition,

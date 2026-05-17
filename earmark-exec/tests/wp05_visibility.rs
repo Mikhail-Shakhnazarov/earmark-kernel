@@ -4,7 +4,7 @@ use earmark_core::{
     StandingRegistry, TokenId, VersionId, VersionRef,
 };
 use earmark_exec::helpers::render_provider_input;
-use earmark_exec::{ProviderFailureKind, ProviderFailure};
+use earmark_exec::{ProviderFailure, ProviderFailureKind};
 use earmark_index::DerivedIndex;
 use earmark_store::{GitCanonicalStore, ObjectStore, StoredObject, StoredPayload, WorkspaceLayout};
 use std::collections::BTreeMap;
@@ -322,7 +322,9 @@ fn test_two_gate_standing_permits_but_profile_denies() {
         _ => panic!("expected ExecError::Provider, got {:?}", err),
     };
     assert_eq!(provider_err.kind, ProviderFailureKind::PolicyViolation);
-    assert!(provider_err.message.contains("allow_prose_objects is false"));
+    assert!(provider_err
+        .message
+        .contains("allow_prose_objects is false"));
 }
 
 #[test]
@@ -433,5 +435,7 @@ fn test_expose_to_provider_true_still_blocked_by_structured_declaration_denial()
         _ => panic!("expected ExecError::Provider, got {:?}", err),
     };
     assert_eq!(provider_err.kind, ProviderFailureKind::PolicyViolation);
-    assert!(provider_err.message.contains("allow_structured_declarations is false"));
+    assert!(provider_err
+        .message
+        .contains("allow_structured_declarations is false"));
 }

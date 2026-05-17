@@ -23,10 +23,9 @@ pub fn approve_standing_request<S: CanonicalStore>(
     let mut request = load_standing_request(store, request_ref)?;
 
     if request.status != StandingRequestStatus::Proposed {
-        return Err(ExecError::Governance(GovernanceError::InvalidRequest(format!(
-            "cannot approve request with status {:?}",
-            request.status
-        ))));
+        return Err(ExecError::Governance(GovernanceError::InvalidRequest(
+            format!("cannot approve request with status {:?}", request.status),
+        )));
     }
 
     request.status = StandingRequestStatus::Approved;
@@ -65,10 +64,9 @@ pub fn reject_standing_request<S: CanonicalStore>(
     if request.status != StandingRequestStatus::Proposed
         && request.status != StandingRequestStatus::Approved
     {
-        return Err(ExecError::Governance(GovernanceError::InvalidRequest(format!(
-            "cannot reject request with status {:?}",
-            request.status
-        ))));
+        return Err(ExecError::Governance(GovernanceError::InvalidRequest(
+            format!("cannot reject request with status {:?}", request.status),
+        )));
     }
 
     request.status = StandingRequestStatus::Rejected;
@@ -107,10 +105,9 @@ pub fn apply_standing_request<S: CanonicalStore>(
     let mut request = load_standing_request(store, request_ref)?;
 
     if request.status != StandingRequestStatus::Approved {
-        return Err(ExecError::Governance(GovernanceError::InvalidRequest(format!(
-            "cannot apply request with status {:?}",
-            request.status
-        ))));
+        return Err(ExecError::Governance(GovernanceError::InvalidRequest(
+            format!("cannot apply request with status {:?}", request.status),
+        )));
     }
 
     // 1. Load target object
@@ -128,8 +125,12 @@ pub fn apply_standing_request<S: CanonicalStore>(
     check_immutability(registry, current_standing)?;
 
     // 1c. Drift Check: verify current standing matches request.from_value
-    let dim_id = DimensionId::parse(&request.dimension)
-        .map_err(|e| ExecError::Governance(GovernanceError::IllegalTransition(format!("invalid dimension: {}", e))))?;
+    let dim_id = DimensionId::parse(&request.dimension).map_err(|e| {
+        ExecError::Governance(GovernanceError::IllegalTransition(format!(
+            "invalid dimension: {}",
+            e
+        )))
+    })?;
     let current_value = current_standing
         .get(&dim_id)
         .map(TokenId::as_str)
@@ -137,22 +138,23 @@ pub fn apply_standing_request<S: CanonicalStore>(
         .to_string();
 
     if current_value != request.from_value.to_lowercase() {
-        return Err(ExecError::Governance(GovernanceError::IllegalTransition(format!(
-            "drift detected: target object {} standing for {} is {}, but request expected {}",
-            target_id.as_str(),
-            request.dimension,
-            current_value,
-            request.from_value
-        ))));
+        return Err(ExecError::Governance(GovernanceError::IllegalTransition(
+            format!(
+                "drift detected: target object {} standing for {} is {}, but request expected {}",
+                target_id.as_str(),
+                request.dimension,
+                current_value,
+                request.from_value
+            ),
+        )));
     }
 
     // 2. Load policy
     let policy_ref = if let Some(pid) = policy_id {
         index
-            .get_head(
-                &ObjectId::parse(pid)
-                    .map_err(|e| ExecError::Governance(GovernanceError::ObjectNotFound(e.to_string())))?,
-            )?
+            .get_head(&ObjectId::parse(pid).map_err(|e| {
+                ExecError::Governance(GovernanceError::ObjectNotFound(e.to_string()))
+            })?)?
             .ok_or_else(|| {
                 ExecError::Governance(GovernanceError::ObjectNotFound(format!(
                     "policy {} not found",
@@ -183,7 +185,10 @@ pub fn apply_standing_request<S: CanonicalStore>(
         let event = GovernanceEvent {
             class: "standing_request.applied_noop".to_string(),
             severity: "info".to_string(),
-            message: format!("Standing request {} applied (no-op)", request_ref.id.as_str()),
+            message: format!(
+                "Standing request {} applied (no-op)",
+                request_ref.id.as_str()
+            ),
             object: Some(earmark_core::ObjectRef {
                 id: next_request_ref.id.clone(),
                 version_id: next_request_ref.version_id.clone(),
@@ -216,7 +221,9 @@ pub fn apply_standing_request<S: CanonicalStore>(
     // 5b. Enforce existing version-matched accepted review evidence for transitions
     //     into accepted review projection.  Uses a global index scan (not same-change-set).
     //     See validate_transition_change_set in validation.rs for the same-change-set path.
-    if project_review(&next_standing, registry) == Some(earmark_core::projection::ReviewProjection::Accepted) {
+    if project_review(&next_standing, registry)
+        == Some(earmark_core::projection::ReviewProjection::Accepted)
+    {
         let actor = target_head.envelope.provenance.actor.as_str();
         if !earmark_governance::is_trusted_actor(actor)
             && !has_accepted_review(store, index, &target_head_ref)?
@@ -298,5 +305,3 @@ fn persist_request_update<S: CanonicalStore>(
 
     write_object_and_index(store, index, &stored)
 }
-
-

@@ -1,0 +1,22 @@
+name: review_context
+version: 0.1.0
+description: Compile report, git changes, gate results for review decision.
+select:
+  classes:
+    - executor_report
+    - git_change_summary
+    - gate_result
+  standing: {}
+  relations:
+    - evidences_report
+    - verifies_report
+  time_range: null
+group_by: []
+render:
+  mode: work_surface_compilation
+  manifest_format: json
+  prose_template: null
+visibility:
+  include_lineage: true
+  include_constraints: true
+  include_provenance: true

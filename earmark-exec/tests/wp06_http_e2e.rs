@@ -6,7 +6,9 @@ use earmark_core::{
     HttpResponseExtraction, Kind, ObjectId, ObjectRef, ProviderProfile, Standing, StandingRegistry,
     TokenId, VersionId, VersionRef,
 };
-use earmark_exec::{ExecError, HttpGenerationAdapter, ProviderFailureKind, ProviderRegistry, ProviderService};
+use earmark_exec::{
+    ExecError, HttpGenerationAdapter, ProviderFailureKind, ProviderRegistry, ProviderService,
+};
 use earmark_index::DerivedIndex;
 use earmark_store::{GitCanonicalStore, ObjectStore, StoredObject, StoredPayload};
 use httpmock::MockServer;
@@ -404,7 +406,9 @@ fn test_http_provider_exposure_structured_hiding() {
         _ => panic!("expected ExecError::Provider, got {:?}", err),
     };
     assert_eq!(provider_err.kind, ProviderFailureKind::PolicyViolation);
-    assert!(provider_err.message.contains("allow_structured_declarations is false"));
+    assert!(provider_err
+        .message
+        .contains("allow_structured_declarations is false"));
 }
 
 #[test]
@@ -487,7 +491,9 @@ fn test_http_provider_exposure_prose_hiding() {
         _ => panic!("expected ExecError::Provider, got {:?}", err),
     };
     assert_eq!(provider_err.kind, ProviderFailureKind::PolicyViolation);
-    assert!(provider_err.message.contains("allow_prose_objects is false"));
+    assert!(provider_err
+        .message
+        .contains("allow_prose_objects is false"));
 }
 
 #[test]
@@ -563,7 +569,9 @@ fn test_http_provider_rejects_unsupported_lineage() {
         issued_at: chrono::Utc::now(),
     };
 
-    let err = registry.provide(&profile, request, "transform").unwrap_err();
+    let err = registry
+        .provide(&profile, request, "transform")
+        .unwrap_err();
     assert_eq!(err.kind, ProviderFailureKind::PolicyViolation);
     assert!(err.message.contains("must_include_lineage"));
     assert!(err.message.contains("http_generation"));
@@ -642,7 +650,9 @@ fn test_http_provider_rejects_unsupported_full_message_capture() {
         issued_at: chrono::Utc::now(),
     };
 
-    let err = registry.provide(&profile, request, "transform").unwrap_err();
+    let err = registry
+        .provide(&profile, request, "transform")
+        .unwrap_err();
     assert_eq!(err.kind, ProviderFailureKind::PolicyViolation);
     assert!(err.message.contains("must_return_candidate_only"));
     assert!(err.message.contains("http_generation"));
@@ -729,5 +739,7 @@ fn test_http_provider_exposure_class_definition_hiding() {
         _ => panic!("expected ExecError::Provider, got {:?}", err),
     };
     assert_eq!(provider_err.kind, ProviderFailureKind::PolicyViolation);
-    assert!(provider_err.message.contains("allow_structured_declarations is false"));
+    assert!(provider_err
+        .message
+        .contains("allow_structured_declarations is false"));
 }

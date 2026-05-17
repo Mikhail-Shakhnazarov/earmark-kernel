@@ -28,9 +28,20 @@ fn test_invalid_workspace() {
         .clone();
 
     let val = verify_error_envelope(&output);
-    assert!(val["error"]["message"].as_str().unwrap().contains("not initialized")
-        || val["error"]["message"].as_str().unwrap().contains("not found")
-        || val["error"]["message"].as_str().unwrap().contains("No such"));
+    assert!(
+        val["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("not initialized")
+            || val["error"]["message"]
+                .as_str()
+                .unwrap()
+                .contains("not found")
+            || val["error"]["message"]
+                .as_str()
+                .unwrap()
+                .contains("No such")
+    );
 }
 
 #[test]
@@ -66,7 +77,11 @@ fn test_malformed_yaml() {
         .clone();
 
     let val = verify_error_envelope(&output);
-    assert!(val["error"]["message"].as_str().unwrap().to_lowercase().contains("yaml"));
+    assert!(val["error"]["message"]
+        .as_str()
+        .unwrap()
+        .to_lowercase()
+        .contains("yaml"));
 }
 
 #[test]
@@ -97,8 +112,13 @@ fn test_non_existent_object() {
         .clone();
 
     let val = verify_error_envelope(&output);
-    assert!(val["error"]["message"].as_str().unwrap().contains("not found")
-        || val["error"]["message"].as_str().unwrap().contains("404"));
+    assert!(
+        val["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("not found")
+            || val["error"]["message"].as_str().unwrap().contains("404")
+    );
 }
 
 #[test]
@@ -129,8 +149,13 @@ fn test_non_existent_run() {
         .clone();
 
     let val = verify_error_envelope(&output);
-    assert!(val["error"]["message"].as_str().unwrap().contains("not found")
-        || val["error"]["message"].as_str().unwrap().contains("404"));
+    assert!(
+        val["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("not found")
+            || val["error"]["message"].as_str().unwrap().contains("404")
+    );
 }
 
 #[test]
