@@ -159,7 +159,12 @@ impl CompiledContextService {
                 Ok(WorkSurfaceObject {
                     object: loaded.envelope.object_ref(),
                     title: loaded.envelope.title(),
-                    path: store.version_path(&version).strip_prefix(store.root()).unwrap().display().to_string(),
+                    path: store
+                        .version_path(&version)
+                        .strip_prefix(store.root())
+                        .unwrap()
+                        .display()
+                        .to_string(),
                     excerpt_range: None,
                     lineage: loaded
                         .envelope
@@ -207,7 +212,12 @@ impl CompiledContextService {
                     target: payload.target,
                     included_endpoint,
                     excluded_endpoint,
-                    path: store.version_path(&relation_ref).strip_prefix(store.root()).unwrap().display().to_string(),
+                    path: store
+                        .version_path(&relation_ref)
+                        .strip_prefix(store.root())
+                        .unwrap()
+                        .display()
+                        .to_string(),
                 })
             })
             .collect::<Result<Vec<_>, ProjectError>>()?;

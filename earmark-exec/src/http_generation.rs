@@ -92,9 +92,10 @@ impl ProviderAdapter for HttpGenerationAdapter {
                 let val = env::var(env_name).map_err(|_| {
                     ProviderFailure::new(
                         ProviderFailureKind::AuthenticationFailed,
-                        crate::redaction::redact_sensitive(
-                            &format!("auth env variable '{}' not set", env_name),
-                        ),
+                        crate::redaction::redact_sensitive(&format!(
+                            "auth env variable '{}' not set",
+                            env_name
+                        )),
                     )
                 })?;
                 auth_header = Some(header.clone());
@@ -115,9 +116,10 @@ impl ProviderAdapter for HttpGenerationAdapter {
                 let val = env::var(env_name).map_err(|_| {
                     ProviderFailure::new(
                         ProviderFailureKind::AuthenticationFailed,
-                        crate::redaction::redact_sensitive(
-                            &format!("auth env variable '{}' not set", env_name),
-                        ),
+                        crate::redaction::redact_sensitive(&format!(
+                            "auth env variable '{}' not set",
+                            env_name
+                        )),
                     )
                 })?;
                 auth_header = Some("Authorization".to_string());
@@ -138,9 +140,10 @@ impl ProviderAdapter for HttpGenerationAdapter {
                 let val = env::var(env_name).map_err(|_| {
                     ProviderFailure::new(
                         ProviderFailureKind::AuthenticationFailed,
-                        crate::redaction::redact_sensitive(
-                            &format!("auth env variable '{}' not set", env_name),
-                        ),
+                        crate::redaction::redact_sensitive(&format!(
+                            "auth env variable '{}' not set",
+                            env_name
+                        )),
                     )
                 })?;
                 auth_value = Some(val);
@@ -727,12 +730,18 @@ mod tests {
 
     #[test]
     fn test_extract_host_simple() {
-        assert_eq!(extract_host("https://api.example.com/v1/chat").unwrap(), "api.example.com");
+        assert_eq!(
+            extract_host("https://api.example.com/v1/chat").unwrap(),
+            "api.example.com"
+        );
     }
 
     #[test]
     fn test_extract_host_with_port() {
-        assert_eq!(extract_host("http://localhost:8080/path").unwrap(), "localhost");
+        assert_eq!(
+            extract_host("http://localhost:8080/path").unwrap(),
+            "localhost"
+        );
     }
 
     #[test]
@@ -901,10 +910,7 @@ mod tests {
         vars.insert("input".to_string(), "hello world".to_string());
         vars.insert("model".to_string(), "gpt-4".to_string());
 
-        let rendered = render_url_template(
-            "https://api.com/{{model}}?q={{input}}",
-            &vars,
-        );
+        let rendered = render_url_template("https://api.com/{{model}}?q={{input}}", &vars);
         assert_eq!(rendered, "https://api.com/gpt-4?q=hello%20world");
     }
 
@@ -913,10 +919,7 @@ mod tests {
         let mut vars = BTreeMap::new();
         vars.insert("input".to_string(), "foo&bar=baz&malicious=1".to_string());
 
-        let rendered = render_url_template(
-            "https://api.com/search?q={{input}}",
-            &vars,
-        );
+        let rendered = render_url_template("https://api.com/search?q={{input}}", &vars);
         // & and = should be encoded so the injected params become part of the value
         assert_eq!(
             rendered,
@@ -930,15 +933,9 @@ mod tests {
         let mut vars = BTreeMap::new();
         vars.insert("model".to_string(), "../evil".to_string());
 
-        let rendered = render_url_template(
-            "https://api.com/models/{{model}}/details",
-            &vars,
-        );
+        let rendered = render_url_template("https://api.com/models/{{model}}/details", &vars);
         // / and . are not encoded (dot is unreserved), but / IS encoded → %2F
-        assert_eq!(
-            rendered,
-            "https://api.com/models/..%2Fevil/details"
-        );
+        assert_eq!(rendered, "https://api.com/models/..%2Fevil/details");
         assert!(!rendered.contains("../evil"));
     }
 
@@ -956,14 +953,8 @@ mod tests {
         let mut vars = BTreeMap::new();
         vars.insert("input".to_string(), "data#fragment".to_string());
 
-        let rendered = render_url_template(
-            "https://api.com/endpoint?q={{input}}",
-            &vars,
-        );
-        assert_eq!(
-            rendered,
-            "https://api.com/endpoint?q=data%23fragment"
-        );
+        let rendered = render_url_template("https://api.com/endpoint?q={{input}}", &vars);
+        assert_eq!(rendered, "https://api.com/endpoint?q=data%23fragment");
         assert!(!rendered.contains("#fragment"));
     }
 

@@ -1,0 +1,22 @@
+name: review_decision
+version: 0.1.0
+kind: object
+required_headers:
+  - title
+payload_schema: inline:any
+standing_rules:
+  allowed_standing:
+    kernel:review:
+      - unreviewed
+      - accepted
+      - rejected
+      - needs_revision
+      - superseded
+    kernel:process:
+      - active
+      - completed
+relation_rules:
+  - relation_type: creates_followup
+    counterparty_classes:
+      - followup_task
+validators: []

@@ -16,8 +16,9 @@ fn pre_scan_json_flag() -> bool {
 
 fn main() {
     let as_json_early = pre_scan_json_flag()
-        || std::env::var("EM_JSON")
-            .map_or(false, |v| matches!(v.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"));
+        || std::env::var("EM_JSON").map_or(false, |v| {
+            matches!(v.as_str(), "1" | "true" | "TRUE" | "yes" | "YES")
+        });
 
     let cli = match Cli::try_parse() {
         Ok(cli) => cli,

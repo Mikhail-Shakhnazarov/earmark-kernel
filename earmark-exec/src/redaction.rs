@@ -72,7 +72,13 @@ impl Redactor {
                         }
                         let val_end = val_start
                             + fragment
-                                .find(|c: char| c.is_whitespace() || c == '"' || c == '\'' || c == '&' || c == ',')
+                                .find(|c: char| {
+                                    c.is_whitespace()
+                                        || c == '"'
+                                        || c == '\''
+                                        || c == '&'
+                                        || c == ','
+                                })
                                 .unwrap_or(fragment.len().min(128));
                         output.push_str(&result[search_start..pos]);
                         output.push_str(prefix);
@@ -105,7 +111,8 @@ impl Redactor {
                         if inner == "[REDACTED_ENV]" {
                             break;
                         }
-                        let end = suffix_pos.map(|e| pos + prefix.len() + e + suffix.len())
+                        let end = suffix_pos
+                            .map(|e| pos + prefix.len() + e + suffix.len())
                             .unwrap_or(result.len());
                         let mut new = String::with_capacity(result.len());
                         new.push_str(&result[..pos]);
@@ -170,13 +177,19 @@ mod tests {
     #[test]
     fn test_redact_url_credentials_basic_auth() {
         let result = redact_sensitive("https://user:password@api.example.com/v1/chat");
-        assert_eq!(result, "https://[REDACTED_CREDENTIALS]@api.example.com/v1/chat");
+        assert_eq!(
+            result,
+            "https://[REDACTED_CREDENTIALS]@api.example.com/v1/chat"
+        );
     }
 
     #[test]
     fn test_redact_url_token_only() {
         let result = redact_sensitive("https://ghp_token123@api.example.com/data");
-        assert_eq!(result, "https://[REDACTED_CREDENTIALS]@api.example.com/data");
+        assert_eq!(
+            result,
+            "https://[REDACTED_CREDENTIALS]@api.example.com/data"
+        );
     }
 
     #[test]
@@ -243,6 +256,9 @@ mod tests {
     fn test_redact_failure_message() {
         let msg = "Provider profile 'test' auth failed: <unset:OPENAI_API_KEY>";
         let result = Redactor::redact_failure_message(msg);
-        assert_eq!(result, "Provider profile 'test' auth failed: <unset:[REDACTED_ENV]>");
+        assert_eq!(
+            result,
+            "Provider profile 'test' auth failed: <unset:[REDACTED_ENV]>"
+        );
     }
 }

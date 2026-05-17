@@ -314,14 +314,16 @@ pub(crate) fn validate_provider_invocation(
     }
 
     for input in &request.inputs {
-        let is_structured = matches!(input.kind,
+        let is_structured = matches!(
+            input.kind,
             Kind::Instruction
-            | Kind::Policy
-            | Kind::Workflow
-            | Kind::CompiledContextTemplate
-            | Kind::ProviderProfile
-            | Kind::SystemDefinition
-        ) || (input.kind == Kind::Object && input.class.as_deref() == Some("class_definition"));
+                | Kind::Policy
+                | Kind::Workflow
+                | Kind::CompiledContextTemplate
+                | Kind::ProviderProfile
+                | Kind::SystemDefinition
+        ) || (input.kind == Kind::Object
+            && input.class.as_deref() == Some("class_definition"));
 
         if is_structured && !profile.exposure.allow_structured_declarations {
             return Err(ProviderFailure::new(
@@ -508,8 +510,7 @@ pub fn provide_with_registry_and_sleeper(
     })?;
 
     // 3a. Contract capability enforcement
-    if profile.response_contract.must_include_lineage
-        && !adapter.can_satisfy_must_include_lineage()
+    if profile.response_contract.must_include_lineage && !adapter.can_satisfy_must_include_lineage()
     {
         return Err(ProviderFailure::new(
             ProviderFailureKind::PolicyViolation,
@@ -751,7 +752,9 @@ pub fn provider_record_from_failure(
         metadata,
         advisory_warnings: vec![],
         usage: None,
-        message: Some(crate::redaction::Redactor::redact_failure_message(&failure.message)),
+        message: Some(crate::redaction::Redactor::redact_failure_message(
+            &failure.message,
+        )),
         recorded_at: Utc::now(),
     }
 }

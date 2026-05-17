@@ -1,5 +1,7 @@
 use crate::app::common::CliError;
-use crate::app::listing::{list_assignments_by_run, list_change_sets_by_run, list_failures, list_handoffs_by_run};
+use crate::app::listing::{
+    list_assignments_by_run, list_change_sets_by_run, list_failures, list_handoffs_by_run,
+};
 use earmark_store::CanonicalStore;
 use serde_json::json;
 

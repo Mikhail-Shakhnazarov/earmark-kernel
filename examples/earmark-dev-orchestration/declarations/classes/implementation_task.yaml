@@ -1,0 +1,41 @@
+name: implementation_task
+version: 0.1.0
+kind: object
+required_headers:
+  - title
+payload_schema: inline:any
+standing_rules:
+  allowed_standing:
+    kernel:review:
+      - unreviewed
+      - review_pending
+      - accepted
+      - rejected
+      - needs_revision
+      - superseded
+    kernel:process:
+      - proposed
+      - ready
+      - dispatched
+      - implemented
+      - closed
+relation_rules:
+  - relation_type: has_manifest
+    counterparty_classes:
+      - executor_manifest
+  - relation_type: has_executor_report
+    counterparty_classes:
+      - executor_report
+  - relation_type: has_git_snapshot
+    counterparty_classes:
+      - git_snapshot
+  - relation_type: has_change_summary
+    counterparty_classes:
+      - git_change_summary
+  - relation_type: has_gate_result
+    counterparty_classes:
+      - gate_result
+  - relation_type: has_review_decision
+    counterparty_classes:
+      - review_decision
+validators: []
