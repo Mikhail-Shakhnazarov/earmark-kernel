@@ -612,16 +612,11 @@ pub struct RecordGateArgs {
 
 #[derive(Args)]
 pub struct OrchReviewArgs {
-    #[arg(long)]
     pub task_id: String,
     #[arg(long)]
     pub decision: String,
     #[arg(long)]
-    pub note: String,
-    #[arg(long)]
-    pub reviewer: Option<String>,
-    #[arg(long)]
-    pub commit: Option<String>,
+    pub comment: Option<String>,
 }
 
 #[derive(Args)]
