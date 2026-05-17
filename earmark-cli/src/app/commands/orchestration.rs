@@ -8,7 +8,7 @@ use crate::app::{emit, mirror_surface, register_declaration_file};
 use crate::cli::*;
 use earmark_core::{ObjectId, RuntimeProvenance, VersionId, VersionRef};
 use earmark_declarations::activate_system_definition;
-use earmark_index::{DerivedIndex, QueryFilter};
+use earmark_index::{DerivedIndex, ObjectSummary, QueryFilter};
 use earmark_runtime_tools::{DepositValidationContext, RuntimeToolSurface};
 use earmark_store::ObjectStore;
 use serde_json::json;
@@ -442,14 +442,252 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
         }
         OrchestrationAction::Review(_) => Err(CliError::argument("command not yet implemented")),
         OrchestrationAction::Show(args) => {
-            if args.task_id == "missing-task" {
-                Err(CliError::not_found(format!(
-                    "task {} not found",
-                    args.task_id
-                )))
-            } else {
-                Err(CliError::argument("command not yet implemented"))
+            require_initialized_workspace(store)?;
+
+            let index_ref = ctx
+                .index
+                .as_ref()
+                .ok_or_else(|| CliError::argument("index required for show"))?;
+
+            let task_arg = args.task_id.to_lowercase();
+
+            let task_filter = QueryFilter {
+                class: Some("implementation_task".to_string()),
+                ..Default::default()
+            };
+            let task_results = index_ref.query_objects(&task_filter)?;
+
+            let mut found_task: Option<(ObjectSummary, serde_json::Value)> = None;
+            for summary in &task_results {
+                let oid = match ObjectId::parse(summary.object_id.clone()) {
+                    Ok(o) => o,
+                    Err(_) => continue,
+                };
+                let vid = match VersionId::parse(summary.version_id.clone()) {
+                    Ok(v) => v,
+                    Err(_) => continue,
+                };
+                let vr = VersionRef::new(oid, vid);
+                let stored = match store.read_version(&vr) {
+                    Ok(s) => s,
+                    Err(_) => continue,
+                };
+                let text = match stored.payload.as_utf8() {
+                    Ok(t) => t,
+                    Err(_) => continue,
+                };
+                let payload: serde_json::Value = match serde_json::from_str(&text) {
+                    Ok(p) => p,
+                    Err(_) => continue,
+                };
+                let tid = match payload.get("task_id").and_then(|v| v.as_str()) {
+                    Some(t) => t.to_lowercase(),
+                    None => continue,
+                };
+                let oid_lower = summary.object_id.to_lowercase();
+                if oid_lower == task_arg
+                    || oid_lower.starts_with(&task_arg)
+                    || tid.starts_with(&task_arg)
+                {
+                    found_task = Some((summary.clone(), payload));
+                    break;
+                }
             }
+
+            let (task_summary, task_payload) = found_task
+                .ok_or_else(|| CliError::not_found(format!("task {} not found", args.task_id)))?;
+
+            let task_id = task_payload
+                .get("task_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let title = task_payload
+                .get("title")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let description = task_payload
+                .get("description")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let status = task_payload
+                .get("status")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let priority = task_payload
+                .get("priority")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+
+            let manifest_filter = QueryFilter {
+                class: Some("executor_manifest".to_string()),
+                ..Default::default()
+            };
+            let manifest_results = index_ref.query_objects(&manifest_filter)?;
+
+            let mut manifests: Vec<(ObjectSummary, serde_json::Value)> = Vec::new();
+            for summary in &manifest_results {
+                let oid = match ObjectId::parse(summary.object_id.clone()) {
+                    Ok(o) => o,
+                    Err(_) => continue,
+                };
+                let vid = match VersionId::parse(summary.version_id.clone()) {
+                    Ok(v) => v,
+                    Err(_) => continue,
+                };
+                let vr = VersionRef::new(oid, vid);
+                let stored = match store.read_version(&vr) {
+                    Ok(s) => s,
+                    Err(_) => continue,
+                };
+                let text = match stored.payload.as_utf8() {
+                    Ok(t) => t,
+                    Err(_) => continue,
+                };
+                let payload: serde_json::Value = match serde_json::from_str(&text) {
+                    Ok(p) => p,
+                    Err(_) => continue,
+                };
+                let tid = match payload.get("task_id").and_then(|v| v.as_str()) {
+                    Some(t) => t.to_lowercase(),
+                    None => continue,
+                };
+                let oid_lower = summary.object_id.to_lowercase();
+                if tid.starts_with(&task_arg) || oid_lower.starts_with(&task_arg) {
+                    manifests.push((summary.clone(), payload));
+                }
+            }
+
+            let report_filter = QueryFilter {
+                class: Some("executor_report".to_string()),
+                ..Default::default()
+            };
+            let report_results = index_ref.query_objects(&report_filter)?;
+
+            let mut reports: Vec<(ObjectSummary, serde_json::Value)> = Vec::new();
+            for summary in &report_results {
+                let oid = match ObjectId::parse(summary.object_id.clone()) {
+                    Ok(o) => o,
+                    Err(_) => continue,
+                };
+                let vid = match VersionId::parse(summary.version_id.clone()) {
+                    Ok(v) => v,
+                    Err(_) => continue,
+                };
+                let vr = VersionRef::new(oid, vid);
+                let stored = match store.read_version(&vr) {
+                    Ok(s) => s,
+                    Err(_) => continue,
+                };
+                let text = match stored.payload.as_utf8() {
+                    Ok(t) => t,
+                    Err(_) => continue,
+                };
+                let payload: serde_json::Value = match serde_json::from_str(&text) {
+                    Ok(p) => p,
+                    Err(_) => continue,
+                };
+                let tid = match payload.get("task_id").and_then(|v| v.as_str()) {
+                    Some(t) => t.to_lowercase(),
+                    None => continue,
+                };
+                let oid_lower = summary.object_id.to_lowercase();
+                if tid.starts_with(&task_arg) || oid_lower.starts_with(&task_arg) {
+                    reports.push((summary.clone(), payload));
+                }
+            }
+
+            let task_oid = ObjectId::parse(task_summary.object_id.clone())?;
+            let head_stored = store.read_head(&task_oid)?;
+            let standing = head_stored
+                .as_ref()
+                .map(|s| {
+                    let mut map = serde_json::Map::new();
+                    for (dim, token) in s.envelope.standing.iter() {
+                        map.insert(
+                            dim.as_str().to_string(),
+                            serde_json::Value::String(token.as_str().to_string()),
+                        );
+                    }
+                    serde_json::Value::Object(map)
+                })
+                .unwrap_or(serde_json::Value::Null);
+
+            let mut attempts: Vec<serde_json::Value> = Vec::new();
+            for (manifest_summary, manifest_payload) in &manifests {
+                let attempt = manifest_payload
+                    .get("attempt")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(1);
+
+                let report_entry = reports
+                    .iter()
+                    .find(|(_, rp)| rp.get("attempt").and_then(|v| v.as_u64()) == Some(attempt));
+
+                let objective = manifest_payload
+                    .get("objective")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                let target_files = manifest_payload
+                    .get("target_files")
+                    .and_then(|v| v.as_array())
+                    .map(|a| {
+                        a.iter()
+                            .map(|v| v.as_str().unwrap_or("").to_string())
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default();
+                let local_gates = manifest_payload
+                    .get("local_gates")
+                    .and_then(|v| v.as_array())
+                    .map(|a| {
+                        a.iter()
+                            .map(|v| v.as_str().unwrap_or("").to_string())
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default();
+
+                let (report_version_id, files_changed) = match report_entry {
+                    Some((rep_summary, rep_payload)) => {
+                        let files = rep_payload
+                            .get("files_changed")
+                            .and_then(|v| v.as_array())
+                            .map(|a| {
+                                a.iter()
+                                    .map(|v| v.as_str().unwrap_or("").to_string())
+                                    .collect::<Vec<_>>()
+                            })
+                            .unwrap_or_default();
+                        (rep_summary.version_id.clone(), files)
+                    }
+                    None => (String::new(), Vec::new()),
+                };
+
+                attempts.push(json!({
+                    "attempt": attempt,
+                    "manifest_version_id": manifest_summary.version_id,
+                    "objective": objective,
+                    "target_files": target_files,
+                    "local_gates": local_gates,
+                    "report_version_id": report_version_id,
+                    "files_changed": files_changed,
+                }));
+            }
+
+            emit(
+                as_json,
+                json!({
+                    "kind": "orchestration_task_details",
+                    "task_id": task_id,
+                    "title": title,
+                    "description": description,
+                    "status": status,
+                    "priority": priority,
+                    "standing": standing,
+                    "attempts": attempts,
+                }),
+            );
+
+            Ok(())
         }
         OrchestrationAction::List(_) => Err(CliError::argument("command not yet implemented")),
     }
