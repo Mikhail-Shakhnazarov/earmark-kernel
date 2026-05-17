@@ -54,6 +54,11 @@ pub fn run(cli: Cli) -> Result<(), common::CliError> {
 
     tracing::debug!(root = %bootstrapped.root.display(), command = %command_name, "starting command");
 
+    crate::output::init_context(crate::output::CliContext {
+        command_name,
+        as_json: ctx.as_json,
+    });
+
     let result = dispatch::dispatch(&ctx, cli);
     crate::metrics::record_command_result(command_name, result.is_ok(), started.elapsed());
     result

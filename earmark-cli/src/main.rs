@@ -63,7 +63,7 @@ fn main() {
 
     if let Err(error) = app::run(cli) {
         if as_json {
-            output::emit_error_envelope(&error.to_string());
+            output::emit_error_envelope_with_kind(&error.to_string(), error.kind_str());
         } else {
             eprintln!("{}", error);
         }
