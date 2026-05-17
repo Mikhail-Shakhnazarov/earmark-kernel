@@ -770,12 +770,7 @@ fn test_redaction_applied_to_provider_record_from_failure() {
     let request = ProviderRequest {
         request_id: "req_redact".to_string(),
         run_id: "run_redact".to_string(),
-        work_packet: ObjectRef::new(
-            ObjectId::new(),
-            VersionId::new(),
-            Kind::WorkPacket,
-            None,
-        ),
+        work_packet: ObjectRef::new(ObjectId::new(), VersionId::new(), Kind::WorkPacket, None),
         provider_profile: VersionRef::new(ObjectId::new(), VersionId::new()),
         instruction_text: "do work".to_string(),
         context_text: None,
@@ -816,12 +811,36 @@ fn test_redaction_applied_to_provider_record_from_failure() {
     );
     let record = provider_record_from_failure(&request, &profile, &failure);
     let msg = record.message.unwrap();
-    assert!(!msg.contains("EARMARK_TEST_REDACT_API_KEY"), "env var name leaked: {}", msg);
-    assert!(!msg.contains("user:pass"), "URL credentials leaked: {}", msg);
-    assert!(!msg.contains("sk-secret123"), "bearer token leaked: {}", msg);
-    assert!(msg.contains("[REDACTED_ENV]"), "env name should be redacted: {}", msg);
-    assert!(msg.contains("[REDACTED_CREDENTIALS]"), "URL creds should be redacted: {}", msg);
-    assert!(msg.contains("[REDACTED_TOKEN]"), "bearer token should be redacted: {}", msg);
+    assert!(
+        !msg.contains("EARMARK_TEST_REDACT_API_KEY"),
+        "env var name leaked: {}",
+        msg
+    );
+    assert!(
+        !msg.contains("user:pass"),
+        "URL credentials leaked: {}",
+        msg
+    );
+    assert!(
+        !msg.contains("sk-secret123"),
+        "bearer token leaked: {}",
+        msg
+    );
+    assert!(
+        msg.contains("[REDACTED_ENV]"),
+        "env name should be redacted: {}",
+        msg
+    );
+    assert!(
+        msg.contains("[REDACTED_CREDENTIALS]"),
+        "URL creds should be redacted: {}",
+        msg
+    );
+    assert!(
+        msg.contains("[REDACTED_TOKEN]"),
+        "bearer token should be redacted: {}",
+        msg
+    );
 }
 
 #[test]
@@ -829,12 +848,7 @@ fn test_provider_record_from_failure_redacts_url_credentials() {
     let request = ProviderRequest {
         request_id: "req_redact_url".to_string(),
         run_id: "run_redact_url".to_string(),
-        work_packet: ObjectRef::new(
-            ObjectId::new(),
-            VersionId::new(),
-            Kind::WorkPacket,
-            None,
-        ),
+        work_packet: ObjectRef::new(ObjectId::new(), VersionId::new(), Kind::WorkPacket, None),
         provider_profile: VersionRef::new(ObjectId::new(), VersionId::new()),
         instruction_text: "do work".to_string(),
         context_text: None,
@@ -875,12 +889,18 @@ fn test_provider_record_from_failure_redacts_url_credentials() {
     let record = provider_record_from_failure(&request, &profile, &failure);
     let msg = record.message.unwrap();
     assert!(!msg.contains("ghp_token_abc123"), "token in URL leaked");
-    assert!(msg.contains("[REDACTED_CREDENTIALS]"), "URL credentials not redacted");
+    assert!(
+        msg.contains("[REDACTED_CREDENTIALS]"),
+        "URL credentials not redacted"
+    );
 }
 
 #[test]
 fn test_resolved_endpoint_identity_does_not_leak_raw_env_value() {
-    std::env::set_var("EARMARK_TEST_ENDPOINT_SECRET", "https://user:pass@internal.api.example.com");
+    std::env::set_var(
+        "EARMARK_TEST_ENDPOINT_SECRET",
+        "https://user:pass@internal.api.example.com",
+    );
     let profile = ProviderProfile {
         name: "endpoint_test".to_string(),
         version: "1".to_string(),
@@ -905,8 +925,16 @@ fn test_resolved_endpoint_identity_does_not_leak_raw_env_value() {
         http: None,
     };
     let identity = crate::provider::resolved_endpoint_identity(&profile);
-    assert!(!identity.contains("user:pass"), "endpoint value leaked credentials: {}", identity);
-    assert!(!identity.contains("internal.api.example.com"), "endpoint URL leaked: {}", identity);
+    assert!(
+        !identity.contains("user:pass"),
+        "endpoint value leaked credentials: {}",
+        identity
+    );
+    assert!(
+        !identity.contains("internal.api.example.com"),
+        "endpoint URL leaked: {}",
+        identity
+    );
     assert!(
         identity.contains("<endpoint_url:"),
         "identity should be hashed: {}",
@@ -996,12 +1024,7 @@ fn test_provider_circuit_key_redacts_sensitive_env_name() {
     let request = ProviderRequest {
         request_id: "req_circuit_redact".to_string(),
         run_id: "run_circuit_redact".to_string(),
-        work_packet: ObjectRef::new(
-            ObjectId::new(),
-            VersionId::new(),
-            Kind::WorkPacket,
-            None,
-        ),
+        work_packet: ObjectRef::new(ObjectId::new(), VersionId::new(), Kind::WorkPacket, None),
         provider_profile: VersionRef::new(ObjectId::new(), VersionId::new()),
         instruction_text: "do work".to_string(),
         context_text: None,

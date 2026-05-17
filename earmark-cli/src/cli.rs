@@ -98,10 +98,9 @@ impl Commands {
             | Self::Completions { .. }
             | Self::Undo(_) => CommandStability::Beta,
 
-            Self::System(_)
-            | Self::Context(_)
-            | Self::Relation(_)
-            | Self::StandingRequest(_) => CommandStability::Experimental,
+            Self::System(_) | Self::Context(_) | Self::Relation(_) | Self::StandingRequest(_) => {
+                CommandStability::Experimental
+            }
         }
     }
 }

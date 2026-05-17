@@ -18,8 +18,14 @@ pub fn handle(ctx: &CommandContext, command: &SystemCommand) -> Result<(), CliEr
     match &command.action {
         SystemAction::Register { manifest } => {
             tracing::info!(manifest = %manifest.display(), "registering system declaration");
-            let version_ref =
-                register_declaration_file(store, None, DeclarationKind::System, manifest, None, actor)?;
+            let version_ref = register_declaration_file(
+                store,
+                None,
+                DeclarationKind::System,
+                manifest,
+                None,
+                actor,
+            )?;
             index.rebuild_from_store(store)?;
             emit(
                 as_json,

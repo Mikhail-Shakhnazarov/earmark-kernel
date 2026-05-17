@@ -80,9 +80,18 @@ fn list_run_records_deterministic_order() {
     let runs = parsed["data"]["runs"].as_array().unwrap();
 
     assert_eq!(runs.len(), 3);
-    assert_eq!(runs[0]["run_id"], "obj_a", "first run should be obj_a (lexicographic tie-break)");
-    assert_eq!(runs[1]["run_id"], "obj_b", "second run should be obj_b (lexicographic tie-break)");
-    assert_eq!(runs[2]["run_id"], "obj_c", "third run should be obj_c (lexicographic tie-break)");
+    assert_eq!(
+        runs[0]["run_id"], "obj_a",
+        "first run should be obj_a (lexicographic tie-break)"
+    );
+    assert_eq!(
+        runs[1]["run_id"], "obj_b",
+        "second run should be obj_b (lexicographic tie-break)"
+    );
+    assert_eq!(
+        runs[2]["run_id"], "obj_c",
+        "third run should be obj_c (lexicographic tie-break)"
+    );
 }
 
 #[test]

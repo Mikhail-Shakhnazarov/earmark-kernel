@@ -1,4 +1,4 @@
-use crate::{StoredObject, StoreError};
+use crate::{StoreError, StoredObject};
 use earmark_core::Kind;
 
 pub fn is_sensitive_kind(kind: &Kind) -> bool {

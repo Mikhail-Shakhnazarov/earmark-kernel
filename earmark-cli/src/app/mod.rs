@@ -9,6 +9,7 @@ pub(crate) mod commands;
 pub(crate) use commands::declarations::{
     register_declaration_file, resolve_version_ref, resolve_workflow_version_ref,
 };
+mod dispatch;
 pub(crate) mod emitter;
 mod graph;
 pub(crate) mod listing;
@@ -17,7 +18,6 @@ mod reports;
 pub(crate) mod resolve;
 mod scaffold;
 mod suggestions;
-mod dispatch;
 
 // Re-exports for command files that import via crate::app::{...}
 pub(crate) use emitter::emit;

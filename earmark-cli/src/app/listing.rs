@@ -190,7 +190,8 @@ pub(crate) fn run_related_artifacts<S: CanonicalStore>(
         .collect::<Vec<_>>();
     let mut synthetic_change_sets = Vec::new();
     for change_set in &change_sets_full {
-        let (synthetic, synthetic_source) = crate::app::loaders::change_set_synthetic_marker(store, change_set)?;
+        let (synthetic, synthetic_source) =
+            crate::app::loaders::change_set_synthetic_marker(store, change_set)?;
         if synthetic {
             synthetic_change_sets.push(json!({
                 "change_set_id": change_set.id.as_str(),

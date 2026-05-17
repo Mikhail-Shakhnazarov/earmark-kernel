@@ -6,8 +6,8 @@ use std::{
 
 use fs4::fs_std::FileExt;
 
-mod backend;
 pub mod authorization;
+mod backend;
 
 use crate::backend::{GitBackend, GixBackend};
 use chrono::Utc;
@@ -376,10 +376,7 @@ impl GitCanonicalStore {
         Self::with_authorized_actors(root, vec![])
     }
 
-    pub fn with_authorized_actors(
-        root: impl AsRef<Path>,
-        authorized_actors: Vec<String>,
-    ) -> Self {
+    pub fn with_authorized_actors(root: impl AsRef<Path>, authorized_actors: Vec<String>) -> Self {
         let root = root.as_ref();
         Self {
             root: root.canonicalize().unwrap_or_else(|_| root.to_path_buf()),
