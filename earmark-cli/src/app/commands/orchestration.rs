@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
@@ -6,11 +6,14 @@ use std::process::Command;
 use crate::app::common::{require_initialized_workspace, CliError, CommandContext};
 use crate::app::{emit, mirror_surface, register_declaration_file};
 use crate::cli::*;
-use earmark_core::{ObjectId, RuntimeProvenance, VersionId, VersionRef};
+use earmark_core::{
+    DimensionId, ObjectId, RuntimeProvenance, Standing, TokenId, VersionId, VersionRef,
+};
 use earmark_declarations::activate_system_definition;
+use earmark_exec::persistence_helpers::write_object_and_index;
 use earmark_index::{DerivedIndex, ObjectSummary, QueryFilter};
 use earmark_runtime_tools::{DepositValidationContext, RuntimeToolSurface};
-use earmark_store::ObjectStore;
+use earmark_store::{ObjectStore, StoredObject, StoredPayload};
 use serde_json::json;
 
 pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<(), CliError> {
@@ -440,7 +443,182 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
         OrchestrationAction::RecordGate(_) => {
             Err(CliError::argument("command not yet implemented"))
         }
-        OrchestrationAction::Review(_) => Err(CliError::argument("command not yet implemented")),
+        OrchestrationAction::Review(args) => {
+            require_initialized_workspace(store)?;
+
+            let index_ref = ctx
+                .index
+                .as_ref()
+                .ok_or_else(|| CliError::argument("index required for review"))?;
+
+            let runtime_surface = RuntimeToolSurface {
+                store,
+                index: index_ref,
+                provider_service: ctx.provider_registry,
+            };
+
+            let task_arg = args.task_id.to_lowercase();
+
+            let task_filter = QueryFilter {
+                class: Some("implementation_task".to_string()),
+                ..Default::default()
+            };
+            let task_results = index_ref.query_objects(&task_filter)?;
+
+            let mut found_task: Option<(ObjectSummary, serde_json::Value)> = None;
+            for summary in &task_results {
+                let oid = match ObjectId::parse(summary.object_id.clone()) {
+                    Ok(o) => o,
+                    Err(_) => continue,
+                };
+                let vid = match VersionId::parse(summary.version_id.clone()) {
+                    Ok(v) => v,
+                    Err(_) => continue,
+                };
+                let vr = VersionRef::new(oid, vid);
+                let stored = match store.read_version(&vr) {
+                    Ok(s) => s,
+                    Err(_) => continue,
+                };
+                let text = match stored.payload.as_utf8() {
+                    Ok(t) => t,
+                    Err(_) => continue,
+                };
+                let payload: serde_json::Value = match serde_json::from_str(&text) {
+                    Ok(p) => p,
+                    Err(_) => continue,
+                };
+                let tid = match payload.get("task_id").and_then(|v| v.as_str()) {
+                    Some(t) => t.to_lowercase(),
+                    None => continue,
+                };
+                let oid_lower = summary.object_id.to_lowercase();
+                if oid_lower == task_arg
+                    || oid_lower.starts_with(&task_arg)
+                    || tid.starts_with(&task_arg)
+                {
+                    found_task = Some((summary.clone(), payload));
+                    break;
+                }
+            }
+
+            let (task_summary, task_payload) = found_task
+                .ok_or_else(|| CliError::not_found(format!("task {} not found", args.task_id)))?;
+
+            let task_id = task_payload
+                .get("task_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let decision = args.decision.to_lowercase();
+            if !["accepted", "rejected", "needs_revision"].contains(&decision.as_str()) {
+                return Err(CliError::argument("invalid decision"));
+            }
+
+            let prov = RuntimeProvenance {
+                actor: "operator".to_string(),
+                source_type: "cli".to_string(),
+            };
+
+            let review_payload = json!({
+                "task_id": task_id,
+                "decision": decision,
+                "comment": args.comment.clone().unwrap_or_default(),
+            });
+
+            let review_object_ref = runtime_surface.deposit_object(
+                "review_decision".to_string(),
+                Some("object".to_string()),
+                Some(format!("Review for {}", args.task_id)),
+                review_payload,
+                prov.clone(),
+                DepositValidationContext::default(),
+            )?;
+
+            let task_oid = ObjectId::parse(task_summary.object_id.clone())?;
+            let head_stored = store.read_head(&task_oid)?.ok_or_else(|| {
+                CliError::not_found(format!("task {} head not found", args.task_id))
+            })?;
+
+            let (process_token, review_token) = match decision.as_str() {
+                "accepted" => ("closed", "accepted"),
+                "rejected" => ("closed", "rejected"),
+                "needs_revision" => ("proposed", "needs_revision"),
+                _ => unreachable!(),
+            };
+
+            let mut standing_values = BTreeMap::new();
+            standing_values.insert(
+                DimensionId::from_static("kernel:process"),
+                TokenId::from_static(process_token),
+            );
+            standing_values.insert(
+                DimensionId::from_static("kernel:review"),
+                TokenId::from_static(review_token),
+            );
+            let standing = Standing {
+                values: standing_values,
+            };
+
+            let mapped_status = match decision.as_str() {
+                "accepted" => "implemented",
+                "rejected" => "closed",
+                "needs_revision" => "proposed",
+                _ => unreachable!(),
+            };
+
+            let mut updated_payload = task_payload.clone();
+            if let Some(obj) = updated_payload.as_object_mut() {
+                obj.insert("status".to_string(), json!(mapped_status));
+            }
+
+            let new_task_object = StoredObject::with_parent(
+                &head_stored,
+                standing,
+                head_stored.envelope.headers.clone(),
+                StoredPayload::from_json_bytes(serde_json::to_vec_pretty(&updated_payload)?),
+            );
+
+            let task_version_ref = write_object_and_index(store, index_ref, &new_task_object)?;
+
+            runtime_surface.create_relation(
+                task_oid.clone(),
+                review_object_ref.id.clone(),
+                "has_review_decision".to_string(),
+                json!({}),
+                prov,
+            )?;
+
+            index_ref.rebuild_from_store(store)?;
+
+            let review_vr = VersionRef::new(
+                review_object_ref.id.clone(),
+                review_object_ref.version_id.clone(),
+            );
+            if let Ok(review_stored) = store.read_version(&review_vr) {
+                let _ = mirror_surface(store, &review_stored);
+            }
+
+            let task_vr = VersionRef::new(task_oid.clone(), task_version_ref.version_id.clone());
+            if let Ok(task_stored) = store.read_version(&task_vr) {
+                let _ = mirror_surface(store, &task_stored);
+            }
+
+            emit(
+                as_json,
+                json!({
+                    "kind": "orchestration_review_decision",
+                    "task_id": task_id,
+                    "decision": decision,
+                    "comment": args.comment.clone().unwrap_or_default(),
+                    "review_decision_object_id": review_object_ref.id.as_str(),
+                    "task_object_id": task_oid.as_str(),
+                    "task_new_version_id": task_version_ref.version_id.as_str(),
+                }),
+            );
+
+            Ok(())
+        }
         OrchestrationAction::Show(args) => {
             require_initialized_workspace(store)?;
 
