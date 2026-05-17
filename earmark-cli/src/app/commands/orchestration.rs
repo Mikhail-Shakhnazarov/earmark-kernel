@@ -5,10 +5,11 @@ use std::path::PathBuf;
 use crate::app::common::{require_initialized_workspace, CliError, CommandContext};
 use crate::app::{emit, mirror_surface, register_declaration_file};
 use crate::cli::*;
-use earmark_core::{RuntimeProvenance, VersionRef};
+use earmark_core::{ObjectId, RuntimeProvenance, VersionId, VersionRef};
 use earmark_declarations::activate_system_definition;
-use earmark_store::ObjectStore;
+use earmark_index::{DerivedIndex, QueryFilter};
 use earmark_runtime_tools::{DepositValidationContext, RuntimeToolSurface};
+use earmark_store::ObjectStore;
 use serde_json::json;
 
 pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<(), CliError> {
@@ -190,8 +191,139 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
 
             Ok(())
         }
-        OrchestrationAction::IngestReport(_) => {
-            Err(CliError::argument("command not yet implemented"))
+        OrchestrationAction::IngestReport(args) => {
+            require_initialized_workspace(store)?;
+
+            let report_path = &args.path;
+            if !report_path.exists() {
+                return Err(CliError::not_found(format!(
+                    "report file not found: {}",
+                    report_path.display()
+                )));
+            }
+            let raw_text = fs::read_to_string(report_path)?;
+
+            let sections = parse_manifest_sections(&raw_text);
+            let preamble = sections.get("_preamble").map(|s| s.as_str()).unwrap_or("");
+            let header_pairs = parse_header_pairs(preamble);
+
+            let task_id = match &args.task_id {
+                Some(tid) => tid.clone(),
+                None => {
+                    let from_header = header_pairs
+                        .get("task_uuid")
+                        .or_else(|| header_pairs.get("task_id"))
+                        .cloned();
+                    match from_header {
+                        Some(tid) => tid,
+                        None => report_path
+                            .file_name()
+                            .and_then(|n| n.to_str())
+                            .and_then(parse_task_id_from_filename)
+                            .unwrap_or_else(|| "unknown".to_string()),
+                    }
+                }
+            };
+
+            let attempt: usize = match args.attempt {
+                Some(a) => a,
+                None => {
+                    let from_header = header_pairs
+                        .get("attempt_number")
+                        .or_else(|| header_pairs.get("attempt"))
+                        .and_then(|s| s.parse::<usize>().ok());
+                    match from_header {
+                        Some(a) => a,
+                        None => report_path
+                            .file_name()
+                            .and_then(|n| n.to_str())
+                            .and_then(parse_attempt_from_filename)
+                            .unwrap_or(1),
+                    }
+                }
+            };
+
+            let files_changed = parse_files_changed(&sections);
+
+            let manifest_ref: Option<String> = if let Some(m) = &args.manifest {
+                Some(m.clone())
+            } else {
+                let index_ref = ctx
+                    .index
+                    .as_ref()
+                    .ok_or_else(|| CliError::argument("index required for ingest-report"))?;
+                resolve_manifest_for_report(store, index_ref, &task_id, attempt)?
+            };
+
+            let index_ref = ctx
+                .index
+                .as_ref()
+                .ok_or_else(|| CliError::argument("index required for ingest-report"))?;
+            let runtime_surface = RuntimeToolSurface {
+                store,
+                index: index_ref,
+                provider_service: ctx.provider_registry,
+            };
+
+            let prov = RuntimeProvenance {
+                actor: "operator".to_string(),
+                source_type: "cli".to_string(),
+            };
+
+            let payload = json!({
+                "task_id": task_id,
+                "attempt": attempt,
+                "files_changed": files_changed,
+                "raw_text": raw_text,
+                "manifest": manifest_ref,
+            });
+
+            let object_ref = runtime_surface.deposit_object(
+                "executor_report".to_string(),
+                Some("object".to_string()),
+                Some(format!("Report for {}", task_id)),
+                payload,
+                prov,
+                DepositValidationContext::default(),
+            )?;
+
+            index_ref.rebuild_from_store(store)?;
+
+            let vr = VersionRef::new(object_ref.id.clone(), object_ref.version_id.clone());
+            let stored_object = store.read_version(&vr)?;
+            mirror_surface(store, &stored_object)?;
+
+            if let Some(ref m) = manifest_ref {
+                let manifest_oid_str = m.split(':').next().unwrap_or(m);
+                if let Ok(target_id) = ObjectId::parse(manifest_oid_str.to_string()) {
+                    let rel_prov = RuntimeProvenance {
+                        actor: "operator".to_string(),
+                        source_type: "cli".to_string(),
+                    };
+                    let _ = runtime_surface.create_relation(
+                        object_ref.id.clone(),
+                        target_id,
+                        "implements_manifest".to_string(),
+                        json!({}),
+                        rel_prov,
+                    );
+                }
+            }
+
+            emit(
+                as_json,
+                json!({
+                    "kind": "executor_report_ingest",
+                    "object_id": object_ref.id.as_str(),
+                    "version_id": object_ref.version_id.as_str(),
+                    "task_id": task_id,
+                    "attempt": attempt,
+                    "files_changed": files_changed,
+                    "manifest": manifest_ref,
+                }),
+            );
+
+            Ok(())
         }
         OrchestrationAction::RecordGate(_) => {
             Err(CliError::argument("command not yet implemented"))
@@ -305,4 +437,73 @@ fn parse_attempt_from_filename(filename: &str) -> Option<usize> {
         return after.parse::<usize>().ok();
     }
     None
+}
+
+fn parse_files_changed(sections: &HashMap<String, String>) -> Vec<String> {
+    let mut files = Vec::new();
+    for (key, content) in sections {
+        let k = key.trim().to_lowercase();
+        if k == "changed files" || k == "files changed" {
+            for line in content.lines() {
+                let trimmed = line.trim();
+                if trimmed.is_empty() {
+                    continue;
+                }
+                let path = if trimmed.starts_with("- ") {
+                    &trimmed[2..]
+                } else if trimmed.starts_with("* ") {
+                    &trimmed[2..]
+                } else if trimmed.len() > 2 && trimmed.as_bytes()[1] == b' ' {
+                    let prefix = trimmed[..2].to_uppercase();
+                    if prefix == "M "
+                        || prefix == "A "
+                        || prefix == "D "
+                        || prefix == "R "
+                        || prefix == "??"
+                    {
+                        &trimmed[2..]
+                    } else {
+                        trimmed
+                    }
+                } else {
+                    trimmed
+                };
+                let p = path.trim().to_string();
+                if !p.is_empty() {
+                    files.push(p);
+                }
+            }
+        }
+    }
+    files
+}
+
+fn resolve_manifest_for_report(
+    store: &impl ObjectStore,
+    index: &DerivedIndex,
+    task_id: &str,
+    attempt: usize,
+) -> Result<Option<String>, CliError> {
+    let filter = QueryFilter {
+        class: Some("executor_manifest".to_string()),
+        ..Default::default()
+    };
+    let results = index.query_objects(&filter)?;
+    for summary in results {
+        let oid = ObjectId::parse(summary.object_id.clone())?;
+        let vid = VersionId::parse(summary.version_id.clone())?;
+        let vr = VersionRef::new(oid, vid);
+        if let Ok(stored) = store.read_version(&vr) {
+            if let Ok(text) = stored.payload.as_utf8() {
+                if let Ok(payload) = serde_json::from_str::<serde_json::Value>(&text) {
+                    let tid = payload.get("task_id").and_then(|v| v.as_str());
+                    let att = payload.get("attempt").and_then(|v| v.as_u64());
+                    if tid == Some(task_id) && att == Some(attempt as u64) {
+                        return Ok(Some(summary.object_id));
+                    }
+                }
+            }
+        }
+    }
+    Ok(None)
 }
