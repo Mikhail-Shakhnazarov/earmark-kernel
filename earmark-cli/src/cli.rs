@@ -626,7 +626,6 @@ pub struct OrchReviewArgs {
 
 #[derive(Args)]
 pub struct ShowTaskArgs {
-    #[arg(long)]
     pub task_id: String,
 }
 
