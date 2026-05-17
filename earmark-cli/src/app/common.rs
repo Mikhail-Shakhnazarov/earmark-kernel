@@ -50,6 +50,25 @@ impl CliError {
     pub fn workspace_not_initialized(status: WorkspaceLayoutStatus) -> Self {
         Self::WorkspaceNotInitialized { status }
     }
+
+    pub fn kind_str(&self) -> &'static str {
+        match self {
+            Self::Store(_) => "store",
+            Self::Index(_) => "index",
+            Self::Derive(_) => "derive",
+            Self::Exec(_) => "exec",
+            Self::Governance(_) => "governance",
+            Self::Core(_) => "core",
+            Self::Json(_) => "json",
+            Self::Yaml(_) => "yaml",
+            Self::Toml(_) => "toml",
+            Self::Io(_) => "io",
+            Self::NotFound(_) => "not_found",
+            Self::Argument(_) => "argument",
+            Self::WorkspaceNotInitialized { .. } => "workspace_not_initialized",
+            Self::Runtime(_) => "runtime",
+        }
+    }
 }
 
 pub struct CommandContext<'a> {
