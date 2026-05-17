@@ -73,6 +73,8 @@ pub enum Commands {
     StandingRequest(StandingRequestCommand),
     #[command(about = "[BETA] Undo a run")]
     Undo(UndoCommand),
+    #[command(about = "[EXPERIMENTAL] Manage orchestration tasks")]
+    Orchestration(OrchestrationCommand),
 }
 
 impl Commands {
@@ -98,9 +100,11 @@ impl Commands {
             | Self::Completions { .. }
             | Self::Undo(_) => CommandStability::Beta,
 
-            Self::System(_) | Self::Context(_) | Self::Relation(_) | Self::StandingRequest(_) => {
-                CommandStability::Experimental
-            }
+            Self::System(_)
+            | Self::Context(_)
+            | Self::Relation(_)
+            | Self::StandingRequest(_)
+            | Self::Orchestration(_) => CommandStability::Experimental,
         }
     }
 }
@@ -532,6 +536,105 @@ pub enum UndoAction {
         #[arg(long)]
         reason: Option<String>,
     },
+}
+
+#[derive(Args)]
+pub struct OrchestrationCommand {
+    #[command(subcommand)]
+    pub action: OrchestrationAction,
+}
+
+#[derive(Subcommand)]
+pub enum OrchestrationAction {
+    #[command(name = "init-example")]
+    InitExample,
+    CaptureGit(CaptureGitArgs),
+    IngestManifest(IngestManifestArgs),
+    IngestReport(IngestReportArgs),
+    RecordGate(RecordGateArgs),
+    Review(OrchReviewArgs),
+    Show(ShowTaskArgs),
+    List(ListOrchestrationArgs),
+}
+
+#[derive(Args)]
+pub struct CaptureGitArgs {
+    #[arg(long)]
+    pub task_id: String,
+    #[arg(long)]
+    pub phase: String,
+    #[arg(long)]
+    pub base: Option<String>,
+    #[arg(long)]
+    pub head: Option<String>,
+    #[arg(long)]
+    pub include_diff_stat: bool,
+    #[arg(long)]
+    pub commit: Option<String>,
+}
+
+#[derive(Args)]
+pub struct IngestManifestArgs {
+    pub path: PathBuf,
+    #[arg(long)]
+    pub task_id: Option<String>,
+    #[arg(long)]
+    pub attempt: Option<usize>,
+    #[arg(long)]
+    pub executor: Option<String>,
+    #[arg(long)]
+    pub branch: Option<String>,
+}
+
+#[derive(Args)]
+pub struct IngestReportArgs {
+    pub path: PathBuf,
+    #[arg(long)]
+    pub task_id: Option<String>,
+    #[arg(long)]
+    pub manifest: Option<String>,
+    #[arg(long)]
+    pub attempt: Option<usize>,
+}
+
+#[derive(Args)]
+pub struct RecordGateArgs {
+    #[arg(long)]
+    pub task_id: String,
+    #[arg(long)]
+    pub command: String,
+    #[arg(long)]
+    pub status: String,
+    #[arg(long)]
+    pub log: Option<PathBuf>,
+}
+
+#[derive(Args)]
+pub struct OrchReviewArgs {
+    #[arg(long)]
+    pub task_id: String,
+    #[arg(long)]
+    pub decision: String,
+    #[arg(long)]
+    pub note: String,
+    #[arg(long)]
+    pub reviewer: Option<String>,
+    #[arg(long)]
+    pub commit: Option<String>,
+}
+
+#[derive(Args)]
+pub struct ShowTaskArgs {
+    #[arg(long)]
+    pub task_id: String,
+}
+
+#[derive(Args)]
+pub struct ListOrchestrationArgs {
+    #[arg(long)]
+    pub status: Option<String>,
+    #[arg(long)]
+    pub include_closed: bool,
 }
 
 pub fn command_for_completions() -> clap::Command {
