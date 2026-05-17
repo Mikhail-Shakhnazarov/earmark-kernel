@@ -1,4 +1,4 @@
-use crate::cli::{Commands, DeclareAction, StandingRequestAction};
+use crate::cli::{Commands, DeclareAction, OrchestrationAction, StandingRequestAction};
 use crate::config::CliConfig;
 use earmark_exec::ProviderRegistry;
 use earmark_index::DerivedIndex;
@@ -141,6 +141,12 @@ pub fn workspace_access_mode(command: &Commands) -> WorkspaceAccessMode {
             | StandingRequestAction::Apply { .. } => WorkspaceAccessMode::Write,
         },
         Commands::Undo(_) => WorkspaceAccessMode::Write,
+        Commands::Orchestration(cmd) => match cmd.action {
+            OrchestrationAction::Show(_) | OrchestrationAction::List(_) => {
+                WorkspaceAccessMode::ReadOnly
+            }
+            _ => WorkspaceAccessMode::Write,
+        },
     }
 }
 
@@ -176,5 +182,6 @@ pub fn command_family_name(command: &Commands) -> &'static str {
         Commands::Relation(_) => "relation",
         Commands::StandingRequest(_) => "standing-request",
         Commands::Undo(_) => "undo",
+        Commands::Orchestration(_) => "orchestration",
     }
 }
