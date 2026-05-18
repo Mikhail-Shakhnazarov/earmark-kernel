@@ -13,6 +13,7 @@ USE_ATTACH="${OPENCODE_ATTACH_URL:-}"
 SKIP_GATES="${SKIP_GATES:-0}"
 KEEP_BRANCH="${KEEP_BRANCH:-1}"
 OPENCODE_SKIP_PERMS="${OPENCODE_SKIP_PERMS:-0}"
+UNIQUE_BRANCH="${UNIQUE_BRANCH:-1}"
 
 usage() {
   cat <<'USAGE'
@@ -85,6 +86,12 @@ BRANCH="orch/${TASK_ID}/${ATTEMPT}"
 echo "dispatch-opencode: root=$ROOT" | tee "$LOG"
 echo "dispatch-opencode: task=$TASK_ID attempt=$ATTEMPT" | tee -a "$LOG"
 
+if [[ -n "$MODEL" ]]; then
+  echo "dispatch-opencode: model=$MODEL" | tee -a "$LOG"
+else
+  echo "dispatch-opencode: model=<opencode default>" | tee -a "$LOG"
+fi
+
 if [[ -n "$MANIFEST_IN" ]]; then
   cp "$MANIFEST_IN" "$MANIFEST"
 else
@@ -113,10 +120,29 @@ else
   } > "$MANIFEST"
 fi
 
-OPENCODE_CMD="${OPENCODE_CMD:-opencode}"
+resolve_opencode_cmd() {
+  if [[ -n "${OPENCODE_CMD:-}" ]]; then
+    echo "$OPENCODE_CMD"
+    return 0
+  fi
 
-if ! command -v "$OPENCODE_CMD" >/dev/null 2>&1; then
-  echo "error: $OPENCODE_CMD not found on PATH" | tee -a "$LOG" >&2
+  if command -v opencode >/dev/null 2>&1; then
+    echo "opencode"
+    return 0
+  fi
+
+  if command -v opencode-cli >/dev/null 2>&1; then
+    echo "opencode-cli"
+    return 0
+  fi
+
+  return 1
+}
+
+OPENCODE_CMD="$(resolve_opencode_cmd || true)"
+
+if [[ -z "$OPENCODE_CMD" ]]; then
+  echo "error: neither opencode nor opencode-cli found on PATH; set OPENCODE_CMD explicitly" | tee -a "$LOG" >&2
   exit 127
 fi
 
@@ -130,9 +156,16 @@ if [[ -n "$(git status --porcelain)" ]]; then
   exit 3
 fi
 
+BASE_BRANCH="$BRANCH"
+
 if git show-ref --verify --quiet "refs/heads/$BRANCH"; then
-  echo "error: branch already exists: $BRANCH" | tee -a "$LOG" >&2
-  exit 4
+  if [[ "$UNIQUE_BRANCH" == "1" ]]; then
+    BRANCH="${BASE_BRANCH}-${timestamp}"
+    echo "dispatch-opencode: branch exists; using unique branch=$BRANCH" | tee -a "$LOG"
+  else
+    echo "error: branch already exists: $BRANCH" | tee -a "$LOG" >&2
+    exit 4
+  fi
 fi
 
 git switch -c "$BRANCH" 2>&1 | tee -a "$LOG"
@@ -156,18 +189,21 @@ OPENCODE_ARGS+=(
 )
 
 echo "dispatch-opencode: running $OPENCODE_CMD" | tee -a "$LOG"
+TMP_OUTPUT="$(mktemp)"
 set +e
+"$OPENCODE_CMD" "${OPENCODE_ARGS[@]}" >"$TMP_OUTPUT" 2>&1
+OPENCODE_STATUS=$?
+set -e
+
 HAS_JSON_ERROR=0
 while IFS= read -r line; do
   echo "$line" | tee -a "$LOG"
   if echo "$line" | grep -q '"type":"error"'; then
     HAS_JSON_ERROR=1
   fi
-done < <("$OPENCODE_CMD" "${OPENCODE_ARGS[@]}" 2>&1)
-OPENCODE_STATUS=$?
-# Wait for the process substitution to finish and get its exit code
-wait $! || OPENCODE_STATUS=$?
-set -e
+done < "$TMP_OUTPUT"
+
+rm -f "$TMP_OUTPUT"
 
 {
   echo "# OpenCode Dispatch Report"
