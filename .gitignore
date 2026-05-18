@@ -23,7 +23,5 @@
 /dogfooding/**/corpus/obj_*.md
 
 # Local orchestration artifacts
-.orchestration/manifests/
-.orchestration/logs/
-.orchestration/reports/
+.orchestration/
 .opencode/
