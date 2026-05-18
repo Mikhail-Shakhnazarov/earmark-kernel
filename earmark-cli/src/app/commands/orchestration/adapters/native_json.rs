@@ -1,7 +1,7 @@
-use std::fs;
-use std::path::Path;
 use crate::app::common::CliError;
 use serde_json::Value;
+use std::fs;
+use std::path::Path;
 
 pub struct NativeTaskData {
     pub task_id: String,
@@ -30,16 +30,31 @@ pub fn ingest_from_json(path_str: &str) -> Result<Vec<NativeTaskData>, CliError>
         for record in records {
             let kind = record.get("kind").and_then(|k| k.as_str()).unwrap_or("");
             if kind == "orchestration.work_item.v1" || kind == "implementation_task" {
-                let title = record.get("title").and_then(|t| t.as_str()).ok_or_else(|| {
-                    CliError::argument("missing required field: title")
-                })?.to_string();
-                let goal = record.get("goal").and_then(|g| g.as_str())
+                let title = record
+                    .get("title")
+                    .and_then(|t| t.as_str())
+                    .ok_or_else(|| CliError::argument("missing required field: title"))?
+                    .to_string();
+                let goal = record
+                    .get("goal")
+                    .and_then(|g| g.as_str())
                     .or_else(|| record.get("description").and_then(|d| d.as_str()))
                     .unwrap_or("")
                     .to_string();
-                let priority = record.get("priority").and_then(|p| p.as_str()).unwrap_or("medium").to_string();
-                let status = record.get("status").and_then(|s| s.as_str()).unwrap_or("proposed").to_string();
-                let task_id = record.get("task_id").or_else(|| record.get("id")).and_then(|i| i.as_str())
+                let priority = record
+                    .get("priority")
+                    .and_then(|p| p.as_str())
+                    .unwrap_or("medium")
+                    .to_string();
+                let status = record
+                    .get("status")
+                    .and_then(|s| s.as_str())
+                    .unwrap_or("proposed")
+                    .to_string();
+                let task_id = record
+                    .get("task_id")
+                    .or_else(|| record.get("id"))
+                    .and_then(|i| i.as_str())
                     .map(|s| s.to_string())
                     .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
@@ -55,16 +70,31 @@ pub fn ingest_from_json(path_str: &str) -> Result<Vec<NativeTaskData>, CliError>
         }
     } else {
         // Support direct single work_item payload
-        let title = parsed.get("title").and_then(|t| t.as_str()).ok_or_else(|| {
-            CliError::argument("missing required field: title")
-        })?.to_string();
-        let goal = parsed.get("goal").and_then(|g| g.as_str())
+        let title = parsed
+            .get("title")
+            .and_then(|t| t.as_str())
+            .ok_or_else(|| CliError::argument("missing required field: title"))?
+            .to_string();
+        let goal = parsed
+            .get("goal")
+            .and_then(|g| g.as_str())
             .or_else(|| parsed.get("description").and_then(|d| d.as_str()))
             .unwrap_or("")
             .to_string();
-        let priority = parsed.get("priority").and_then(|p| p.as_str()).unwrap_or("medium").to_string();
-        let status = parsed.get("status").and_then(|s| s.as_str()).unwrap_or("proposed").to_string();
-        let task_id = parsed.get("task_id").or_else(|| parsed.get("id")).and_then(|i| i.as_str())
+        let priority = parsed
+            .get("priority")
+            .and_then(|p| p.as_str())
+            .unwrap_or("medium")
+            .to_string();
+        let status = parsed
+            .get("status")
+            .and_then(|s| s.as_str())
+            .unwrap_or("proposed")
+            .to_string();
+        let task_id = parsed
+            .get("task_id")
+            .or_else(|| parsed.get("id"))
+            .and_then(|i| i.as_str())
             .map(|s| s.to_string())
             .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 

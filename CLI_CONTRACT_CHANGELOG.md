@@ -3,10 +3,12 @@
 This document tracks changes to the machine-readable JSON output of the Earmark CLI.
 Downstream orchestrators and tools should monitor this file for breaking changes and schema updates.
 
-Current Contract Version: 0.3.0
+Current Contract Version: 0.2.0
 Reference Documentation: [docs/cli-contract.md](docs/cli-contract.md)
 
-## [0.3.0] - 2026-05-17
+## [Unreleased]
+
+### [0.3.0] - 2026-05-17
 
 ### Summary
 Added structured error codes, thread-local context tracking, and enriched error envelopes.

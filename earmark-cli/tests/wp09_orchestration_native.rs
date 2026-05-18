@@ -33,8 +33,14 @@ fn test_orchestration_ingest_source_validation() {
         .failure();
 
     let err_msg = String::from_utf8_lossy(&assert_res.get_output().stdout);
-    assert!(err_msg.contains("unsupported source"), "Error message did not complain about source");
-    assert!(err_msg.contains("Supported sources"), "Error message did not list supported sources");
+    assert!(
+        err_msg.contains("unsupported source"),
+        "Error message did not complain about source"
+    );
+    assert!(
+        err_msg.contains("Supported sources"),
+        "Error message did not list supported sources"
+    );
 }
 
 #[test]

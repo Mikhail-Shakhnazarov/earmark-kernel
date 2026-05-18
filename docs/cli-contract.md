@@ -1,6 +1,6 @@
 # Earmark CLI Contract
 
-Current version: `0.3.0`
+Current version: `0.2.0`
 
 ## JSON Envelope
 
@@ -10,7 +10,7 @@ All JSON output uses a standard top-level envelope:
 
 ```json
 {
-  "contract_version": "0.3.0",
+  "contract_version": "0.2.0",
   "ok": true,
   "data": { ... }
 }
@@ -20,7 +20,7 @@ All JSON output uses a standard top-level envelope:
 
 ```json
 {
-  "contract_version": "0.3.0",
+  "contract_version": "0.2.0",
   "ok": false,
   "error": {
     "message": "human-readable description",

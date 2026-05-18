@@ -4,7 +4,7 @@ use earmark_core::{
     StandingRegistry, TokenId, VersionId, VersionRef,
 };
 use earmark_exec::helpers::render_provider_input;
-use earmark_exec::{ProviderFailure, ProviderFailureKind};
+use earmark_exec::ProviderFailureKind;
 use earmark_index::DerivedIndex;
 use earmark_store::{GitCanonicalStore, ObjectStore, StoredObject, StoredPayload, WorkspaceLayout};
 use std::collections::BTreeMap;

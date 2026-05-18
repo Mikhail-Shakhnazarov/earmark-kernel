@@ -1,9 +1,8 @@
 use std::collections::BTreeMap;
 
-use earmark_core::{HeaderValue, Kind, Provenance, Standing};
+use earmark_core::{Kind, Provenance, Standing};
 use earmark_store::{
     authorization, GitCanonicalStore, ObjectStore, StoreError, StoredObject, StoredPayload,
-    WorkspaceLayout,
 };
 use tempfile::tempdir;
 

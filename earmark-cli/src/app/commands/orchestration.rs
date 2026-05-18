@@ -58,8 +58,94 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
             );
             Ok(())
         }
-        OrchestrationAction::CaptureGit(_) => {
-            Err(CliError::argument("command not yet implemented"))
+        OrchestrationAction::CaptureGit(args) => {
+            require_initialized_workspace(store)?;
+            let index_ref = ctx
+                .index
+                .as_ref()
+                .ok_or_else(|| CliError::argument("index required"))?;
+
+            let (task_oid, _class, _task_summary, task_payload) =
+                find_orchestration_task(index_ref, store, &args.task_id)?.ok_or_else(|| {
+                    CliError::not_found(format!("task {} not found", args.task_id))
+                })?;
+
+            let task_id = task_payload
+                .get("task_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+
+            let commit = match &args.commit {
+                Some(c) => c.clone(),
+                None => run_git_cmd(&["rev-parse", "HEAD"])?,
+            };
+
+            let branch = run_git_cmd(&["branch", "--show-current"]).unwrap_or_default();
+
+            let status_porcelain = run_git_cmd(&["status", "--porcelain"]).unwrap_or_default();
+            let dirty = !status_porcelain.is_empty();
+
+            let status_short = run_git_cmd(&["status", "--short"]).unwrap_or_default();
+
+            let base = args.base.clone().unwrap_or_default();
+            let head = args.head.clone().unwrap_or_else(|| commit.clone());
+
+            let diff_stat = if args.include_diff_stat {
+                if !base.is_empty() {
+                    run_git_cmd(&["diff", "--stat", &format!("{}..{}", base, head)])
+                        .unwrap_or_default()
+                } else {
+                    run_git_cmd(&["diff", "--stat"]).unwrap_or_default()
+                }
+            } else {
+                String::new()
+            };
+
+            let payload = json!({
+                "task_id": task_id,
+                "task_object_id": task_oid.as_str(),
+                "phase": args.phase,
+                "commit": commit,
+                "base": base,
+                "head": head,
+                "branch": branch,
+                "dirty": dirty,
+                "status_short": status_short,
+                "diff_stat": diff_stat,
+                "captured_by": "orchestration capture-git"
+            });
+
+            let title = format!("Git snapshot: {} for {}", args.phase, task_id);
+            let obj_ref = deposit_orchestration_object(ctx, "git_snapshot", Some(title), payload)?;
+
+            create_orchestration_relation(
+                ctx,
+                task_oid.clone(),
+                obj_ref.id.clone(),
+                "has_git_snapshot",
+            )?;
+
+            let vr = VersionRef::new(obj_ref.id.clone(), obj_ref.version_id.clone());
+            if let Ok(stored_object) = store.read_version(&vr) {
+                let _ = mirror_surface(store, &stored_object);
+            }
+
+            emit(
+                as_json,
+                json!({
+                    "kind": "orchestration_git_snapshot",
+                    "task_id": task_id,
+                    "task_object_id": task_oid.as_str(),
+                    "snapshot_object_id": obj_ref.id.as_str(),
+                    "snapshot_version_id": obj_ref.version_id.as_str(),
+                    "phase": args.phase,
+                    "commit": commit,
+                    "dirty": dirty
+                }),
+            );
+
+            Ok(())
         }
         OrchestrationAction::IngestManifest(args) => {
             require_initialized_workspace(store)?;
@@ -339,7 +425,7 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                 .ok_or_else(|| CliError::argument("index required for ingest-task"))?;
 
             let source = &args.source;
-            
+
             let tasks = match source.as_str() {
                 "engram" => {
                     let task = self::adapters::engram::ingest_from_engram(&args.task_id)?;
@@ -426,8 +512,100 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
 
             Ok(())
         }
-        OrchestrationAction::RecordGate(_) => {
-            Err(CliError::argument("command not yet implemented"))
+        OrchestrationAction::RecordGate(args) => {
+            require_initialized_workspace(store)?;
+            let index_ref = ctx
+                .index
+                .as_ref()
+                .ok_or_else(|| CliError::argument("index required"))?;
+
+            let (task_oid, _class, _task_summary, task_payload) =
+                find_orchestration_task(index_ref, store, &args.task_id)?.ok_or_else(|| {
+                    CliError::not_found(format!("task {} not found", args.task_id))
+                })?;
+
+            let task_id = task_payload
+                .get("task_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+
+            let normalized_status = match args.status.to_lowercase().as_str() {
+                "pass" | "passed" | "success" | "ok" => "pass",
+                "fail" | "failed" | "error" => "fail",
+                "skipped" | "skip" => "skipped",
+                other => return Err(CliError::argument(format!("invalid status: '{}'", other))),
+            };
+
+            let mut log_path = String::new();
+            let mut log_excerpt = String::new();
+            if let Some(ref path) = args.log {
+                log_path = path.to_string_lossy().to_string();
+                if !path.exists() {
+                    return Err(CliError::not_found(format!(
+                        "log file not found: {}",
+                        path.display()
+                    )));
+                }
+                let content = fs::read_to_string(path)?;
+                let lines: Vec<&str> = content.lines().collect();
+                let start_idx = if lines.len() > 120 {
+                    lines.len() - 120
+                } else {
+                    0
+                };
+                let selected_lines = &lines[start_idx..];
+                let mut excerpt = selected_lines.join("\n");
+                if excerpt.len() > 12000 {
+                    let char_start = excerpt.len() - 12000;
+                    let mut byte_idx = char_start;
+                    while byte_idx < excerpt.len() && !excerpt.is_char_boundary(byte_idx) {
+                        byte_idx += 1;
+                    }
+                    excerpt = excerpt[byte_idx..].to_string();
+                }
+                log_excerpt = excerpt;
+            }
+
+            let payload = json!({
+                "task_id": task_id,
+                "task_object_id": task_oid.as_str(),
+                "command": args.command,
+                "status": normalized_status,
+                "log_path": log_path,
+                "log_excerpt": log_excerpt,
+                "recorded_by": "orchestration record-gate"
+            });
+
+            let title = format!("Gate result: {} for {}", args.command, task_id);
+            let obj_ref = deposit_orchestration_object(ctx, "gate_result", Some(title), payload)?;
+
+            create_orchestration_relation(
+                ctx,
+                task_oid.clone(),
+                obj_ref.id.clone(),
+                "has_gate_result",
+            )?;
+
+            let vr = VersionRef::new(obj_ref.id.clone(), obj_ref.version_id.clone());
+            if let Ok(stored_object) = store.read_version(&vr) {
+                let _ = mirror_surface(store, &stored_object);
+            }
+
+            emit(
+                as_json,
+                json!({
+                    "kind": "orchestration_gate_result",
+                    "task_id": task_id,
+                    "task_object_id": task_oid.as_str(),
+                    "gate_result_object_id": obj_ref.id.as_str(),
+                    "gate_result_version_id": obj_ref.version_id.as_str(),
+                    "command": args.command,
+                    "status": normalized_status
+                }),
+            );
+
+            Ok(())
         }
         OrchestrationAction::Review(args) => {
             require_initialized_workspace(store)?;
@@ -615,9 +793,13 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
 
             let task_arg = args.task_id.to_lowercase();
 
-            // First, try to find a work_item matching task_id
-            if let Some((work_item_oid, work_item_summary, work_item_payload)) = find_work_item(index_ref, store, &task_arg)? {
-                let connected_objects = traverse_orchestration_graph(index_ref, store, &work_item_oid)?;
+            let (task_oid, class, task_summary, task_payload) =
+                find_orchestration_task(index_ref, store, &task_arg)?.ok_or_else(|| {
+                    CliError::not_found(format!("task {} not found", args.task_id))
+                })?;
+
+            if class == "work_item" {
+                let connected_objects = traverse_orchestration_graph(index_ref, store, &task_oid)?;
 
                 let mut context_packets = Vec::new();
                 let mut dispatches = Vec::new();
@@ -625,6 +807,8 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                 let mut evidence = Vec::new();
                 let mut reviews = Vec::new();
                 let mut closures = Vec::new();
+                let mut git_snapshots = Vec::new();
+                let mut gate_results = Vec::new();
 
                 for (_oid, summary, payload, _captured_at) in connected_objects {
                     match summary.class.as_deref().unwrap_or("") {
@@ -634,24 +818,26 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                         "evidence" => evidence.push(payload),
                         "review" => reviews.push(payload),
                         "closure" => closures.push(payload),
+                        "git_snapshot" => git_snapshots.push(payload),
+                        "gate_result" => gate_results.push(payload),
                         _ => {}
                     }
                 }
 
-                let title = work_item_payload
+                let title = task_payload
                     .get("title")
                     .and_then(|v| v.as_str())
-                    .or_else(|| work_item_summary.title.as_deref())
+                    .or(task_summary.title.as_deref())
                     .unwrap_or("");
-                let description = work_item_payload
+                let description = task_payload
                     .get("description")
                     .and_then(|v| v.as_str())
                     .unwrap_or("");
-                let status = work_item_payload
+                let status = task_payload
                     .get("status")
                     .and_then(|v| v.as_str())
                     .unwrap_or("");
-                let priority = work_item_payload
+                let priority = task_payload
                     .get("priority")
                     .and_then(|v| v.as_str())
                     .unwrap_or("");
@@ -660,7 +846,7 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                     as_json,
                     json!({
                         "kind": "orchestration_work_item_show",
-                        "work_item_id": work_item_oid.as_str(),
+                        "work_item_id": task_oid.as_str(),
                         "title": title,
                         "description": description,
                         "status": status,
@@ -671,6 +857,8 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                         "evidence": evidence,
                         "reviews": reviews,
                         "closures": closures,
+                        "git_snapshots": git_snapshots,
+                        "gate_results": gate_results
                     }),
                 );
 
@@ -678,52 +866,6 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
             }
 
             // Fallback to legacy implementation_task Show command logic
-            let task_filter = QueryFilter {
-                class: Some("implementation_task".to_string()),
-                ..Default::default()
-            };
-            let task_results = index_ref.query_objects(&task_filter)?;
-
-            let mut found_task: Option<(ObjectSummary, serde_json::Value)> = None;
-            for summary in &task_results {
-                let oid = match ObjectId::parse(summary.object_id.clone()) {
-                    Ok(o) => o,
-                    Err(_) => continue,
-                };
-                let vid = match VersionId::parse(summary.version_id.clone()) {
-                    Ok(v) => v,
-                    Err(_) => continue,
-                };
-                let vr = VersionRef::new(oid, vid);
-                let stored = match store.read_version(&vr) {
-                    Ok(s) => s,
-                    Err(_) => continue,
-                };
-                let text = match stored.payload.as_utf8() {
-                    Ok(t) => t,
-                    Err(_) => continue,
-                };
-                let payload: serde_json::Value = match serde_json::from_str(&text) {
-                    Ok(p) => p,
-                    Err(_) => continue,
-                };
-                let tid = match payload.get("task_id").and_then(|v| v.as_str()) {
-                    Some(t) => t.to_lowercase(),
-                    None => continue,
-                };
-                let oid_lower = summary.object_id.to_lowercase();
-                if oid_lower == task_arg
-                    || oid_lower.starts_with(&task_arg)
-                    || tid.starts_with(&task_arg)
-                {
-                    found_task = Some((summary.clone(), payload));
-                    break;
-                }
-            }
-
-            let (task_summary, task_payload) = found_task
-                .ok_or_else(|| CliError::not_found(format!("task {} not found", args.task_id)))?;
-
             let task_id = task_payload
                 .get("task_id")
                 .and_then(|v| v.as_str())
@@ -823,7 +965,6 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                 }
             }
 
-            let task_oid = ObjectId::parse(task_summary.object_id.clone())?;
             let head_stored = store.read_head(&task_oid)?;
             let standing = head_stored
                 .as_ref()
@@ -900,6 +1041,18 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                 }));
             }
 
+            // Also traverse graph for implementation_task to find git_snapshots and gate_results
+            let connected_objects = traverse_orchestration_graph(index_ref, store, &task_oid)?;
+            let mut git_snapshots = Vec::new();
+            let mut gate_results = Vec::new();
+            for (_oid, summary, payload, _captured_at) in connected_objects {
+                match summary.class.as_deref().unwrap_or("") {
+                    "git_snapshot" => git_snapshots.push(payload),
+                    "gate_result" => gate_results.push(payload),
+                    _ => {}
+                }
+            }
+
             emit(
                 as_json,
                 json!({
@@ -911,6 +1064,8 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                     "priority": priority,
                     "standing": standing,
                     "attempts": attempts,
+                    "git_snapshots": git_snapshots,
+                    "gate_results": gate_results
                 }),
             );
 
@@ -925,10 +1080,12 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                 .ok_or_else(|| CliError::argument("index required for timeline"))?;
 
             let task_arg = args.task_id.to_lowercase();
-            let (work_item_oid, _, _work_item_payload) = find_work_item(index_ref, store, &task_arg)?
-                .ok_or_else(|| CliError::not_found(format!("work_item {} not found", args.task_id)))?;
+            let (task_oid, _class, _task_summary, _task_payload) =
+                find_orchestration_task(index_ref, store, &task_arg)?.ok_or_else(|| {
+                    CliError::not_found(format!("task {} not found", args.task_id))
+                })?;
 
-            let mut connected_objects = traverse_orchestration_graph(index_ref, store, &work_item_oid)?;
+            let mut connected_objects = traverse_orchestration_graph(index_ref, store, &task_oid)?;
 
             // Sort chronologically by captured_at
             connected_objects.sort_by_key(|(_, _, _, captured_at)| *captured_at);
@@ -940,7 +1097,7 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                     let title = payload
                         .get("title")
                         .and_then(|v| v.as_str())
-                        .or_else(|| summary.title.as_deref())
+                        .or(summary.title.as_deref())
                         .unwrap_or("")
                         .to_string();
                     let summary_text = get_object_summary_text(&class_name, &payload);
@@ -959,14 +1116,177 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                 as_json,
                 json!({
                     "kind": "orchestration_timeline",
-                    "work_item_id": work_item_oid.as_str(),
+                    "work_item_id": task_oid.as_str(),
+                    "task_id": task_oid.as_str(),
                     "events": events,
                 }),
             );
 
             Ok(())
         }
-        OrchestrationAction::List(_) => Err(CliError::argument("command not yet implemented")),
+        OrchestrationAction::List(args) => {
+            require_initialized_workspace(store)?;
+            let index_ref = ctx
+                .index
+                .as_ref()
+                .ok_or_else(|| CliError::argument("index required"))?;
+
+            let terminal_statuses: std::collections::HashSet<&str> = [
+                "closed",
+                "completed",
+                "deferred",
+                "rejected",
+                "superseded",
+                "cancelled",
+            ]
+            .iter()
+            .cloned()
+            .collect();
+
+            let mut filtered_terminal_status = false;
+            let target_status = args.status.as_ref().map(|s| s.to_lowercase());
+
+            if let Some(ref req_status) = target_status {
+                if !args.include_closed && terminal_statuses.contains(req_status.as_str()) {
+                    filtered_terminal_status = true;
+                }
+            }
+
+            let mut tasks = Vec::new();
+
+            if !filtered_terminal_status {
+                for class in &["work_item", "implementation_task"] {
+                    let filter = QueryFilter {
+                        class: Some(class.to_string()),
+                        ..Default::default()
+                    };
+                    let results = index_ref.query_objects(&filter)?;
+                    for summary in results {
+                        let oid = match ObjectId::parse(summary.object_id.clone()) {
+                            Ok(o) => o,
+                            Err(_) => continue,
+                        };
+                        let vid = match VersionId::parse(summary.version_id.clone()) {
+                            Ok(v) => v,
+                            Err(_) => continue,
+                        };
+                        let vr = VersionRef::new(oid.clone(), vid);
+                        let stored = match store.read_version(&vr) {
+                            Ok(s) => s,
+                            Err(_) => continue,
+                        };
+                        let text = match stored.payload.as_utf8() {
+                            Ok(t) => t,
+                            Err(_) => continue,
+                        };
+                        let payload: serde_json::Value = match serde_json::from_str(&text) {
+                            Ok(p) => p,
+                            Err(_) => continue,
+                        };
+
+                        let status = payload
+                            .get("status")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_lowercase();
+
+                        let is_terminal = terminal_statuses.contains(status.as_str());
+
+                        if let Some(ref req_status) = target_status {
+                            if status != *req_status {
+                                continue;
+                            }
+                        } else if !args.include_closed && is_terminal {
+                            continue;
+                        }
+
+                        let task_id = payload
+                            .get("task_id")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        let title = payload
+                            .get("title")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        let priority = payload
+                            .get("priority")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string();
+
+                        tasks.push((
+                            oid,
+                            summary.version_id.clone(),
+                            class.to_string(),
+                            task_id,
+                            title,
+                            status,
+                            priority,
+                            is_terminal,
+                        ));
+                    }
+                }
+
+                tasks.sort_by(|a, b| {
+                    let a_term = a.7;
+                    let b_term = b.7;
+                    if a_term != b_term {
+                        return a_term.cmp(&b_term);
+                    }
+
+                    let p_weight = |p: &str| match p.to_lowercase().as_str() {
+                        "critical" => 0,
+                        "high" => 1,
+                        "medium" => 2,
+                        "low" => 3,
+                        _ => 4,
+                    };
+                    let a_p = p_weight(&a.6);
+                    let b_p = p_weight(&b.6);
+                    if a_p != b_p {
+                        return a_p.cmp(&b_p);
+                    }
+
+                    let title_cmp = a.4.to_lowercase().cmp(&b.4.to_lowercase());
+                    if title_cmp != std::cmp::Ordering::Equal {
+                        return title_cmp;
+                    }
+
+                    a.0.as_str().cmp(b.0.as_str())
+                });
+            }
+
+            let task_records: Vec<serde_json::Value> = tasks
+                .into_iter()
+                .map(|(oid, vid, class, task_id, title, status, priority, _)| {
+                    json!({
+                        "object_id": oid.as_str(),
+                        "version_id": vid,
+                        "class": class,
+                        "task_id": task_id,
+                        "title": title,
+                        "status": status,
+                        "priority": priority
+                    })
+                })
+                .collect();
+
+            emit(
+                as_json,
+                json!({
+                    "kind": "orchestration_task_list",
+                    "count": task_records.len(),
+                    "include_closed": args.include_closed,
+                    "status_filter": args.status,
+                    "filtered_terminal_status": filtered_terminal_status,
+                    "tasks": task_records
+                }),
+            );
+
+            Ok(())
+        }
     }
 }
 
@@ -976,11 +1296,11 @@ fn parse_manifest_sections(text: &str) -> HashMap<String, String> {
     let mut current_content = Vec::new();
 
     for line in text.lines() {
-        if line.starts_with("## ") {
+        if let Some(stripped) = line.strip_prefix("## ") {
             if !current_content.is_empty() {
                 sections.insert(current_section, current_content.join("\n"));
             }
-            current_section = line[3..].trim().to_lowercase();
+            current_section = stripped.trim().to_lowercase();
             current_content.clear();
         } else {
             current_content.push(line);
@@ -1009,13 +1329,9 @@ fn parse_bullet_list(text: &str) -> Vec<String> {
     text.lines()
         .filter_map(|line| {
             let t = line.trim();
-            if t.starts_with("- ") {
-                Some(t[2..].trim().to_string())
-            } else if t.starts_with("* ") {
-                Some(t[2..].trim().to_string())
-            } else {
-                None
-            }
+            t.strip_prefix("- ")
+                .or_else(|| t.strip_prefix("* "))
+                .map(|stripped| stripped.trim().to_string())
         })
         .collect()
 }
@@ -1076,10 +1392,11 @@ fn parse_files_changed(sections: &HashMap<String, String>) -> Vec<String> {
                 if trimmed.is_empty() {
                     continue;
                 }
-                let path = if trimmed.starts_with("- ") {
-                    &trimmed[2..]
-                } else if trimmed.starts_with("* ") {
-                    &trimmed[2..]
+                let path = if let Some(stripped) = trimmed
+                    .strip_prefix("- ")
+                    .or_else(|| trimmed.strip_prefix("* "))
+                {
+                    stripped
                 } else if trimmed.len() > 2 && trimmed.as_bytes()[1] == b' ' {
                     let prefix = trimmed[..2].to_uppercase();
                     if prefix == "M "
@@ -1135,62 +1452,22 @@ fn resolve_manifest_for_report(
     Ok(None)
 }
 
-fn find_work_item(
-    index: &DerivedIndex,
-    store: &dyn ObjectStore,
-    task_arg: &str,
-) -> Result<Option<(ObjectId, ObjectSummary, serde_json::Value)>, CliError> {
-    let task_arg = task_arg.to_lowercase();
-    let filter = QueryFilter {
-        class: Some("work_item".to_string()),
-        ..Default::default()
-    };
-    let results = index.query_objects(&filter)?;
-
-    for summary in results {
-        let oid = match ObjectId::parse(summary.object_id.clone()) {
-            Ok(o) => o,
-            Err(_) => continue,
-        };
-        let vid = match VersionId::parse(summary.version_id.clone()) {
-            Ok(v) => v,
-            Err(_) => continue,
-        };
-        let vr = VersionRef::new(oid.clone(), vid);
-        let stored = match store.read_version(&vr) {
-            Ok(s) => s,
-            Err(_) => continue,
-        };
-        let text = match stored.payload.as_utf8() {
-            Ok(t) => t,
-            Err(_) => continue,
-        };
-        let payload: serde_json::Value = match serde_json::from_str(&text) {
-            Ok(p) => p,
-            Err(_) => continue,
-        };
-        let tid = payload.get("task_id").and_then(|v| v.as_str()).map(|s| s.to_lowercase());
-        let oid_lower = summary.object_id.to_lowercase();
-
-        let matches = oid_lower == task_arg
-            || oid_lower.starts_with(&task_arg)
-            || tid.as_ref().map(|t| t == &task_arg).unwrap_or(false)
-            || tid.as_ref().map(|t| t.starts_with(&task_arg)).unwrap_or(false);
-
-        if matches {
-            return Ok(Some((oid, summary, payload)));
-        }
-    }
-    Ok(None)
-}
-
+#[allow(clippy::type_complexity)]
 fn traverse_orchestration_graph(
     index: &DerivedIndex,
     store: &dyn ObjectStore,
     start_id: &ObjectId,
-) -> Result<Vec<(ObjectId, ObjectSummary, serde_json::Value, chrono::DateTime<chrono::Utc>)>, CliError> {
-    use std::collections::VecDeque;
+) -> Result<
+    Vec<(
+        ObjectId,
+        ObjectSummary,
+        serde_json::Value,
+        chrono::DateTime<chrono::Utc>,
+    )>,
+    CliError,
+> {
     use std::collections::HashSet;
+    use std::collections::VecDeque;
 
     let mut visited = HashSet::new();
     let mut queue = VecDeque::new();
@@ -1201,12 +1478,15 @@ fn traverse_orchestration_graph(
 
     let orch_classes: HashSet<&str> = [
         "work_item",
+        "implementation_task",
         "dispatch",
         "context_packet",
         "trace_event",
         "evidence",
         "review",
         "closure",
+        "git_snapshot",
+        "gate_result",
     ]
     .iter()
     .cloned()
@@ -1285,33 +1565,237 @@ fn get_object_summary_text(class: &str, payload: &serde_json::Value) -> String {
             let status = payload.get("status").and_then(|v| v.as_str()).unwrap_or("");
             format!("Work Item: '{}' [{}]", title, status)
         }
+        "implementation_task" => {
+            let title = payload.get("title").and_then(|v| v.as_str()).unwrap_or("");
+            let status = payload.get("status").and_then(|v| v.as_str()).unwrap_or("");
+            format!("Implementation Task: '{}' [{}]", title, status)
+        }
         "dispatch" => {
             let attempt = payload.get("attempt").and_then(|v| v.as_u64()).unwrap_or(1);
-            let executor = payload.get("executor").and_then(|v| v.as_str()).unwrap_or("");
+            let executor = payload
+                .get("executor")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
             format!("Dispatch (Attempt #{}): executor={}", attempt, executor)
         }
         "context_packet" => {
-            let task_id = payload.get("task_id").and_then(|v| v.as_str()).unwrap_or("");
+            let task_id = payload
+                .get("task_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
             format!("Context Packet for task {}", task_id)
         }
         "trace_event" => {
-            let msg = payload.get("message").and_then(|v| v.as_str()).unwrap_or("");
+            let msg = payload
+                .get("message")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
             format!("Trace Event: {}", msg)
         }
         "evidence" => {
-            let checksum = payload.get("checksum").and_then(|v| v.as_str()).unwrap_or("");
-            let desc = payload.get("description").and_then(|v| v.as_str()).unwrap_or("");
+            let checksum = payload
+                .get("checksum")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let desc = payload
+                .get("description")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
             format!("Evidence: {} (checksum={})", desc, checksum)
         }
         "review" => {
-            let decision = payload.get("decision").and_then(|v| v.as_str()).unwrap_or("");
-            let comments = payload.get("comments").and_then(|v| v.as_str()).unwrap_or("");
+            let decision = payload
+                .get("decision")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let comments = payload
+                .get("comments")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
             format!("Review: {} - {}", decision, comments)
         }
         "closure" => {
-            let outcome = payload.get("outcome").and_then(|v| v.as_str()).unwrap_or("");
+            let outcome = payload
+                .get("outcome")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
             format!("Closure: {}", outcome)
         }
+        "git_snapshot" => {
+            let phase = payload.get("phase").and_then(|v| v.as_str()).unwrap_or("");
+            let commit = payload.get("commit").and_then(|v| v.as_str()).unwrap_or("");
+            format!("Git Snapshot: phase={} (commit={})", phase, commit)
+        }
+        "gate_result" => {
+            let command = payload
+                .get("command")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let status = payload.get("status").and_then(|v| v.as_str()).unwrap_or("");
+            format!("Gate Result: '{}' -> {}", command, status)
+        }
         _ => String::new(),
+    }
+}
+
+fn find_orchestration_task(
+    index: &DerivedIndex,
+    store: &dyn ObjectStore,
+    task_arg: &str,
+) -> Result<Option<(ObjectId, String, ObjectSummary, serde_json::Value)>, CliError> {
+    let task_arg = task_arg.to_lowercase();
+    let mut candidates = Vec::new();
+
+    for class in &["work_item", "implementation_task"] {
+        let filter = QueryFilter {
+            class: Some(class.to_string()),
+            ..Default::default()
+        };
+        let results = index.query_objects(&filter)?;
+        for summary in results {
+            let oid = match ObjectId::parse(summary.object_id.clone()) {
+                Ok(o) => o,
+                Err(_) => continue,
+            };
+            let vid = match VersionId::parse(summary.version_id.clone()) {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
+            let vr = VersionRef::new(oid.clone(), vid);
+            let stored = match store.read_version(&vr) {
+                Ok(s) => s,
+                Err(_) => continue,
+            };
+            let text = match stored.payload.as_utf8() {
+                Ok(t) => t,
+                Err(_) => continue,
+            };
+            let payload: serde_json::Value = match serde_json::from_str(&text) {
+                Ok(p) => p,
+                Err(_) => continue,
+            };
+
+            let oid_lower = summary.object_id.to_lowercase();
+            let tid = payload
+                .get("task_id")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_lowercase())
+                .unwrap_or_default();
+
+            let is_work_item = *class == "work_item";
+
+            let score = if oid_lower == task_arg {
+                if is_work_item {
+                    8
+                } else {
+                    7
+                }
+            } else if oid_lower.starts_with(&task_arg) {
+                if is_work_item {
+                    6
+                } else {
+                    5
+                }
+            } else if !tid.is_empty() && tid == task_arg {
+                if is_work_item {
+                    4
+                } else {
+                    3
+                }
+            } else if !tid.is_empty() && tid.starts_with(&task_arg) {
+                if is_work_item {
+                    2
+                } else {
+                    1
+                }
+            } else {
+                0
+            };
+
+            if score > 0 {
+                candidates.push((oid, class.to_string(), summary, payload, score));
+            }
+        }
+    }
+
+    candidates.sort_by_key(|c| c.4);
+    if let Some(best) = candidates.pop() {
+        Ok(Some((best.0, best.1, best.2, best.3)))
+    } else {
+        Ok(None)
+    }
+}
+
+fn deposit_orchestration_object(
+    ctx: &CommandContext,
+    class: &str,
+    title: Option<String>,
+    payload: serde_json::Value,
+) -> Result<earmark_core::ObjectRef, CliError> {
+    let index_ref = ctx
+        .index
+        .as_ref()
+        .ok_or_else(|| CliError::argument("index required"))?;
+    let runtime_surface = RuntimeToolSurface {
+        store: ctx.store,
+        index: index_ref,
+        provider_service: ctx.provider_registry,
+    };
+    let prov = RuntimeProvenance {
+        actor: "operator".to_string(),
+        source_type: "cli".to_string(),
+    };
+    let obj_ref = runtime_surface.deposit_object(
+        class.to_string(),
+        Some("object".to_string()),
+        title,
+        payload,
+        prov,
+        DepositValidationContext::default(),
+    )?;
+    index_ref.rebuild_from_store(ctx.store)?;
+    Ok(obj_ref)
+}
+
+fn create_orchestration_relation(
+    ctx: &CommandContext,
+    source: ObjectId,
+    target: ObjectId,
+    relation_type: &str,
+) -> Result<(), CliError> {
+    let index_ref = ctx
+        .index
+        .as_ref()
+        .ok_or_else(|| CliError::argument("index required"))?;
+    let runtime_surface = RuntimeToolSurface {
+        store: ctx.store,
+        index: index_ref,
+        provider_service: ctx.provider_registry,
+    };
+    let prov = RuntimeProvenance {
+        actor: "operator".to_string(),
+        source_type: "cli".to_string(),
+    };
+    runtime_surface.create_relation(source, target, relation_type.to_string(), json!({}), prov)?;
+    index_ref.rebuild_from_store(ctx.store)?;
+    Ok(())
+}
+
+fn run_git_cmd(args: &[&str]) -> Result<String, CliError> {
+    let output = std::process::Command::new("git").args(args).output();
+    match output {
+        Ok(out) => {
+            if out.status.success() {
+                Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+            } else {
+                let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
+                Err(CliError::argument(format!(
+                    "git command failed: git {}. Error: {}",
+                    args.join(" "),
+                    err
+                )))
+            }
+        }
+        Err(e) => Err(CliError::argument(format!("failed to execute git: {}", e))),
     }
 }

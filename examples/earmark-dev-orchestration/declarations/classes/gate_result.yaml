@@ -4,16 +4,6 @@ kind: object
 required_headers:
   - title
 payload_schema: inline:any
-standing_rules:
-  allowed_standing:
-    kernel:review:
-      - unreviewed
-      - accepted
-    kernel:process:
-      - active
-      - completed
-relation_rules:
-  - relation_type: verifies_report
-    counterparty_classes:
-      - executor_report
+standing_rules: {}
+relation_rules: []
 validators: []

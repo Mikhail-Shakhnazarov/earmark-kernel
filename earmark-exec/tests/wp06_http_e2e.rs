@@ -500,7 +500,7 @@ fn test_http_provider_exposure_prose_hiding() {
 #[cfg(feature = "http-provider")]
 fn test_http_provider_rejects_unsupported_lineage() {
     let dir = tempdir().unwrap();
-    let store = GitCanonicalStore::new(dir.path());
+    let _store = GitCanonicalStore::new(dir.path());
     let _index = DerivedIndex::open(dir.path()).unwrap();
 
     let server = MockServer::start();
@@ -581,7 +581,7 @@ fn test_http_provider_rejects_unsupported_lineage() {
 #[cfg(feature = "http-provider")]
 fn test_http_provider_rejects_unsupported_full_message_capture() {
     let dir = tempdir().unwrap();
-    let store = GitCanonicalStore::new(dir.path());
+    let _store = GitCanonicalStore::new(dir.path());
     let _index = DerivedIndex::open(dir.path()).unwrap();
 
     let server = MockServer::start();

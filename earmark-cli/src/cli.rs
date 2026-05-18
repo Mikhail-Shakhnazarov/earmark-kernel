@@ -20,6 +20,7 @@ pub struct Cli {
     pub command: Commands,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CommandStability {
     Stable,
@@ -78,6 +79,7 @@ pub enum Commands {
 }
 
 impl Commands {
+    #[allow(dead_code)]
     pub fn stability(&self) -> CommandStability {
         match self {
             Self::Init

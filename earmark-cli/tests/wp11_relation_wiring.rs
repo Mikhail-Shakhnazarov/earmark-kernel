@@ -65,13 +65,17 @@ fn deposit_object(root: &PathBuf, class: &str, title: &str, payload: &str) -> St
         .clone();
 
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    parsed["data"]["object_id"]
-        .as_str()
-        .unwrap()
-        .to_string()
+    parsed["data"]["object_id"].as_str().unwrap().to_string()
 }
 
-fn link_objects(root: &PathBuf, source_id: &str, source_class: &str, target_id: &str, target_class: &str, relation_type: &str) {
+fn link_objects(
+    root: &PathBuf,
+    source_id: &str,
+    source_class: &str,
+    target_id: &str,
+    target_class: &str,
+    relation_type: &str,
+) {
     let store = GitCanonicalStore::new(root);
     let index = DerivedIndex::open(root).unwrap();
 
@@ -149,8 +153,22 @@ fn test_work_item_show_includes_linked_dispatch_and_context() {
     );
 
     // Link WI-1 to CP-1 and DP-1
-    link_objects(&root, &wi_id, "work_item", &cp_id, "context_packet", "has_context");
-    link_objects(&root, &wi_id, "work_item", &dp_id, "dispatch", "has_dispatch");
+    link_objects(
+        &root,
+        &wi_id,
+        "work_item",
+        &cp_id,
+        "context_packet",
+        "has_context",
+    );
+    link_objects(
+        &root,
+        &wi_id,
+        "work_item",
+        &dp_id,
+        "dispatch",
+        "has_dispatch",
+    );
 
     // Retrieve via orchestration show
     let show_output = workspace_command()
@@ -202,30 +220,15 @@ fn test_timeline_orders_trace_evidence_review_and_closure() {
 
     std::thread::sleep(std::time::Duration::from_millis(50));
 
-    let dp_id = deposit_object(
-        &root,
-        "dispatch",
-        "DP-2",
-        "{\"executor\":\"opencode\"}",
-    );
+    let dp_id = deposit_object(&root, "dispatch", "DP-2", "{\"executor\":\"opencode\"}");
 
     std::thread::sleep(std::time::Duration::from_millis(50));
 
-    let te_id = deposit_object(
-        &root,
-        "trace_event",
-        "TE-2",
-        "{\"message\":\"trace2\"}",
-    );
+    let te_id = deposit_object(&root, "trace_event", "TE-2", "{\"message\":\"trace2\"}");
 
     std::thread::sleep(std::time::Duration::from_millis(50));
 
-    let ev_id = deposit_object(
-        &root,
-        "evidence",
-        "EV-2",
-        "{\"checksum\":\"12345\"}",
-    );
+    let ev_id = deposit_object(&root, "evidence", "EV-2", "{\"checksum\":\"12345\"}");
 
     std::thread::sleep(std::time::Duration::from_millis(50));
 
@@ -238,20 +241,43 @@ fn test_timeline_orders_trace_evidence_review_and_closure() {
 
     std::thread::sleep(std::time::Duration::from_millis(50));
 
-    let cl_id = deposit_object(
-        &root,
-        "closure",
-        "CL-2",
-        "{\"outcome\":\"completed\"}",
-    );
+    let cl_id = deposit_object(&root, "closure", "CL-2", "{\"outcome\":\"completed\"}");
 
     // Establish links
-    link_objects(&root, &wi_id, "work_item", &cp_id, "context_packet", "has_context");
-    link_objects(&root, &wi_id, "work_item", &dp_id, "dispatch", "has_dispatch");
-    link_objects(&root, &wi_id, "work_item", &ev_id, "evidence", "has_evidence");
+    link_objects(
+        &root,
+        &wi_id,
+        "work_item",
+        &cp_id,
+        "context_packet",
+        "has_context",
+    );
+    link_objects(
+        &root,
+        &wi_id,
+        "work_item",
+        &dp_id,
+        "dispatch",
+        "has_dispatch",
+    );
+    link_objects(
+        &root,
+        &wi_id,
+        "work_item",
+        &ev_id,
+        "evidence",
+        "has_evidence",
+    );
     link_objects(&root, &wi_id, "work_item", &rv_id, "review", "has_review");
     link_objects(&root, &wi_id, "work_item", &cl_id, "closure", "has_closure");
-    link_objects(&root, &dp_id, "dispatch", &te_id, "trace_event", "emitted_trace");
+    link_objects(
+        &root,
+        &dp_id,
+        "dispatch",
+        &te_id,
+        "trace_event",
+        "emitted_trace",
+    );
 
     // Fetch timeline
     let timeline_output = workspace_command()
@@ -295,14 +321,16 @@ fn test_index_rebuild_preserves_orchestration_relations() {
         "{\"goal\":\"Rebuild test\",\"status\":\"proposed\",\"priority\":\"medium\"}",
     );
 
-    let dp_id = deposit_object(
-        &root,
-        "dispatch",
-        "DP-3",
-        "{\"executor\":\"opencode\"}",
-    );
+    let dp_id = deposit_object(&root, "dispatch", "DP-3", "{\"executor\":\"opencode\"}");
 
-    link_objects(&root, &wi_id, "work_item", &dp_id, "dispatch", "has_dispatch");
+    link_objects(
+        &root,
+        &wi_id,
+        "work_item",
+        &dp_id,
+        "dispatch",
+        "has_dispatch",
+    );
 
     // Rebuild index using em doctor --repair-index
     workspace_command()

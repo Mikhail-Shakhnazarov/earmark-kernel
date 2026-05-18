@@ -43,4 +43,10 @@ relation_rules:
   - relation_type: supersedes
     counterparty_classes:
       - work_item
+  - relation_type: has_git_snapshot
+    counterparty_classes:
+      - git_snapshot
+  - relation_type: has_gate_result
+    counterparty_classes:
+      - gate_result
 validators: []
