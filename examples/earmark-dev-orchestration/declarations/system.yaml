@@ -12,6 +12,13 @@ classes:
   - classes/gate_result.yaml
   - classes/review_decision.yaml
   - classes/followup_task.yaml
+  - classes/work_item.yaml
+  - classes/dispatch.yaml
+  - classes/context_packet.yaml
+  - classes/trace_event.yaml
+  - classes/evidence.yaml
+  - classes/review.yaml
+  - classes/closure.yaml
 instructions:
   - instructions/task_to_manifest.md
   - instructions/report_to_review_summary.md

@@ -52,7 +52,7 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                     "registered_object_id": version_ref.id.as_str(),
                     "registered_version_id": version_ref.version_id.as_str(),
                     "activation_status": "active",
-                    "class_count": 8,
+                    "class_count": 15,
                     "workflow_count": 1,
                 }),
             );
