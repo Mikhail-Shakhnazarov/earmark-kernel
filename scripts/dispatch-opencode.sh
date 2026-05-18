@@ -14,6 +14,7 @@ SKIP_GATES="${SKIP_GATES:-0}"
 KEEP_BRANCH="${KEEP_BRANCH:-1}"
 OPENCODE_SKIP_PERMS="${OPENCODE_SKIP_PERMS:-0}"
 UNIQUE_BRANCH="${UNIQUE_BRANCH:-1}"
+OPENCODE_TIMEOUT_SEC="${OPENCODE_TIMEOUT_SEC:-900}"
 
 usage() {
   cat <<'USAGE'
@@ -28,6 +29,7 @@ Environment:
   OPENCODE_ATTACH_URL    optional running opencode serve URL
   OPENCODE_CMD           path to the opencode binary; defaults to 'opencode'
   OPENCODE_SKIP_PERMS    set 1 to pass --dangerously-skip-permissions
+  OPENCODE_TIMEOUT_SEC   hard timeout for opencode execution (seconds, default 900)
   SKIP_GATES             set 1 to skip local/global gates during smoke tests
   KEEP_BRANCH            default 1; leaves branch for inspection
 
@@ -189,17 +191,58 @@ OPENCODE_ARGS+=(
 )
 
 echo "dispatch-opencode: running $OPENCODE_CMD" | tee -a "$LOG"
+echo "dispatch-opencode: timeout_sec=$OPENCODE_TIMEOUT_SEC" | tee -a "$LOG"
 TMP_OUTPUT="$(mktemp)"
+WATCHDOG_SENTINEL="${TMP_OUTPUT}.watchdog"
+QUOTA_SENTINEL="${TMP_OUTPUT}.quota"
 set +e
-"$OPENCODE_CMD" "${OPENCODE_ARGS[@]}" >"$TMP_OUTPUT" 2>&1
+"$OPENCODE_CMD" "${OPENCODE_ARGS[@]}" >"$TMP_OUTPUT" 2>&1 &
+OPENCODE_PID=$!
+(
+  while kill -0 "$OPENCODE_PID" >/dev/null 2>&1; do
+    if grep -q "FreeUsageLimitError" "$TMP_OUTPUT"; then
+      echo "dispatch-opencode: provider quota error detected; terminating pid=$OPENCODE_PID" >>"$TMP_OUTPUT"
+      kill "$OPENCODE_PID" >/dev/null 2>&1 || true
+      sleep 2
+      if kill -0 "$OPENCODE_PID" >/dev/null 2>&1; then
+        kill -9 "$OPENCODE_PID" >/dev/null 2>&1 || true
+      fi
+      touch "$QUOTA_SENTINEL"
+      break
+    fi
+    sleep 2
+  done
+) &
+QUOTA_WATCH_PID=$!
+(
+  sleep "$OPENCODE_TIMEOUT_SEC"
+  if kill -0 "$OPENCODE_PID" >/dev/null 2>&1; then
+    echo "dispatch-opencode: watchdog timeout reached; terminating pid=$OPENCODE_PID" >>"$TMP_OUTPUT"
+    kill "$OPENCODE_PID" >/dev/null 2>&1 || true
+    sleep 3
+    if kill -0 "$OPENCODE_PID" >/dev/null 2>&1; then
+      kill -9 "$OPENCODE_PID" >/dev/null 2>&1 || true
+    fi
+    touch "$WATCHDOG_SENTINEL"
+  fi
+) &
+WATCHDOG_PID=$!
+
+wait "$OPENCODE_PID"
 OPENCODE_STATUS=$?
+kill "$WATCHDOG_PID" >/dev/null 2>&1 || true
+kill "$QUOTA_WATCH_PID" >/dev/null 2>&1 || true
 set -e
 
 HAS_JSON_ERROR=0
+WATCHDOG_TRIGGERED=0
 while IFS= read -r line; do
   echo "$line" | tee -a "$LOG"
   if echo "$line" | grep -q '"type":"error"'; then
     HAS_JSON_ERROR=1
+  fi
+  if echo "$line" | grep -q "watchdog timeout reached"; then
+    WATCHDOG_TRIGGERED=1
   fi
 done < "$TMP_OUTPUT"
 
@@ -229,9 +272,20 @@ rm -f "$TMP_OUTPUT"
 } > "$REPORT"
 
 if [[ "$OPENCODE_STATUS" -ne 0 ]]; then
+  if [[ "$WATCHDOG_TRIGGERED" -eq 1 || -f "$WATCHDOG_SENTINEL" ]]; then
+    OPENCODE_STATUS=124
+    echo "dispatch-opencode: opencode watchdog timeout after ${OPENCODE_TIMEOUT_SEC}s; see $LOG" | tee -a "$LOG"
+  elif [[ -f "$QUOTA_SENTINEL" ]]; then
+    OPENCODE_STATUS=75
+    echo "dispatch-opencode: provider quota/rate-limit error; see $LOG" | tee -a "$LOG"
+  fi
   echo "dispatch-opencode: opencode exited non-zero; see $LOG" | tee -a "$LOG"
+  rm -f "$WATCHDOG_SENTINEL"
+  rm -f "$QUOTA_SENTINEL"
   exit "$OPENCODE_STATUS"
 fi
+rm -f "$WATCHDOG_SENTINEL"
+rm -f "$QUOTA_SENTINEL"
 
 if [[ "$HAS_JSON_ERROR" -ne 0 ]]; then
   {
