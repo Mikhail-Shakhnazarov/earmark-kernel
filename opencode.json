@@ -5,7 +5,7 @@
     "grep": "allow",
     "glob": "allow",
     "edit": "allow",
-    "bash": "ask",
+    "bash": "allow",
     "webfetch": "deny",
     "websearch": "deny"
   }
