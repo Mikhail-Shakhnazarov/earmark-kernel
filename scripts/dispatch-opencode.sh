@@ -217,10 +217,14 @@ kill "$WATCHDOG_PID" >/dev/null 2>&1 || true
 set -e
 
 HAS_JSON_ERROR=0
+WATCHDOG_TRIGGERED=0
 while IFS= read -r line; do
   echo "$line" | tee -a "$LOG"
   if echo "$line" | grep -q '"type":"error"'; then
     HAS_JSON_ERROR=1
+  fi
+  if echo "$line" | grep -q "watchdog timeout reached"; then
+    WATCHDOG_TRIGGERED=1
   fi
 done < "$TMP_OUTPUT"
 
@@ -250,7 +254,7 @@ rm -f "$TMP_OUTPUT"
 } > "$REPORT"
 
 if [[ "$OPENCODE_STATUS" -ne 0 ]]; then
-  if [[ -f "$WATCHDOG_SENTINEL" ]]; then
+  if [[ "$WATCHDOG_TRIGGERED" -eq 1 || -f "$WATCHDOG_SENTINEL" ]]; then
     OPENCODE_STATUS=124
     echo "dispatch-opencode: opencode watchdog timeout after ${OPENCODE_TIMEOUT_SEC}s; see $LOG" | tee -a "$LOG"
   fi
