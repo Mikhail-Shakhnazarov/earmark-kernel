@@ -822,6 +822,7 @@ impl DerivedIndex {
     }
 }
 
+#[allow(clippy::type_complexity)]
 fn extract_object_metadata(
     conn: &Connection,
     envelope: &Envelope,

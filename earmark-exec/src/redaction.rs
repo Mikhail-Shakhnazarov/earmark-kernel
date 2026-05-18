@@ -5,8 +5,7 @@ impl Redactor {
         let text = Self::redact_url_credentials(text);
         let text = Self::redact_auth_header_values(&text);
         let text = Self::redact_env_var_value_outside_brackets(&text);
-        let text = Self::redact_known_sensitive_env_names(&text);
-        text
+        Self::redact_known_sensitive_env_names(&text)
     }
 
     fn redact_url_credentials(text: &str) -> String {
@@ -35,7 +34,7 @@ impl Redactor {
                 result.push_str(before);
                 result.push_str("://");
                 result.push_str(userinfo);
-                rest = &after_scheme;
+                rest = after_scheme;
             }
         }
         result.push_str(rest);

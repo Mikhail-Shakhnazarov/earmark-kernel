@@ -1,5 +1,5 @@
-use std::process::Command;
 use crate::app::common::CliError;
+use std::process::Command;
 
 pub struct EngramTaskData {
     pub task_id: String,
@@ -11,30 +11,32 @@ pub struct EngramTaskData {
 }
 
 pub fn ingest_from_engram(task_id: &str) -> Result<EngramTaskData, CliError> {
-    let output = Command::new("cargo")
-        .current_dir("/home/m/GITHUB/engram/engram")
-        .args([
-            "run",
-            "--manifest-path",
-            "/home/m/GITHUB/engram/engram/Cargo.toml",
-            "--quiet",
-            "--bin",
-            "engram",
-            "--",
-            "task",
-            "show",
-            task_id,
-        ])
-        .output()?;
+    let engram_bin = std::env::var("ENGRAM_BIN").unwrap_or_else(|_| "engram".to_string());
+
+    let output = Command::new(&engram_bin)
+        .args(["task", "show", task_id])
+        .output();
+
+    let output = match output {
+        Ok(out) => out,
+        Err(e) => {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                return Err(CliError::argument(
+                    "Engram executable not found. Set ENGRAM_BIN or install `engram` on PATH.",
+                ));
+            }
+            return Err(CliError::argument(format!(
+                "Failed to execute engram: {}",
+                e
+            )));
+        }
+    };
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let stderr_trimmed = stderr.trim();
-        if stderr_trimmed.contains("Not found") {
-            return Err(CliError::not_found(format!(
-                "task {} not found",
-                task_id
-            )));
+        if stderr_trimmed.contains("Not found") || stderr_trimmed.contains("not found") {
+            return Err(CliError::not_found(format!("task {} not found", task_id)));
         }
         return Err(CliError::argument(format!(
             "engram command failed: {}",
@@ -50,6 +52,11 @@ pub fn ingest_from_engram(task_id: &str) -> Result<EngramTaskData, CliError> {
         .cloned()
         .unwrap_or_else(|| task_id.to_string());
     let title = fields.get("Title").cloned().unwrap_or_default();
+    if title.is_empty() {
+        return Err(CliError::argument(
+            "engram output did not include a task title",
+        ));
+    }
     let description = fields.get("Description").cloned().unwrap_or_default();
     let priority = fields.get("Priority").cloned().unwrap_or_default();
     let status_raw = fields.get("Status").cloned().unwrap_or_default();

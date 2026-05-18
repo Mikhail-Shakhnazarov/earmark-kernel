@@ -4,7 +4,7 @@ description: "The self-hosting development loop: prepare manifest, execute, repo
 operations:
   - id: prepare_manifest
     kind: transform
-    input_contracts: [work_packet]
+    input_contracts: [implementation_task]
     output_contracts: [executor_manifest]
     instruction: "../instructions/task_to_manifest.md"
 
@@ -16,7 +16,7 @@ operations:
 
   - id: execute_task
     kind: transform
-    input_contracts: [work_packet]
+    input_contracts: [implementation_task]
     output_contracts: [executor_report]
     instruction: "../instructions/report_to_review_summary.md"
 
@@ -28,13 +28,13 @@ operations:
 
   - id: review_results
     kind: transform
-    input_contracts: [work_packet]
+    input_contracts: [implementation_task]
     output_contracts: [review_decision]
     instruction: "../instructions/report_to_review_summary.md"
 
   - id: handle_followup
     kind: transform
-    input_contracts: [work_packet]
+    input_contracts: [implementation_task]
     output_contracts: [followup_task]
     instruction: "../instructions/failure_to_followup.md"
 

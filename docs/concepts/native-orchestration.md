@@ -8,7 +8,7 @@ Rather than relying on external task trackers, Earmark represents development li
 
 ## 1. Native Entities
 
-The ledger is built upon seven native object classes declared dynamically under the development orchestration system:
+The ledger is built upon nine native object classes declared dynamically under the development orchestration system:
 
 ```mermaid
 graph TD
@@ -17,6 +17,8 @@ graph TD
     WI -->|has_evidence| EV[evidence]
     WI -->|has_review| RV[review]
     WI -->|has_closure| CL[closure]
+    WI -->|has_git_snapshot| GS[git_snapshot]
+    WI -->|has_gate_result| GR[gate_result]
     DP -->|emitted_trace| TE[trace_event]
 ```
 
@@ -48,20 +50,46 @@ Maintains the outcome of human or programmatic verification against acceptance c
 Ratifies final disposition of the work item.
 * **Fields**: `work_item_id`, `disposition` (`completed`, `deferred`), `summary`.
 
+### 1.8 `git_snapshot`
+Captures exact state of git repository before or after task execution.
+* **Fields**: `task_id`, `task_object_id`, `phase`, `commit`, `base`, `head`, `branch`, `dirty`, `status_short`, `diff_stat`, `captured_by`.
+
+### 1.9 `gate_result`
+Records outcomes of automated gate verification scripts (e.g. lints, unit tests).
+* **Fields**: `task_id`, `task_object_id`, `command`, `status`, `log_path`, `log_excerpt`, `recorded_by`.
+
 ---
 
 ## 2. CLI Command Reference
 
 Verify, trace, and inspect execution components natively from the CLI:
 
-### 2.1 Show Component Details
-Locates a work item and lists all linked context packets, dispatches, traces, and closures:
+### 2.1 Capture Git Snapshot
+Record a git snapshot associated with a task:
+```bash
+earmark orchestration capture-git --task-id <TASK_ID_OR_OID> --phase <before|after|review|manual> [--commit <hash>] [--base <base>] [--head <head>] [--include-diff-stat]
+```
+
+### 2.2 Record Gate Result
+Log an automated gate execution result:
+```bash
+earmark orchestration record-gate --task-id <TASK_ID_OR_OID> --command <command> --status <pass|fail|skipped> [--log <path>]
+```
+
+### 2.3 List Orchestration Tasks
+List work items and implementation tasks:
+```bash
+earmark orchestration list [--status <status>] [--include-closed]
+```
+
+### 2.4 Show Component Details
+Locates a task and lists all linked context packets, dispatches, traces, git snapshots, gate results, and closures:
 ```bash
 earmark orchestration show <TASK_ID_OR_OID>
 ```
 
-### 2.2 Chronological Timeline Query
-Generates a deterministic chronological timeline of every event in a task's lifecycle, ordered by nanosecond-accurate commit timestamps:
+### 2.5 Chronological Timeline Query
+Generates a chronological timeline of every event in a task's lifecycle, ordered by nanosecond-accurate commit timestamps:
 ```bash
 earmark orchestration timeline <TASK_ID_OR_OID>
 ```

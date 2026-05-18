@@ -144,7 +144,7 @@ pub(crate) fn mirror_surface(
         ),
     };
 
-    fs::create_dir_all(&dir).map_err(|e| CliError::Io(e))?;
+    fs::create_dir_all(&dir).map_err(CliError::Io)?;
     let path = dir.join(format!("{}.{}", object.envelope.id.as_str(), ext));
     fs::write(path, &object.payload.bytes)?;
     Ok(())

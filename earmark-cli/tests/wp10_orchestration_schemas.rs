@@ -146,7 +146,9 @@ fn test_create_trace_event_valid() {
         .arg("--title")
         .arg("Trace Step")
         .arg("--json-payload")
-        .arg("{\"work_item_id\":\"wi_123\",\"event_type\":\"started\",\"summary\":\"Started task\"}")
+        .arg(
+            "{\"work_item_id\":\"wi_123\",\"event_type\":\"started\",\"summary\":\"Started task\"}",
+        )
         .assert()
         .success()
         .get_output()

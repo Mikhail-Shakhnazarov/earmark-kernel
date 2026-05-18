@@ -4,9 +4,10 @@ use std::cell::RefCell;
 pub const CONTRACT_VERSION: &str = "0.2.0";
 
 thread_local! {
-    static CLI_CTX: RefCell<Option<CliContext>> = RefCell::new(None);
+    static CLI_CTX: RefCell<Option<CliContext>> = const { RefCell::new(None) };
 }
 
+#[allow(dead_code)]
 pub struct CliContext {
     pub command_name: &'static str,
     pub as_json: bool,
@@ -18,6 +19,7 @@ pub fn init_context(ctx: CliContext) {
     });
 }
 
+#[allow(dead_code)]
 pub fn with_context<F, R>(f: F) -> Option<R>
 where
     F: FnOnce(&CliContext) -> R,
@@ -25,10 +27,12 @@ where
     CLI_CTX.with(|cell| cell.borrow().as_ref().map(f))
 }
 
+#[allow(dead_code)]
 pub fn as_json_mode() -> bool {
     with_context(|ctx| ctx.as_json).unwrap_or(false)
 }
 
+#[allow(dead_code)]
 pub fn command_name() -> Option<&'static str> {
     with_context(|ctx| ctx.command_name)
 }
