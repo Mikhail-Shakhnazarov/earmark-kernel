@@ -1,7 +1,8 @@
+pub mod adapters;
+
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::path::PathBuf;
-use std::process::Command;
 
 use crate::app::common::{require_initialized_workspace, CliError, CommandContext};
 use crate::app::{emit, mirror_surface, register_declaration_file};
@@ -338,103 +339,88 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                 .ok_or_else(|| CliError::argument("index required for ingest-task"))?;
 
             let source = &args.source;
-            if source != "engram" {
-                return Err(CliError::argument(format!(
-                    "unsupported source: {}. only 'engram' is supported",
-                    source
-                )));
-            }
-
-            let output = Command::new("cargo")
-                .current_dir("/home/m/GITHUB/engram/engram")
-                .args([
-                    "run",
-                    "--manifest-path",
-                    "/home/m/GITHUB/engram/engram/Cargo.toml",
-                    "--quiet",
-                    "--bin",
-                    "engram",
-                    "--",
-                    "task",
-                    "show",
-                    &args.task_id,
-                ])
-                .output()?;
-
-            if !output.status.success() {
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                let stderr_trimmed = stderr.trim();
-                if stderr_trimmed.contains("Not found") {
-                    return Err(CliError::not_found(format!(
-                        "task {} not found",
-                        args.task_id
+            
+            let tasks = match source.as_str() {
+                "engram" => {
+                    let task = self::adapters::engram::ingest_from_engram(&args.task_id)?;
+                    vec![self::adapters::native_json::NativeTaskData {
+                        task_id: task.task_id,
+                        title: task.title,
+                        description: task.description,
+                        priority: task.priority,
+                        status: task.status,
+                        raw_text: task.raw_text,
+                    }]
+                }
+                "native-json" | "local-json" => {
+                    self::adapters::native_json::ingest_from_json(&args.task_id)?
+                }
+                _ => {
+                    return Err(CliError::argument(format!(
+                        "unsupported source: '{}'. Supported sources: 'engram', 'native-json', 'local-json'",
+                        source
                     )));
                 }
-                return Err(CliError::argument(format!(
-                    "engram command failed: {}",
-                    stderr_trimmed
-                )));
+            };
+
+            if tasks.is_empty() {
+                return Err(CliError::argument("No valid work items found in payload"));
             }
 
-            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-            let fields = parse_engram_fields(&stdout);
+            let mut ingested = Vec::new();
+            for task in tasks {
+                let payload = json!({
+                    "task_id": task.task_id,
+                    "title": task.title,
+                    "description": task.description,
+                    "status": task.status,
+                    "priority": task.priority,
+                    "tags": [],
+                    "raw_text": task.raw_text,
+                });
 
-            let task_id = fields
-                .get("ID")
-                .cloned()
-                .unwrap_or_else(|| args.task_id.clone());
-            let title = fields.get("Title").cloned().unwrap_or_default();
-            let description = fields.get("Description").cloned().unwrap_or_default();
-            let priority = fields.get("Priority").cloned().unwrap_or_default();
-            let status_raw = fields.get("Status").cloned().unwrap_or_default();
-            let status = map_engram_status(&status_raw);
+                let runtime_surface = RuntimeToolSurface {
+                    store,
+                    index: index_ref,
+                    provider_service: ctx.provider_registry,
+                };
 
-            let payload = json!({
-                "task_id": task_id,
-                "title": title,
-                "description": description,
-                "status": status,
-                "priority": priority,
-                "tags": [],
-                "raw_text": stdout,
-            });
+                let prov = RuntimeProvenance {
+                    actor: "operator".to_string(),
+                    source_type: "cli".to_string(),
+                };
 
-            let runtime_surface = RuntimeToolSurface {
-                store,
-                index: index_ref,
-                provider_service: ctx.provider_registry,
-            };
+                let object_ref = runtime_surface.deposit_object(
+                    "implementation_task".to_string(),
+                    Some("object".to_string()),
+                    Some(task.title.clone()),
+                    payload,
+                    prov,
+                    DepositValidationContext::default(),
+                )?;
 
-            let prov = RuntimeProvenance {
-                actor: "operator".to_string(),
-                source_type: "cli".to_string(),
-            };
+                index_ref.rebuild_from_store(store)?;
 
-            let object_ref = runtime_surface.deposit_object(
-                "implementation_task".to_string(),
-                Some("object".to_string()),
-                Some(title.clone()),
-                payload,
-                prov,
-                DepositValidationContext::default(),
-            )?;
+                let vr = VersionRef::new(object_ref.id.clone(), object_ref.version_id.clone());
+                let stored_object = store.read_version(&vr)?;
+                mirror_surface(store, &stored_object)?;
 
-            index_ref.rebuild_from_store(store)?;
-
-            let vr = VersionRef::new(object_ref.id.clone(), object_ref.version_id.clone());
-            let stored_object = store.read_version(&vr)?;
-            mirror_surface(store, &stored_object)?;
+                ingested.push(json!({
+                    "object_id": object_ref.id.as_str(),
+                    "version_id": object_ref.version_id.as_str(),
+                    "task_id": task.task_id,
+                    "title": task.title,
+                    "status": task.status,
+                    "priority": task.priority,
+                }));
+            }
 
             emit(
                 as_json,
                 json!({
                     "kind": "implementation_task_ingest",
-                    "object_id": object_ref.id.as_str(),
-                    "version_id": object_ref.version_id.as_str(),
-                    "task_id": task_id,
-                    "title": title,
-                    "status": status,
-                    "priority": priority,
+                    "source": source,
+                    "tasks": ingested,
                 }),
             );
 
@@ -1004,38 +990,6 @@ fn parse_files_changed(sections: &HashMap<String, String>) -> Vec<String> {
         }
     }
     files
-}
-
-fn parse_engram_fields(text: &str) -> HashMap<String, String> {
-    let mut fields = HashMap::new();
-    for line in text.lines() {
-        if !line.starts_with("  ") {
-            continue;
-        }
-        let trimmed = line.trim();
-        if let Some(pos) = trimmed.find(':') {
-            let key = trimmed[..pos].trim().to_string();
-            let value = trimmed[pos + 1..].trim().to_string();
-            if !key.is_empty()
-                && !value.is_empty()
-                && key.chars().all(|c| c.is_alphanumeric() || c == ' ')
-            {
-                fields.insert(key, value);
-            }
-        }
-    }
-    fields
-}
-
-fn map_engram_status(status: &str) -> &'static str {
-    match status {
-        "Todo" => "proposed",
-        "InProgress" => "dispatched",
-        "Done" => "implemented",
-        "Blocked" => "proposed",
-        "Cancelled" => "closed",
-        _ => "proposed",
-    }
 }
 
 fn resolve_manifest_for_report(
