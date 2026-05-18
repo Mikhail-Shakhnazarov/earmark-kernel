@@ -615,6 +615,69 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
 
             let task_arg = args.task_id.to_lowercase();
 
+            // First, try to find a work_item matching task_id
+            if let Some((work_item_oid, work_item_summary, work_item_payload)) = find_work_item(index_ref, store, &task_arg)? {
+                let connected_objects = traverse_orchestration_graph(index_ref, store, &work_item_oid)?;
+
+                let mut context_packets = Vec::new();
+                let mut dispatches = Vec::new();
+                let mut trace_events = Vec::new();
+                let mut evidence = Vec::new();
+                let mut reviews = Vec::new();
+                let mut closures = Vec::new();
+
+                for (_oid, summary, payload, _captured_at) in connected_objects {
+                    match summary.class.as_deref().unwrap_or("") {
+                        "context_packet" => context_packets.push(payload),
+                        "dispatch" => dispatches.push(payload),
+                        "trace_event" => trace_events.push(payload),
+                        "evidence" => evidence.push(payload),
+                        "review" => reviews.push(payload),
+                        "closure" => closures.push(payload),
+                        _ => {}
+                    }
+                }
+
+                let title = work_item_payload
+                    .get("title")
+                    .and_then(|v| v.as_str())
+                    .or_else(|| work_item_summary.title.as_deref())
+                    .unwrap_or("");
+                let description = work_item_payload
+                    .get("description")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                let status = work_item_payload
+                    .get("status")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                let priority = work_item_payload
+                    .get("priority")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+
+                emit(
+                    as_json,
+                    json!({
+                        "kind": "orchestration_work_item_show",
+                        "work_item_id": work_item_oid.as_str(),
+                        "title": title,
+                        "description": description,
+                        "status": status,
+                        "priority": priority,
+                        "context_packets": context_packets,
+                        "dispatches": dispatches,
+                        "trace_events": trace_events,
+                        "evidence": evidence,
+                        "reviews": reviews,
+                        "closures": closures,
+                    }),
+                );
+
+                return Ok(());
+            }
+
+            // Fallback to legacy implementation_task Show command logic
             let task_filter = QueryFilter {
                 class: Some("implementation_task".to_string()),
                 ..Default::default()
@@ -853,6 +916,56 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
 
             Ok(())
         }
+        OrchestrationAction::Timeline(args) => {
+            require_initialized_workspace(store)?;
+
+            let index_ref = ctx
+                .index
+                .as_ref()
+                .ok_or_else(|| CliError::argument("index required for timeline"))?;
+
+            let task_arg = args.task_id.to_lowercase();
+            let (work_item_oid, _, _work_item_payload) = find_work_item(index_ref, store, &task_arg)?
+                .ok_or_else(|| CliError::not_found(format!("work_item {} not found", args.task_id)))?;
+
+            let mut connected_objects = traverse_orchestration_graph(index_ref, store, &work_item_oid)?;
+
+            // Sort chronologically by captured_at
+            connected_objects.sort_by_key(|(_, _, _, captured_at)| *captured_at);
+
+            let events: Vec<serde_json::Value> = connected_objects
+                .into_iter()
+                .map(|(oid, summary, payload, captured_at)| {
+                    let class_name = summary.class.clone().unwrap_or_default();
+                    let title = payload
+                        .get("title")
+                        .and_then(|v| v.as_str())
+                        .or_else(|| summary.title.as_deref())
+                        .unwrap_or("")
+                        .to_string();
+                    let summary_text = get_object_summary_text(&class_name, &payload);
+
+                    json!({
+                        "id": oid.as_str(),
+                        "class": class_name,
+                        "title": title,
+                        "timestamp": captured_at.to_rfc3339(),
+                        "summary": summary_text,
+                    })
+                })
+                .collect();
+
+            emit(
+                as_json,
+                json!({
+                    "kind": "orchestration_timeline",
+                    "work_item_id": work_item_oid.as_str(),
+                    "events": events,
+                }),
+            );
+
+            Ok(())
+        }
         OrchestrationAction::List(_) => Err(CliError::argument("command not yet implemented")),
     }
 }
@@ -1020,4 +1133,185 @@ fn resolve_manifest_for_report(
         }
     }
     Ok(None)
+}
+
+fn find_work_item(
+    index: &DerivedIndex,
+    store: &dyn ObjectStore,
+    task_arg: &str,
+) -> Result<Option<(ObjectId, ObjectSummary, serde_json::Value)>, CliError> {
+    let task_arg = task_arg.to_lowercase();
+    let filter = QueryFilter {
+        class: Some("work_item".to_string()),
+        ..Default::default()
+    };
+    let results = index.query_objects(&filter)?;
+
+    for summary in results {
+        let oid = match ObjectId::parse(summary.object_id.clone()) {
+            Ok(o) => o,
+            Err(_) => continue,
+        };
+        let vid = match VersionId::parse(summary.version_id.clone()) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        let vr = VersionRef::new(oid.clone(), vid);
+        let stored = match store.read_version(&vr) {
+            Ok(s) => s,
+            Err(_) => continue,
+        };
+        let text = match stored.payload.as_utf8() {
+            Ok(t) => t,
+            Err(_) => continue,
+        };
+        let payload: serde_json::Value = match serde_json::from_str(&text) {
+            Ok(p) => p,
+            Err(_) => continue,
+        };
+        let tid = payload.get("task_id").and_then(|v| v.as_str()).map(|s| s.to_lowercase());
+        let oid_lower = summary.object_id.to_lowercase();
+
+        let matches = oid_lower == task_arg
+            || oid_lower.starts_with(&task_arg)
+            || tid.as_ref().map(|t| t == &task_arg).unwrap_or(false)
+            || tid.as_ref().map(|t| t.starts_with(&task_arg)).unwrap_or(false);
+
+        if matches {
+            return Ok(Some((oid, summary, payload)));
+        }
+    }
+    Ok(None)
+}
+
+fn traverse_orchestration_graph(
+    index: &DerivedIndex,
+    store: &dyn ObjectStore,
+    start_id: &ObjectId,
+) -> Result<Vec<(ObjectId, ObjectSummary, serde_json::Value, chrono::DateTime<chrono::Utc>)>, CliError> {
+    use std::collections::VecDeque;
+    use std::collections::HashSet;
+
+    let mut visited = HashSet::new();
+    let mut queue = VecDeque::new();
+    let mut results = Vec::new();
+
+    queue.push_back(start_id.clone());
+    visited.insert(start_id.clone());
+
+    let orch_classes: HashSet<&str> = [
+        "work_item",
+        "dispatch",
+        "context_packet",
+        "trace_event",
+        "evidence",
+        "review",
+        "closure",
+    ]
+    .iter()
+    .cloned()
+    .collect();
+
+    while let Some(current) = queue.pop_front() {
+        let head = match store.read_head(&current) {
+            Ok(Some(h)) => h,
+            Ok(None) => continue,
+            Err(_) => continue,
+        };
+        let vid = head.envelope.version_id.clone();
+        let vr = VersionRef::new(current.clone(), vid.clone());
+        let stored = match store.read_version(&vr) {
+            Ok(s) => s,
+            _ => continue,
+        };
+        let text = match stored.payload.as_utf8() {
+            Ok(t) => t,
+            _ => continue,
+        };
+        let payload: serde_json::Value = match serde_json::from_str(&text) {
+            Ok(p) => p,
+            _ => continue,
+        };
+
+        let filter = QueryFilter {
+            object_id: Some(current.as_str().to_string()),
+            ..Default::default()
+        };
+        let summaries = match index.query_objects(&filter) {
+            Ok(s) => s,
+            _ => continue,
+        };
+        let summary = match summaries.into_iter().next() {
+            Some(s) => s,
+            None => continue,
+        };
+
+        let class_name = summary.class.as_deref().unwrap_or("");
+        if !orch_classes.contains(class_name) {
+            continue;
+        }
+
+        let captured_at = head.envelope.provenance.captured_at;
+        results.push((current.clone(), summary.clone(), payload, captured_at));
+
+        let edges = match index.relation_adjacency(&current, false) {
+            Ok(e) => e,
+            _ => continue,
+        };
+
+        for edge in edges {
+            let next_str = if edge.source_object_id == current.as_str() {
+                edge.target_object_id
+            } else {
+                edge.source_object_id
+            };
+
+            if let Ok(next_oid) = ObjectId::parse(next_str) {
+                if !visited.contains(&next_oid) {
+                    visited.insert(next_oid.clone());
+                    queue.push_back(next_oid);
+                }
+            }
+        }
+    }
+
+    Ok(results)
+}
+
+fn get_object_summary_text(class: &str, payload: &serde_json::Value) -> String {
+    match class {
+        "work_item" => {
+            let title = payload.get("title").and_then(|v| v.as_str()).unwrap_or("");
+            let status = payload.get("status").and_then(|v| v.as_str()).unwrap_or("");
+            format!("Work Item: '{}' [{}]", title, status)
+        }
+        "dispatch" => {
+            let attempt = payload.get("attempt").and_then(|v| v.as_u64()).unwrap_or(1);
+            let executor = payload.get("executor").and_then(|v| v.as_str()).unwrap_or("");
+            format!("Dispatch (Attempt #{}): executor={}", attempt, executor)
+        }
+        "context_packet" => {
+            let task_id = payload.get("task_id").and_then(|v| v.as_str()).unwrap_or("");
+            format!("Context Packet for task {}", task_id)
+        }
+        "trace_event" => {
+            let msg = payload.get("message").and_then(|v| v.as_str()).unwrap_or("");
+            format!("Trace Event: {}", msg)
+        }
+        "evidence" => {
+            let checksum = payload.get("checksum").and_then(|v| v.as_str()).unwrap_or("");
+            let desc = payload.get("description").and_then(|v| v.as_str()).unwrap_or("");
+            format!("Evidence: {} (checksum={})", desc, checksum)
+        }
+        "review" => {
+            let decision = payload.get("decision").and_then(|v| v.as_str()).unwrap_or("");
+            let comments = payload.get("comments").and_then(|v| v.as_str()).unwrap_or("");
+            format!("Review: {} - {}", decision, comments)
+        }
+        "closure" => {
+            let outcome = payload.get("outcome").and_then(|v| v.as_str()).unwrap_or("");
+            format!("Closure: {}", outcome)
+        }
+        _ => String::new(),
+    }
 }

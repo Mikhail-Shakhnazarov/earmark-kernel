@@ -554,6 +554,7 @@ pub enum OrchestrationAction {
     RecordGate(RecordGateArgs),
     Review(OrchReviewArgs),
     Show(ShowTaskArgs),
+    Timeline(ShowTaskArgs),
     List(ListOrchestrationArgs),
     IngestTask(IngestTaskArgs),
 }
