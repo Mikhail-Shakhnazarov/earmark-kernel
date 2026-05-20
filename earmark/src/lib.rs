@@ -1,3 +1,18 @@
+//! CLI-backed compatibility facade for Earmark.
+//!
+//! This crate currently shells out to `earmark-cli` and parses its JSON output.
+//! It is retained as a compatibility surface, not as the primary in-process Rust
+//! API for Earmark's canonical spine.
+//!
+//! Runtime requirements:
+//!
+//! - set `EARMARK_CLI_BIN` to the desired `earmark-cli` executable; or
+//! - ensure `earmark-cli` is available on `PATH`.
+//!
+//! The future in-process API should compose `GitCanonicalStore`, `DerivedIndex`,
+//! declaration registration, and `ExecutionEngine` directly. Until then, callers
+//! should treat `EarmarkWorkspace` as a CLI-backed wrapper.
+
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -142,22 +157,37 @@ impl EarmarkWorkspace {
         cmd.arg("--root").arg(&self.root).arg("--json").args(args);
         let out = cmd.output()?;
         if !out.status.success() {
-            return Err(EarmarkError::Command(
-                String::from_utf8_lossy(&out.stderr).trim().to_string(),
-            ));
+            if let Ok(value) = serde_json::from_slice::<Value>(&out.stdout) {
+                return Err(EarmarkError::Command(cli_error_message(&value)));
+            }
+            let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+            return Err(EarmarkError::Command(if stderr.is_empty() {
+                format!("earmark-cli exited with status {}", out.status)
+            } else {
+                stderr
+            }));
         }
         let value: Value = serde_json::from_slice(&out.stdout)?;
         if value.get("ok").and_then(|v| v.as_bool()) == Some(false) {
-            return Err(EarmarkError::Command(
-                value
-                    .get("error")
-                    .and_then(|e| e.get("message"))
-                    .and_then(|m| m.as_str())
-                    .unwrap_or("unknown cli error")
-                    .to_string(),
-            ));
+            return Err(EarmarkError::Command(cli_error_message(&value)));
         }
         Ok(value)
+    }
+}
+
+fn cli_error_message(value: &Value) -> String {
+    let message = value
+        .get("error")
+        .and_then(|e| e.get("message"))
+        .and_then(|m| m.as_str())
+        .unwrap_or("unknown cli error");
+    match value
+        .get("error")
+        .and_then(|e| e.get("code"))
+        .and_then(|c| c.as_str())
+    {
+        Some(code) if !code.trim().is_empty() => format!("{}: {}", code, message),
+        _ => message.to_string(),
     }
 }
 
