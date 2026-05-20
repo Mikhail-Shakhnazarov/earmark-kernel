@@ -98,7 +98,7 @@ pub fn authorize_relation_creation<S: CanonicalStore>(
     };
 
     // 5. Determine trusted provenance from configured trusted actors or explicit privileged system path
-    let is_trusted_provenance = earmark_governance::is_trusted_actor(&provenance.actor);
+    let is_trusted_provenance = store.is_trusted_actor(&provenance.actor);
 
     // 6. Call RelationAuthorizationResolver
     let resolver = RelationAuthorizationResolver {

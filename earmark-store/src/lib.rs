@@ -361,7 +361,16 @@ pub trait StoreWriteLocking {
     }
 }
 
-pub trait CanonicalStore: WorkspaceLayout + ObjectStore + StoreScanner + StoreWriteLocking {}
+pub trait CanonicalStore: WorkspaceLayout + ObjectStore + StoreScanner + StoreWriteLocking {
+    /// Returns whether an actor is trusted for privileged operations in the current runtime/store.
+    fn is_trusted_actor(&self, actor: &str) -> bool {
+        default_trusted_actor(actor)
+    }
+}
+
+fn default_trusted_actor(actor: &str) -> bool {
+    matches!(actor, "runtime" | "execution_engine" | "system")
+}
 
 #[derive(Debug, Clone)]
 pub struct GitCanonicalStore {
@@ -838,7 +847,16 @@ impl StoreScanner for GitCanonicalStore {
     }
 }
 
-impl CanonicalStore for GitCanonicalStore {}
+impl CanonicalStore for GitCanonicalStore {
+    fn is_trusted_actor(&self, actor: &str) -> bool {
+        if self.authorized_actors.is_empty() {
+            return default_trusted_actor(actor);
+        }
+        self.authorized_actors
+            .iter()
+            .any(|trusted| trusted == actor)
+    }
+}
 
 #[derive(Debug, Error)]
 pub enum StoreError {
