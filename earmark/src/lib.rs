@@ -396,6 +396,9 @@ impl EarmarkWorkspace {
         })
     }
 
+    /// Returns a compact in-process HTML summary for a run.
+    ///
+    /// This is intentionally lighter than the full CLI report renderer.
     pub fn report_run(&self, run_id: &str) -> Result<String, EarmarkError> {
         let record = self.find_run_record(run_id)?;
         let status = serde_json::to_string(&record.status)?

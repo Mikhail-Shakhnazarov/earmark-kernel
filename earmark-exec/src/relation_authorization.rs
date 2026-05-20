@@ -44,20 +44,48 @@ pub fn authorize_relation_creation<S: CanonicalStore>(
 
     // 3. Load class definitions for source and target classes through the derived index
     let source_definition = if let Some(class_name) = &source_facts.class {
-        if let Ok(Some(resolved_ref)) = index.resolve_class_definition_symbolic_latest(class_name) {
-            crate::resolution::load_class_definition(store, index, &resolved_ref).ok()
-        } else {
-            None
+        match index.resolve_class_definition_symbolic_latest(class_name) {
+            Ok(Some(resolved_ref)) => Some(
+                crate::resolution::load_class_definition(store, index, &resolved_ref).map_err(
+                    |e| {
+                        ExecError::IncompleteExecution(format!(
+                            "failed to load source class definition '{}': {}",
+                            class_name, e
+                        ))
+                    },
+                )?,
+            ),
+            Ok(None) => None,
+            Err(e) => {
+                return Err(ExecError::IncompleteExecution(format!(
+                    "failed to resolve source class definition '{}': {}",
+                    class_name, e
+                )));
+            }
         }
     } else {
         None
     };
 
     let target_definition = if let Some(class_name) = &target_facts.class {
-        if let Ok(Some(resolved_ref)) = index.resolve_class_definition_symbolic_latest(class_name) {
-            crate::resolution::load_class_definition(store, index, &resolved_ref).ok()
-        } else {
-            None
+        match index.resolve_class_definition_symbolic_latest(class_name) {
+            Ok(Some(resolved_ref)) => Some(
+                crate::resolution::load_class_definition(store, index, &resolved_ref).map_err(
+                    |e| {
+                        ExecError::IncompleteExecution(format!(
+                            "failed to load target class definition '{}': {}",
+                            class_name, e
+                        ))
+                    },
+                )?,
+            ),
+            Ok(None) => None,
+            Err(e) => {
+                return Err(ExecError::IncompleteExecution(format!(
+                    "failed to resolve target class definition '{}': {}",
+                    class_name, e
+                )));
+            }
         }
     } else {
         None

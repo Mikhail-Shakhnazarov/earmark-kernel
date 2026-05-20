@@ -19,7 +19,7 @@ use super::reports::ReportCommand;
 pub struct Cli {
     #[arg(long)]
     pub root: Option<PathBuf>,
-    #[arg(long)]
+    #[arg(long, global = true)]
     pub json: bool,
     #[arg(long)]
     pub config: Option<PathBuf>,
