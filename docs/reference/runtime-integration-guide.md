@@ -1,20 +1,29 @@
 # Runtime Integration Guide
 
-This guide explains how to use Earmark as a governed execution substrate from your application, either through the Rust SDK or by driving the CLI as a subprocess. Workspace state is stored in a Git-backed canonical store implemented through `gix`, with a derived index for query and inspection.
+© 2026 Mikhail Shakhnazarov
+
+This guide explains how to integrate with Earmark as a governed execution substrate.
+
+There are currently two integration modes:
+
+1. **In-process crate composition** using the workspace crates directly. This is the architectural direction for the canonical spine.
+2. **CLI-backed compatibility facade** through the `earmark` crate or by spawning `earmark-cli` directly. This is useful for lightweight embedding, but it is not yet the primary in-process Rust API.
+
+Workspace state is stored in a Git-backed canonical store implemented through `gix`, with a derived index for query and inspection.
 
 ## Architecture
 
-Earmark doesn't run agents directly. It provides bounded context through work packets, manages assignments over transitions, validates the resulting change sets, and persists durable state in the workspace repository. Your application follows this loop:
+Earmark does not run agents directly. It provides bounded context through work packets, manages assignments over transitions, validates resulting change sets, and persists durable state in the workspace repository. A host application follows this loop:
 
-1. Compile context from the kernel.
+1. Compile context from declared objects and context templates.
 2. Receive a work packet for a transition.
-3. Dispatch to a provider through the registry.
-4. Deposit the result back into the kernel.
+3. Dispatch to a provider through a provider service or registry.
+4. Persist the result back into the canonical store.
 5. Continue to the next transition using the handoff manifest.
 
-## Using the Rust SDK
+## In-process crate composition
 
-Add the workspace crates to your `Cargo.toml`:
+Add the workspace crates to `Cargo.toml`:
 
 ```toml
 [dependencies]
@@ -25,7 +34,7 @@ earmark-index = { path = "..." }
 earmark-runtime-tools = { path = "..." }
 ```
 
-### Initializing the Surface
+### Initializing the surface
 
 `GitCanonicalStore` manages the canonical workspace repository. It writes objects, relations, assignments, change sets, and handoffs into the repository-backed store and records commit-backed history through `gix`.
 
@@ -40,7 +49,6 @@ let store = GitCanonicalStore::new("./workspace");
 let index = DerivedIndex::open("./workspace")?;
 let mut registry = ProviderRegistry::new();
 
-// Register the declarative HTTP provider adapter
 registry.register(Arc::new(HttpGenerationAdapter));
 
 let surface = RuntimeToolSurface {
@@ -50,9 +58,9 @@ let surface = RuntimeToolSurface {
 };
 ```
 
-The provider registry is the current extension seam for custom provider integration. The bundled `HttpGenerationAdapter` handles most REST-based LLM providers (OpenAI, Anthropic, Gemini, etc.) through declarative profiles. For standalone or legacy integrations, you can still register custom `ProviderAdapter` implementations.
+The provider registry is the current extension seam for custom provider integration. The bundled `HttpGenerationAdapter` handles REST-based LLM providers through declarative profiles. For standalone or legacy integrations, custom `ProviderAdapter` implementations can still be registered.
 
-### Running a Workflow
+### Running a workflow
 
 ```rust
 use earmark_exec::WorkflowRunRequest;
@@ -72,22 +80,49 @@ for object in outcome.emitted_objects {
 }
 ```
 
-## Using the CLI Bridge
+## CLI-backed compatibility facade
 
-You can drive Earmark from any language by spawning the `em` binary and parsing its JSON output.
+The `earmark` crate currently shells out to `earmark-cli` and parses JSON output. It is retained as a compatibility surface while the in-process API matures.
+
+Use it when a simple Rust wrapper around the CLI is sufficient. Do not treat it as the canonical Rust API yet.
+
+Runtime requirements:
+
+- set `EARMARK_CLI_BIN` to the intended `earmark-cli` executable; or
+- ensure `earmark-cli` is available on `PATH`.
+
+The future primary Rust API should compose `GitCanonicalStore`, `DerivedIndex`, declaration registration, and `ExecutionEngine` directly rather than spawning a subprocess.
+
+## Direct CLI bridge
+
+Any language can drive Earmark by spawning the `em` / `earmark-cli` binary and parsing JSON output.
 
 With `--json`, most command output is wrapped in a versioned envelope. Always check `contract_version`:
 
 ```json
 {
   "contract_version": "0.2.0",
-  "data": { ... }
+  "ok": true,
+  "data": { }
 }
 ```
 
-Some output-special commands (`completions`, `run explain`) return shell code or formatted text even with `--json`; they are not designed for machine-driven parsing.
+Error envelopes are also emitted to stdout in JSON mode:
 
-### Python Example
+```json
+{
+  "contract_version": "0.2.0",
+  "ok": false,
+  "error": {
+    "message": "human-readable description",
+    "code": "error_kind"
+  }
+}
+```
+
+Some output-special commands, such as shell completions or formatted explanations, may return shell code or formatted text rather than machine-oriented JSON.
+
+### Python example
 
 ```python
 import subprocess
@@ -97,30 +132,39 @@ def em_command(args):
     result = subprocess.run(
         ["em", "--json"] + args,
         capture_output=True,
-        text=True
+        text=True,
     )
     if result.returncode != 0:
-        raise Exception(f"Earmark error: {result.stderr}")
+        try:
+            payload = json.loads(result.stdout)
+            message = payload.get("error", {}).get("message", "unknown Earmark error")
+            code = payload.get("error", {}).get("code")
+            raise Exception(f"Earmark error {code}: {message}")
+        except json.JSONDecodeError:
+            raise Exception(f"Earmark error: {result.stderr}")
     return json.loads(result.stdout)
 
-# Deposit a source note
-resp = em_command(["deposit", "--class", "source_note", "--title", "Hello", "--body", "World"])
+resp = em_command([
+    "deposit",
+    "--class", "source_note",
+    "--title", "Hello",
+    "--body", "World",
+])
 note_id = resp["data"]["object_id"]
 
-# Run a workflow
 run_resp = em_command([
     "workflow", "run", "research_synthesis",
     "--system-id", "sys_research_synthesis",
-    "--with", note_id
+    "--with", note_id,
 ])
 print(f"Run completed: {run_resp['data']['run_id']}")
 ```
 
-## Provider Profiles
+## Provider profiles
 
 A provider profile connects a transition to a specific LLM provider.
 
-### Declarative HTTP Provider Example
+### Declarative HTTP provider example
 
 ```yaml
 name: gemini_3_1_flash
@@ -150,7 +194,7 @@ http:
     output_tokens_path: "$.usageMetadata.candidatesTokenCount"
 ```
 
-### OpenAI-Compatible Example
+### OpenAI-compatible example
 
 ```yaml
 name: gpt_4o
@@ -175,12 +219,11 @@ http:
     output_tokens_path: "$.usage.completion_tokens"
 ```
 
-The mock provider (`mock`) is available for local-only development and testing without requiring API keys.
-Outputs produced through the mock provider are marked as synthetic in provider metadata.
+The mock provider (`mock`) is available for local-only development and testing without requiring API keys. Outputs produced through the mock provider are marked as synthetic in provider metadata.
 
 For direct provider extension patterns, see the [Provider Extension](provider-extension.md) reference.
 
-## Standing Model
+## Standing model
 
 Standing is stored as a map from standing dimension IDs to token IDs:
 
@@ -193,9 +236,10 @@ Standing is stored as a map from standing dimension IDs to token IDs:
 }
 ```
 
-Built-in kernel dimensions use the `kernel:` prefix. Custom dimensions are declared in the system definition. Kernel behavior (review authorization, visibility, immutability) is projected from declared standing tokens through protocol bindings, not by matching token names.
+Built-in kernel dimensions use the `kernel:` prefix. Custom dimensions are declared in the system definition. Kernel behavior, including review authorization, visibility, and immutability, is projected from declared standing tokens through protocol bindings rather than by matching token names.
 
 Provider exposure requires two gates:
+
 1. The standing projection must return `expose_to_provider: true`.
 2. The provider profile must permit the object/content type.
 
@@ -208,21 +252,11 @@ Provider exposure requires two gates:
 
 Only the v0.3 map format is supported. Objects using the legacy v0.2 `epistemic` / `review` / `process` fields will not deserialize correctly.
 
-### Query by Standing Dimension
-
-Use the index's `object_standing` table to query objects by custom standing dimension:
-
-```rust
-let results = index.query_standing(
-    &DimensionId::parse("research:status")?,
-    &TokenId::parse("verified")?,
-)?;
-```
-
-## Error Handling
+## Error handling
 
 - **ExecError**: check the workflow definition and inputs.
-- **DispatchFailure**: check API keys, network connectivity, and provider budget limits.
-- **RuntimeToolError**: check for resource conflicts (e.g., duplicate assignments) or missing objects.
+- **ProviderFailure**: check API keys, network connectivity, provider policy, and provider budget limits.
+- **RuntimeToolError**: check for resource conflicts, duplicate assignments, or missing objects.
+- **CLI JSON errors**: parse stdout before falling back to stderr.
 
 See the [Runtime Contract](runtime-contract.md) for the full error type reference.
