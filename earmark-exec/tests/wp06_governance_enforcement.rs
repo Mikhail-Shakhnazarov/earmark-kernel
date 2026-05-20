@@ -160,6 +160,38 @@ fn test_review_artifact_alone_does_not_mutate_standing() {
     );
 }
 
+fn register_class(
+    store: &GitCanonicalStore,
+    index: &DerivedIndex,
+    name: &str,
+    relation_rules: Vec<earmark_core::RelationRule>,
+) {
+    let def = earmark_core::ClassDefinition {
+        name: name.to_string(),
+        version: "1".to_string(),
+        kind: "object".to_string(),
+        required_headers: vec![],
+        payload_schema: earmark_core::JsonSchemaRef("inline:any".to_string()),
+        standing_rules: earmark_core::ClassStandingRules::default(),
+        relation_rules,
+        validators: vec![],
+    };
+    let json = serde_json::to_string(&def).unwrap();
+    let stored = StoredObject::new(
+        Kind::Object,
+        Some("class_definition".to_string()),
+        Standing::default(),
+        earmark_core::Provenance::direct_input("system"),
+        BTreeMap::new(),
+        StoredPayload::from_markdown(&json),
+        vec![],
+    );
+    let obj_ref = store.write_object(&stored).unwrap();
+    index
+        .upsert_head_object_from_store(store, &obj_ref.id)
+        .unwrap();
+}
+
 #[test]
 fn test_sealed_object_can_be_targeted_by_relation() {
     use earmark_core::{
@@ -168,6 +200,18 @@ fn test_sealed_object_can_be_targeted_by_relation() {
     };
     let dir = TempDir::new().unwrap();
     let (store, index) = setup_store(dir.path());
+
+    register_class(
+        &store,
+        &index,
+        "artifact",
+        vec![earmark_core::RelationRule {
+            relation_type: "references".to_string(),
+            counterparty_classes: vec!["artifact".to_string()],
+            direction: Some("outgoing".to_string()),
+            authorizing_endpoint: Some("source".to_string()),
+        }],
+    );
 
     let _sys = SystemDefinition {
         system_id: "test_seal_rel".to_string(),

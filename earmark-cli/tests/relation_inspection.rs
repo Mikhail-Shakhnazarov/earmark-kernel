@@ -1,12 +1,10 @@
 use assert_cmd::Command;
 use serde_json::Value;
-use std::path::PathBuf;
 use tempfile::tempdir;
 
 #[test]
 fn relation_inspection_and_explanation() {
     let dir = tempdir().unwrap();
-    let workspace = workspace_root();
 
     // 1. Init
     Command::cargo_bin("earmark-cli")
@@ -18,7 +16,30 @@ fn relation_inspection_and_explanation() {
         .success();
 
     // 2. Register classes
-    let class_path = workspace.join("docs/declarations/examples/classes/finding.yaml");
+    let finding_yaml = r#"
+name: finding
+version: 0.2.0
+kind: object
+required_headers:
+  - title
+payload_schema: inline:any
+standing_rules:
+  allowed_standing:
+    kernel:epistemic:
+      - working
+    kernel:review:
+      - unreviewed
+relation_rules:
+  - relation_type: mentions
+    counterparty_classes:
+      - source_note
+    direction: outgoing
+    authorizing_endpoint: source
+validators: []
+"#;
+    let finding_class_path = dir.path().join("finding.yaml");
+    std::fs::write(&finding_class_path, finding_yaml).unwrap();
+
     Command::cargo_bin("earmark-cli")
         .unwrap()
         .arg("--root")
@@ -27,7 +48,38 @@ fn relation_inspection_and_explanation() {
         .arg("register")
         .arg("--kind")
         .arg("class")
-        .arg(&class_path)
+        .arg(&finding_class_path)
+        .assert()
+        .success();
+
+    let source_note_yaml = r#"
+name: source_note
+version: 0.2.0
+kind: object
+required_headers:
+  - title
+payload_schema: inline:any
+standing_rules:
+  allowed_standing:
+    kernel:epistemic:
+      - working
+    kernel:review:
+      - unreviewed
+relation_rules: []
+validators: []
+"#;
+    let source_note_class_path = dir.path().join("source_note.yaml");
+    std::fs::write(&source_note_class_path, source_note_yaml).unwrap();
+
+    Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(dir.path())
+        .arg("declare")
+        .arg("register")
+        .arg("--kind")
+        .arg("class")
+        .arg(&source_note_class_path)
         .assert()
         .success();
 
@@ -47,10 +99,9 @@ fn relation_inspection_and_explanation() {
         .get_output()
         .stdout
         .clone();
-    let id1 = serde_json::from_slice::<Value>(&dep1).unwrap()["data"]["object_id"]
-        .as_str()
-        .unwrap()
-        .to_string();
+    let dep1_val = serde_json::from_slice::<Value>(&dep1).unwrap();
+    let id1 = dep1_val["data"]["object_id"].as_str().unwrap().to_string();
+    let vid1 = dep1_val["data"]["version_id"].as_str().unwrap().to_string();
 
     let dep2 = Command::cargo_bin("earmark-cli")
         .unwrap()
@@ -67,10 +118,9 @@ fn relation_inspection_and_explanation() {
         .get_output()
         .stdout
         .clone();
-    let id2 = serde_json::from_slice::<Value>(&dep2).unwrap()["data"]["object_id"]
-        .as_str()
-        .unwrap()
-        .to_string();
+    let dep2_val = serde_json::from_slice::<Value>(&dep2).unwrap();
+    let id2 = dep2_val["data"]["object_id"].as_str().unwrap().to_string();
+    let vid2 = dep2_val["data"]["version_id"].as_str().unwrap().to_string();
 
     // 4. Create a privileged relation using the real canonical path
     let rel_id = {
@@ -84,13 +134,13 @@ fn relation_inspection_and_explanation() {
         let payload = RelationPayload {
             source: ObjectRef::new(
                 ObjectId::parse(&id1).unwrap(),
-                VersionId::new(),
+                VersionId::parse(&vid1).unwrap(),
                 Kind::Object,
                 Some("finding".to_string()),
             ),
             target: ObjectRef::new(
                 ObjectId::parse(&id2).unwrap(),
-                VersionId::new(),
+                VersionId::parse(&vid2).unwrap(),
                 Kind::Object,
                 Some("source_note".to_string()),
             ),
@@ -103,7 +153,7 @@ fn relation_inspection_and_explanation() {
             &store,
             &index,
             payload,
-            Provenance::direct_input("test"),
+            Provenance::direct_input("system"),
             RelationCreationMode::PrivilegedSystem,
             None,
         )
@@ -168,13 +218,13 @@ fn relation_inspection_and_explanation() {
         let payload = RelationPayload {
             source: ObjectRef::new(
                 source_id,
-                VersionId::new(),
+                VersionId::parse(&vid1).unwrap(),
                 Kind::Object,
                 Some("finding".to_string()),
             ),
             target: ObjectRef::new(
                 target_id,
-                VersionId::new(),
+                VersionId::parse(&vid2).unwrap(),
                 Kind::Object,
                 Some("source_note".to_string()),
             ),
@@ -231,11 +281,4 @@ fn relation_inspection_and_explanation() {
     assert_eq!(auth["class"], "finding");
     assert_eq!(auth["authority"], "source");
     assert_eq!(auth["direction"], "outgoing");
-}
-
-fn workspace_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .to_path_buf()
 }

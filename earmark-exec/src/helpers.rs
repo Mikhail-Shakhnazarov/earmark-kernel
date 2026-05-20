@@ -29,6 +29,11 @@ pub(crate) fn compile_workflow(workflow: &WorkflowDefinition) -> Result<Executio
                     operation.id
                 )));
             }
+            if operation.kind == earmark_core::WorkflowOperationKind::Transform && operation.output_contracts.len() > 1 {
+                return Err(ExecError::InvalidWorkflow(
+                    "multi-output transform operations are not supported by this runtime; split the operation or use a supported operation kind".to_string()
+                ));
+            }
             Ok(ExecutionTransition {
                 id: operation.id.clone(),
                 operation: operation.kind.clone(),

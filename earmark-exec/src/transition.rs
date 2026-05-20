@@ -280,7 +280,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
         let res = (|| {
             if transition.output_contracts.len() > 1 {
                 return Err(ExecError::UnsupportedOperation(
-                    "multi-output transform operations are not yet implemented".to_string(),
+                    "multi-output transform operations are not supported by this runtime; split the operation or use a supported operation kind".to_string(),
                 ));
             }
             let instruction_ref = transition.instruction.as_ref().ok_or_else(|| {

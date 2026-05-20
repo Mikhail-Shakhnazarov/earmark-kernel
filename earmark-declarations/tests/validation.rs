@@ -914,6 +914,7 @@ fn provider_profile_rejects_empty_allowed_domain() {
             },
             allowed_domains: vec!["".to_string()],
             blocked_domains: vec![],
+            ..Default::default()
         }),
     };
     assert!(validate_provider_profile(&profile).is_err());

@@ -4,9 +4,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use tempfile::tempdir;
 
-use earmark_core::{
-    Kind, ObjectId, ObjectRef, Provenance, RelationCreationMode, RelationPayload, VersionId,
-};
+use earmark_core::{Kind, ObjectId, ObjectRef, Provenance, RelationCreationMode, RelationPayload};
 use earmark_index::DerivedIndex;
 use earmark_store::GitCanonicalStore;
 
@@ -79,16 +77,30 @@ fn link_objects(
     let store = GitCanonicalStore::new(root);
     let index = DerivedIndex::open(root).unwrap();
 
+    let source_oid = ObjectId::parse(source_id).unwrap();
+    let target_oid = ObjectId::parse(target_id).unwrap();
+
+    let source_vid = index
+        .get_head(&source_oid)
+        .unwrap()
+        .expect("source object version not found in index")
+        .version_id;
+    let target_vid = index
+        .get_head(&target_oid)
+        .unwrap()
+        .expect("target object version not found in index")
+        .version_id;
+
     let payload = RelationPayload {
         source: ObjectRef::new(
-            ObjectId::parse(source_id).unwrap(),
-            VersionId::new(),
+            source_oid,
+            source_vid,
             Kind::Object,
             Some(source_class.to_string()),
         ),
         target: ObjectRef::new(
-            ObjectId::parse(target_id).unwrap(),
-            VersionId::new(),
+            target_oid,
+            target_vid,
             Kind::Object,
             Some(target_class.to_string()),
         ),

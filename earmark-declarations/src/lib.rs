@@ -416,7 +416,7 @@ pub fn validate_workflow_definition(value: &WorkflowDeclaration) -> Result<(), D
                 }
                 if op.output_contracts.len() > 1 {
                     return Err(DeriveError::Validation(format!(
-                        "workflow operation '{}' has {} output contracts: multi-output transform operations are not yet implemented",
+                        "workflow operation '{}' has {} output contracts: multi-output transform operations are not supported by this runtime; split the operation or use a supported operation kind",
                         op.id,
                         op.output_contracts.len()
                     )));

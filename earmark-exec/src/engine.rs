@@ -315,8 +315,9 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
 
         if !remaining.is_empty() {
             let message = format!(
-                "workflow execution finished with {} transitions unreached",
-                remaining.len()
+                "workflow execution finished with {} transitions unreached: {}",
+                remaining.len(),
+                remaining.join(", ")
             );
             record_transition(
                 &mut record,
@@ -326,9 +327,10 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                 vec![],
                 Some(message),
             );
+            record.status = RunStatus::Partial;
+        } else {
+            record.status = RunStatus::Completed;
         }
-
-        record.status = RunStatus::Completed;
         record.final_marking = final_marking
             .iter()
             .cloned()
