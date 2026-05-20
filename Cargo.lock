@@ -766,6 +766,14 @@ name = "earmark"
 version = "0.1.0"
 dependencies = [
  "assert_cmd",
+ "chrono",
+ "earmark-core",
+ "earmark-declarations",
+ "earmark-exec",
+ "earmark-index",
+ "earmark-runtime-tools",
+ "earmark-store",
+ "serde",
  "serde_json",
  "serde_yaml",
  "tempfile",

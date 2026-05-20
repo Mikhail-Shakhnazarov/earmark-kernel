@@ -577,7 +577,9 @@ mod tests {
         CompiledContextExpansion, DimensionId, ExpansionObjectFilter, Kind, Provenance, Standing,
         TokenId,
     };
-    use earmark_store::{GitCanonicalStore, ObjectStore, StoredObject, StoredPayload, WorkspaceLayout};
+    use earmark_store::{
+        GitCanonicalStore, ObjectStore, StoredObject, StoredPayload, WorkspaceLayout,
+    };
     use tempfile::tempdir;
 
     #[test]
@@ -1743,5 +1745,118 @@ mod tests {
         assert!(!evidence.contains(secret_payload));
         // Boundary relation should still be present (IDs/classes only)
         assert!(manifest.boundary_relations.is_empty() || !evidence.contains(secret_payload));
+    }
+
+    fn object_with_class(title: &str, class: &str, standing: Standing) -> StoredObject {
+        StoredObject::new(
+            Kind::Object,
+            Some(class.to_string()),
+            standing,
+            Provenance::direct_input("operator"),
+            BTreeMap::from([(
+                "title".to_string(),
+                earmark_core::HeaderValue::String(title.to_string()),
+            )]),
+            StoredPayload::from_markdown(title),
+            vec![],
+        )
+    }
+
+    #[test]
+    fn test_compile_depth_limit_and_cycles() {
+        let dir = tempdir().unwrap();
+        let store = GitCanonicalStore::new(dir.path());
+        store.init_layout().unwrap();
+        let index = DerivedIndex::open(dir.path()).unwrap();
+
+        // 1. Create a cycle A -> B -> C -> A
+        let a = object_with_class("a", "class_a", Standing::default());
+        let b = object_with_class("b", "class_b", Standing::default());
+        let c = object_with_class("c", "class_c", Standing::default());
+
+        store.write_object(&a).unwrap();
+        store.write_object(&b).unwrap();
+        store.write_object(&c).unwrap();
+
+        store.write_object(&relation(&a, &b, "linked")).unwrap();
+        store.write_object(&relation(&b, &c, "linked")).unwrap();
+        store.write_object(&relation(&c, &a, "linked")).unwrap();
+
+        // 2. Create a long chain C -> node_0 -> node_1 -> ... -> node_69
+        let mut chain_objects = Vec::new();
+        for i in 0..70 {
+            let obj = object_with_class(
+                &format!("node_{}", i),
+                &format!("class_{}", i),
+                Standing::default(),
+            );
+            store.write_object(&obj).unwrap();
+            chain_objects.push(obj);
+        }
+
+        store
+            .write_object(&relation(&c, &chain_objects[0], "linked"))
+            .unwrap();
+        for i in 0..69 {
+            store
+                .write_object(&relation(
+                    &chain_objects[i],
+                    &chain_objects[i + 1],
+                    "linked",
+                ))
+                .unwrap();
+        }
+
+        let template = template_with_select(
+            vec!["class_a".to_string()],
+            BTreeMap::new(),
+            vec!["linked".to_string()],
+            Some(ExpansionObjectFilter::None),
+        );
+
+        let template_obj = StoredObject::new(
+            Kind::CompiledContextTemplate,
+            None,
+            Standing::default(),
+            Provenance::direct_input("operator"),
+            BTreeMap::new(),
+            StoredPayload::from_json_bytes(serde_json::to_vec(&template).unwrap()),
+            vec![],
+        );
+        let template_ref = store.write_object(&template_obj).unwrap();
+        index.rebuild_from_store(&store).unwrap();
+
+        let reg = visibility_registry();
+        let manifest =
+            CompiledContextService::compile(&store, &index, &template_ref, None, &reg).unwrap();
+
+        let object_ids: BTreeSet<String> = manifest
+            .objects
+            .iter()
+            .map(|obj| obj.object.id.as_str().to_string())
+            .collect();
+
+        // A, B, C must be present (cycle compiled successfully without infinite loop)
+        // A, B, C must be present (cycle compiled successfully without infinite loop)
+        assert!(object_ids.contains(a.envelope.id.as_str()));
+        assert!(object_ids.contains(b.envelope.id.as_str()));
+        assert!(object_ids.contains(c.envelope.id.as_str()));
+
+        // Max expansion depth is 64.
+        // A (0) -> C (1) (via c -> a relation) -> node_0 (2) -> node_1 (3) -> ...
+        // node_61 is at depth 63.
+        // node_62 is at depth 64.
+        // Since node_62 is at depth 64, the check `depth >= 64` triggers when popped,
+        // and we continue/skip traversing its relations.
+        // Therefore, node_62's neighbors (node_63) are never reached.
+        // Thus, node_62 must be in the set, but node_63 must NOT.
+        assert!(object_ids.contains(chain_objects[62].envelope.id.as_str()));
+        assert!(!object_ids.contains(chain_objects[63].envelope.id.as_str()));
+
+        // 3. Path rendering check: relative path and canonical/non-canonical behavior
+        for obj in &manifest.objects {
+            assert!(!obj.path.starts_with('/'));
+            assert!(obj.path.contains(".earmark/canonical/objects"));
+        }
     }
 }

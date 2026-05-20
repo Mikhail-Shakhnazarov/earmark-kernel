@@ -105,6 +105,7 @@ pub enum WorkspaceAccessMode {
 pub fn workspace_access_mode(command: &Commands) -> WorkspaceAccessMode {
     match command {
         Commands::Completions { .. } => WorkspaceAccessMode::None,
+        Commands::Catalog => WorkspaceAccessMode::None,
         Commands::Init => WorkspaceAccessMode::Init,
         Commands::Doctor(args) => {
             if args.repair_index {
@@ -181,6 +182,7 @@ pub fn command_family_name(command: &Commands) -> &'static str {
         Commands::Report(_) => "report",
         Commands::Provider(_) => "provider",
         Commands::Completions { .. } => "completions",
+        Commands::Catalog => "commands",
         Commands::Status => "status",
         Commands::Relation(_) => "relation",
         Commands::StandingRequest(_) => "standing-request",
