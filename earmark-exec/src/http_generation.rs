@@ -322,8 +322,6 @@ fn render_json_template(
     }
 }
 
-
-
 #[cfg(feature = "http-provider")]
 fn validate_url(
     url_str: &str,
@@ -355,13 +353,11 @@ fn validate_url(
     }
 
     // 2. Credentials check
-    if !http.allow_local_http {
-        if !parsed.username().is_empty() || parsed.password().is_some() {
-            return Err(ProviderFailure::new(
-                ProviderFailureKind::PolicyViolation,
-                "URL credentials (username/password) are not allowed".to_string(),
-            ));
-        }
+    if !http.allow_local_http && (!parsed.username().is_empty() || parsed.password().is_some()) {
+        return Err(ProviderFailure::new(
+            ProviderFailureKind::PolicyViolation,
+            "URL credentials (username/password) are not allowed".to_string(),
+        ));
     }
 
     // 3. Host check
@@ -439,28 +435,26 @@ fn validate_url(
     }
 
     // 4. Allowed / Blocked domain checks
-    if !http.allow_local_http {
-        if http.allowed_domains.is_empty() {
-            return Err(ProviderFailure::new(
-                ProviderFailureKind::PolicyViolation,
-                "For non-local HTTP profiles, allowed_domains cannot be empty".to_string(),
-            ));
-        }
+    if !http.allow_local_http && http.allowed_domains.is_empty() {
+        return Err(ProviderFailure::new(
+            ProviderFailureKind::PolicyViolation,
+            "For non-local HTTP profiles, allowed_domains cannot be empty".to_string(),
+        ));
     }
 
     let host_lower = host_str.to_lowercase();
 
     // Blocked list check (always checked, even if allowed_domains is checked)
-    if !http.blocked_domains.is_empty() {
-        if http.blocked_domains.iter().any(|d| {
+    if !http.blocked_domains.is_empty()
+        && http.blocked_domains.iter().any(|d| {
             let d_lower = d.to_lowercase();
             host_lower == d_lower || host_lower.ends_with(&format!(".{}", d_lower))
-        }) {
-            return Err(ProviderFailure::new(
-                ProviderFailureKind::PolicyViolation,
-                format!("domain '{}' is blocked by provider policy", host_str),
-            ));
-        }
+        })
+    {
+        return Err(ProviderFailure::new(
+            ProviderFailureKind::PolicyViolation,
+            format!("domain '{}' is blocked by provider policy", host_str),
+        ));
     }
 
     // Allowed list check
@@ -853,8 +847,6 @@ mod tests {
         assert!(err.message.contains("timed out after 50 ms"));
     }
 
-
-
     #[test]
     fn test_domain_blocked_rejects_request() {
         let profile = ProviderProfile {
@@ -1185,8 +1177,10 @@ mod tests {
         assert!(err.message.contains("blocked by provider policy"));
 
         // 7. If allow_local_http is enabled, local endpoints and HTTP schemes are allowed
-        let mut local_profile = HttpGenerationProfile::default();
-        local_profile.allow_local_http = true;
+        let local_profile = HttpGenerationProfile {
+            allow_local_http: true,
+            ..HttpGenerationProfile::default()
+        };
 
         assert!(validate_url("http://localhost:8080/api", &local_profile).is_ok());
         assert!(validate_url("http://127.0.0.1/api", &local_profile).is_ok());

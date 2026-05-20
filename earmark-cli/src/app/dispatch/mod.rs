@@ -1,7 +1,9 @@
 mod handlers;
 
 use crate::app::common::{CliError, CommandContext};
+use crate::app::emit;
 use crate::cli::*;
+use serde_json::json;
 
 pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
     match cli.command {
@@ -24,6 +26,25 @@ pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
         Commands::Report(command) => handlers::handle_report(ctx, command)?,
         Commands::Provider(command) => handlers::handle_provider(ctx, command)?,
         Commands::Completions { .. } => {}
+        Commands::Catalog => {
+            let commands = command_catalog()
+                .into_iter()
+                .map(|entry| {
+                    json!({
+                        "name": entry.name,
+                        "stability": entry.stability.as_str(),
+                        "summary": entry.summary
+                    })
+                })
+                .collect::<Vec<_>>();
+            emit(
+                ctx.as_json,
+                json!({
+                    "kind": "command_catalog",
+                    "commands": commands,
+                }),
+            );
+        }
         Commands::Status => handlers::handle_status(ctx)?,
         Commands::Relation(command) => handlers::handle_relation(ctx, command)?,
         Commands::StandingRequest(command) => handlers::handle_standing_request(ctx, command)?,

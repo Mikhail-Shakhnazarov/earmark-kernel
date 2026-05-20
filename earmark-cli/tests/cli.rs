@@ -1954,6 +1954,29 @@ fn json_output_uses_versioned_envelope() {
 }
 
 #[test]
+fn commands_catalog_includes_stability_metadata() {
+    let output = Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--json")
+        .arg("commands")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(parsed["data"]["kind"], "command_catalog");
+    let commands = parsed["data"]["commands"].as_array().unwrap();
+    assert!(commands
+        .iter()
+        .any(|c| c["name"] == "deposit" && c["stability"] == "stable"));
+    assert!(commands
+        .iter()
+        .any(|c| c["name"] == "orchestration" && c["stability"] == "experimental"));
+}
+
+#[test]
 fn missing_run_id_fails_cleanly_in_json_mode() {
     let dir = tempdir().unwrap();
     Command::cargo_bin("earmark-cli")
