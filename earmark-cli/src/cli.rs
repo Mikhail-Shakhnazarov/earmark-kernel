@@ -20,30 +20,95 @@ pub struct Cli {
     pub command: Commands,
 }
 
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CommandStability {
+    Stable,
+    Beta,
+    Experimental,
+}
+
 #[derive(Subcommand)]
 pub enum Commands {
+    #[command(about = "[STABLE] Initialize a new earmark workspace")]
     Init,
+    #[command(about = "[BETA] Diagnose and repair workspace issues")]
     Doctor(DoctorArgs),
+    #[command(about = "[EXPERIMENTAL] Manage system registration")]
     System(SystemCommand),
+    #[command(about = "[STABLE] Deposit an object into the store")]
     Deposit(DepositArgs),
+    #[command(about = "[STABLE] Query the object store")]
     Query(QueryArgs),
+    #[command(about = "[STABLE] Review an object")]
     Review(ReviewArgs),
+    #[command(about = "[STABLE] Manage workflows")]
     Workflow(WorkflowCommand),
+    #[command(about = "[STABLE] Manage runs")]
     Run(RunCommand),
+    #[command(about = "[BETA] Declare and register declarations")]
     Declare(DeclareCommand),
+    #[command(about = "[STABLE] Manage assignments")]
     Assignment(AssignmentCommand),
+    #[command(about = "[STABLE] Manage change sets")]
     ChangeSet(ChangeSetCommand),
+    #[command(about = "[STABLE] Manage handoffs")]
     Handoff(HandoffCommand),
+    #[command(about = "[STABLE] Manage failures")]
     Failure(FailureCommand),
+    #[command(about = "[EXPERIMENTAL] Compile context")]
     Context(ContextCommand),
+    #[command(about = "[BETA] Audit workspace events")]
     Audit(AuditCommand),
+    #[command(about = "[STABLE] Generate reports")]
     Report(ReportCommand),
+    #[command(about = "[BETA] Manage providers")]
     Provider(ProviderCommand),
+    #[command(about = "[BETA] Generate shell completions")]
     Completions { shell: CompletionShell },
+    #[command(about = "[STABLE] Show workspace status")]
     Status,
+    #[command(about = "[EXPERIMENTAL] Manage relations")]
     Relation(RelationCommand),
+    #[command(about = "[EXPERIMENTAL] Manage standing requests")]
     StandingRequest(StandingRequestCommand),
+    #[command(about = "[BETA] Undo a run")]
     Undo(UndoCommand),
+    #[command(about = "[EXPERIMENTAL] Manage orchestration tasks")]
+    Orchestration(OrchestrationCommand),
+}
+
+impl Commands {
+    #[allow(dead_code)]
+    pub fn stability(&self) -> CommandStability {
+        match self {
+            Self::Init
+            | Self::Status
+            | Self::Query(_)
+            | Self::Deposit(_)
+            | Self::Run(_)
+            | Self::Workflow(_)
+            | Self::Assignment(_)
+            | Self::ChangeSet(_)
+            | Self::Handoff(_)
+            | Self::Failure(_)
+            | Self::Report(_)
+            | Self::Review(_) => CommandStability::Stable,
+
+            Self::Doctor(_)
+            | Self::Declare(_)
+            | Self::Audit(_)
+            | Self::Provider(_)
+            | Self::Completions { .. }
+            | Self::Undo(_) => CommandStability::Beta,
+
+            Self::System(_)
+            | Self::Context(_)
+            | Self::Relation(_)
+            | Self::StandingRequest(_)
+            | Self::Orchestration(_) => CommandStability::Experimental,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -473,6 +538,108 @@ pub enum UndoAction {
         #[arg(long)]
         reason: Option<String>,
     },
+}
+
+#[derive(Args)]
+pub struct OrchestrationCommand {
+    #[command(subcommand)]
+    pub action: OrchestrationAction,
+}
+
+#[derive(Subcommand)]
+pub enum OrchestrationAction {
+    #[command(name = "init-example")]
+    InitExample,
+    CaptureGit(CaptureGitArgs),
+    IngestManifest(IngestManifestArgs),
+    IngestReport(IngestReportArgs),
+    RecordGate(RecordGateArgs),
+    Review(OrchReviewArgs),
+    Show(ShowTaskArgs),
+    Timeline(ShowTaskArgs),
+    List(ListOrchestrationArgs),
+    IngestTask(IngestTaskArgs),
+}
+
+#[derive(Args)]
+pub struct CaptureGitArgs {
+    #[arg(long)]
+    pub task_id: String,
+    #[arg(long)]
+    pub phase: String,
+    #[arg(long)]
+    pub base: Option<String>,
+    #[arg(long)]
+    pub head: Option<String>,
+    #[arg(long)]
+    pub include_diff_stat: bool,
+    #[arg(long)]
+    pub commit: Option<String>,
+}
+
+#[derive(Args)]
+pub struct IngestManifestArgs {
+    pub path: PathBuf,
+    #[arg(long)]
+    pub task_id: Option<String>,
+    #[arg(long)]
+    pub attempt: Option<usize>,
+    #[arg(long)]
+    pub executor: Option<String>,
+    #[arg(long)]
+    pub branch: Option<String>,
+}
+
+#[derive(Args)]
+pub struct IngestReportArgs {
+    pub path: PathBuf,
+    #[arg(long)]
+    pub task_id: Option<String>,
+    #[arg(long)]
+    pub manifest: Option<String>,
+    #[arg(long)]
+    pub attempt: Option<usize>,
+}
+
+#[derive(Args)]
+pub struct RecordGateArgs {
+    #[arg(long)]
+    pub task_id: String,
+    #[arg(long)]
+    pub command: String,
+    #[arg(long)]
+    pub status: String,
+    #[arg(long)]
+    pub log: Option<PathBuf>,
+}
+
+#[derive(Args)]
+pub struct OrchReviewArgs {
+    pub task_id: String,
+    #[arg(long)]
+    pub decision: String,
+    #[arg(long)]
+    pub comment: Option<String>,
+}
+
+#[derive(Args)]
+pub struct ShowTaskArgs {
+    pub task_id: String,
+}
+
+#[derive(Args)]
+pub struct ListOrchestrationArgs {
+    #[arg(long)]
+    pub status: Option<String>,
+    #[arg(long)]
+    pub include_closed: bool,
+}
+
+#[derive(Args)]
+pub struct IngestTaskArgs {
+    pub task_id: String,
+    #[arg(long, default_value = "engram")]
+    pub source: String,
 }
 
 pub fn command_for_completions() -> clap::Command {

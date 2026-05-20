@@ -762,6 +762,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
 
 [[package]]
+name = "earmark"
+version = "0.1.0"
+dependencies = [
+ "assert_cmd",
+ "serde_json",
+ "serde_yaml",
+ "tempfile",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "earmark-cli"
 version = "0.1.0"
 dependencies = [
@@ -786,6 +797,7 @@ dependencies = [
  "toml",
  "tracing",
  "tracing-subscriber",
+ "uuid",
  "walkdir",
 ]
 
@@ -845,11 +857,13 @@ dependencies = [
  "earmark-index",
  "earmark-runtime-tools",
  "earmark-store",
+ "hex",
  "httpmock",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
  "serde_yaml",
+ "sha2",
  "tempfile",
  "thiserror 1.0.69",
 ]
@@ -860,6 +874,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "earmark-core",
+ "earmark-index",
  "earmark-store",
  "serde",
  "serde_json",

@@ -3,7 +3,8 @@ use std::collections::BTreeMap;
 use earmark_core::{
     ClassDefinition, ClassStandingRules, CompiledContextExpansion, CompiledContextRender,
     CompiledContextSelect, CompiledContextTemplate, CompiledContextVisibility, DimensionId,
-    EscalationRule, FlexibleVersionRef, InstructionPayload, JsonSchemaRef, MarkdownBody,
+    EscalationRule, FlexibleVersionRef, HttpAuthConfig, HttpAuthKind, HttpGenerationProfile,
+    HttpRequestTemplate, HttpResponseExtraction, InstructionPayload, JsonSchemaRef, MarkdownBody,
     OperationRequirement, ProviderBudget, ProviderExposure, ProviderProfile,
     ProviderResponseContract, ProviderResponseFormat, StandingPolicy, StandingRegistry,
     StandingTransitionRule, TokenId, WorkflowDeclaration, WorkflowDeclarationOperation,
@@ -871,6 +872,51 @@ fn valid_provider_profile_passes() {
         http: None,
     };
     assert!(validate_provider_profile(&profile).is_ok());
+}
+
+#[test]
+fn provider_profile_rejects_empty_allowed_domain() {
+    let profile = ProviderProfile {
+        name: "http_provider".to_string(),
+        version: "1.0.0".to_string(),
+        description: None,
+        provider: "http_generation".to_string(),
+        model: "demo".to_string(),
+        endpoint_env: None,
+        auth_env: None,
+        budget: ProviderBudget::default(),
+        allowed_operations: vec!["transform".to_string()],
+        exposure: ProviderExposure {
+            allow_prose_objects: true,
+            allow_structured_declarations: true,
+            allow_work_surface_only: false,
+            allow_export_requests: false,
+        },
+        response_contract: ProviderResponseContract {
+            format: ProviderResponseFormat::Markdown,
+            must_return_candidate_only: true,
+            must_include_lineage: false,
+        },
+        http: Some(HttpGenerationProfile {
+            method: Some("POST".to_string()),
+            url_template: "https://api.example.com/v1".to_string(),
+            auth: HttpAuthConfig {
+                kind: HttpAuthKind::None,
+                ..Default::default()
+            },
+            request: HttpRequestTemplate {
+                content_type: Some("application/json".to_string()),
+                body: serde_json::json!({"prompt": "{{input_text}}"}),
+            },
+            response: HttpResponseExtraction {
+                text_path: "$.output".to_string(),
+                ..Default::default()
+            },
+            allowed_domains: vec!["".to_string()],
+            blocked_domains: vec![],
+        }),
+    };
+    assert!(validate_provider_profile(&profile).is_err());
 }
 
 #[test]

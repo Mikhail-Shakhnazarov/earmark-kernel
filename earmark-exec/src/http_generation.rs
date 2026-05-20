@@ -92,7 +92,10 @@ impl ProviderAdapter for HttpGenerationAdapter {
                 let val = env::var(env_name).map_err(|_| {
                     ProviderFailure::new(
                         ProviderFailureKind::AuthenticationFailed,
-                        format!("auth env variable '{}' not set", env_name),
+                        crate::redaction::redact_sensitive(&format!(
+                            "auth env variable '{}' not set",
+                            env_name
+                        )),
                     )
                 })?;
                 auth_header = Some(header.clone());
@@ -113,7 +116,10 @@ impl ProviderAdapter for HttpGenerationAdapter {
                 let val = env::var(env_name).map_err(|_| {
                     ProviderFailure::new(
                         ProviderFailureKind::AuthenticationFailed,
-                        format!("auth env variable '{}' not set", env_name),
+                        crate::redaction::redact_sensitive(&format!(
+                            "auth env variable '{}' not set",
+                            env_name
+                        )),
                     )
                 })?;
                 auth_header = Some("Authorization".to_string());
@@ -134,15 +140,44 @@ impl ProviderAdapter for HttpGenerationAdapter {
                 let val = env::var(env_name).map_err(|_| {
                     ProviderFailure::new(
                         ProviderFailureKind::AuthenticationFailed,
-                        format!("auth env variable '{}' not set", env_name),
+                        crate::redaction::redact_sensitive(&format!(
+                            "auth env variable '{}' not set",
+                            env_name
+                        )),
                     )
                 })?;
                 auth_value = Some(val);
             }
         }
 
-        // 2. Build URL
-        let url = render_template(&http.url_template, &vars);
+        // 2. Build URL (with percent-encoding to prevent URL injection)
+        let url = render_url_template(&http.url_template, &vars);
+
+        // 2a. Domain safety check
+        if !http.allowed_domains.is_empty() || !http.blocked_domains.is_empty() {
+            let host = extract_host(&url).unwrap_or_default();
+            if http
+                .blocked_domains
+                .iter()
+                .any(|d| host == d.as_str() || host.ends_with(&format!(".{}", d)))
+            {
+                return Err(ProviderFailure::new(
+                    ProviderFailureKind::PolicyViolation,
+                    format!("domain '{}' is blocked by provider policy", host),
+                ));
+            }
+            if !http.allowed_domains.is_empty()
+                && !http
+                    .allowed_domains
+                    .iter()
+                    .any(|d| host == d.as_str() || host.ends_with(&format!(".{}", d)))
+            {
+                return Err(ProviderFailure::new(
+                    ProviderFailureKind::PolicyViolation,
+                    format!("domain '{}' is not in the allowed list", host),
+                ));
+            }
+        }
 
         // 3. Build Body
         let body = render_json_template(&http.request.body, &vars);
@@ -265,6 +300,31 @@ fn render_template(template: &str, vars: &BTreeMap<String, String>) -> String {
 }
 
 #[cfg(feature = "http-provider")]
+fn url_encode(input: &str) -> String {
+    let mut result = String::new();
+    for byte in input.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                result.push(byte as char);
+            }
+            _ => {
+                result.push_str(&format!("%{:02X}", byte));
+            }
+        }
+    }
+    result
+}
+
+#[cfg(feature = "http-provider")]
+fn render_url_template(template: &str, vars: &BTreeMap<String, String>) -> String {
+    let mut result = template.to_string();
+    for (k, v) in vars {
+        result = result.replace(&format!("{{{{{}}}}}", k), &url_encode(v));
+    }
+    result
+}
+
+#[cfg(feature = "http-provider")]
 fn render_json_template(
     value: &serde_json::Value,
     vars: &BTreeMap<String, String>,
@@ -283,6 +343,19 @@ fn render_json_template(
         }
         _ => value.clone(),
     }
+}
+
+#[cfg(feature = "http-provider")]
+fn extract_host(url: &str) -> Option<String> {
+    let without_scheme = url.split("://").nth(1)?;
+    let without_credentials = if let Some(at_pos) = without_scheme.find('@') {
+        &without_scheme[at_pos + 1..]
+    } else {
+        without_scheme
+    };
+    let host_port = without_credentials.split('/').next()?;
+    let host = host_port.split(':').next()?;
+    Some(host.to_string())
 }
 
 #[cfg(feature = "http-provider")]
@@ -425,6 +498,8 @@ mod tests {
                     input_tokens_path: Some("$.usage.tokens".to_string()),
                     output_tokens_path: None,
                 },
+                allowed_domains: vec![],
+                blocked_domains: vec![],
             }),
         };
 
@@ -514,6 +589,8 @@ mod tests {
                     input_tokens_path: Some("$.usage.tokens".to_string()),
                     ..Default::default()
                 },
+                allowed_domains: vec![],
+                blocked_domains: vec![],
             }),
         };
 
@@ -618,6 +695,8 @@ mod tests {
                     text_path: "$.output".to_string(),
                     ..Default::default()
                 },
+                allowed_domains: vec![],
+                blocked_domains: vec![],
             }),
         };
 
@@ -647,5 +726,306 @@ mod tests {
         let err = adapter.provide(request, &profile, "transform").unwrap_err();
         assert_eq!(err.kind, ProviderFailureKind::Timeout);
         assert!(err.message.contains("timed out after 50 ms"));
+    }
+
+    #[test]
+    fn test_extract_host_simple() {
+        assert_eq!(
+            extract_host("https://api.example.com/v1/chat").unwrap(),
+            "api.example.com"
+        );
+    }
+
+    #[test]
+    fn test_extract_host_with_port() {
+        assert_eq!(
+            extract_host("http://localhost:8080/path").unwrap(),
+            "localhost"
+        );
+    }
+
+    #[test]
+    fn test_extract_host_with_credentials() {
+        assert_eq!(
+            extract_host("https://user:pass@api.example.com/v1").unwrap(),
+            "api.example.com"
+        );
+    }
+
+    #[test]
+    fn test_domain_blocked_rejects_request() {
+        let profile = ProviderProfile {
+            name: "block_test".to_string(),
+            version: "1".to_string(),
+            description: None,
+            provider: "http_generation".to_string(),
+            model: "test-model".to_string(),
+            endpoint_env: None,
+            auth_env: None,
+            budget: ProviderBudget::default(),
+            allowed_operations: vec!["transform".to_string()],
+            exposure: earmark_core::ProviderExposure {
+                allow_prose_objects: true,
+                allow_structured_declarations: true,
+                allow_work_surface_only: false,
+                allow_export_requests: false,
+            },
+            response_contract: ProviderResponseContract {
+                format: earmark_core::ProviderResponseFormat::Markdown,
+                must_return_candidate_only: true,
+                must_include_lineage: false,
+            },
+            http: Some(HttpGenerationProfile {
+                method: Some("POST".to_string()),
+                url_template: "https://malicious.example.com/api".to_string(),
+                auth: HttpAuthConfig {
+                    kind: HttpAuthKind::None,
+                    ..Default::default()
+                },
+                request: HttpRequestTemplate {
+                    content_type: Some("application/json".to_string()),
+                    body: json!({ "prompt": "hi" }),
+                },
+                response: HttpResponseExtraction {
+                    text_path: "$.output".to_string(),
+                    ..Default::default()
+                },
+                blocked_domains: vec!["malicious.example.com".to_string()],
+                allowed_domains: vec![],
+            }),
+        };
+
+        let adapter = HttpGenerationAdapter;
+        let request = ProviderRequest {
+            request_id: "req_block".to_string(),
+            run_id: "run_block".to_string(),
+            work_packet: earmark_core::ObjectRef::new(
+                earmark_core::ObjectId::new(),
+                earmark_core::VersionId::new(),
+                earmark_core::Kind::WorkPacket,
+                None,
+            ),
+            provider_profile: earmark_core::VersionRef::new(
+                earmark_core::ObjectId::new(),
+                earmark_core::VersionId::new(),
+            ),
+            instruction_text: "hi".to_string(),
+            context_text: None,
+            input_text: "hi".to_string(),
+            work_surface_manifest: None,
+            inputs: vec![],
+            response_contract: profile.response_contract.clone(),
+            issued_at: chrono::Utc::now(),
+        };
+
+        let err = adapter.provide(request, &profile, "transform").unwrap_err();
+        assert_eq!(err.kind, ProviderFailureKind::PolicyViolation);
+        assert!(err.message.contains("blocked by provider policy"));
+    }
+
+    #[test]
+    fn test_domain_allowlist_required() {
+        let profile = ProviderProfile {
+            name: "allow_test".to_string(),
+            version: "1".to_string(),
+            description: None,
+            provider: "http_generation".to_string(),
+            model: "test-model".to_string(),
+            endpoint_env: None,
+            auth_env: None,
+            budget: ProviderBudget::default(),
+            allowed_operations: vec!["transform".to_string()],
+            exposure: earmark_core::ProviderExposure {
+                allow_prose_objects: true,
+                allow_structured_declarations: true,
+                allow_work_surface_only: false,
+                allow_export_requests: false,
+            },
+            response_contract: ProviderResponseContract {
+                format: earmark_core::ProviderResponseFormat::Markdown,
+                must_return_candidate_only: true,
+                must_include_lineage: false,
+            },
+            http: Some(HttpGenerationProfile {
+                method: Some("POST".to_string()),
+                url_template: "https://not-allowed.com/api".to_string(),
+                auth: HttpAuthConfig {
+                    kind: HttpAuthKind::None,
+                    ..Default::default()
+                },
+                request: HttpRequestTemplate {
+                    content_type: Some("application/json".to_string()),
+                    body: json!({ "prompt": "hi" }),
+                },
+                response: HttpResponseExtraction {
+                    text_path: "$.output".to_string(),
+                    ..Default::default()
+                },
+                allowed_domains: vec!["only.approved.com".to_string()],
+                blocked_domains: vec![],
+            }),
+        };
+
+        let adapter = HttpGenerationAdapter;
+        let request = ProviderRequest {
+            request_id: "req_allow".to_string(),
+            run_id: "run_allow".to_string(),
+            work_packet: earmark_core::ObjectRef::new(
+                earmark_core::ObjectId::new(),
+                earmark_core::VersionId::new(),
+                earmark_core::Kind::WorkPacket,
+                None,
+            ),
+            provider_profile: earmark_core::VersionRef::new(
+                earmark_core::ObjectId::new(),
+                earmark_core::VersionId::new(),
+            ),
+            instruction_text: "hi".to_string(),
+            context_text: None,
+            input_text: "hi".to_string(),
+            work_surface_manifest: None,
+            inputs: vec![],
+            response_contract: profile.response_contract.clone(),
+            issued_at: chrono::Utc::now(),
+        };
+
+        let err = adapter.provide(request, &profile, "transform").unwrap_err();
+        assert_eq!(err.kind, ProviderFailureKind::PolicyViolation);
+        assert!(err.message.contains("not in the allowed list"));
+    }
+
+    #[test]
+    fn test_url_encode_special_chars() {
+        assert_eq!(url_encode("hello world"), "hello%20world");
+        assert_eq!(url_encode("a&b=c"), "a%26b%3Dc");
+        assert_eq!(url_encode("path/to?query#frag"), "path%2Fto%3Fquery%23frag");
+        assert_eq!(url_encode("simple"), "simple");
+        assert_eq!(url_encode(""), "");
+        assert_eq!(url_encode("abc123-_."), "abc123-_.");
+    }
+
+    #[test]
+    fn test_render_url_template_encodes_values() {
+        let mut vars = BTreeMap::new();
+        vars.insert("input".to_string(), "hello world".to_string());
+        vars.insert("model".to_string(), "gpt-4".to_string());
+
+        let rendered = render_url_template("https://api.com/{{model}}?q={{input}}", &vars);
+        assert_eq!(rendered, "https://api.com/gpt-4?q=hello%20world");
+    }
+
+    #[test]
+    fn test_render_url_template_prevents_query_injection() {
+        let mut vars = BTreeMap::new();
+        vars.insert("input".to_string(), "foo&bar=baz&malicious=1".to_string());
+
+        let rendered = render_url_template("https://api.com/search?q={{input}}", &vars);
+        // & and = should be encoded so the injected params become part of the value
+        assert_eq!(
+            rendered,
+            "https://api.com/search?q=foo%26bar%3Dbaz%26malicious%3D1"
+        );
+        assert!(!rendered.contains("malicious=1"));
+    }
+
+    #[test]
+    fn test_render_url_template_prevents_path_traversal() {
+        let mut vars = BTreeMap::new();
+        vars.insert("model".to_string(), "../evil".to_string());
+
+        let rendered = render_url_template("https://api.com/models/{{model}}/details", &vars);
+        // / and . are not encoded (dot is unreserved), but / IS encoded → %2F
+        assert_eq!(rendered, "https://api.com/models/..%2Fevil/details");
+        assert!(!rendered.contains("../evil"));
+    }
+
+    #[test]
+    fn test_render_url_template_does_not_affect_json_body() {
+        let mut vars = BTreeMap::new();
+        vars.insert("input".to_string(), "hello & goodbye".to_string());
+
+        let rendered = render_template("{\"msg\": \"{{input}}\"}", &vars);
+        assert_eq!(rendered, "{\"msg\": \"hello & goodbye\"}");
+    }
+
+    #[test]
+    fn test_render_url_template_encodes_fragment_injection() {
+        let mut vars = BTreeMap::new();
+        vars.insert("input".to_string(), "data#fragment".to_string());
+
+        let rendered = render_url_template("https://api.com/endpoint?q={{input}}", &vars);
+        assert_eq!(rendered, "https://api.com/endpoint?q=data%23fragment");
+        assert!(!rendered.contains("#fragment"));
+    }
+
+    #[test]
+    fn test_domain_subdomain_match_blocked() {
+        let profile = ProviderProfile {
+            name: "subdomain_test".to_string(),
+            version: "1".to_string(),
+            description: None,
+            provider: "http_generation".to_string(),
+            model: "test-model".to_string(),
+            endpoint_env: None,
+            auth_env: None,
+            budget: ProviderBudget::default(),
+            allowed_operations: vec!["transform".to_string()],
+            exposure: earmark_core::ProviderExposure {
+                allow_prose_objects: true,
+                allow_structured_declarations: true,
+                allow_work_surface_only: false,
+                allow_export_requests: false,
+            },
+            response_contract: ProviderResponseContract {
+                format: earmark_core::ProviderResponseFormat::Markdown,
+                must_return_candidate_only: true,
+                must_include_lineage: false,
+            },
+            http: Some(HttpGenerationProfile {
+                method: Some("POST".to_string()),
+                url_template: "https://sub.malicious.com/api".to_string(),
+                auth: HttpAuthConfig {
+                    kind: HttpAuthKind::None,
+                    ..Default::default()
+                },
+                request: HttpRequestTemplate {
+                    content_type: Some("application/json".to_string()),
+                    body: json!({ "prompt": "hi" }),
+                },
+                response: HttpResponseExtraction {
+                    text_path: "$.output".to_string(),
+                    ..Default::default()
+                },
+                blocked_domains: vec!["malicious.com".to_string()],
+                allowed_domains: vec![],
+            }),
+        };
+
+        let adapter = HttpGenerationAdapter;
+        let request = ProviderRequest {
+            request_id: "req_sub".to_string(),
+            run_id: "run_sub".to_string(),
+            work_packet: earmark_core::ObjectRef::new(
+                earmark_core::ObjectId::new(),
+                earmark_core::VersionId::new(),
+                earmark_core::Kind::WorkPacket,
+                None,
+            ),
+            provider_profile: earmark_core::VersionRef::new(
+                earmark_core::ObjectId::new(),
+                earmark_core::VersionId::new(),
+            ),
+            instruction_text: "hi".to_string(),
+            context_text: None,
+            input_text: "hi".to_string(),
+            work_surface_manifest: None,
+            inputs: vec![],
+            response_contract: profile.response_contract.clone(),
+            issued_at: chrono::Utc::now(),
+        };
+
+        let err = adapter.provide(request, &profile, "transform").unwrap_err();
+        assert_eq!(err.kind, ProviderFailureKind::PolicyViolation);
+        assert!(err.message.contains("blocked by provider policy"));
     }
 }

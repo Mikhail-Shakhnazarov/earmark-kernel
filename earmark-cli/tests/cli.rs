@@ -408,7 +408,7 @@ fn artifact_explain_missing_id_fails_cleanly() {
         .assert()
         .failure()
         .get_output()
-        .stderr
+        .stdout
         .clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
     assert_eq!(parsed["contract_version"], "0.2.0");
@@ -536,7 +536,7 @@ runtime_profile:
         .assert()
         .failure()
         .get_output()
-        .stderr
+        .stdout
         .clone();
 
     let parsed: Value = serde_json::from_slice(&output).unwrap();
@@ -689,7 +689,7 @@ fn status_requires_initialized_workspace_without_creating_layout() {
         .assert()
         .failure()
         .get_output()
-        .stderr
+        .stdout
         .clone();
 
     let parsed: Value = serde_json::from_slice(&output).unwrap();
@@ -1944,7 +1944,7 @@ fn missing_run_id_fails_cleanly_in_json_mode() {
         .assert()
         .failure()
         .get_output()
-        .stderr
+        .stdout
         .clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
     assert_eq!(parsed["contract_version"], "0.2.0");
@@ -1978,7 +1978,7 @@ fn missing_assignment_id_fails_cleanly_in_json_mode() {
         .assert()
         .failure()
         .get_output()
-        .stderr
+        .stdout
         .clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
     assert_eq!(parsed["contract_version"], "0.2.0");
@@ -2012,7 +2012,7 @@ fn missing_relation_id_fails_cleanly_in_json_mode() {
         .assert()
         .failure()
         .get_output()
-        .stderr
+        .stdout
         .clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
     assert_eq!(parsed["contract_version"], "0.2.0");

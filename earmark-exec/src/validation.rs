@@ -12,6 +12,7 @@ use std::collections::{BTreeSet, HashMap, VecDeque};
 use crate::error::ExecError;
 use crate::ir::{ExecutionEdge, ExecutionIr, ExecutionTransition, WorkflowRunRequest};
 use crate::resolution::load_class_definition;
+use earmark_governance::is_trusted_actor;
 
 pub fn reachability_warnings(ir: &ExecutionIr) -> Vec<String> {
     if ir.transitions.is_empty() {
@@ -315,23 +316,19 @@ pub fn validate_transition_change_set<S: CanonicalStore>(
                 }
 
                 // Initial accepted standing check
-                if let Ok(projection) =
-                    earmark_core::projection::project(&stored.envelope.standing, &registry)
+                if earmark_core::projection::project_review(&stored.envelope.standing, &registry)
+                    == Some(earmark_core::projection::ReviewProjection::Accepted)
                 {
-                    if projection.review
-                        == Some(earmark_core::projection::ReviewProjection::Accepted)
+                    let actor = stored.envelope.provenance.actor.as_str();
+                    if !is_trusted_actor(actor)
+                        && !review_targets.iter().any(|(id, vid)| {
+                            id == &stored.envelope.id && vid == &stored.envelope.version_id
+                        })
                     {
-                        let actor = stored.envelope.provenance.actor.as_str();
-                        if !is_trusted_actor(actor)
-                            && !review_targets.iter().any(|(id, vid)| {
-                                id == &stored.envelope.id && vid == &stored.envelope.version_id
-                            })
-                        {
-                            failures.push(format!(
-                                "created object {} projects accepted review but has no same-change-set review evidence and no trusted provenance",
-                                object_id.as_str()
-                            ));
-                        }
+                        failures.push(format!(
+                            "created object {} projects accepted review but has no same-change-set review evidence and no trusted provenance",
+                            object_id.as_str()
+                        ));
                     }
                 }
             }
@@ -462,10 +459,6 @@ pub fn validate_standing_rules(
     }
 
     requests
-}
-
-fn is_trusted_actor(actor: &str) -> bool {
-    actor == "runtime" || actor == "execution_engine" || actor == "system"
 }
 
 pub fn validate_relation_object<S: CanonicalStore>(

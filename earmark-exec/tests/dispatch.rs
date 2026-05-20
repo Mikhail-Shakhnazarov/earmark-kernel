@@ -231,7 +231,7 @@ fn profile(provider: &str, model: &str) -> ProviderProfile {
         response_contract: ProviderResponseContract {
             format: earmark_core::ProviderResponseFormat::Json,
             must_return_candidate_only: true,
-            must_include_lineage: true,
+            must_include_lineage: false,
         },
         http: None,
     }
@@ -255,7 +255,7 @@ fn request_with_provider_profile(provider_profile: VersionRef) -> ProviderReques
         response_contract: ProviderResponseContract {
             format: earmark_core::ProviderResponseFormat::Json,
             must_return_candidate_only: true,
-            must_include_lineage: true,
+            must_include_lineage: false,
         },
         issued_at: chrono::Utc::now(),
     }

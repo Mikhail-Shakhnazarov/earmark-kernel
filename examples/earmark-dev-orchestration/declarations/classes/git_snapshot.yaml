@@ -1,0 +1,9 @@
+name: git_snapshot
+version: 0.1.0
+kind: object
+required_headers:
+  - title
+payload_schema: inline:any
+standing_rules: {}
+relation_rules: []
+validators: []

@@ -1,0 +1,21 @@
+name: task_execution_context
+version: 0.1.0
+description: Compile task, manifest, and pre-execution git state for the execution phase.
+select:
+  classes:
+    - implementation_task
+    - executor_manifest
+    - git_snapshot
+  standing: {}
+  relations:
+    - has_manifest
+  time_range: null
+group_by: []
+render:
+  mode: work_surface_compilation
+  manifest_format: json
+  prose_template: null
+visibility:
+  include_lineage: true
+  include_constraints: true
+  include_provenance: true

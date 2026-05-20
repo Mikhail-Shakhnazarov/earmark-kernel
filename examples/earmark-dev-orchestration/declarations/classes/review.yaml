@@ -1,0 +1,21 @@
+name: review
+version: 0.1.0
+kind: object
+required_headers:
+  - title
+payload_schema: inline:any
+standing_rules:
+  allowed_standing:
+    kernel:review:
+      - approved
+      - changes_requested
+      - rejected
+      - inconclusive
+relation_rules:
+  - relation_type: reviews
+    counterparty_classes:
+      - work_item
+      - dispatch
+      - evidence
+      - closure
+validators: []
