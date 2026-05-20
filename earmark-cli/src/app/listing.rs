@@ -232,6 +232,6 @@ pub(crate) fn list_provider_records_by_run<S: CanonicalStore>(
             records.push(record);
         }
     }
-    records.sort_by(|a, b| a.recorded_at.cmp(&b.recorded_at));
+    records.sort_by_key(|a| a.recorded_at);
     Ok(records)
 }
