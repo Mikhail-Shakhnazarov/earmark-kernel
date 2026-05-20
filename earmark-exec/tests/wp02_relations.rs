@@ -667,3 +667,64 @@ fn test_missing_endpoint_version_failure() {
     let err = res.unwrap_err().to_string();
     assert!(err.contains("failed to load target endpoint"));
 }
+
+#[test]
+fn test_privileged_relation_uses_store_configured_trust_actor_set() {
+    let dir = tempdir().unwrap();
+    let store =
+        GitCanonicalStore::with_authorized_actors(dir.path(), vec!["configured-admin".to_string()]);
+    store.init_layout().unwrap();
+    let index = DerivedIndex::open(dir.path()).unwrap();
+
+    let source_ref = create_object(&store, Kind::Object, Some("note"), "source");
+    let target_ref = create_object(&store, Kind::Instruction, Some("instruction"), "target");
+    let payload = RelationPayload {
+        source: source_ref,
+        target: target_ref,
+        relation_type: REL_TYPE_USED_INSTRUCTION.to_string(),
+        qualifiers: BTreeMap::new(),
+        scope: None,
+    };
+
+    let rel_ref = earmark_exec::persist_relation_canonical(
+        &store,
+        &index,
+        payload,
+        Provenance::direct_input("configured-admin"),
+        earmark_core::RelationCreationMode::PrivilegedSystem,
+        None,
+    )
+    .unwrap();
+    assert_eq!(rel_ref.kind, Kind::Relation);
+}
+
+#[test]
+fn test_privileged_relation_rejects_hardcoded_trusted_actor_when_not_configured() {
+    let dir = tempdir().unwrap();
+    let store =
+        GitCanonicalStore::with_authorized_actors(dir.path(), vec!["configured-admin".to_string()]);
+    store.init_layout().unwrap();
+    let index = DerivedIndex::open(dir.path()).unwrap();
+
+    let source_ref = create_object(&store, Kind::Object, Some("note"), "source");
+    let target_ref = create_object(&store, Kind::Instruction, Some("instruction"), "target");
+    let payload = RelationPayload {
+        source: source_ref,
+        target: target_ref,
+        relation_type: REL_TYPE_USED_INSTRUCTION.to_string(),
+        qualifiers: BTreeMap::new(),
+        scope: None,
+    };
+
+    let err = earmark_exec::persist_relation_canonical(
+        &store,
+        &index,
+        payload,
+        Provenance::direct_input("runtime"),
+        earmark_core::RelationCreationMode::PrivilegedSystem,
+        None,
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(err.contains("has untrusted provenance"));
+}

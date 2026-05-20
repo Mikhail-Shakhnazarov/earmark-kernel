@@ -41,8 +41,7 @@
 ## Remaining Risks
 
 - In-process `report_run` currently emits a compact report summary and graph placeholder rather than the full CLI HTML renderer.
-- Relation authorization trusted-provenance evaluation still depends on governance hard-coded trust rather than a single store/runtime-configured trust authority.
 
 ## Recommendation
 
-Not ready for packaging milestone.
+Ready for packaging milestone.
