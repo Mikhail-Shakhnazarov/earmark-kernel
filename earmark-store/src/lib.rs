@@ -548,7 +548,9 @@ impl StoreWriteLocking for GitCanonicalStore {
         for object in &batch.objects {
             authorization::check_write_authorized(object, &self.authorized_actors)?;
         }
-        self.init_layout_unlocked()?;
+        if !self.layout_status().is_initialized() {
+            return Err(StoreError::WorkspaceNotInitialized);
+        }
         let mut written = Vec::with_capacity(batch.objects.len());
         let mut total_size = 0;
         let mut created_files: Vec<PathBuf> = Vec::new();
@@ -878,4 +880,6 @@ pub enum StoreError {
     },
     #[error("unauthorized: {0}")]
     Unauthorized(String),
+    #[error("workspace not initialized")]
+    WorkspaceNotInitialized,
 }

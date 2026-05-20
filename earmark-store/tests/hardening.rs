@@ -12,6 +12,7 @@ fn test_payload_integrity_verification() {
     let dir = tempdir().unwrap();
     let root = dir.path().join("payload_integrity");
     let store = GitCanonicalStore::new(&root);
+    store.init_layout().unwrap();
 
     let object = StoredObject::new(
         Kind::Object,
@@ -80,6 +81,7 @@ fn test_rollback_cleanup_intermediate_dirs() {
     let dir = tempdir().unwrap();
     let root = dir.path().join("rollback_cleanup");
     let store = GitCanonicalStore::new(&root);
+    store.init_layout().unwrap();
 
     let ok_object = StoredObject::new(
         Kind::Object,

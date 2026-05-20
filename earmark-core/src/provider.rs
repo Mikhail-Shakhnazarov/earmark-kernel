@@ -58,6 +58,8 @@ pub struct HttpGenerationProfile {
     pub allowed_domains: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub blocked_domains: Vec<String>,
+    #[serde(default)]
+    pub allow_local_http: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -6,8 +6,8 @@ This guide explains how to integrate with Earmark as a governed execution substr
 
 There are currently two integration modes:
 
-1. **In-process crate composition** using the workspace crates directly. This is the architectural direction for the canonical spine.
-2. **CLI-backed compatibility facade** through the `earmark` crate or by spawning `earmark-cli` directly. This is useful for lightweight embedding, but it is not yet the primary in-process Rust API.
+1. **In-process API** through `earmark::EarmarkWorkspace` (or direct crate composition). This is the canonical Rust integration path.
+2. **CLI-backed compatibility facade** through `earmark::CliBackedWorkspace` or by spawning `earmark-cli` directly.
 
 Workspace state is stored in a Git-backed canonical store implemented through `gix`, with a derived index for query and inspection.
 
@@ -82,16 +82,16 @@ for object in outcome.emitted_objects {
 
 ## CLI-backed compatibility facade
 
-The `earmark` crate currently shells out to `earmark-cli` and parses JSON output. It is retained as a compatibility surface while the in-process API matures.
+`CliBackedWorkspace` shells out to `earmark-cli` and parses JSON output. It is retained as a compatibility surface.
 
-Use it when a simple Rust wrapper around the CLI is sufficient. Do not treat it as the canonical Rust API yet.
+Use it when a simple Rust wrapper around the CLI is sufficient. Prefer `EarmarkWorkspace` for in-process Rust integration.
 
 Runtime requirements:
 
 - set `EARMARK_CLI_BIN` to the intended `earmark-cli` executable; or
 - ensure `earmark-cli` is available on `PATH`.
 
-The future primary Rust API should compose `GitCanonicalStore`, `DerivedIndex`, declaration registration, and `ExecutionEngine` directly rather than spawning a subprocess.
+`EarmarkWorkspace` already composes canonical store, derived index, declaration registration, deposit, and workflow execution without spawning a subprocess.
 
 ## Direct CLI bridge
 

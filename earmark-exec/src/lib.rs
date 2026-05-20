@@ -31,6 +31,8 @@ pub use provider::{
 };
 pub use redaction::redact_sensitive;
 pub use relation::persist_relation_canonical;
+pub mod relation_authorization;
+pub use relation_authorization::authorize_relation_creation;
 pub use relation_logic::{
     RelationAuthorizationDecision, RelationAuthorizationReason, RelationAuthorizationResolver,
     RelationEndpointFacts,

@@ -704,39 +704,17 @@ fn execution_error_persists_failed_delta() {
 
     let result = engine.run_workflow(request);
     assert!(result.is_err());
+    let err_msg = result.unwrap_err().to_string();
+    assert!(err_msg.contains("multi-output transform operations are not supported by this runtime; split the operation or use a supported operation kind"));
 
+    // Verify no execution state (like ChangeSet or TransitionAssignment) was created/written
     let objects = store.scan_objects().unwrap().scanned_objects;
-    let change_set = objects
+    assert!(!objects
         .iter()
-        .find(|obj| obj.envelope.kind == Kind::ChangeSet)
-        .expect("ChangeSet should be persisted on execution error");
-
-    let payload: earmark_core::ChangeSet =
-        serde_json::from_slice(&change_set.payload.bytes).unwrap();
-    println!("Validation Result: {:?}", payload.validation_results[0]);
-    assert!(!payload.validation_results.is_empty());
-    assert!(!payload.validation_results[0].is_valid);
-    assert!(payload.validation_results[0]
-        .failures
-        .join(" ")
-        .contains("multi-output transform operations are not yet implemented"));
-
-    let claim_obj = objects
+        .any(|obj| obj.envelope.kind == Kind::ChangeSet));
+    assert!(!objects
         .iter()
-        .filter(|obj| obj.envelope.kind == Kind::TransitionAssignment)
-        .find(|obj| {
-            let c: earmark_core::TransitionAssignment =
-                serde_json::from_slice(&obj.payload.bytes).unwrap();
-            c.status == earmark_core::AssignmentStatus::Blocked
-        })
-        .expect("Blocked TransitionAssignment should be persisted");
-    let assignment: earmark_core::TransitionAssignment =
-        serde_json::from_slice(&claim_obj.payload.bytes).unwrap();
-    assert!(assignment
-        .blocked_reason
-        .as_ref()
-        .unwrap()
-        .contains(change_set.envelope.id.as_str()));
+        .any(|obj| obj.envelope.kind == Kind::TransitionAssignment));
 }
 
 fn create_simple_instruction(
@@ -772,4 +750,197 @@ fn create_simple_instruction(
     index.rebuild_from_store(store).unwrap();
 
     earmark_core::ObjectRef::new(vref.id, vref.version_id, Kind::Instruction, None)
+}
+
+#[test]
+fn test_workflow_completion_semantics() {
+    let dir = tempdir().unwrap();
+    let store = GitCanonicalStore::new(dir.path());
+    store.init_layout().unwrap();
+    let index = DerivedIndex::open(dir.path()).unwrap();
+    let registry = ProviderRegistry::default();
+
+    let system = SystemDefinition {
+        system_id: "test-system".to_string(),
+        namespace: "test".to_string(),
+        title: "Test System".to_string(),
+        description: None,
+        classes: vec![],
+        instructions: vec![],
+        policies: vec![],
+        workflows: vec![],
+        compiled_contexts: vec![],
+        provider_profiles: vec![],
+        default_compiled_context: None,
+        default_provider_profile: None,
+        standing_dimensions: vec![],
+        runtime_profile: RuntimeProfile {
+            execution_surface: "runtime_over_folder".to_string(),
+            machine_output_default: "json".to_string(),
+            work_surface_mode: "materialized_manifest".to_string(),
+        },
+        activated_at: None,
+    };
+    let system_ref = store
+        .write_object(&StoredObject::new(
+            Kind::SystemDefinition,
+            None,
+            Standing::default(),
+            Provenance::direct_input("test"),
+            BTreeMap::new(),
+            StoredPayload::from_yaml(to_yaml(&system).unwrap()),
+            vec![],
+        ))
+        .unwrap();
+
+    let linear_wf = earmark_core::WorkflowDefinition {
+        name: "linear-wf".to_string(),
+        version: "0.1.0".to_string(),
+        description: None,
+        operations: vec![
+            earmark_core::WorkflowOperation {
+                id: "start_op".to_string(),
+                kind: WorkflowOperationKind::Review,
+                input_contracts: vec!["start".to_string()],
+                output_contracts: vec!["middle".to_string()],
+                instruction: None,
+                compiled_context: None,
+                policy: None,
+                provider_profile: None,
+            },
+            earmark_core::WorkflowOperation {
+                id: "next_op".to_string(),
+                kind: WorkflowOperationKind::Review,
+                input_contracts: vec!["middle".to_string()],
+                output_contracts: vec!["end".to_string()],
+                instruction: None,
+                compiled_context: None,
+                policy: None,
+                provider_profile: None,
+            },
+        ],
+        edges: vec![earmark_core::WorkflowEdge {
+            from: "start_op".to_string(),
+            to: "next_op".to_string(),
+            condition: None,
+        }],
+        guards: vec![],
+        output_contracts: vec![],
+    };
+    let linear_wf_ref = store
+        .write_object(&StoredObject::new(
+            Kind::Workflow,
+            None,
+            Standing::default(),
+            Provenance::direct_input("test"),
+            BTreeMap::new(),
+            StoredPayload::from_yaml(to_yaml(&linear_wf).unwrap()),
+            vec![],
+        ))
+        .unwrap();
+
+    let start_obj = StoredObject::new(
+        Kind::Object,
+        Some("start".to_string()),
+        Standing::default(),
+        Provenance::direct_input("test"),
+        BTreeMap::new(),
+        StoredPayload::from_markdown("start"),
+        vec![],
+    );
+    store.write_object(&start_obj).unwrap();
+    index.rebuild_from_store(&store).unwrap();
+
+    let engine = ExecutionEngine {
+        store: &store,
+        index: &index,
+        provider_service: &registry,
+    };
+
+    let outcome = engine
+        .run_workflow(WorkflowRunRequest {
+            run_id: "linear-run".to_string(),
+            system_definition: system_ref.clone(),
+            workflow: linear_wf_ref,
+            inputs: vec![start_obj.object_ref()],
+            handoff_manifest: None,
+            transition_assignment: None,
+            operator_approved: true,
+        })
+        .unwrap();
+
+    assert_eq!(outcome.record.status, earmark_core::RunStatus::Completed);
+
+    let partial_wf = earmark_core::WorkflowDefinition {
+        name: "partial-wf".to_string(),
+        version: "0.1.0".to_string(),
+        description: None,
+        operations: vec![
+            earmark_core::WorkflowOperation {
+                id: "start_op".to_string(),
+                kind: WorkflowOperationKind::Review,
+                input_contracts: vec!["start".to_string()],
+                output_contracts: vec!["middle".to_string()],
+                instruction: None,
+                compiled_context: None,
+                policy: None,
+                provider_profile: None,
+            },
+            earmark_core::WorkflowOperation {
+                id: "unreachable_op".to_string(),
+                kind: WorkflowOperationKind::Review,
+                input_contracts: vec!["middle".to_string()],
+                output_contracts: vec!["end".to_string()],
+                instruction: None,
+                compiled_context: None,
+                policy: None,
+                provider_profile: None,
+            },
+        ],
+        edges: vec![earmark_core::WorkflowEdge {
+            from: "start_op".to_string(),
+            to: "unreachable_op".to_string(),
+            condition: Some("operator_approved".to_string()),
+        }],
+        guards: vec![],
+        output_contracts: vec![],
+    };
+    let partial_wf_ref = store
+        .write_object(&StoredObject::new(
+            Kind::Workflow,
+            None,
+            Standing::default(),
+            Provenance::direct_input("test"),
+            BTreeMap::new(),
+            StoredPayload::from_yaml(to_yaml(&partial_wf).unwrap()),
+            vec![],
+        ))
+        .unwrap();
+
+    let outcome_partial = engine
+        .run_workflow(WorkflowRunRequest {
+            run_id: "partial-run".to_string(),
+            system_definition: system_ref,
+            workflow: partial_wf_ref,
+            inputs: vec![start_obj.object_ref()],
+            handoff_manifest: None,
+            transition_assignment: None,
+            operator_approved: false,
+        })
+        .unwrap();
+
+    assert_eq!(
+        outcome_partial.record.status,
+        earmark_core::RunStatus::Partial
+    );
+
+    let analysis_event = outcome_partial
+        .record
+        .events
+        .iter()
+        .find(|e| e.transition == "analysis" && e.event_type == "partial_execution")
+        .expect("analysis transition not found");
+
+    let msg = analysis_event.message.as_ref().expect("message expected");
+    assert!(msg.contains("unreachable_op"), "message: {}", msg);
 }

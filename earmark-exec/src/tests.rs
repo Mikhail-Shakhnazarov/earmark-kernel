@@ -1116,6 +1116,7 @@ fn test_fail_closed_blocked_domain_rejects_before_http() {
             },
             allowed_domains: vec![],
             blocked_domains: vec!["blocked-domain.example.com".to_string()],
+            ..Default::default()
         }),
     };
     // Without http-provider feature, this test is skipped

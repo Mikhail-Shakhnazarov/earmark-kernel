@@ -47,6 +47,38 @@ fn empty_class_definition(name: &str) -> ClassDefinition {
     }
 }
 
+fn register_class(
+    store: &GitCanonicalStore,
+    index: &DerivedIndex,
+    name: &str,
+    relation_rules: Vec<earmark_core::RelationRule>,
+) {
+    let def = ClassDefinition {
+        name: name.to_string(),
+        version: "1".to_string(),
+        kind: "object".to_string(),
+        required_headers: vec![],
+        payload_schema: JsonSchemaRef("inline:any".to_string()),
+        standing_rules: ClassStandingRules::default(),
+        relation_rules,
+        validators: vec![],
+    };
+    let json = serde_json::to_string(&def).unwrap();
+    let stored = StoredObject::new(
+        Kind::Object,
+        Some("class_definition".to_string()),
+        Standing::default(),
+        Provenance::direct_input("system"),
+        BTreeMap::new(),
+        StoredPayload::from_markdown(&json),
+        vec![],
+    );
+    let obj_ref = store.write_object(&stored).unwrap();
+    index
+        .upsert_head_object_from_store(store, &obj_ref.id)
+        .unwrap();
+}
+
 #[test]
 fn test_endpoint_identity_verification() {
     let (_dir, store, index) = setup_store_and_index();
@@ -74,7 +106,7 @@ fn test_endpoint_identity_verification() {
         &store,
         &index,
         payload,
-        Provenance::direct_input("test"),
+        Provenance::direct_input("runtime"), // use trusted provenance so it doesn't fail auth check
         earmark_core::RelationCreationMode::PrivilegedSystem, // derived_from is now privileged
         None,
     )
@@ -108,6 +140,19 @@ fn test_source_authorized_relation() {
 
     let source_ref = create_object(&store, Kind::Object, Some("note"), "source");
     let target_ref = create_object(&store, Kind::Object, Some("finding"), "target");
+
+    register_class(
+        &store,
+        &index,
+        "note",
+        vec![earmark_core::RelationRule {
+            relation_type: "mentions".to_string(),
+            counterparty_classes: vec!["finding".to_string()],
+            direction: Some("outgoing".to_string()),
+            authorizing_endpoint: Some("source".to_string()),
+        }],
+    );
+    register_class(&store, &index, "finding", vec![]);
 
     let payload = RelationPayload {
         source: source_ref.clone(),
@@ -169,6 +214,19 @@ fn test_target_authorized_relation() {
     let source_ref = create_object(&store, Kind::Object, Some("note"), "source");
     let target_ref = create_object(&store, Kind::Object, Some("finding"), "target");
 
+    register_class(
+        &store,
+        &index,
+        "finding",
+        vec![earmark_core::RelationRule {
+            relation_type: "references".to_string(),
+            counterparty_classes: vec!["note".to_string()],
+            direction: Some("incoming".to_string()),
+            authorizing_endpoint: Some("target".to_string()),
+        }],
+    );
+    register_class(&store, &index, "note", vec![]);
+
     let payload = RelationPayload {
         source: source_ref.clone(),
         target: target_ref.clone(),
@@ -228,6 +286,19 @@ fn test_either_endpoint_authorization() {
 
     let source_ref = create_object(&store, Kind::Object, Some("note"), "source");
     let target_ref = create_object(&store, Kind::Object, Some("finding"), "target");
+
+    register_class(
+        &store,
+        &index,
+        "finding",
+        vec![earmark_core::RelationRule {
+            relation_type: "linked_to".to_string(),
+            counterparty_classes: vec!["note".to_string()],
+            direction: Some("incoming".to_string()),
+            authorizing_endpoint: Some("either_endpoint".to_string()),
+        }],
+    );
+    register_class(&store, &index, "note", vec![]);
 
     let payload = RelationPayload {
         source: source_ref.clone(),
@@ -320,6 +391,19 @@ fn test_malformed_rule_fail_fast() {
 
     let source_ref = create_object(&store, Kind::Object, Some("note"), "source");
     let target_ref = create_object(&store, Kind::Object, Some("finding"), "target");
+
+    register_class(
+        &store,
+        &index,
+        "note",
+        vec![earmark_core::RelationRule {
+            relation_type: "mentions".to_string(),
+            counterparty_classes: vec!["finding".to_string()],
+            direction: Some("outgoing".to_string()),
+            authorizing_endpoint: Some("source".to_string()),
+        }],
+    );
+    register_class(&store, &index, "finding", vec![]);
 
     let payload = RelationPayload {
         source: source_ref.clone(),
@@ -496,37 +580,17 @@ fn test_missing_endpoint_version_failure() {
         scope: None,
     };
 
-    // We can persist it (validation happens later)
-    let rel_ref = earmark_exec::persist_relation_canonical(
+    // We cannot persist it: authorization/endpoint checking fails fast at write time
+    let res = earmark_exec::persist_relation_canonical(
         &store,
         &index,
         payload,
         Provenance::direct_input("runtime"),
         earmark_core::RelationCreationMode::PrivilegedSystem,
         None,
-    )
-    .unwrap();
+    );
 
-    let mut failures = Vec::new();
-    let mut info = Vec::new();
-    let stored_rel = store
-        .read_version(&VersionRef::new(
-            rel_ref.id.clone(),
-            rel_ref.version_id.clone(),
-        ))
-        .unwrap();
-
-    earmark_exec::validation::validate_relation_object(
-        &store,
-        &rel_ref.id,
-        &stored_rel,
-        &HashMap::new(),
-        &mut failures,
-        &mut info,
-    )
-    .unwrap();
-
-    assert!(failures
-        .iter()
-        .any(|f| f.contains("relation references missing target version")));
+    assert!(res.is_err());
+    let err = res.unwrap_err().to_string();
+    assert!(err.contains("failed to load target endpoint"));
 }
