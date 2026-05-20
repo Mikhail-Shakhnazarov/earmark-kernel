@@ -11,6 +11,7 @@ use tempfile::tempdir;
 fn write_and_read_by_version() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
+    store.init_layout().unwrap();
     let mut headers = BTreeMap::new();
     headers.insert(
         "title".to_string(),
@@ -36,6 +37,7 @@ fn write_and_read_by_version() {
 fn advance_head_with_new_version() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
+    store.init_layout().unwrap();
     let mut headers = BTreeMap::new();
     headers.insert(
         "title".to_string(),
@@ -74,6 +76,7 @@ fn advance_head_with_new_version() {
 fn list_versions_for_object() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
+    store.init_layout().unwrap();
 
     let first = StoredObject::new(
         Kind::Object,
@@ -102,6 +105,7 @@ fn list_versions_for_object() {
 fn relation_object_storage_and_retrieval() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
+    store.init_layout().unwrap();
 
     let source = StoredObject::new(
         Kind::Object,
@@ -153,6 +157,7 @@ fn relation_object_storage_and_retrieval() {
 fn write_batch_rolls_back_on_mid_batch_failure() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
+    store.init_layout().unwrap();
 
     let first = StoredObject::new(
         Kind::Object,
@@ -196,6 +201,7 @@ fn write_batch_rolls_back_on_mid_batch_failure() {
 fn write_batch_restores_overwritten_head_on_failure() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
+    store.init_layout().unwrap();
 
     let first = StoredObject::new(
         Kind::Object,
@@ -248,6 +254,7 @@ fn write_batch_restores_overwritten_head_on_failure() {
 fn commit_history_advances_and_records_message() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
+    store.init_layout().unwrap();
 
     let first = StoredObject::new(
         Kind::Object,

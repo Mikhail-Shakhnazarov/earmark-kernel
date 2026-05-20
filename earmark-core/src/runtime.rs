@@ -36,6 +36,7 @@ pub enum RunStatus {
     Completed,
     Failed,
     Cancelled,
+    Partial,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

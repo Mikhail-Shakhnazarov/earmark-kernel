@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use earmark_core::{Kind, Provenance, Standing};
 use earmark_store::{
     authorization, GitCanonicalStore, ObjectStore, StoreError, StoredObject, StoredPayload,
+    WorkspaceLayout,
 };
 use tempfile::tempdir;
 
@@ -23,6 +24,7 @@ fn non_sensitive_kinds_bypass_auth_check() {
     let dir = tempdir().unwrap();
     let store =
         GitCanonicalStore::with_authorized_actors(dir.path(), vec!["trusted-admin".to_string()]);
+    store.init_layout().unwrap();
 
     let object = make_object(Kind::Instruction, "untrusted-user");
     let result = store.write_object(&object);
@@ -33,6 +35,7 @@ fn non_sensitive_kinds_bypass_auth_check() {
 fn default_store_allows_sensitive_kinds() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
+    store.init_layout().unwrap();
 
     let object = make_object(Kind::SystemDefinition, "anyone");
     let result = store.write_object(&object);
@@ -47,6 +50,7 @@ fn authorized_actor_can_write_sensitive_kind() {
     let dir = tempdir().unwrap();
     let store =
         GitCanonicalStore::with_authorized_actors(dir.path(), vec!["trusted-admin".to_string()]);
+    store.init_layout().unwrap();
 
     let object = make_object(Kind::ProviderProfile, "trusted-admin");
     let result = store.write_object(&object);
@@ -58,6 +62,7 @@ fn unauthorized_actor_rejected_for_system_kind() {
     let dir = tempdir().unwrap();
     let store =
         GitCanonicalStore::with_authorized_actors(dir.path(), vec!["trusted-admin".to_string()]);
+    store.init_layout().unwrap();
 
     let object = make_object(Kind::SystemDefinition, "untrusted-user");
     let result = store.write_object(&object);
@@ -73,6 +78,7 @@ fn unauthorized_actor_rejected_for_policy_kind() {
     let dir = tempdir().unwrap();
     let store =
         GitCanonicalStore::with_authorized_actors(dir.path(), vec!["trusted-admin".to_string()]);
+    store.init_layout().unwrap();
 
     let object = make_object(Kind::Policy, "untrusted-user");
     let result = store.write_object(&object);
@@ -88,6 +94,7 @@ fn unauthorized_actor_rejected_for_provider_profile_kind() {
     let dir = tempdir().unwrap();
     let store =
         GitCanonicalStore::with_authorized_actors(dir.path(), vec!["trusted-admin".to_string()]);
+    store.init_layout().unwrap();
 
     let object = make_object(Kind::ProviderProfile, "untrusted-user");
     let result = store.write_object(&object);

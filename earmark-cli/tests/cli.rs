@@ -14,6 +14,13 @@ use tempfile::tempdir;
 #[test]
 fn deposit_outputs_machine_readable_json() {
     let dir = tempdir().unwrap();
+    Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(dir.path())
+        .arg("init")
+        .assert()
+        .success();
     let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
     cmd.arg("--root")
         .arg(dir.path())
@@ -35,6 +42,13 @@ fn deposit_outputs_machine_readable_json() {
 #[test]
 fn query_outputs_machine_readable_json() {
     let dir = tempdir().unwrap();
+    Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(dir.path())
+        .arg("init")
+        .assert()
+        .success();
     let mut deposit = Command::cargo_bin("earmark-cli").unwrap();
     deposit
         .arg("--root")
@@ -70,6 +84,13 @@ fn query_outputs_machine_readable_json() {
 #[test]
 fn system_activate_outputs_machine_readable_json() {
     let dir = tempdir().unwrap();
+    Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(dir.path())
+        .arg("init")
+        .assert()
+        .success();
     let manifest = dir.path().join("system.yaml");
     fs::write(
         &manifest,
@@ -741,8 +762,14 @@ fn completions_does_not_touch_workspace() {
 #[test]
 fn workflow_run_uses_config_default_system_id() {
     let dir = tempdir().unwrap();
+    Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(dir.path())
+        .arg("init")
+        .assert()
+        .success();
     let config_dir = dir.path().join(".earmark");
-    fs::create_dir_all(&config_dir).unwrap();
     fs::write(
         config_dir.join("config.toml"),
         "default_system_id = \"sys_research_synthesis\"\njson = true\n",
@@ -807,8 +834,13 @@ fn workflow_run_uses_config_default_system_id() {
 #[test]
 fn test_deposit_rejection_in_active_system() {
     let dir = tempdir().unwrap();
-    let config_dir = dir.path().join(".earmark");
-    fs::create_dir_all(&config_dir).unwrap();
+    Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(dir.path())
+        .arg("init")
+        .assert()
+        .success();
 
     // 1. Setup classes and system (using research-synthesis example)
     let workspace = workspace_root();
@@ -1429,7 +1461,7 @@ fn demo_path_research_synthesis_full_workflow() {
         .clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
     assert_eq!(parsed["ok"], true);
-    assert_eq!(parsed["data"]["status"], "completed");
+    assert_eq!(parsed["data"]["status"], "partial");
     let run_id = parsed["data"]["run_id"].as_str().unwrap().to_string();
     assert!(!parsed["data"]["created_assignments"]
         .as_array()

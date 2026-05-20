@@ -87,6 +87,15 @@ Defines a sequence of transitions.
 
 Each operation has: `id`, `kind` (`compile_context` or `transform`), `input_contracts`, `output_contracts`, and either a `compiled_context` reference or an `instruction` reference.
 
+#### Supported Operation/Output Combinations
+
+| Operation kind  | Supported output contracts                           |
+| --------------- | ---------------------------------------------------- |
+| `compile_context` | one work packet / context object as declared         |
+| `transform`       | zero or one output class                             |
+| `review`          | one or more forwarded classes if explicitly declared |
+| `export`          | no output object required                            |
+
 ### Compiled Context Template
 
 Defines rules for compiling bounded context from the store.

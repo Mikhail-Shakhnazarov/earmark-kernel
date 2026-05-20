@@ -160,6 +160,8 @@ pub(crate) fn generate_run_report<S: CanonicalStore>(
         status = format!("{:?}", ledger.status).to_lowercase(),
         status_class = if matches!(ledger.status, earmark_core::RunStatus::Completed) {
             "success"
+        } else if matches!(ledger.status, earmark_core::RunStatus::Partial) {
+            "warning"
         } else {
             "error"
         },

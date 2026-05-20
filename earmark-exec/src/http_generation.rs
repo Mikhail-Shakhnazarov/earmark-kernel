@@ -153,31 +153,8 @@ impl ProviderAdapter for HttpGenerationAdapter {
         // 2. Build URL (with percent-encoding to prevent URL injection)
         let url = render_url_template(&http.url_template, &vars);
 
-        // 2a. Domain safety check
-        if !http.allowed_domains.is_empty() || !http.blocked_domains.is_empty() {
-            let host = extract_host(&url).unwrap_or_default();
-            if http
-                .blocked_domains
-                .iter()
-                .any(|d| host == d.as_str() || host.ends_with(&format!(".{}", d)))
-            {
-                return Err(ProviderFailure::new(
-                    ProviderFailureKind::PolicyViolation,
-                    format!("domain '{}' is blocked by provider policy", host),
-                ));
-            }
-            if !http.allowed_domains.is_empty()
-                && !http
-                    .allowed_domains
-                    .iter()
-                    .any(|d| host == d.as_str() || host.ends_with(&format!(".{}", d)))
-            {
-                return Err(ProviderFailure::new(
-                    ProviderFailureKind::PolicyViolation,
-                    format!("domain '{}' is not in the allowed list", host),
-                ));
-            }
-        }
+        // 2a. Safety checks (URL format, scheme, host, credentials, loopback, private ranges, domains)
+        let _parsed_url = validate_url(&url, http)?;
 
         // 3. Build Body
         let body = render_json_template(&http.request.body, &vars);
@@ -345,17 +322,162 @@ fn render_json_template(
     }
 }
 
+
+
 #[cfg(feature = "http-provider")]
-fn extract_host(url: &str) -> Option<String> {
-    let without_scheme = url.split("://").nth(1)?;
-    let without_credentials = if let Some(at_pos) = without_scheme.find('@') {
-        &without_scheme[at_pos + 1..]
-    } else {
-        without_scheme
-    };
-    let host_port = without_credentials.split('/').next()?;
-    let host = host_port.split(':').next()?;
-    Some(host.to_string())
+fn validate_url(
+    url_str: &str,
+    http: &earmark_core::HttpGenerationProfile,
+) -> Result<url::Url, ProviderFailure> {
+    use url::{Host, Url};
+
+    let parsed = Url::parse(url_str).map_err(|e| {
+        ProviderFailure::new(
+            ProviderFailureKind::PolicyViolation,
+            format!("Invalid URL: {}", e),
+        )
+    })?;
+
+    // 1. Scheme check
+    let scheme = parsed.scheme();
+    if scheme != "http" && scheme != "https" {
+        return Err(ProviderFailure::new(
+            ProviderFailureKind::PolicyViolation,
+            format!("Unsupported URL scheme '{}', must be http or https", scheme),
+        ));
+    }
+
+    if !http.allow_local_http && scheme != "https" {
+        return Err(ProviderFailure::new(
+            ProviderFailureKind::PolicyViolation,
+            "HTTP is only allowed when allow_local_http is enabled".to_string(),
+        ));
+    }
+
+    // 2. Credentials check
+    if !http.allow_local_http {
+        if !parsed.username().is_empty() || parsed.password().is_some() {
+            return Err(ProviderFailure::new(
+                ProviderFailureKind::PolicyViolation,
+                "URL credentials (username/password) are not allowed".to_string(),
+            ));
+        }
+    }
+
+    // 3. Host check
+    let host = parsed.host().ok_or_else(|| {
+        ProviderFailure::new(
+            ProviderFailureKind::PolicyViolation,
+            "URL must have a host".to_string(),
+        )
+    })?;
+
+    let host_str = parsed.host_str().unwrap_or("");
+    if host_str.is_empty() {
+        return Err(ProviderFailure::new(
+            ProviderFailureKind::PolicyViolation,
+            "URL host cannot be empty".to_string(),
+        ));
+    }
+
+    if !http.allow_local_http {
+        // Reject localhost
+        if host_str.eq_ignore_ascii_case("localhost") {
+            return Err(ProviderFailure::new(
+                ProviderFailureKind::PolicyViolation,
+                "Local hostnames are not allowed".to_string(),
+            ));
+        }
+
+        // IP checks
+        match host {
+            Host::Ipv4(ip) => {
+                if ip.is_loopback() {
+                    return Err(ProviderFailure::new(
+                        ProviderFailureKind::PolicyViolation,
+                        format!("Loopback IP '{}' is not allowed", ip),
+                    ));
+                }
+                if ip.is_private() {
+                    return Err(ProviderFailure::new(
+                        ProviderFailureKind::PolicyViolation,
+                        format!("Private IP range '{}' is not allowed", ip),
+                    ));
+                }
+                if ip.is_link_local() {
+                    return Err(ProviderFailure::new(
+                        ProviderFailureKind::PolicyViolation,
+                        format!("Link-local IP range '{}' is not allowed", ip),
+                    ));
+                }
+            }
+            Host::Ipv6(ip) => {
+                if ip.is_loopback() {
+                    return Err(ProviderFailure::new(
+                        ProviderFailureKind::PolicyViolation,
+                        format!("Loopback IP '{}' is not allowed", ip),
+                    ));
+                }
+                let segments = ip.segments();
+                let is_unique_local = (segments[0] & 0xfe00) == 0xfc00;
+                if is_unique_local {
+                    return Err(ProviderFailure::new(
+                        ProviderFailureKind::PolicyViolation,
+                        format!("Private IPv6 range '{}' is not allowed", ip),
+                    ));
+                }
+                let is_link_local = (segments[0] & 0xffc0) == 0xfe80;
+                if is_link_local {
+                    return Err(ProviderFailure::new(
+                        ProviderFailureKind::PolicyViolation,
+                        format!("Link-local IPv6 range '{}' is not allowed", ip),
+                    ));
+                }
+            }
+            Host::Domain(_) => {}
+        }
+    }
+
+    // 4. Allowed / Blocked domain checks
+    if !http.allow_local_http {
+        if http.allowed_domains.is_empty() {
+            return Err(ProviderFailure::new(
+                ProviderFailureKind::PolicyViolation,
+                "For non-local HTTP profiles, allowed_domains cannot be empty".to_string(),
+            ));
+        }
+    }
+
+    let host_lower = host_str.to_lowercase();
+
+    // Blocked list check (always checked, even if allowed_domains is checked)
+    if !http.blocked_domains.is_empty() {
+        if http.blocked_domains.iter().any(|d| {
+            let d_lower = d.to_lowercase();
+            host_lower == d_lower || host_lower.ends_with(&format!(".{}", d_lower))
+        }) {
+            return Err(ProviderFailure::new(
+                ProviderFailureKind::PolicyViolation,
+                format!("domain '{}' is blocked by provider policy", host_str),
+            ));
+        }
+    }
+
+    // Allowed list check
+    if !http.allowed_domains.is_empty() {
+        let is_allowed = http.allowed_domains.iter().any(|d| {
+            let d_lower = d.to_lowercase();
+            host_lower == d_lower || host_lower.ends_with(&format!(".{}", d_lower))
+        });
+        if !is_allowed {
+            return Err(ProviderFailure::new(
+                ProviderFailureKind::PolicyViolation,
+                format!("domain '{}' is not in the allowed list", host_str),
+            ));
+        }
+    }
+
+    Ok(parsed)
 }
 
 #[cfg(feature = "http-provider")]
@@ -500,6 +622,7 @@ mod tests {
                 },
                 allowed_domains: vec![],
                 blocked_domains: vec![],
+                allow_local_http: true,
             }),
         };
 
@@ -591,6 +714,7 @@ mod tests {
                 },
                 allowed_domains: vec![],
                 blocked_domains: vec![],
+                allow_local_http: true,
             }),
         };
 
@@ -697,6 +821,7 @@ mod tests {
                 },
                 allowed_domains: vec![],
                 blocked_domains: vec![],
+                allow_local_http: true,
             }),
         };
 
@@ -728,29 +853,7 @@ mod tests {
         assert!(err.message.contains("timed out after 50 ms"));
     }
 
-    #[test]
-    fn test_extract_host_simple() {
-        assert_eq!(
-            extract_host("https://api.example.com/v1/chat").unwrap(),
-            "api.example.com"
-        );
-    }
 
-    #[test]
-    fn test_extract_host_with_port() {
-        assert_eq!(
-            extract_host("http://localhost:8080/path").unwrap(),
-            "localhost"
-        );
-    }
-
-    #[test]
-    fn test_extract_host_with_credentials() {
-        assert_eq!(
-            extract_host("https://user:pass@api.example.com/v1").unwrap(),
-            "api.example.com"
-        );
-    }
 
     #[test]
     fn test_domain_blocked_rejects_request() {
@@ -791,7 +894,8 @@ mod tests {
                     ..Default::default()
                 },
                 blocked_domains: vec!["malicious.example.com".to_string()],
-                allowed_domains: vec![],
+                allowed_domains: vec!["malicious.example.com".to_string()],
+                ..Default::default()
             }),
         };
 
@@ -863,6 +967,7 @@ mod tests {
                 },
                 allowed_domains: vec!["only.approved.com".to_string()],
                 blocked_domains: vec![],
+                ..Default::default()
             }),
         };
 
@@ -997,7 +1102,8 @@ mod tests {
                     ..Default::default()
                 },
                 blocked_domains: vec!["malicious.com".to_string()],
-                allowed_domains: vec![],
+                allowed_domains: vec!["sub.malicious.com".to_string()],
+                ..Default::default()
             }),
         };
 
@@ -1027,5 +1133,65 @@ mod tests {
         let err = adapter.provide(request, &profile, "transform").unwrap_err();
         assert_eq!(err.kind, ProviderFailureKind::PolicyViolation);
         assert!(err.message.contains("blocked by provider policy"));
+    }
+
+    #[test]
+    fn test_url_constrain_and_harden() {
+        let mut profile = HttpGenerationProfile::default();
+
+        // 1. Non-local HTTP profile without allowed domains should fail validation
+        let err = validate_url("https://approved.com/api", &profile).unwrap_err();
+        assert!(err.message.contains("allowed_domains cannot be empty"));
+
+        profile.allowed_domains = vec!["approved.com".to_string()];
+
+        // 2. Valid HTTPS endpoint passes
+        assert!(validate_url("https://approved.com/api", &profile).is_ok());
+
+        // 3. HTTP endpoint rejected under non-local profile
+        let err = validate_url("http://approved.com/api", &profile).unwrap_err();
+        assert!(err
+            .message
+            .contains("HTTP is only allowed when allow_local_http is enabled"));
+
+        // 4. Localhost/loopback/private/link-local/credentials rejected under non-local profile
+        assert!(validate_url("https://localhost/api", &profile).is_err());
+        assert!(validate_url("https://127.0.0.1/api", &profile).is_err());
+        assert!(validate_url("https://[::1]/api", &profile).is_err());
+        assert!(validate_url("https://10.0.0.1/api", &profile).is_err());
+        assert!(validate_url("https://192.168.1.1/api", &profile).is_err());
+        assert!(validate_url("https://172.16.0.1/api", &profile).is_err());
+        assert!(validate_url("https://169.254.0.1/api", &profile).is_err());
+        assert!(validate_url("https://[fe80::1]/api", &profile).is_err());
+        assert!(validate_url("https://user:pass@approved.com/api", &profile).is_err());
+
+        // 5. allowed subdomain accepted only under explicit parent-domain rule
+        assert!(validate_url("https://sub.approved.com/api", &profile).is_ok());
+        let err = validate_url("https://unapproved.com/api", &profile).unwrap_err();
+        assert!(err.message.contains("not in the allowed list"));
+
+        // Sibling-domain suffix trick rejected
+        let err = validate_url("https://notapproved.com/api", &profile).unwrap_err();
+        assert!(err.message.contains("not in the allowed list"));
+        let err = validate_url("https://approved.com.co/api", &profile).unwrap_err();
+        assert!(err.message.contains("not in the allowed list"));
+
+        // 6. Blocked domain rejected
+        profile.blocked_domains = vec!["blocked.com".to_string()];
+        profile.allowed_domains = vec!["approved.com".to_string(), "blocked.com".to_string()];
+        let err = validate_url("https://blocked.com/api", &profile).unwrap_err();
+        assert!(err.message.contains("blocked by provider policy"));
+        let err = validate_url("https://sub.blocked.com/api", &profile).unwrap_err();
+        assert!(err.message.contains("blocked by provider policy"));
+
+        // 7. If allow_local_http is enabled, local endpoints and HTTP schemes are allowed
+        let mut local_profile = HttpGenerationProfile::default();
+        local_profile.allow_local_http = true;
+
+        assert!(validate_url("http://localhost:8080/api", &local_profile).is_ok());
+        assert!(validate_url("http://127.0.0.1/api", &local_profile).is_ok());
+        assert!(validate_url("http://[::1]/api", &local_profile).is_ok());
+        assert!(validate_url("http://192.168.1.5/api", &local_profile).is_ok());
+        assert!(validate_url("http://user:pass@127.0.0.1/api", &local_profile).is_ok());
     }
 }
