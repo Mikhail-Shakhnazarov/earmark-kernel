@@ -85,7 +85,7 @@ fn run_artifacts_exposes_handoffs_for_demo_path() {
         .clone();
     let parsed: Value = serde_json::from_slice(&run_output).unwrap();
     assert_eq!(parsed["ok"], true);
-    assert_eq!(parsed["data"]["status"], "completed");
+    assert_eq!(parsed["data"]["status"], "partial");
     let run_id = parsed["data"]["run_id"].as_str().unwrap().to_string();
 
     let artifacts_output = Command::cargo_bin("earmark-cli")

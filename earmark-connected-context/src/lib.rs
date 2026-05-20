@@ -577,7 +577,7 @@ mod tests {
         CompiledContextExpansion, DimensionId, ExpansionObjectFilter, Kind, Provenance, Standing,
         TokenId,
     };
-    use earmark_store::{GitCanonicalStore, ObjectStore, StoredObject, StoredPayload};
+    use earmark_store::{GitCanonicalStore, ObjectStore, StoredObject, StoredPayload, WorkspaceLayout};
     use tempfile::tempdir;
 
     #[test]
@@ -813,6 +813,7 @@ mod tests {
     fn collect_selected_objects_terminates_on_two_node_cycle() {
         let dir = tempdir().unwrap();
         let store = GitCanonicalStore::new(dir.path());
+        store.init_layout().unwrap();
         let index = DerivedIndex::open(dir.path()).unwrap();
 
         let a = object("a", Standing::default());
@@ -839,6 +840,7 @@ mod tests {
     fn collect_selected_objects_handles_larger_cycle() {
         let dir = tempdir().unwrap();
         let store = GitCanonicalStore::new(dir.path());
+        store.init_layout().unwrap();
         let index = DerivedIndex::open(dir.path()).unwrap();
 
         let a = object("a", Standing::default());
@@ -866,6 +868,7 @@ mod tests {
     fn collect_selected_objects_dedupes_when_multiple_paths_reach_same_node() {
         let dir = tempdir().unwrap();
         let store = GitCanonicalStore::new(dir.path());
+        store.init_layout().unwrap();
         let index = DerivedIndex::open(dir.path()).unwrap();
 
         let a = object("a", Standing::default());
@@ -896,6 +899,7 @@ mod tests {
     fn collect_selected_objects_preserves_standing_filter_on_seed_selection() {
         let dir = tempdir().unwrap();
         let store = GitCanonicalStore::new(dir.path());
+        store.init_layout().unwrap();
         let index = DerivedIndex::open(dir.path()).unwrap();
 
         let accepted = object("accepted", standing_kernel("working", "accepted", "active"));
@@ -923,6 +927,7 @@ mod tests {
     fn compiled_context_expansion_excludes_wrong_class_neighbor_by_default() {
         let dir = tempdir().unwrap();
         let store = GitCanonicalStore::new(dir.path());
+        store.init_layout().unwrap();
         let index = DerivedIndex::open(dir.path()).unwrap();
 
         let finding = StoredObject::new(
@@ -974,6 +979,7 @@ mod tests {
     fn compiled_context_expansion_respects_relation_type_filter() {
         let dir = tempdir().unwrap();
         let store = GitCanonicalStore::new(dir.path());
+        store.init_layout().unwrap();
         let index = DerivedIndex::open(dir.path()).unwrap();
 
         let accepted = object("accepted", standing_kernel("working", "accepted", "active"));
@@ -1012,6 +1018,7 @@ mod tests {
     fn compiled_context_expansion_object_filter_none_includes_rejected_neighbor() {
         let dir = tempdir().unwrap();
         let store = GitCanonicalStore::new(dir.path());
+        store.init_layout().unwrap();
         let index = DerivedIndex::open(dir.path()).unwrap();
 
         let accepted = object("accepted", standing_kernel("working", "accepted", "active"));
@@ -1052,6 +1059,7 @@ mod tests {
     fn compiled_context_does_not_enqueue_filtered_neighbor_for_further_traversal() {
         let dir = tempdir().unwrap();
         let store = GitCanonicalStore::new(dir.path());
+        store.init_layout().unwrap();
         let index = DerivedIndex::open(dir.path()).unwrap();
 
         let accepted = object("accepted", standing_kernel("working", "accepted", "active"));
@@ -1094,6 +1102,7 @@ mod tests {
     fn test_boundary_relations_omitted_by_default() {
         let dir = tempdir().unwrap();
         let store = GitCanonicalStore::new(dir.path());
+        store.init_layout().unwrap();
         let index = DerivedIndex::open(dir.path()).unwrap();
 
         let finding = StoredObject::new(
@@ -1141,6 +1150,7 @@ mod tests {
     fn test_compile_includes_boundary_relations() {
         let dir = tempdir().unwrap();
         let store = GitCanonicalStore::new(dir.path());
+        store.init_layout().unwrap();
         let index = DerivedIndex::open(dir.path()).unwrap();
 
         let finding = StoredObject::new(
@@ -1224,6 +1234,7 @@ mod tests {
     fn test_inbound_relation_is_not_boundary() {
         let dir = tempdir().unwrap();
         let store = GitCanonicalStore::new(dir.path());
+        store.init_layout().unwrap();
         let index = DerivedIndex::open(dir.path()).unwrap();
 
         let a = object("a", Standing::default());
@@ -1246,6 +1257,7 @@ mod tests {
     fn test_wrong_relation_type_no_boundary() {
         let dir = tempdir().unwrap();
         let store = GitCanonicalStore::new(dir.path());
+        store.init_layout().unwrap();
         let index = DerivedIndex::open(dir.path()).unwrap();
 
         let finding = StoredObject::new(
@@ -1292,6 +1304,7 @@ mod tests {
     fn test_filtered_neighbor_not_traversed() {
         let dir = tempdir().unwrap();
         let store = GitCanonicalStore::new(dir.path());
+        store.init_layout().unwrap();
         let index = DerivedIndex::open(dir.path()).unwrap();
 
         let accepted = object("accepted", standing_kernel("working", "accepted", "active"));
@@ -1331,6 +1344,7 @@ mod tests {
     fn test_no_payload_leakage() {
         let dir = tempdir().unwrap();
         let store = GitCanonicalStore::new(dir.path());
+        store.init_layout().unwrap();
         let index = DerivedIndex::open(dir.path()).unwrap();
 
         let finding = StoredObject::new(
@@ -1482,6 +1496,7 @@ mod tests {
     fn visibility_excludes_object_from_standard_context() {
         let dir = tempdir().unwrap();
         let store = GitCanonicalStore::new(dir.path());
+        store.init_layout().unwrap();
         let index = DerivedIndex::open(dir.path()).unwrap();
 
         let included = object("included", Standing::default());
@@ -1521,6 +1536,7 @@ mod tests {
     fn visibility_included_object_appears_in_context() {
         let dir = tempdir().unwrap();
         let store = GitCanonicalStore::new(dir.path());
+        store.init_layout().unwrap();
         let index = DerivedIndex::open(dir.path()).unwrap();
 
         let visible = object("visible", standing_with_visibility("standard_only"));
@@ -1556,6 +1572,7 @@ mod tests {
     fn visibility_no_binding_defaults_to_included() {
         let dir = tempdir().unwrap();
         let store = GitCanonicalStore::new(dir.path());
+        store.init_layout().unwrap();
         let index = DerivedIndex::open(dir.path()).unwrap();
 
         let obj = object("default", Standing::default());
@@ -1591,6 +1608,7 @@ mod tests {
     fn visibility_excluded_by_standing_is_excluded_from_compile() {
         let dir = tempdir().unwrap();
         let store = GitCanonicalStore::new(dir.path());
+        store.init_layout().unwrap();
         let index = DerivedIndex::open(dir.path()).unwrap();
 
         let included = object("included", Standing::default());
@@ -1630,6 +1648,7 @@ mod tests {
     fn visibility_excluded_object_triggers_warning() {
         let dir = tempdir().unwrap();
         let store = GitCanonicalStore::new(dir.path());
+        store.init_layout().unwrap();
         let index = DerivedIndex::open(dir.path()).unwrap();
 
         let hidden_obj = object("hidden", standing_with_visibility("hidden"));
@@ -1667,6 +1686,7 @@ mod tests {
     fn visibility_excluded_boundary_relation_does_not_leak_payload() {
         let dir = tempdir().unwrap();
         let store = GitCanonicalStore::new(dir.path());
+        store.init_layout().unwrap();
         let index = DerivedIndex::open(dir.path()).unwrap();
 
         let finding = StoredObject::new(

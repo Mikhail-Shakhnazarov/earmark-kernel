@@ -53,6 +53,9 @@ impl CliError {
 
     pub fn kind_str(&self) -> &'static str {
         match self {
+            Self::Store(earmark_store::StoreError::WorkspaceNotInitialized) => {
+                "workspace_not_initialized"
+            }
             Self::Store(_) => "store",
             Self::Index(_) => "index",
             Self::Derive(_) => "derive",

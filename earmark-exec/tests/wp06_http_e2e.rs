@@ -10,7 +10,7 @@ use earmark_exec::{
     ExecError, HttpGenerationAdapter, ProviderFailureKind, ProviderRegistry, ProviderService,
 };
 use earmark_index::DerivedIndex;
-use earmark_store::{GitCanonicalStore, ObjectStore, StoredObject, StoredPayload};
+use earmark_store::{GitCanonicalStore, ObjectStore, StoredObject, StoredPayload, WorkspaceLayout};
 use httpmock::MockServer;
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -61,6 +61,7 @@ fn test_registry() -> StandingRegistry {
 fn test_http_provider_e2e_content_rendering() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
+    store.init_layout().unwrap();
     let _index = DerivedIndex::open(dir.path()).unwrap();
 
     // 1. Create an input object with real payload
@@ -142,6 +143,7 @@ fn test_http_provider_e2e_content_rendering() {
             },
             allowed_domains: vec![],
             blocked_domains: vec![],
+            allow_local_http: true,
         }),
     };
 
@@ -212,6 +214,7 @@ fn test_http_provider_e2e_content_rendering() {
 fn test_http_provider_rendering_with_manifest() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
+    store.init_layout().unwrap();
 
     // 1. Objects
     let stored_input = StoredObject::new(
@@ -333,6 +336,7 @@ fn test_http_provider_rendering_with_manifest() {
 fn test_http_provider_exposure_structured_hiding() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
+    store.init_layout().unwrap();
 
     // Structured object (Workflow)
     let stored_workflow = StoredObject::new(
@@ -416,6 +420,7 @@ fn test_http_provider_exposure_structured_hiding() {
 fn test_http_provider_exposure_prose_hiding() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
+    store.init_layout().unwrap();
 
     let stored_input = StoredObject::new(
         Kind::Object,
@@ -549,6 +554,7 @@ fn test_http_provider_rejects_unsupported_lineage() {
             },
             allowed_domains: vec![],
             blocked_domains: vec![],
+            allow_local_http: true,
         }),
     };
 
@@ -630,6 +636,7 @@ fn test_http_provider_rejects_unsupported_full_message_capture() {
             },
             allowed_domains: vec![],
             blocked_domains: vec![],
+            allow_local_http: true,
         }),
     };
 
@@ -663,6 +670,7 @@ fn test_http_provider_rejects_unsupported_full_message_capture() {
 fn test_http_provider_exposure_class_definition_hiding() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
+    store.init_layout().unwrap();
 
     // Class definition object (Kind::Object, class="class_definition")
     let stored_class = StoredObject::new(
