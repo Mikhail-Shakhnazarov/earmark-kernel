@@ -107,6 +107,7 @@ See the [Quickstart Tutorial](docs/tutorials/quickstart.md) for a complete walkt
 |---|---|
 | **[Quickstart](docs/tutorials/quickstart.md)** | Get moving in 5 minutes |
 | **[Practical Guide](docs/tutorials/practical-guide.md)** | Plain-language explanation and use cases |
+| **[Canonical Spine](docs/architecture/canonical-spine.md)** | Authoritative architecture note for the core durable path |
 | **[Staged Execution](docs/concepts/staged-execution.md)** | How transitions, assignments, and handoffs work |
 | **[Context Compilation](docs/concepts/context-compilation.md)** | How Earmark bounds what a runtime sees |
 | **[Standing](docs/concepts/standing.md)** | How domain lifecycle state is declared and enforced |
