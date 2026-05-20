@@ -21,3 +21,7 @@
 
 # Generated dogfooding corpus objects unless explicitly promoted to fixtures
 /dogfooding/**/corpus/obj_*.md
+
+# Local orchestration artifacts
+.orchestration/
+.opencode/

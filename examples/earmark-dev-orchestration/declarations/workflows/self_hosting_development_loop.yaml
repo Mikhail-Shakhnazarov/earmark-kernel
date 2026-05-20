@@ -1,0 +1,53 @@
+name: self_hosting_development_loop
+version: 0.1.0
+description: "The self-hosting development loop: prepare manifest, execute, report, review, close or follow up."
+operations:
+  - id: prepare_manifest
+    kind: transform
+    input_contracts: [implementation_task]
+    output_contracts: [executor_manifest]
+    instruction: "../instructions/task_to_manifest.md"
+
+  - id: capture_git_before
+    kind: compile_context
+    input_contracts: [executor_manifest]
+    output_contracts: [task_execution_context]
+    compiled_context: "../compiled_contexts/task_execution_context.yaml"
+
+  - id: execute_task
+    kind: transform
+    input_contracts: [implementation_task]
+    output_contracts: [executor_report]
+    instruction: "../instructions/report_to_review_summary.md"
+
+  - id: capture_git_after
+    kind: compile_context
+    input_contracts: [executor_report]
+    output_contracts: [review_context]
+    compiled_context: "../compiled_contexts/review_context.yaml"
+
+  - id: review_results
+    kind: transform
+    input_contracts: [implementation_task]
+    output_contracts: [review_decision]
+    instruction: "../instructions/report_to_review_summary.md"
+
+  - id: handle_followup
+    kind: transform
+    input_contracts: [implementation_task]
+    output_contracts: [followup_task]
+    instruction: "../instructions/failure_to_followup.md"
+
+edges:
+  - from: prepare_manifest
+    to: capture_git_before
+  - from: capture_git_before
+    to: execute_task
+  - from: execute_task
+    to: capture_git_after
+  - from: capture_git_after
+    to: review_results
+  - from: review_results
+    to: handle_followup
+
+guards: []
