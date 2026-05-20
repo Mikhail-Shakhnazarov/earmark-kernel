@@ -1,14 +1,31 @@
 # Native Orchestration Ledger
 
-The Earmark Native Orchestration Ledger implements a fully sovereign, auditable, and versioned task execution history natively inside Earmark's canonical storage and derived SQLite index. 
+© 2026 Mikhail Shakhnazarov
 
-Rather than relying on external task trackers, Earmark represents development lifecycles, executor dispatches, and verification gates directly as structured, linked Earmark objects.
+## Status
+
+Experimental / internal dogfooding infrastructure.
+
+This document describes the native orchestration ledger used to coordinate Earmark development work. It is not part of the canonical product spine. The canonical spine remains:
+
+```text
+declarations
+  -> bounded context / work surface
+  -> staged execution
+  -> durable artifacts
+  -> derived index
+  -> query / audit / report
+```
+
+The orchestration surface may be useful for local project self-hosting, executor dispatch, and dogfooding. It must not be treated as a stable user-facing workflow layer until the core semantics are hardened: relation authorization, derived-index rebuild safety, partial workflow status, declaration/runtime contract alignment, and workspace initialization safety.
+
+No orchestration helper may bypass canonical write paths.
 
 ---
 
 ## 1. Native Entities
 
-The ledger is built upon nine native object classes declared dynamically under the development orchestration system:
+The ledger is built upon native object classes declared under the development orchestration system:
 
 ```mermaid
 graph TD
@@ -23,104 +40,106 @@ graph TD
 ```
 
 ### 1.1 `work_item`
-Represents the durable unit of planned or delegated work.
-* **Fields**: `task_id`, `title`, `goal`, `status` (`proposed`, `ready`, `dispatched`, `in_progress`, `blocked`, `implemented`, `reviewed`, `closed`), `priority`.
+
+Represents the durable unit of planned or delegated development work.
+
+Fields include `task_id`, `title`, `goal`, `status`, and `priority`.
 
 ### 1.2 `context_packet`
+
 The bounded set of instructions and file/object references compiled and handed off to an executor.
-* **Fields**: `work_item_id`, `title`, `instructions`, `included_refs`.
+
+Fields include `work_item_id`, `title`, `instructions`, and `included_refs`.
 
 ### 1.3 `dispatch`
-Records a specific assignment of a work item to an executor or runtime (e.g. `opencode`, `codex`, `human`).
-* **Fields**: `work_item_id`, `executor`, `attempt`, `status`.
+
+Records a specific assignment of a work item to an executor or runtime, such as `opencode`, `codex`, or a human operator.
+
+Fields include `work_item_id`, `executor`, `attempt`, and `status`.
 
 ### 1.4 `trace_event`
-Chronologically logs a factual, visible step in execution.
-* **Fields**: `work_item_id`, `dispatch_id`, `event_type` (`started`, `failed`, `completed`), `message`.
+
+Chronologically logs a factual, visible execution step.
+
+Fields include `work_item_id`, `dispatch_id`, `event_type`, and `message`.
 
 ### 1.5 `evidence`
-Stores or references verifiable outcomes produced by the executor (e.g., git diff, test stdout).
-* **Fields**: `work_item_id`, `dispatch_id`, `evidence_type` (`git_diff`, `test_output`), `description`.
+
+Stores or references verifiable outcomes produced by the executor, such as git diff summaries or test output.
+
+Fields include `work_item_id`, `dispatch_id`, `evidence_type`, and `description`.
 
 ### 1.6 `review`
+
 Maintains the outcome of human or programmatic verification against acceptance criteria.
-* **Fields**: `work_item_id`, `verdict` (`approved`, `rejected`), `comment`.
+
+Fields include `work_item_id`, `verdict`, and `comment`.
 
 ### 1.7 `closure`
+
 Ratifies final disposition of the work item.
-* **Fields**: `work_item_id`, `disposition` (`completed`, `deferred`), `summary`.
+
+Fields include `work_item_id`, `disposition`, and `summary`.
 
 ### 1.8 `git_snapshot`
-Captures exact state of git repository before or after task execution.
-* **Fields**: `task_id`, `task_object_id`, `phase`, `commit`, `base`, `head`, `branch`, `dirty`, `status_short`, `diff_stat`, `captured_by`.
+
+Captures exact git repository state before or after task execution.
+
+Fields include `task_id`, `task_object_id`, `phase`, `commit`, `base`, `head`, `branch`, `dirty`, `status_short`, `diff_stat`, and `captured_by`.
 
 ### 1.9 `gate_result`
-Records outcomes of automated gate verification scripts (e.g. lints, unit tests).
-* **Fields**: `task_id`, `task_object_id`, `command`, `status`, `log_path`, `log_excerpt`, `recorded_by`.
+
+Records outcomes of automated verification gates such as tests, linters, or smoke scripts.
+
+Fields include `task_id`, `task_object_id`, `command`, `status`, `log_path`, `log_excerpt`, and `recorded_by`.
 
 ---
 
-## 2. CLI Command Reference
+## 2. Current CLI Surface
 
-Verify, trace, and inspect execution components natively from the CLI:
+The current experimental CLI surface includes:
 
-### 2.1 Capture Git Snapshot
-Record a git snapshot associated with a task:
 ```bash
-earmark orchestration capture-git --task-id <TASK_ID_OR_OID> --phase <before|after|review|manual> [--commit <hash>] [--base <base>] [--head <head>] [--include-diff-stat]
-```
-
-### 2.2 Record Gate Result
-Log an automated gate execution result:
-```bash
-earmark orchestration record-gate --task-id <TASK_ID_OR_OID> --command <command> --status <pass|fail|skipped> [--log <path>]
-```
-
-### 2.3 List Orchestration Tasks
-List work items and implementation tasks:
-```bash
-earmark orchestration list [--status <status>] [--include-closed]
-```
-
-### 2.4 Show Component Details
-Locates a task and lists all linked context packets, dispatches, traces, git snapshots, gate results, and closures:
-```bash
+earmark orchestration init-example
+earmark orchestration ingest-task --source native-json task.json
+earmark orchestration ingest-task --source engram <TASK_ID>
+earmark orchestration capture-git --task-id <TASK_ID_OR_OID> --phase <before|after|review|manual>
+earmark orchestration record-gate --task-id <TASK_ID_OR_OID> --command "cargo test" --status pass
+earmark orchestration list
 earmark orchestration show <TASK_ID_OR_OID>
-```
-
-### 2.5 Chronological Timeline Query
-Generates a chronological timeline of every event in a task's lifecycle, ordered by nanosecond-accurate commit timestamps:
-```bash
 earmark orchestration timeline <TASK_ID_OR_OID>
 ```
 
-Both commands support `--json` to output machine-readable JSON envelopes ideal for programmatic consumption.
+These commands are for internal/dogfooding use. They should not be used to explain the main Earmark product to a new reader.
 
 ---
 
-## 3. End-to-End Orchestration Tutorial
+## 3. Internal use pattern
 
-### Step 1: Initialize the Orchestration Example
-Initialize a workspace and activate the sovereign dev orchestration system:
+A local development loop may use the orchestration ledger as follows:
+
 ```bash
 earmark init
 earmark orchestration init-example
-```
-
-### Step 2: Ingest a Task
-Import a task from Engram or local JSON payload files:
-```bash
-earmark orchestration ingest-task --source engram <TASK_ID>
-```
-
-### Step 3: Run Native Dispatch
-Execute the task manifest, capture the git diff, run validation gates, and log evidence natively:
-```bash
+earmark orchestration ingest-task --source native-json task.json
+earmark orchestration capture-git --task-id <TASK_ID> --phase before --include-diff-stat
 scripts/dispatch-native.sh --title "My Task" --objective "Implement feature X"
+earmark orchestration record-gate --task-id <TASK_ID> --command "cargo test" --status pass
+earmark orchestration timeline <TASK_ID>
 ```
 
-### Step 4: Inspect Graph & Timeline
-Audit the chronological progression of the work item:
-```bash
-earmark orchestration timeline <WORK_ITEM_ID>
-```
+This is a dogfooding workflow, not a stable product tutorial.
+
+---
+
+## 4. Promotion requirements
+
+The orchestration surface may be promoted toward product status only after it satisfies the same standards as the canonical spine:
+
+1. declared schemas and relation rules are authoritative;
+2. durable writes pass through sanctioned write paths;
+3. invalid relation creation cannot bypass authorization;
+4. run status semantics distinguish partial from completed work;
+5. index rebuilds are atomic or replacement-safe;
+6. CLI help and documentation mark stability accurately;
+7. tests cover failure and boundary cases.
