@@ -79,6 +79,33 @@ fn register_class(
         .unwrap();
 }
 
+fn register_class_then_corrupt_payload(
+    store: &GitCanonicalStore,
+    index: &DerivedIndex,
+    name: &str,
+    relation_rules: Vec<earmark_core::RelationRule>,
+) {
+    register_class(store, index, name, relation_rules);
+    let (obj_id, version_id) = index.find_class_definition(name).unwrap().unwrap();
+    let version_ref = VersionRef::new(
+        ObjectId::parse(obj_id).unwrap(),
+        VersionId::parse(version_id).unwrap(),
+    );
+    let version_dir = store.version_path(&version_ref);
+    let payload_path = std::fs::read_dir(&version_dir)
+        .unwrap()
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .find(|path| {
+            path.file_name()
+                .and_then(|s| s.to_str())
+                .map(|s| s.starts_with("payload."))
+                .unwrap_or(false)
+        })
+        .unwrap();
+    std::fs::write(payload_path, b"not valid class definition payload").unwrap();
+}
+
 #[test]
 fn test_endpoint_identity_verification() {
     let (_dir, store, index) = setup_store_and_index();
@@ -278,6 +305,52 @@ fn test_target_authorized_relation() {
     assert!(info
         .iter()
         .any(|i| i.contains("authorized by target class 'finding' incoming rule")));
+}
+
+#[test]
+fn test_corrupt_class_definition_blocks_relation_authorization() {
+    let (_dir, store, index) = setup_store_and_index();
+
+    let source_ref = create_object(&store, Kind::Object, Some("note"), "source");
+    let target_ref = create_object(&store, Kind::Object, Some("finding"), "target");
+
+    register_class_then_corrupt_payload(
+        &store,
+        &index,
+        "note",
+        vec![earmark_core::RelationRule {
+            relation_type: "mentions".to_string(),
+            counterparty_classes: vec!["finding".to_string()],
+            direction: Some("outgoing".to_string()),
+            authorizing_endpoint: Some("source".to_string()),
+        }],
+    );
+    register_class(&store, &index, "finding", vec![]);
+
+    let payload = RelationPayload {
+        source: source_ref,
+        target: target_ref,
+        relation_type: "mentions".to_string(),
+        qualifiers: BTreeMap::new(),
+        scope: None,
+    };
+
+    let result = earmark_exec::persist_relation_canonical(
+        &store,
+        &index,
+        payload,
+        Provenance::direct_input("test"),
+        earmark_core::RelationCreationMode::Declared,
+        None,
+    );
+
+    let err = result.expect_err("corrupt class definition should fail closed");
+    assert!(matches!(
+        err,
+        earmark_exec::ExecError::IncompleteExecution(_)
+    ));
+    let msg = err.to_string();
+    assert!(msg.contains("failed to load source class definition 'note'"));
 }
 
 #[test]

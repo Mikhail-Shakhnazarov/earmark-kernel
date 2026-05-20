@@ -1977,6 +1977,22 @@ fn commands_catalog_includes_stability_metadata() {
 }
 
 #[test]
+fn commands_catalog_accepts_json_flag_after_subcommand() {
+    let output = Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("commands")
+        .arg("--json")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(parsed["data"]["kind"], "command_catalog");
+}
+
+#[test]
 fn missing_run_id_fails_cleanly_in_json_mode() {
     let dir = tempdir().unwrap();
     Command::cargo_bin("earmark-cli")
