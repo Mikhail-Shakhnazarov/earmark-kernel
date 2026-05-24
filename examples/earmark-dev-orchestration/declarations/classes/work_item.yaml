@@ -2,28 +2,19 @@ name: work_item
 version: 0.1.0
 kind: object
 required_headers:
+  - task_id
   - title
 payload_schema: inline:any
 standing_rules:
   allowed_standing:
-    kernel:review:
-      - unreviewed
-      - review_pending
-      - accepted
-      - rejected
-      - superseded
     kernel:process:
       - proposed
       - ready
       - dispatched
-      - in_progress
-      - blocked
-      - implemented
-      - reviewed
+      - under_review
       - closed
-      - deferred
-      - rejected
-      - superseded
+      - followup_required
+      - blocked
 relation_rules:
   - relation_type: has_context
     counterparty_classes:
