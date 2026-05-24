@@ -45,22 +45,31 @@ fn setup_and_init_example() -> (tempfile::TempDir, PathBuf) {
 }
 
 fn deposit_object(root: &PathBuf, class: &str, title: &str, payload: &str) -> String {
-    let output = workspace_command()
-        .arg("--root")
+    deposit_object_with_headers(root, class, title, payload, &[])
+}
+
+fn deposit_object_with_headers(
+    root: &PathBuf,
+    class: &str,
+    title: &str,
+    payload: &str,
+    headers: &[(&str, &str)],
+) -> String {
+    let mut cmd = workspace_command();
+    cmd.arg("--root")
         .arg(root)
         .arg("--json")
         .arg("deposit")
         .arg("--class")
         .arg(class)
         .arg("--title")
-        .arg(title)
-        .arg("--json-payload")
-        .arg(payload)
-        .assert()
-        .success()
-        .get_output()
-        .stdout
-        .clone();
+        .arg(title);
+    for (k, v) in headers {
+        cmd.arg("--header").arg(format!("{}={}", k, v));
+    }
+    cmd.arg("--json-payload").arg(payload);
+
+    let output = cmd.assert().success().get_output().stdout.clone();
 
     let parsed: Value = serde_json::from_slice(&output).unwrap();
     parsed["data"]["object_id"].as_str().unwrap().to_string()
@@ -143,11 +152,12 @@ fn link_objects(
 fn test_work_item_show_includes_linked_dispatch_and_context() {
     let (_dir, root) = setup_and_init_example();
 
-    let wi_id = deposit_object(
+    let wi_id = deposit_object_with_headers(
         &root,
         "work_item",
         "WI-1",
         "{\"goal\":\"Show test\",\"status\":\"proposed\",\"priority\":\"medium\"}",
+        &[("task_id", "test-task-1")],
     );
 
     let cp_id = deposit_object(
@@ -213,11 +223,12 @@ fn test_work_item_show_includes_linked_dispatch_and_context() {
 fn test_timeline_orders_trace_evidence_review_and_closure() {
     let (_dir, root) = setup_and_init_example();
 
-    let wi_id = deposit_object(
+    let wi_id = deposit_object_with_headers(
         &root,
         "work_item",
         "WI-2",
         "{\"goal\":\"Timeline test\",\"status\":\"proposed\",\"priority\":\"medium\"}",
+        &[("task_id", "test-task-2")],
     );
 
     // Wait a brief millisecond/moment to ensure chronological separation of commits
@@ -326,11 +337,12 @@ fn test_timeline_orders_trace_evidence_review_and_closure() {
 fn test_index_rebuild_preserves_orchestration_relations() {
     let (_dir, root) = setup_and_init_example();
 
-    let wi_id = deposit_object(
+    let wi_id = deposit_object_with_headers(
         &root,
         "work_item",
         "WI-3",
         "{\"goal\":\"Rebuild test\",\"status\":\"proposed\",\"priority\":\"medium\"}",
+        &[("task_id", "test-task-3")],
     );
 
     let dp_id = deposit_object(&root, "dispatch", "DP-3", "{\"executor\":\"opencode\"}");
