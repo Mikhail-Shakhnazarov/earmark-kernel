@@ -51,6 +51,8 @@ fn test_create_work_item_valid() {
         .arg("work_item")
         .arg("--title")
         .arg("My Work Item")
+        .arg("--header")
+        .arg("task_id=test-task-1")
         .arg("--json-payload")
         .arg("{\"goal\":\"Test goal\",\"status\":\"proposed\",\"priority\":\"medium\"}")
         .assert()
@@ -68,7 +70,7 @@ fn test_create_work_item_valid() {
 fn test_create_work_item_missing_required_title_header() {
     let (_dir, root) = setup_and_init_example();
 
-    // class work_item has required_headers: [title]
+    // class work_item has required_headers: [task_id, title]; task_id is provided, title is missing
     workspace_command()
         .arg("--root")
         .arg(&root)
@@ -76,6 +78,8 @@ fn test_create_work_item_missing_required_title_header() {
         .arg("deposit")
         .arg("--class")
         .arg("work_item")
+        .arg("--header")
+        .arg("task_id=test-task-1")
         .arg("--json-payload")
         .arg("{\"goal\":\"Test goal\",\"status\":\"proposed\",\"priority\":\"medium\"}")
         .assert()
