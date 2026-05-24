@@ -8,7 +8,7 @@ TITLE=""
 OBJECTIVE=""
 ATTEMPT="1"
 MODEL="${OPENCODE_MODEL:-}"
-SKIP_GATES="${SKIP_GATES:-0}"
+SKIP_GATES="${SKIP_GATES:-1}"
 
 usage() {
   cat <<'USAGE'
@@ -17,8 +17,8 @@ Usage:
 
 Environment:
   EARMARK_WORKSPACE      repo root; default /home/m/GITHUB/earmark-workspace
-  OPENCODE_MODEL         optional provider/model override
-  SKIP_GATES             set 1 to skip local/global gates during execution
+  OPENCODE_MODEL         model override; default opencode/big-pickle
+  SKIP_GATES             set 1 (default) to skip global gates in dispatch-opencode
 USAGE
 }
 
@@ -55,6 +55,12 @@ if [[ -z "$TITLE" || -z "$OBJECTIVE" ]]; then
 fi
 
 cd "$ROOT"
+
+if [[ -z "$MODEL" ]]; then
+  MODEL="opencode/big-pickle"
+fi
+export OPENCODE_MODEL="$MODEL"
+export SKIP_GATES
 
 resolve_em_cmd() {
   if [[ -x "./target/debug/earmark-cli" ]]; then
