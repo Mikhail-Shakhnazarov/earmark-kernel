@@ -2188,7 +2188,10 @@ fn normalize_gate_status(status: &str) -> Result<String, CliError> {
         "pass" | "passed" | "success" | "ok" => Ok("pass".to_string()),
         "fail" | "failed" | "error" => Ok("fail".to_string()),
         "skipped" | "skip" => Ok("skipped".to_string()),
-        other => Err(CliError::argument(format!("invalid gate status: {}", other))),
+        other => Err(CliError::argument(format!(
+            "invalid gate status: {}",
+            other
+        ))),
     }
 }
 
