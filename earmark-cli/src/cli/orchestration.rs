@@ -100,6 +100,6 @@ pub struct ListOrchestrationArgs {
 #[derive(Args)]
 pub struct IngestTaskArgs {
     pub task_id: String,
-    #[arg(long, default_value = "engram")]
+    #[arg(long, default_value = "native-json")]
     pub source: String,
 }
