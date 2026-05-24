@@ -12,6 +12,9 @@ standing_rules:
       - rejected
       - inconclusive
 relation_rules:
+  - relation_type: causes
+    counterparty_classes:
+      - closure
   - relation_type: reviews
     counterparty_classes:
       - work_item

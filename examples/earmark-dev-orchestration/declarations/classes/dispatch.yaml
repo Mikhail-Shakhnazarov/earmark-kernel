@@ -22,4 +22,10 @@ relation_rules:
   - relation_type: produced_evidence
     counterparty_classes:
       - evidence
+  - relation_type: anchored_by
+    counterparty_classes:
+      - git_snapshot
+  - relation_type: checked_by
+    counterparty_classes:
+      - gate_result
 validators: []

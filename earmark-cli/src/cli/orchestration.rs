@@ -21,12 +21,15 @@ pub enum OrchestrationAction {
     Timeline(ShowTaskArgs),
     List(ListOrchestrationArgs),
     IngestTask(IngestTaskArgs),
+    RecordContext(RecordContextArgs),
 }
 
 #[derive(Args)]
 pub struct CaptureGitArgs {
     #[arg(long)]
     pub task_id: String,
+    #[arg(long)]
+    pub dispatch_id: Option<String>,
     #[arg(long)]
     pub phase: String,
     #[arg(long)]
@@ -50,6 +53,8 @@ pub struct IngestManifestArgs {
     pub executor: Option<String>,
     #[arg(long)]
     pub branch: Option<String>,
+    #[arg(long)]
+    pub context_id: Option<String>,
 }
 
 #[derive(Args)]
@@ -67,6 +72,8 @@ pub struct IngestReportArgs {
 pub struct RecordGateArgs {
     #[arg(long)]
     pub task_id: String,
+    #[arg(long)]
+    pub dispatch_id: Option<String>,
     #[arg(long)]
     pub command: String,
     #[arg(long)]
@@ -102,4 +109,10 @@ pub struct IngestTaskArgs {
     pub task_id: String,
     #[arg(long, default_value = "native-json")]
     pub source: String,
+}
+#[derive(Args)]
+pub struct RecordContextArgs {
+    #[arg(long)]
+    pub task_id: String,
+    pub path: PathBuf,
 }

@@ -135,6 +135,16 @@ if [[ -n "$(git status --porcelain)" ]]; then
   exit 3
 fi
 
+# Single Native Story: Register dispatch and pre-state
+EARMARK_CMD="${EARMARK_CMD:-cargo run --bin earmark-cli --}"
+
+echo "dispatch-opencode: registering dispatch in Earmark" | tee -a "$LOG"
+DISPATCH_JSON=$($EARMARK_CMD orchestration ingest-manifest "$MANIFEST_IN" --task-id "$TASK_ID" --attempt "$ATTEMPT")
+DISPATCH_ID=$(echo "$DISPATCH_JSON" | grep -oP '"object_id":"\K[^"]+')
+
+echo "dispatch-opencode: capturing pre-dispatch git state (dispatch_id=$DISPATCH_ID)" | tee -a "$LOG"
+$EARMARK_CMD orchestration capture-git --task-id "$TASK_ID" --dispatch-id "$DISPATCH_ID" --phase "pre-dispatch"
+
 BASE_BRANCH="$BRANCH"
 
 if git show-ref --verify --quiet "refs/heads/$BRANCH"; then
@@ -296,9 +306,16 @@ if [[ "$SKIP_GATES" != "1" ]]; then
   fi
 fi
 
+echo "dispatch-opencode: capturing post-dispatch git state (dispatch_id=$DISPATCH_ID)" | tee -a "$LOG"
+$EARMARK_CMD orchestration capture-git --task-id "$TASK_ID" --dispatch-id "$DISPATCH_ID" --phase "post-dispatch"
+
+echo "dispatch-opencode: ingesting executor report (dispatch_id=$DISPATCH_ID)" | tee -a "$LOG"
+$EARMARK_CMD orchestration ingest-report "$REPORT" --task-id "$TASK_ID" --manifest "$DISPATCH_ID" --attempt "$ATTEMPT"
+
 echo "dispatch-opencode: complete" | tee -a "$LOG"
 echo "dispatch-opencode: report=$REPORT" | tee -a "$LOG"
 echo "dispatch-opencode: branch=$BRANCH" | tee -a "$LOG"
+echo "dispatch-opencode: dispatch_id=$DISPATCH_ID" | tee -a "$LOG"
 
 CHANGED_FILES=$(git status --short | wc -l)
 if [[ "$CHANGED_FILES" -gt 0 ]]; then

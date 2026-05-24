@@ -19,7 +19,7 @@ relation_rules:
   - relation_type: has_context
     counterparty_classes:
       - context_packet
-  - relation_type: has_dispatch
+  - relation_type: dispatched_as
     counterparty_classes:
       - dispatch
   - relation_type: has_evidence
