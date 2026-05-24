@@ -1,10 +1,10 @@
-# Standing
+# Evaluation and Verification
 
-Standing is declared domain state attached to objects. It tracks where an object is in its lifecycle — whether it's a draft or accepted, reviewed or unreviewed, active or archived — without hardcoding those categories into the kernel.
+Every piece of work in Earmark carries **evaluation metadata**. This metadata tracks exactly where an object is in its lifecycle — for example, whether it is a "draft" or "verified", "accepted" or "rejected".
 
 ## How It Works
 
-Standing is stored as a map from dimension IDs to token IDs:
+This metadata is stored as a simple map of dimensions and tokens:
 
 ```yaml
 standing:
@@ -14,19 +14,24 @@ standing:
   research:status: draft
 ```
 
-Dimensions and tokens are declared by the active system definition. A system might declare an `epistemic` dimension with tokens `working`, `accepted`, and `rejected`, and a `review` dimension with tokens `unreviewed`, `reviewed`, and `approved`.
+Dimensions like `review` or `status` are defined by the domain author. This allows you to categorize work precisely for your specific use case (e.g., "Medical Review", "Legal Approval").
 
-## Protocol Bindings
+## Lifecycle Rules
 
-Kernel behavior — review authorization, visibility, immutability — is not tied to specific token names. Instead, the kernel defines protocols (e.g., "review authorization"), and the system definition binds specific standing tokens to those protocols.
+Earmark doesn't care about the *names* of your categories. Instead, it uses **lifecycle rules** to bind your metadata to system behavior.
 
-This means you can name your tokens whatever makes sense for your domain. The kernel enforces protocols, not token names.
+For example, a rule might say:
+> "Only objects with the token `verified` are allowed to be included in the synthesis stage."
 
-## Format
+This decoupling allows you to use your own terminology while the system enforces your strict evaluation requirements behind the scenes.
 
-Only the v0.3 map format is supported. Legacy v0.2 objects that used bare `epistemic`, `review`, or `process` fields without namespace prefixes are not supported. If you encounter v0.2-format objects, they need to be migrated to the namespaced map format shown above.
+## Why This Matters
+
+- **Trust Transitions**: Work only moves forward when it meets your specific criteria.
+- **Auditable Quality**: You can see exactly who verified a piece of data and which criteria were used.
+- **Customizable Gatekeeping**: Define your own multi-stage review gates without changing any code.
 
 ## Related
 
-- [Staged Execution](staged-execution.md) — how standing interacts with workflow stages
-- [Context Compilation](context-compilation.md) — how standing affects what a runtime sees
+- [The Durable Work Spine](staged-execution.md) — how evaluation affects work transitions
+- [Task-Specific Context](context-compilation.md) — how metadata controls what the AI sees

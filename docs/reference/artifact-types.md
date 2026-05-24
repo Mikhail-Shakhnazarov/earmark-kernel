@@ -1,91 +1,60 @@
 # Artifact Types
 
-Earmark produces durable artifacts during execution. These are persistent objects in the store — not log entries, not ephemeral state. They can be queried, inspected, and used for audit and continuation.
+Earmark produces durable artifacts during execution. These are persistent objects in the store — not ephemeral logs. They can be queried, inspected, and used for audit and continuation of work.
 
-## TransitionAssignment
+## Assignment
 
-Tracks ownership and status of a single piece of work.
+Tracks the ownership and status of a specific task within the work spine.
 
-- **What it records**: which transition was claimed, by whom, over which bounded inputs, and what happened.
-- **Statuses**: `Assigned`, `Completed`, `Blocked`, `Released`, `Expired`, `Superseded`.
-- **Example**: "Agent gemini-flash is extracting findings from source_note obj_abc123. Status: Completed."
+- **What it records**: which transition was claimed, by which model/runtime, and the specific inputs used.
+- **Statuses**: `Assigned`, `Completed`, `Blocked`.
 
-```bash
-em assignment explain <assignment_id>
-```
+## Transition Result (Change Set)
 
-## ChangeSet
+The atomic record of exactly what a task produced.
 
-The atomic record of what a transition produced.
+- **What it records**: new objects, new relationships, and updated evaluation metadata.
+- **Validity**: `Valid` or `Invalid`. Invalid results are preserved so you can audit exactly what the model tried to do when it failed.
 
-- **What it records**: created objects, created relations, and updated standings.
-- **Validity**: `Valid` or `Invalid`. Invalid change sets are preserved for audit — they show exactly what the model tried to do when it failed.
-- **Example**: "This transition created 3 finding objects and 3 derived_from relations. Validation: passed."
+## Handoff
 
-```bash
-em change-set explain <change_set_id>
-```
+Defines the task-specific context passed to the next stage of work.
 
-## HandoffManifest
+- **What it records**: the specific findings and evidence that the next stage is allowed to see.
+- **Example**: "Successor work may see `finding` objects. Source notes are excluded."
 
-Defines the bounded input for the next stage of work.
+## Failure Record
 
-- **What it records**: root objects, inherited inputs, newly created objects, allowed classes, allowed relations, standing constraints, and required checks.
-- **Example**: "Successor work may see finding objects and traverse derived_from relations. Source notes are excluded."
+A durable record produced when a task cannot move forward.
 
-```bash
-em handoff explain <handoff_id>
-```
+- **What it records**: the error message, the failed attempt, and the rejected result (if any).
+- **Example**: "Validation failure: output missing required summary. Assignment blocked."
 
-## TransformationFailure
+## Workflow Run
 
-A durable error record produced when a transition fails.
+The top-level record of a single execution of the work spine.
 
-- **What it records**: the error message, the failed assignment, and the failed change set (if any).
-- **Example**: "Validation failure: output missing required 'title' header. Assignment blocked. Change set persisted as invalid."
+- **What it records**: start/end times, active system, and links to all generated assignments and results.
 
-```bash
-em failure explain <failure_id>
-```
+## Object & Relationship
 
-## WorkflowRunRecord
+The fundamental building blocks of the Earmark corpus.
 
-The top-level record of a single workflow execution.
-
-- **What it records**: start time, end time, system ID, workflow ID, status, and links to all generated artifacts (assignments, change sets, handoffs, failures).
-
-```bash
-em run explain <run_id>
-```
-
-## Object
-
-The fundamental unit of data in the corpus.
-
-- **Versioning**: objects are immutable. Changes create a new version linked to the previous one.
-- **Class**: every object has a declared class (e.g., `source_note`, `finding`, `briefing_card`).
-- **Headers**: typed metadata fields (e.g., `title`).
-- **Payload**: the actual content.
-
-## Relation
-
-A typed link between two objects.
-
-- **Examples**: `derived_from`, `supports`, `reviews`.
-- **Declared constraints**: relation rules in class declarations define which classes can participate in which relation types.
-- **Used by**: context compilation (relation traversal) and lineage inspection.
+- **Object**: A versioned unit of data with a declared class and payload.
+- **Relationship**: A verified link between two objects that enables context traversal and lineage.
 
 ## Summary
 
-| Artifact | Purpose | Inspect With |
+| Artifact | Purpose | Command |
 |---|---|---|
-| Assignment | Work tracking | `em assignment explain` |
-| ChangeSet | Data delta | `em change-set explain` |
-| Handoff | Bounded continuation | `em handoff explain` |
-| Failure | Error audit | `em failure explain` |
-| Run | Execution history | `em run explain` |
+| **Assignment** | Task tracking | `em assignment explain` |
+| **Result** | Rejection/Audit | `em result explain` |
+| **Handoff** | Data transfer | `em handoff explain` |
+| **Failure** | Feedback | `em failure explain` |
+| **Run** | Lifecycle audit | `em run explain` |
 
 ## See Also
 
-- [Staged Execution](../concepts/staged-execution.md) — the lifecycle that produces these artifacts
-- [Failures](../concepts/failures.md) — how failed work is preserved
+- [The Durable Work Spine](../concepts/staged-execution.md) — the lifecycle that produces these artifacts
+- [Learning from Failure](../concepts/failures.md) — how failed work is preserved
+- [Native Orchestration](../concepts/native-orchestration.md) — orchestration-specific objects (Work Items, Dispatches)

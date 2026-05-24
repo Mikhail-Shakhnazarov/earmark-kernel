@@ -85,9 +85,9 @@ Search the corpus through the derived index.
 
 Submit a review for an object. Accepts by default; use `--reject` to deny.
 
-### `em context compile --root <object_id> [--depth <n>] [--relation-type <type>] [--class <class>] [--epistemic <standing>]`
+### `em surface compile --root <object_id> [--depth <n>] [--relation-type <type>] [--class <class>] [--evaluation <standing>]`
 
-Compile a work surface from one or more root objects. Flags like `--root`, `--relation-type`, and `--class` are repeatable.
+Compile a task-specific work surface from one or more root objects. Flags like `--root`, `--relation-type`, and `--class` are repeatable. (Formerly `context compile`).
 
 ## Workflow Execution
 
@@ -107,11 +107,11 @@ List recent workflow runs.
 
 ### `em run show <run_id>`
 
-Show the raw run record for a specific run. Returns the stored ledger data directly (run_id, status, events, timestamps). Accepts `latest` for the most recent run.
+Show the raw run record for a specific run.
 
 ### `em run explain <run_id>`
 
-Interpreted run context: status, transitions, related artifacts (assignments, change sets, handoffs, failures), and suggested next commands. Use `latest` for the most recent run.
+Interpreted run context: status, transitions, related artifacts (assignments, results, handoffs, failures).
 
 ### `em run timeline <run_id>`
 
@@ -123,63 +123,27 @@ List all durable artifacts created during a run.
 
 ### `em run graph <run_id>`
 
-Mermaid relationship graph of artifacts produced during a run.
-
-### `em assignment show <id>`
-
-Show raw data for a transition assignment.
+Relationship graph of artifacts produced during a run.
 
 ### `em assignment explain <id>`
 
-Explain a transition assignment's status and inputs.
+Explain a task assignment's status and inputs.
 
-### `em assignment list [--run-id <id>] [--status <status>]`
+### `em result explain <id>`
 
-List assignments, optionally filtered by run or status.
-
-### `em change-set show <id>`
-
-Show raw data for a change set.
-
-### `em change-set explain <id>`
-
-Explain what a transition produced.
-
-### `em change-set list [--run-id <id>]`
-
-List change sets, optionally filtered by run.
-
-### `em handoff show <id>`
-
-Show raw data for a handoff.
+Explain what a transition produced (a "Change Set").
 
 ### `em handoff explain <id>`
 
 Explain a handoff's constraints and carried objects.
 
-### `em handoff list [--run-id <id>]`
-
-List handoffs, optionally filtered by run.
-
-### `em failure show <id>`
-
-Show the complete failure artifact as stored. Includes run id, transition id, assignment id, error type, error message, failed change set id (if any), input object ids at time of failure, and timestamp.
-
 ### `em failure explain <id>`
 
-Explain what went wrong in a transition. Returns interpreted context: run id, assignment id, transition id, failed change set id, error type, and suggested next commands (`em failure show`, `em run explain`, `em change-set explain`, `em assignment explain`, `em run timeline`).
-
-### `em failure list [--run-id <id>] [--transition-id <id>]`
-
-List failures with summary fields (failure id, run id, transition id, assignment id, error type, message, timestamp). Filter by run id, transition id, or both.
-
-### `em relation show <id>`
-
-Show raw data for a specific relation.
+Explain what went wrong in a transition.
 
 ### `em relation explain <id>`
 
-Explain a relation: type, endpoints, and authorization trace.
+Explain a relationship: type, endpoints, and verification trace.
 
 ### `em relation list [--source-id <id>] [--target-id <id>] [--relation-type <type>]`
 

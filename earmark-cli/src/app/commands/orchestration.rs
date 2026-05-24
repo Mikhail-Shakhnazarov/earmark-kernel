@@ -312,7 +312,7 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                 payload,
                 prov,
                 DepositValidationContext {
-                    namespace: None,
+                    namespace: Some("examples.earmark-dev".to_string()),
                     headers,
                 },
             )?;
@@ -459,7 +459,7 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                 payload,
                 prov,
                 DepositValidationContext {
-                    namespace: None,
+                    namespace: Some("examples.earmark-dev".to_string()),
                     headers,
                 },
             )?;
@@ -521,15 +521,26 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
 
             let source = &args.source;
 
-            let tasks = match source.as_str() {
-                "native-json" | "local-json" => {
-                    self::adapters::native_json::ingest_from_json(&args.task_id)?
-                }
-                _ => {
-                    return Err(CliError::argument(format!(
-                        "unsupported source: '{}'. Supported sources: 'native-json', 'local-json'",
-                        source
-                    )));
+            let tasks = if let Some(title) = &args.title {
+                vec![self::adapters::native_json::NativeTaskData {
+                    task_id: args.task_id.clone(),
+                    title: title.clone(),
+                    description: args.description.clone().unwrap_or_default(),
+                    priority: args.priority.clone().unwrap_or_else(|| "medium".to_string()),
+                    status: args.status.clone().unwrap_or_else(|| "proposed".to_string()),
+                    raw_text: String::new(),
+                }]
+            } else {
+                match source.as_str() {
+                    "native-json" | "local-json" => {
+                        self::adapters::native_json::ingest_from_json(&args.task_id)?
+                    }
+                    _ => {
+                        return Err(CliError::argument(format!(
+                            "unsupported source: '{}'. Supported sources: 'native-json', 'local-json'",
+                            source
+                        )));
+                    }
                 }
             };
 
@@ -571,7 +582,7 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                     payload,
                     prov,
                     DepositValidationContext {
-                        namespace: None,
+                        namespace: Some("examples.earmark-dev".to_string()),
                         headers,
                     },
                 )?;
@@ -804,6 +815,7 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
             let task_results = index_ref.query_objects(&task_filter)?;
 
             let mut found_task: Option<(ObjectSummary, serde_json::Value)> = None;
+            let mut candidates = Vec::new();
             for summary in &task_results {
                 let oid = match ObjectId::parse(summary.object_id.clone()) {
                     Ok(o) => o,
@@ -835,9 +847,22 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                     || oid_lower.starts_with(&task_arg)
                     || tid.starts_with(&task_arg)
                 {
-                    found_task = Some((summary.clone(), payload));
+                    candidates.push((summary.clone(), payload));
+                }
+            }
+
+            // Prioritize work_item or implementation_task
+            for (summary, payload) in &candidates {
+                let class = summary.class.as_deref().unwrap_or("");
+                if class == "work_item" || class == "implementation_task" {
+                    found_task = Some((summary.clone(), payload.clone()));
                     break;
                 }
+            }
+
+            // Fallback to first candidate if no priority class found
+            if found_task.is_none() {
+                found_task = candidates.into_iter().next();
             }
 
             let (task_summary, task_payload) = found_task
@@ -867,7 +892,10 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                 Some(format!("Review for {}", args.task_id)),
                 review_payload,
                 prov.clone(),
-                DepositValidationContext::default(),
+                DepositValidationContext {
+                    namespace: Some("examples.earmark-dev".to_string()),
+                    headers: BTreeMap::new(),
+                },
             )?;
 
             let task_oid = ObjectId::parse(task_summary.object_id.clone())?;
@@ -884,7 +912,10 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                 Some(format!("Closure for {}", args.task_id)),
                 closure_payload,
                 prov.clone(),
-                DepositValidationContext::default(),
+                DepositValidationContext {
+                    namespace: Some("examples.earmark-dev".to_string()),
+                    headers: BTreeMap::new(),
+                },
             )?;
 
             create_orchestration_relation(
@@ -1354,7 +1385,18 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
             let mut tasks = Vec::new();
 
             if !filtered_terminal_status {
-                for class in &["work_item", "implementation_task"] {
+                for class in &[
+                    "work_item",
+                    "implementation_task",
+                    "dispatch",
+                    "executor_manifest",
+                    "executor_report",
+                    "evidence",
+                    "git_snapshot",
+                    "gate_result",
+                    "review",
+                    "closure",
+                ] {
                     let filter = QueryFilter {
                         class: Some(class.to_string()),
                         ..Default::default()
@@ -1481,6 +1523,49 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                     "status_filter": args.status,
                     "filtered_terminal_status": filtered_terminal_status,
                     "tasks": task_records
+                }),
+            );
+
+            Ok(())
+        }
+        OrchestrationAction::ExplainDispatch(args) => {
+            require_initialized_workspace(store)?;
+            let index_ref = ctx
+                .index
+                .as_ref()
+                .ok_or_else(|| CliError::argument("index required for explain-dispatch"))?;
+
+            let dispatch_arg = args.dispatch_id.to_lowercase();
+            let (dispatch_oid, _class, _summary, payload) =
+                find_orchestration_task(index_ref, store, &dispatch_arg)?.ok_or_else(|| {
+                    CliError::not_found(format!("dispatch {} not found", args.dispatch_id))
+                })?;
+
+            let mut connected_objects = traverse_orchestration_graph(index_ref, store, &dispatch_oid)?;
+            connected_objects.sort_by_key(|(_, _, _, captured_at)| *captured_at);
+
+            let events: Vec<serde_json::Value> = connected_objects
+                .into_iter()
+                .map(|(oid, summary, payload, captured_at)| {
+                    let class_name = summary.class.clone().unwrap_or_default();
+                    let summary_text = get_object_summary_text(&class_name, &payload);
+
+                    json!({
+                        "id": oid.as_str(),
+                        "class": class_name,
+                        "timestamp": captured_at.to_rfc3339(),
+                        "summary": summary_text,
+                    })
+                })
+                .collect();
+
+            emit(
+                as_json,
+                json!({
+                    "kind": "orchestration_dispatch_explanation",
+                    "dispatch_id": dispatch_oid.as_str(),
+                    "payload": payload,
+                    "events": events,
                 }),
             );
 
@@ -1807,18 +1892,15 @@ fn get_object_summary_text(class: &str, payload: &serde_json::Value) -> String {
                 .get("decision")
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
-            let comments = payload
-                .get("comments")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
-            format!("Review: {} - {}", decision, comments)
-        }
-        "closure" => {
             let outcome = payload
                 .get("outcome")
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
-            format!("Closure: {}", outcome)
+            if outcome.is_empty() {
+                format!("Review: decision={}", decision)
+            } else {
+                format!("Review: decision={} ({})", decision, outcome)
+            }
         }
         "git_snapshot" => {
             let phase = payload.get("phase").and_then(|v| v.as_str()).unwrap_or("");
@@ -1845,7 +1927,18 @@ fn find_orchestration_task(
     let task_arg = task_arg.to_lowercase();
     let mut candidates = Vec::new();
 
-    for class in &["work_item", "implementation_task"] {
+    for class in &[
+        "work_item",
+        "implementation_task",
+        "dispatch",
+        "executor_manifest",
+        "executor_report",
+        "evidence",
+        "git_snapshot",
+        "gate_result",
+        "review",
+        "closure",
+    ] {
         let filter = QueryFilter {
             class: Some(class.to_string()),
             ..Default::default()
@@ -1971,7 +2064,7 @@ fn deposit_orchestration_object(
         payload,
         prov,
         DepositValidationContext {
-            namespace: None,
+            namespace: Some("examples.earmark-dev".to_string()),
             headers,
         },
     )?;

@@ -1,12 +1,12 @@
-# Staged Execution
+# The Durable Work Spine
 
-Most AI work happens in a single pass: prompt in, response out, hope for the best. If the task is complex — extracting claims from raw notes, then synthesizing a briefing from those claims — the whole thing runs in one long context window and the intermediate steps are invisible.
+Most AI work happens in a single pass: prompt in, response out, hope for the best. If the task is complex — such as extracting claims from raw notes and then synthesizing a briefing — the whole process usually runs in one long, hidden context window. Intermediate steps are invisible and hard to verify.
 
-Earmark breaks that into a sequence of **transitions**, where each stage consumes a bounded input, produces verified output, and emits a handoff for the next stage. Every step leaves behind durable evidence of what happened.
+Earmark solves this by establishing a **durable work spine**. It breaks complex tasks into a sequence of **controlled transitions**, where each stage consumes task-specific inputs, produces verified results, and leaves behind a permanent chain of evidence.
 
 ## The Lifecycle
 
-Every transition follows this sequence:
+Every transition in the spine follows this verifiable sequence:
 
 ```mermaid
 sequenceDiagram
@@ -15,56 +15,53 @@ sequenceDiagram
     participant S as Store
     participant V as Validator
 
-    O->>E: workflow run (with inputs or handoff)
-    E->>S: create Assignment (status: Assigned)
-    E->>E: compile bounded context
-    E->>O: work packet
-    O->>E: complete assignment (with candidate output)
+    O->>E: run workflow (with inputs)
+    E->>S: create Assignment (claimed)
+    E->>E: compile task-specific context
+    E->>O: work packet (LLM ready)
+    O->>E: complete assignment (with result)
     E->>V: validate change set
     alt valid
-        V->>S: persist ChangeSet (Valid)
-        V->>E: emit HandoffManifest
+        V->>S: persist result (Valid)
+        V->>E: emit transition handoff
         E->>S: update Assignment (Completed)
         E->>O: success
     else invalid
-        V->>S: persist ChangeSet (Invalid)
-        V->>S: create TransformationFailure
+        V->>S: persist result (Invalid)
+        V->>S: create Failure Record
         E->>S: update Assignment (Blocked)
         E->>O: failure
     end
 ```
 
-The important part: both paths persist artifacts. When work succeeds, you get a valid change set and a handoff. When work fails, you get an invalid change set and a failure record. Nothing disappears.
+The core principle: both paths persist artifacts. When work succeeds, you get a valid result and a handoff for the next stage. When it fails, you get an explicit failure record. No work "disappears" into a chat history.
 
-## Artifacts
+## Key Artifacts
 
-**Assignment** — A claim on a piece of work. Records the transition, the bounded inputs, the runtime that claimed the work, and the current status (`Assigned`, `Completed`, `Blocked`, `Released`, `Expired`, `Superseded`).
+- **Assignment** — A durable claim on a piece of work. Records the transition, the specific inputs used, and the current status (e.g., `Assigned`, `Completed`, `Blocked`).
+- **Change Set** — The exact collection of new objects and relations produced. Persisted regardless of validity for audit purposes.
+- **Failure Record** — A link between the failed work and the specific error message. Replaces generic "it didn't work" with actionable evidence.
+- **Handoff** — The hand-off of validated data to the next stage of the spine.
 
-**Change Set** — The collection of creates, links, and changes produced by a transition. Persisted whether valid or invalid.
+## Transitioning Work
 
-**Failure** — A record linking the failed assignment and change set to the specific error. Created when validation fails or execution errors out. Each failure preserves the run id, transition id, assignment id, error type, error message, timestamp, input object ids that were active at the time of failure, and the failed change set id when one was produced. The failure is linked to the assignment via a `resulted_in_failure` relation. Failures are inspectable via `em failure show`, `em failure explain`, `em failure list`, and appear in `em run artifacts` and `em run timeline`.
+The point of the work spine is **transitioning without ambient noise**.
 
-**Handoff** — Defines the bounded input for the next stage. See [Handoffs](handoffs.md).
+In a traditional chat system, Stage 2 continues because it "remembers" everything in the conversation. In Earmark, Stage 2 continues because it receives a **handoff** that explicitly defines exactly what it is allowed to see.
 
-## Continuation
-
-The point of staging is **continuation without ambient memory**.
-
-In a chat-based system, Stage 2 continues because the conversation history contains Stage 1's output. In Earmark, Stage 2 continues because it reads a handoff manifest that explicitly defines what it's allowed to see.
-
-That means:
-- Stage 2 can run in a different session or a later run can consume the same handoff.
-- Stage 2 doesn't inherit Stage 1's internal reasoning or side effects.
-- You can re-run Stage 2 multiple times from the same Stage 1 handoff.
+This means:
+- **Clean Handoffs**: Stage 2 doesn't inherit Stage 1's messy reasoning or internal logs.
+- **Restartability**: You can restart Stage 2 from the same handoff without having to re-run Stage 1.
+- **Verifiability**: Each stage can be evaluated independently before the next one starts.
 
 ## Why It Matters
 
-- **Auditability**: every object traces to the assignment and run that created it.
-- **Resilience**: if Stage 2 fails, Stage 1's handoff is still there. Continue from the handoff without re-running Stage 1.
-- **Human review**: insert a review gate between any two stages by requiring standing changes before the handoff is accepted.
+- **Evidence-Based AI**: Every result is backed by a durable chain of source objects.
+- **Resilience**: If a later stage fails, the previous validated work is still safe.
+- **Audit Trails**: Complete visibility into which AI model did what, when, and with what data.
 
 ## See Also
 
-- [Handoffs](handoffs.md) — how bounded continuation works between stages
-- [Failures](failures.md) — how failed work is preserved and inspected
-- [Quickstart](../tutorials/quickstart.md) — run a staged workflow in 5 minutes
+- [Carrying Work Forward](handoffs.md) — how transitions work between stages
+- [Learning from Failure](failures.md) — how failed work is preserved and inspected
+- [Quickstart](../tutorials/quickstart.md) — start building your own work spine in 5 minutes

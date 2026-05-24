@@ -1,18 +1,18 @@
-# Failures
+# Learning from Failure
 
-In most AI systems, failed work just disappears. The model produced bad output, the orchestrator retried or moved on, and nobody can inspect what went wrong. The error might show up in a log file. It won't show up as something you can audit, link to the input that caused it, or use to improve the next run.
+In most AI systems, failed work just disappears. A model produces bad output, the system retries or crashes, and the evidence is buried in a log file. You can't easily audit what went wrong or use the failure to improve the next run.
 
-In Earmark, failures are durable artifacts. When a transition fails — bad output, validation error, provider timeout — the system persists the evidence and links it to the assignment and change set that produced it.
+In Earmark, **failures are durable evidence**. When a task fails — whether due to a model error, a validation rule, or a timeout — the system preserves the exact state and links it to the work that produced it.
 
-## The Failure Trace
+## The Evidence Trace
 
 ```mermaid
 flowchart TD
     A[Assignment] --> B{Execution}
-    B -->|Validation error| CS[Failed Change Set]
+    B -->|Validation error| CS[Captured Result]
     B -->|Runtime error| E[Error Record]
 
-    CS --> F[TransformationFailure]
+    CS --> F[Failure Record]
     E --> F
 
     F --> BA[Assignment status: Blocked]
@@ -21,48 +21,40 @@ flowchart TD
     style CS fill:#eaa,stroke:#333,stroke-dasharray: 5 5
 ```
 
-A failure record links three things: the assignment that was attempted, the change set that was produced (even if it's invalid), and the error that caused the failure.
+A failure record links three things:
+1. **The Attempt**: What the AI was trying to do.
+2. **The Result**: The exact output that was rejected (so you can audit it).
+3. **The Reason**: Why the system rejected it (schema violations, policy blocks, etc.).
 
 ## Types of Failures
 
-**Validation failures.** The model produced output, but it violated a declared rule — a missing required field, an undeclared class, a relation that isn't allowed by the schema. The invalid change set is persisted so you can see exactly what the model tried to do.
-
-**Execution errors.** The runtime crashed, timed out, or returned something unparseable.
-
-**Policy blocks.** A standing policy prevented the transition — for example, "no unreviewed findings may be used in summaries."
+- **Validation Mismatch**: The AI produced output, but it violated your declared rules (e.g., "missing required finding summary").
+- **Execution Error**: The model provider timed out or returned unparseable text.
+- **Policy Block**: A lifecycle rule prevented the work from moving forward (e.g., "unreviewed data cannot be summarized").
 
 ## Inspecting Failures
 
+You can query and explain failures just like any other object:
+
 ```bash
-# List failures
+# List all failures in the workspace
 em failure list
 
-# Explain a specific failure
+# Get a plain-language explanation of a specific failure
 em failure explain <failure_id>
 ```
 
-A failure explanation shows:
-- What went wrong
-- Which assignment failed
-- The change set that was rejected (if any)
-- Suggested next steps
-
-## Recovery
-
-Because failures persist as state, you can recover from them:
-
-- **Resume** — re-try the same assignment, perhaps with a different model or fixed instruction.
-- **Supersede** — replace the failed work with a new assignment that takes its place.
-
-The failed change set remains in the store for audit even after recovery. Nothing is overwritten.
-
 ## Why It Matters
 
-Failed work is not waste. It's evidence. A validation failure tells you the model misunderstood the output contract. An execution error tells you the provider configuration is wrong. A policy block tells you the input data isn't ready for this stage yet.
+**Failed work is not waste; it is feedback.** 
 
-Keeping that evidence durable and linked — rather than buried in a log — is what makes the system governable.
+- A validation failure tells you your AI prompt needs more clarity.
+- An execution error tells you your infrastructure needs adjustment.
+- A policy block tells you where your human-in-the-loop process is slowing down.
+
+By keeping failure records durable and linked — rather than buried in logs — Earmark makes AI workflows truly governable.
 
 ## See Also
 
-- [Staged Execution](staged-execution.md) — the lifecycle that produces failures
+- [The Durable Work Spine](staged-execution.md) — the lifecycle that captures failures
 - [CLI Reference](../reference/cli.md) — failure inspection commands

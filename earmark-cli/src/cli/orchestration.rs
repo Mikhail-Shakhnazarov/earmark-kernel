@@ -22,6 +22,7 @@ pub enum OrchestrationAction {
     List(ListOrchestrationArgs),
     IngestTask(IngestTaskArgs),
     RecordContext(RecordContextArgs),
+    ExplainDispatch(ExplainDispatchArgs),
 }
 
 #[derive(Args)]
@@ -109,10 +110,24 @@ pub struct IngestTaskArgs {
     pub task_id: String,
     #[arg(long, default_value = "native-json")]
     pub source: String,
+    #[arg(long)]
+    pub title: Option<String>,
+    #[arg(long)]
+    pub description: Option<String>,
+    #[arg(long)]
+    pub priority: Option<String>,
+    #[arg(long)]
+    pub status: Option<String>,
 }
 #[derive(Args)]
 pub struct RecordContextArgs {
     #[arg(long)]
     pub task_id: String,
     pub path: PathBuf,
+}
+
+#[derive(Args)]
+pub struct ExplainDispatchArgs {
+    #[arg(help = "durable ID of the dispatch or 'latest'")]
+    pub dispatch_id: String,
 }

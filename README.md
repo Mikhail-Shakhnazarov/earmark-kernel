@@ -1,78 +1,66 @@
-# Earmark
+# Earmark: Coordinated AI Work
 
 [![CI](https://github.com/Mikhail-Shakhnazarov/earmark-workspace/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Mikhail-Shakhnazarov/earmark-workspace/actions/workflows/ci.yml)
 
-AI-assisted work usually runs on ambient context: a chat history, some retrieved snippets, whatever files happen to be open. That works for quick tasks. It falls apart when work needs to be inspected, resumed, reviewed, or handed to someone else.
+AI work usually runs on ephemeral chat history: some retrieved snippets, a long conversation, and whatever files are open. This works for quick questions. It falls apart when work needs to be **inspected, resumed, reviewed, or handed over.**
 
-Concrete failure modes:
+Without a durable spine, AI work faces common failure modes:
+- **Implicit Inheritance:** A later step silently "inherits" an assumption from an earlier prompt.
+- **Context Bloat:** A model sees 10,000 lines of history when it only needed 10 specific findings.
+- **Lost Evidence:** Failed work or intermediate derivations vanish when a session ends.
+- **Review Gap:** Approval is just a social convention in a chat, not a trackable system state.
 
-- A model sees more than the current task requires.
-- A later step silently inherits assumptions from an earlier prompt.
-- Failed work vanishes into logs or chat transcripts.
-- You can't prove which inputs produced which output.
-- Review and approval are social conventions, not system state.
-- Continuing work means re-reading a long conversation, not loading a durable artifact.
+**Earmark replaces ephemeral history with a durable, inspectable work spine.**
 
-Earmark replaces ambient context with structured, inspectable work.
-
-## What Earmark Does
-
-You declare your domain: the types of objects you work with, the relations between them, and what each processing step is allowed to see. Earmark then compiles the right context for each step, runs the step, records what happened, and passes bounded results to the next step.
-
-Every result is stored as a durable artifact. Failures are preserved, not discarded. When work moves from one stage to the next, a handoff defines exactly what the next stage receives — no implicit inheritance from earlier conversation.
-
-Workspace state is Git-backed (through `gix`), with a rebuildable derived index for fast query and inspection.
+---
 
 ## How It Works
 
-A staged flow looks like this:
+Earmark lets you define exactly which **task materials** (objects) each step is allowed to see. It then compiles a **task-specific input set**, runs the operation, and records the authoritative result.
 
+### The Problem: Ephemeral Context
+```text
+Conversation: [Note A, Note B, Note C] → AI finds Finding 1 → (Prompt continues) → AI writes Briefing
 ```
-source_note → finding → briefing_card
+In a standard chat, the "Briefing" step sees all three notes, the finding, and any noise in between. Assumptions from Note A might bleed into the Briefing even if they were irrelevant to Finding 1.
+
+### The Earmark Solution: Bounded Transitions
+```text
+Note A → [Finding 1] → Briefing
 ```
+1. **Stage 1 (Extraction):** Receives Note A. Produces Finding 1. Records exactly what changed.
+2. **Stage 2 (Synthesis):** Receives *only* Finding 1. It cannot see Note A.
+3. **Outcome:** The synthesis is guaranteed to be based only on the authoritative findings, not on ambient noise from the source.
 
-**Stage 1** receives raw source notes. It extracts discrete findings and records a change set showing what was created. Each finding links back to its source through a `derived_from` relation.
+---
 
-**Stage 2** receives only the findings — not the original source notes. It produces a briefing card from that bounded input. The runtime never sees the full corpus. It sees exactly what the declarations say it should see.
+## Core Capabilities
 
-Between stages, a **handoff manifest** defines the bounded surface for successor work: which objects are included, which relations are allowed, which constraints apply.
+- **Task-Specific Inputs:** Every processing step sees only what its declaration allows. No more silent context inheritance.
+- **Durable Provenance:** Every result links back to its specific causes. You can always prove *why* an output exists.
+- **Durable Failure:** Failed work is preserved for audit, not discarded.
+- **Git-Backed History:** Workspace state is stored in a standard Git repository, providing a full audit trail and easy portability.
+- **Native Orchestration:** Self-hosting tools for tracking complex, multi-stage AI work programs.
 
-After the run, you can inspect every artifact: what was assigned, what was produced, what passed or failed validation, and what the next step can see.
+---
 
-```bash
-# Inspect the run
-em run explain latest
+## Documentation (The Flow)
 
-# See the handoff between stages
-em handoff explain <handoff_id>
+If you are new to Earmark, follow this path:
 
-# Generate an HTML report
-em report run latest --output report.html
-```
+| Order | Guide | Purpose |
+| :--- | :--- | :--- |
+| 1 | **README** (You are here) | High-level "Should I use this?" |
+| 2 | **[One-Minute Flow](docs/tutorials/one-minute-flow.md)** | See it in action immediately |
+| 3 | **[Quickstart](docs/tutorials/quickstart.md)** | Your first successful run in 5 minutes |
+| 4 | **[Practical Guide](docs/tutorials/practical-guide.md)** | Concrete examples and plain-language "Why" |
+| 5 | **[Research Synthesis Demo](docs/tutorials/research-synthesis-demo.md)** | A complete, multi-stage example |
+| 6 | **[Build a Domain](docs/tutorials/build-a-domain-definition.md)** | Create your own classes and workflows |
+| 7 | **[Concepts Overview](docs/concepts/coordinated-ai-work.md)** | Deep dive into the "Durable Spine" philosophy |
+| 8 | **[CLI Reference](docs/reference/cli.md)** | Command and schema lookup |
+| 9 | **[Limitations](docs/limitations.md)** | Known constraints and WIP status |
 
-## What Earmark Records
-
-Every run produces durable artifacts:
-
-- **Assignments** track what work was claimed, by whom, over which inputs, and whether it completed, failed, or was blocked.
-- **Change sets** record what a transition created or changed. Invalid change sets are preserved for audit — failed work doesn't disappear.
-- **Handoffs** define the bounded continuation surface: which objects, relations, and constraints the next step is allowed to use.
-- **Failures** are first-class records linked to the assignment and change set that produced them. They remain inspectable as persistent state.
-
-## When It's Useful
-
-Earmark is worth considering when:
-
-- Outputs need provenance — you need to show which inputs produced which results.
-- Failures need to remain inspectable, not just logged.
-- Work spans multiple stages, and later steps should not inherit all earlier context.
-- Review and standing matter — a draft is different from an accepted finding.
-- Multiple runtimes or operators need to resume work from the same place.
-- A durable corpus is more valuable than a chat transcript.
-
-Good candidate domains: research synthesis, policy review, compliance workflows, editorial pipelines, knowledge management, safety-sensitive triage.
-
-It's probably too heavy for one-off prompting, quick scripts, or casual personal notes.
+---
 
 ## Getting Started
 
@@ -85,78 +73,41 @@ alias em="$(pwd)/target/debug/earmark-cli"
 mkdir my-workspace && cd my-workspace
 em init
 
-# Register the demo system
+# Register a demo system
 em system register ../examples/research-synthesis/declarations/systems/system.yaml
 em system activate sys_research_synthesis
 
-# Deposit a source note
-em deposit --class source_note --title "Test Note" --body "AI context should be bounded."
+# Deposit work materials
+em deposit --class source_note --title "Architecture Note" --body "AI context must be limited."
 
-# Find the deposited object's ID
-em query --class source_note
-
-# Run the workflow (use the object_id from the deposit or query output)
+# Run a coordinated task
 em workflow run research_synthesis --system-id sys_research_synthesis --with <object_id>
 ```
 
-See the [Quickstart Tutorial](docs/tutorials/quickstart.md) for a complete walkthrough.
+---
 
-## Documentation
+## Technical Architecture
 
-| | |
-|---|---|
-| **[Quickstart](docs/tutorials/quickstart.md)** | Get moving in 5 minutes |
-| **[Practical Guide](docs/tutorials/practical-guide.md)** | Plain-language explanation and use cases |
-| **[Canonical Spine](docs/architecture/canonical-spine.md)** | Authoritative architecture note for the core durable path |
-| **[Staged Execution](docs/concepts/staged-execution.md)** | How transitions, assignments, and handoffs work |
-| **[Context Compilation](docs/concepts/context-compilation.md)** | How Earmark bounds what a runtime sees |
-| **[Standing](docs/concepts/standing.md)** | How domain lifecycle state is declared and enforced |
-| **[Relation Authorization](docs/concepts/relation-authorization.md)** | How relation creation records the rule that authorized it |
-| **[Research Synthesis Demo](docs/tutorials/research-synthesis-demo.md)** | Run and inspect a complete research synthesis workflow |
-| **[Build a Domain](docs/tutorials/build-a-domain-definition.md)** | Define your own classes, workflows, and system |
-| **[CLI Reference](docs/reference/cli.md)** | Command lookup |
-| **[Runtime Integration](docs/reference/runtime-integration-guide.md)** | Using Earmark from Rust or any language |
-| **[Provider Extension](docs/reference/provider-extension.md)** | Register custom providers through the current extension surface |
-| **[Declaration Authoring](docs/declarations/README.md)** | Examples and validation rules |
+Earmark is built in Rust and uses:
+- **Canonical Store:** File-based, Git-backed object storage for durability.
+- **Derived Index:** A local SQLite index for fast search and lifecycle tracking.
+- **Declared Types:** YAML-based schemas for objects, relations, and instructions.
 
+### Current Status
 
-## Current Status
+Earmark is **Stable** for local development and orchestration but remains pre-release. 
+- **What Works:** Full ingestion, staged execution, relation authorization, and native orchestration.
+- **WIP:** Multi-actor coordination, advanced provider plugins, and web-based observability.
 
-Earmark is pre-release software. Build from source with Cargo. Binary packaging is a later release step.
+See **[Stability Catalog](docs/reference/stability.md)** for a detailed look at the current implementation status.
 
-What works today:
-
-- Workspace initialization, object deposit, and querying
-- Declaration, validation, and scaffolding of domain definitions
-- Bounded context compilation from declared objects and relations
-- Staged workflow execution with assignment lifecycle management
-- Durable change sets, handoffs, and failure records
-- Git-backed canonical storage with commit-backed workspace history
-- CLI inspection, explanation, and HTML report generation
-
-For developers building on Earmark:
-
-- Registry-based custom provider extension through `ProviderRegistry` and `ProviderService`
-- Additive async provider traits (`AsyncProviderService`, `AsyncProviderAdapter`) as a preparation seam for future async runtime support
-- Versioned JSON CLI contracts at 0.2.0
-
-Not yet available: package distribution (build from source), GUI or web dashboard.
-
-Workspace verification is exposed through the [CI workflow](.github/workflows/ci.yml), which runs formatting, workspace checks, tests, and Clippy.
-
-## Build and Test
-
-```bash
-cargo check --workspace
-cargo test --workspace
-cargo clippy --workspace --all-targets -- -D warnings
-```
-
-For local development and pull-request expectations, see [CONTRIBUTING.md](./CONTRIBUTING.md). For vulnerability reporting, see [SECURITY.md](./SECURITY.md).
+---
 
 ## Acknowledgments
 
-Earmark draws architectural inspiration from the concept of durable, explicit context, a direction significantly explored by creators in the AI tools space. Systems like [Engram](https://github.com/vincents-ai/engram) helped demonstrate the value of structured knowledge management for agent-operable workflows, providing a conceptual foundation that Earmark continues to develop in a fully native, Git-backed architecture.
+Earmark draws architectural inspiration from systems that prioritize durable, explicit context, such as [Engram](https://github.com/vincents-ai/engram). Earmark continues this development as a fully native, Git-backed architecture designed for high-integrity AI coordination.
+
+---
 
 ## License
 

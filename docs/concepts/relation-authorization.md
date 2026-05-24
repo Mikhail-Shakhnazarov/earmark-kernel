@@ -1,90 +1,34 @@
-# Relation Authorization
+# Verified Relationships
 
-A relation is useful only if the workspace can explain why the link was allowed.
+In Earmark, a link between two objects (a **relation**) is only useful if the system can explain *why* that link was permitted.
 
-If a `source_note` links to a `finding`, the relation may affect lineage, context traversal, reports, and later review. The system should be able to say which rule authorized the link: the source class's outgoing rule, the target class's incoming rule, either endpoint, or privileged runtime authority.
-
-Relation authorization records that decision on the relation object. A later operator can inspect not only the link, but the reason the link was permitted.
+If a `source_note` links to a `finding`, that relationship affects the lineage of all future work. Earmark doesn't just record the link; it records the **verification proof** that authorized it.
 
 ## Why This Matters
 
-Relations are not just hyperlinks. They shape what later stages can traverse and what lineage claims the system can make. When a relation appears in the workspace, the important question is not only "what does this connect?" but "why was this connection allowed?"
+Relationships are not just hyperlinks. They define the "mesh" of evidence that supports your AI work. By recording the authorization for every link, Earmark provides a definitive answer to the question: **"Why was this connection allowed?"**
 
-## What Earmark Records
+## The Verification Proof
 
-When a relation is created, Earmark writes four headers:
+When a relationship is created, Earmark attaches metadata that traces the link back to a specific rule in your system definition:
 
-| Header | Description |
+| Detail | Description |
 |---|---|
-| `relation_auth_endpoint` | Which endpoint's rule matched: `source` or `target` |
-| `relation_auth_class` | The class whose rule authorized the relation |
-| `relation_auth_authority` | The authorization authority: `source`, `target`, `either_endpoint`, or `privileged` |
-| `relation_auth_direction` | The rule direction that matched: `outgoing`, `incoming`, `bidirectional`, `either`, or `system` |
+| **Authorizing Class** | The specific object type (e.g., `source_note`) whose rules allowed the link. |
+| **Direction** | Whether it was an `outgoing` rule, an `incoming` rule, or a system-level authority. |
+| **Endpoint** | Which side of the link provided the authorization. |
 
-## Inspecting Authorization
+## Inspecting Proofs
 
-Use `em relation explain <relation_id>` to see the authorization trace:
+You can inspect the authorization trace for any relationship using the `explain` command:
 
 ```bash
-em relation explain obj_abc123
+em relation explain <relation_id>
 ```
 
-The `related.authorization` section surfaces the evidence:
+This returns a structured view of the link, including the source and target objects and the exact rule that matched.
 
-```json
-{
-  "related": {
-    "source": { "object_id": "obj_...", "class": "source_note" },
-    "target": { "object_id": "obj_...", "class": "finding" },
-    "relation_type": "mentions",
-    "creation_mode": "declared",
-    "authorization": {
-      "endpoint": "source",
-      "class": "source_note",
-      "authority": "source",
-      "direction": "outgoing"
-    }
-  }
-}
-```
+---
 
-## Examples
-
-### Source-Authorized Relation
-
-A `source_note` declares an outgoing `mentions` rule targeting `finding`. When a relation of type `mentions` is created from a `source_note` to a `finding`, the source's rule authorizes it:
-
-```json
-{
-  "authorization": {
-    "endpoint": "source",
-    "class": "source_note",
-    "authority": "source",
-    "direction": "outgoing"
-  }
-}
-```
-
-### Target-Authorized Relation
-
-A `finding` declares an incoming `referenced_by` rule targeting `source_note`. A relation from `source_note` to `finding` is authorized by the target's rule:
-
-```json
-{
-  "authorization": {
-    "endpoint": "target",
-    "class": "finding",
-    "authority": "target",
-    "direction": "incoming"
-  }
-}
-```
-
-### Either-Endpoint Authorization
-
-A rule with `authorizing_endpoint: either_endpoint` allows either the source-side rule or the target-side rule to authorize the relation, provided the rule direction matches that endpoint's position in the relation. The recorded authority is `either_endpoint`; the recorded endpoint still shows which side's rule matched.
-
-## Relation Show vs Explain
-
-- `em relation show <id>` returns the raw stored object.
-- `em relation explain <id>` returns a structured summary including the authorization trace, source/target references, and suggested next commands.
+- [Task-Specific Context](context-compilation.md) — how relationships control visibility
+- [Carrying Work Forward](handoffs.md) — how relationships enable transitions

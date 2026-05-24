@@ -1,106 +1,73 @@
-# Context Compilation
+# Task-Specific Context
 
-When a model summarizes a document, what should it be allowed to see? The full repository? Everything tagged "relevant"? Whatever the retrieval system found?
+When an AI model summarizes a document, what should it be allowed to see? The full database? Everything tagged "relevant"? Whatever a search engine retrieved?
 
-In most AI systems, the answer is vague: the model sees whatever context was assembled at runtime, and nobody can prove exactly what was included or excluded. That's retrieval. It asks "what might be relevant?" and returns a best guess.
+In most AI systems, the answer is vague: the model sees whatever context happened to be assembled at runtime. Nobody can prove exactly what was included or excluded.
 
-Context compilation asks a different question: **what is allowed for this specific operation?**
+Earmark uses **task-specific context** to answer a different question: **Exactly what is required for this specific operation?**
 
-## How It Works
+## Rules for Visibility
 
-Earmark compiles context from four declared inputs:
+Instead of guessing what is relevant (search), Earmark compiles context based on **declared rules**:
 
-- **Objects** in the corpus, filtered by class (e.g., only `finding` objects, not `source_note` objects)
-- **Relations** between objects (e.g., traverse `derived_from` links to bring in lineage)
-- **Standing constraints** (e.g., only include objects with `accepted` review status)
-- **Compiled context templates** that define all of the above as a reusable declaration
+- **Class Filters**: Only include `findings`, not raw `source_notes`.
+- **Relationship Traversal**: Follow "lineage" links to bring in supporting evidence, but stop there.
+- **Evaluation Gates**: Only include data that has been "verified" or "reviewed".
 
-The result is a **work packet**: a bounded set of objects with provenance information, ready for a runtime to process.
+The result is a **Work Packet**: a strictly bounded set of data with full provenance, ready for an AI agent to process.
 
 ```mermaid
 flowchart TD
-    subgraph Store
+    subgraph Store [Data Store]
         O[Objects]
         R[Relations]
     end
 
-    subgraph Declarations
-        CC[Compiled Context Template]
-        SP[Standing Constraints]
+    subgraph Declarations [Rules]
+        CC[Context Template]
+        SP[Evaluation Goals]
     end
 
     Store --> Planner[Context Planner]
     CC --> Planner
     SP --> Planner
 
-    Planner --> Traverser[Lineage Traversal]
-    Traverser --> |Filter by class| Filtered[Filtered Objects]
-    Traverser --> |Traverse relations| Filtered
+    Planner --> Traverser[Relationship Traversal]
+    Traverser --> |Filter by class| Filtered[Task Data]
+    Traverser --> |Follow links| Filtered
 
     Filtered --> Materializer[Work Packet Assembly]
-    Materializer --> Packet[Work Packet]
+    Materializer --> Packet[AI Work Packet]
 ```
-
-## A Concrete Example
-
-In the research synthesis demo, there are two compiled context templates:
-
-**`source_notes_for_extraction`** — admits only `source_note` objects. This is what the finding-extraction step sees.
-
-**`findings_for_summary`** — admits only `finding` objects and their `derived_from` relations. This is what the summarization step sees.
-
-The summarization step cannot see the original source notes. It receives only the findings that were extracted and validated in the previous stage. That narrowing is not an accident — it's declared in the compiled context template.
 
 ## Why It Matters
 
-**You can prove what a model saw.** The compiled context is a deterministic function of declarations and corpus state. If someone asks "did the model have access to the confidential intake notes?" you can answer definitively.
+**Determinism**: You can prove exactly what the AI saw. If a model hallucinates or leaks sensitive data, you can audit the specific context template that was used.
 
-**Smaller context reduces noise.** A summarizer that sees only verified findings produces better output than one that also sees raw interview transcripts, private annotations, and unrelated objects.
+**Reduced Noise**: An AI that sees only verified facts produces better results than one overwhelmed by raw transcripts, private notes, and unrelated data.
 
-**Different stages see different things.** A triage step might see raw intake data. A routing step might see only the extracted symptoms. A reporting step might see only reviewed findings. Each stage has its own compiled context template.
+**Controlled Narrowing**: A triage AI sees raw data. A reporting AI sees only reviewed findings. Each stage of the "work spine" uses a context template tailored to its specific responsibility.
 
-## Declaring a Compiled Context
+## Declaring a Context Template
 
-A compiled context template is a YAML file:
+Context templates are defined in YAML. They act as a firewall for your AI workflows:
 
 ```yaml
 name: findings_for_summary
-version: 0.2.0
-description: Compile findings for summarization.
+description: Target only verified findings and their lineage.
 select:
   classes:
     - finding
-  standing: {}
   relations:
     - derived_from
-  time_range: null
-group_by: []
-render:
-  mode: work_surface_compilation
-  manifest_format: json
-  prose_template: null
-visibility:
-  include_lineage: true
-  include_constraints: true
-  include_provenance: true
+  lifecycle:
+    - verified
 ```
 
-The `select` block says: include `finding` objects and traverse `derived_from` relations. Nothing else gets in.
+The `select` block ensures the AI receives the `finding` objects and follows their `derived_from` links, but is physically unable to see anything else in the workspace.
 
-Filter semantics are global by default: class and standing filters apply both to seed selection and to objects reached through relation expansion. Relation filters control which edges can be traversed.
+## Related
 
-To deliberately widen across object-filter boundaries, set:
-
-```yaml
-select:
-  expansion:
-    object_filter: none
-```
-
-Example failure mode: a context selecting `review = accepted` findings will not pull in a `review = rejected` neighbor through traversal unless expansion is explicitly widened.
-
-## See Also
-
-- [Staged Execution](staged-execution.md) — how transitions use compiled context
-- [Handoffs](handoffs.md) — how context narrows between stages
-- [Research Synthesis Demo](../tutorials/research-synthesis-demo.md) — see context compilation in action
+- [The Durable Work Spine](staged-execution.md) — how transitions use task-specific context
+- [Carrying Work Forward](handoffs.md) — how context narrows between stages
+- [Research Synthesis Demo](../tutorials/research-synthesis-demo.md) — see task-specific context in action

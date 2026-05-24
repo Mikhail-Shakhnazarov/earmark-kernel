@@ -22,6 +22,9 @@ relation_rules:
   - relation_type: dispatched_as
     counterparty_classes:
       - dispatch
+  - relation_type: has_dispatch
+    counterparty_classes:
+      - dispatch
   - relation_type: has_evidence
     counterparty_classes:
       - evidence
