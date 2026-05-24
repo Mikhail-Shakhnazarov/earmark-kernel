@@ -10,7 +10,9 @@ use std::fs;
 
 pub fn handle(ctx: &CommandContext, args: &DepositArgs) -> Result<(), CliError> {
     let store = ctx.store;
-    let index = ctx.index.as_ref().expect("index required for deposit");
+    let index = ctx.index.as_ref().ok_or_else(|| {
+        CliError::argument("index required for deposit — ensure workspace is initialized")
+    })?;
     let provider_registry = ctx.provider_registry;
     let config = ctx.config;
     let as_json = ctx.as_json;

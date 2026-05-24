@@ -10,7 +10,9 @@ pub fn handle(ctx: &CommandContext, command: &SystemCommand) -> Result<(), CliEr
     let index = ctx
         .index
         .as_ref()
-        .expect("index required for system commands");
+        .ok_or_else(|| {
+            CliError::argument("index required for system commands — ensure workspace is initialized")
+        })?;
     let config = ctx.config;
     let as_json = ctx.as_json;
     let actor = ctx.actor;
@@ -42,7 +44,7 @@ pub fn handle(ctx: &CommandContext, command: &SystemCommand) -> Result<(), CliEr
                     "system id required: pass --system-id, set EM_SYSTEM_ID, or set default_system_id in config"
                 )
             })?;
-            let active = activate_system_definition(store, index, &system_id)?;
+            let active = activate_system_definition(store, &index, &system_id)?;
             emit(
                 as_json,
                 json!({

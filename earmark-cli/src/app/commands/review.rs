@@ -7,7 +7,9 @@ use serde_json::json;
 
 pub fn handle(ctx: &CommandContext, args: &ReviewArgs) -> Result<(), CliError> {
     let store = ctx.store;
-    let index = ctx.index.as_ref().expect("index required for review");
+    let index = ctx.index.as_ref().ok_or_else(|| {
+        CliError::argument("index required for review — ensure workspace is initialized")
+    })?;
     let as_json = ctx.as_json;
 
     let reference = resolve_version_ref(store, &args.object_id, args.version_id.as_deref())?;
