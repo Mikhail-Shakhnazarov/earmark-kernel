@@ -6,11 +6,10 @@ ROOT="${EARMARK_WORKSPACE:-$ROOT_DEFAULT}"
 cd "$ROOT"
 
 OPENCODE_MODEL="${OPENCODE_MODEL:-opencode/big-pickle}"
-OPENCODE_SKIP_PERMS="${OPENCODE_SKIP_PERMS:-1}"
 SKIP_GATES="${SKIP_GATES:-1}"
 UNIQUE_BRANCH="${UNIQUE_BRANCH:-1}"
 
-export OPENCODE_MODEL OPENCODE_SKIP_PERMS SKIP_GATES UNIQUE_BRANCH
+export OPENCODE_MODEL SKIP_GATES UNIQUE_BRANCH
 
 if command -v opencode >/dev/null 2>&1; then
   export OPENCODE_CMD="${OPENCODE_CMD:-opencode}"
@@ -67,7 +66,6 @@ test "\$(cat $SMOKE_FILE)" = "opencode-big-pickle-smoke-ok"
 ## Executor Rules
 
 - Implement only this manifest.
-- Do not query engram.
 - Do not commit.
 - Do not merge.
 - Stop after the edit and local gate.
