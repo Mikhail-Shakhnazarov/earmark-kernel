@@ -71,6 +71,20 @@ test "\$(cat $SMOKE_FILE)" = "opencode-big-pickle-smoke-ok"
 - Stop after the edit and local gate.
 MANIFEST
 
+# Single Native Story: Ingest smoke task first
+EARMARK_CMD="${EARMARK_CMD:-cargo run --bin earmark-cli --}"
+TASK_JSON=".orchestration/smoke/opencode-big-pickle-smoke-task.json"
+cat > "$TASK_JSON" <<EOF
+{
+  "task_id": "opencode-big-pickle-smoke",
+  "title": "OpenCode Big Pickle Smoke Test",
+  "goal": "Verify opencode dispatch reliability.",
+  "priority": "low",
+  "status": "proposed"
+}
+EOF
+$EARMARK_CMD orchestration ingest-task --source native-json "$TASK_JSON"
+
 scripts/dispatch-opencode.sh \
   --manifest "$MANIFEST" \
   --task opencode-big-pickle-smoke \

@@ -76,6 +76,18 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                 .unwrap_or("")
                 .to_string();
 
+            let dispatch_oid = if let Some(ref d_id) = args.dispatch_id {
+                let (oid, class, _, _) = find_orchestration_task(index_ref, store, d_id)?.ok_or_else(|| {
+                    CliError::not_found(format!("dispatch {} not found", d_id))
+                })?;
+                if class != "dispatch" {
+                    return Err(CliError::argument(format!("object {} is a {}, not a dispatch", d_id, class)));
+                }
+                Some(oid)
+            } else {
+                None
+            };
+
             let commit = match &args.commit {
                 Some(c) => c.clone(),
                 None => run_git_cmd(&["rev-parse", "HEAD"])?,
@@ -102,7 +114,7 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                 String::new()
             };
 
-            let payload = json!({
+            let mut payload = json!({
                 "task_id": task_id,
                 "task_object_id": task_oid.as_str(),
                 "phase": args.phase,
@@ -116,15 +128,30 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                 "captured_by": "orchestration capture-git"
             });
 
+            if let Some(ref d_oid) = dispatch_oid {
+                if let Some(obj) = payload.as_object_mut() {
+                    obj.insert("dispatch_id".to_string(), json!(d_oid.as_str()));
+                }
+            }
+
             let title = format!("Git snapshot: {} for {}", args.phase, task_id);
             let obj_ref = deposit_orchestration_object(ctx, "git_snapshot", Some(title), payload)?;
 
-            create_orchestration_relation(
-                ctx,
-                task_oid.clone(),
-                obj_ref.id.clone(),
-                "has_git_snapshot",
-            )?;
+            if let Some(d_oid) = dispatch_oid {
+                create_orchestration_relation(
+                    ctx,
+                    d_oid,
+                    obj_ref.id.clone(),
+                    "anchored_by",
+                )?;
+            } else {
+                create_orchestration_relation(
+                    ctx,
+                    task_oid.clone(),
+                    obj_ref.id.clone(),
+                    "has_git_snapshot",
+                )?;
+            }
 
             let vr = VersionRef::new(obj_ref.id.clone(), obj_ref.version_id.clone());
             if let Ok(stored_object) = store.read_version(&vr) {
@@ -225,7 +252,24 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                 .unwrap_or_else(|| "opencode".to_string());
             let branch = args.branch.clone().unwrap_or_default();
 
-            let payload = json!({
+            let index_ref = ctx
+                .index
+                .as_ref()
+                .ok_or_else(|| CliError::argument("index required for ingest-manifest"))?;
+
+            let context_oid = if let Some(ref c_id) = args.context_id {
+                let (oid, class, _, _) = find_orchestration_task(index_ref, store, c_id)?.ok_or_else(|| {
+                    CliError::not_found(format!("context {} not found", c_id))
+                })?;
+                if class != "context_packet" {
+                    return Err(CliError::argument(format!("object {} is a {}, not a context_packet", c_id, class)));
+                }
+                Some(oid)
+            } else {
+                None
+            };
+
+            let mut payload = json!({
                 "task_id": task_id,
                 "attempt": attempt,
                 "objective": objective,
@@ -234,12 +278,15 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                 "raw_text": raw_text,
                 "executor": executor,
                 "branch": branch,
+                "status": normalize_dispatch_status("queued"),
             });
 
-            let index_ref = ctx
-                .index
-                .as_ref()
-                .ok_or_else(|| CliError::argument("index required for ingest-manifest"))?;
+            if let Some(ref c_oid) = context_oid {
+                if let Some(obj) = payload.as_object_mut() {
+                    obj.insert("context_id".to_string(), json!(c_oid.as_str()));
+                }
+            }
+
             let runtime_surface = RuntimeToolSurface {
                 store,
                 index: index_ref,
@@ -254,10 +301,14 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
             let mut headers = BTreeMap::new();
             headers.insert("task_id".to_string(), earmark_core::HeaderValue::String(task_id.clone()));
 
+            let (task_oid, _, _, _) = find_orchestration_task(index_ref, store, &task_id)?.ok_or_else(|| {
+                CliError::not_found(format!("parent work_item {} not found", task_id))
+            })?;
+
             let object_ref = runtime_surface.deposit_object(
-                "executor_manifest".to_string(),
+                "dispatch".to_string(),
                 Some("object".to_string()),
-                Some(format!("Manifest for {}", task_id)),
+                Some(format!("Dispatch for {}", task_id)),
                 payload,
                 prov,
                 DepositValidationContext {
@@ -265,6 +316,22 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                     headers,
                 },
             )?;
+
+            create_orchestration_relation(
+                ctx,
+                task_oid,
+                object_ref.id.clone(),
+                "dispatched_as",
+            )?;
+
+            if let Some(c_oid) = context_oid {
+                create_orchestration_relation(
+                    ctx,
+                    object_ref.id.clone(),
+                    c_oid,
+                    "used_context",
+                )?;
+            }
 
             index_ref.rebuild_from_store(store)?;
 
@@ -378,10 +445,17 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
             let mut headers = BTreeMap::new();
             headers.insert("task_id".to_string(), earmark_core::HeaderValue::String(task_id.clone()));
 
+            let dispatch_oid = if let Some(ref m) = manifest_ref {
+                let manifest_oid_str = m.split(':').next().unwrap_or(m);
+                ObjectId::parse(manifest_oid_str.to_string()).ok()
+            } else {
+                None
+            };
+
             let object_ref = runtime_surface.deposit_object(
-                "executor_report".to_string(),
+                "evidence".to_string(),
                 Some("object".to_string()),
-                Some(format!("Report for {}", task_id)),
+                Some(format!("Evidence for {}", task_id)),
                 payload,
                 prov,
                 DepositValidationContext {
@@ -389,6 +463,15 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                     headers,
                 },
             )?;
+
+            if let Some(d_oid) = dispatch_oid {
+                create_orchestration_relation(
+                    ctx,
+                    d_oid,
+                    object_ref.id.clone(),
+                    "produced_evidence",
+                )?;
+            }
 
             index_ref.rebuild_from_store(store)?;
 
@@ -456,11 +539,12 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
 
             let mut ingested = Vec::new();
             for task in tasks {
+                let normalized_status = normalize_work_item_status(&task.status);
                 let payload = json!({
                     "task_id": task.task_id,
                     "title": task.title,
                     "description": task.description,
-                    "status": task.status,
+                    "status": normalized_status,
                     "priority": task.priority,
                     "tags": [],
                     "raw_text": task.raw_text,
@@ -481,7 +565,7 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                 headers.insert("task_id".to_string(), earmark_core::HeaderValue::String(task.task_id.clone()));
 
                 let object_ref = runtime_surface.deposit_object(
-                    "implementation_task".to_string(),
+                    "work_item".to_string(),
                     Some("object".to_string()),
                     Some(task.title.clone()),
                     payload,
@@ -519,7 +603,7 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
 
             Ok(())
         }
-        OrchestrationAction::RecordGate(args) => {
+        OrchestrationAction::RecordContext(args) => {
             require_initialized_workspace(store)?;
             let index_ref = ctx
                 .index
@@ -537,12 +621,80 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                 .unwrap_or("")
                 .to_string();
 
-            let normalized_status = match args.status.to_lowercase().as_str() {
-                "pass" | "passed" | "success" | "ok" => "pass",
-                "fail" | "failed" | "error" => "fail",
-                "skipped" | "skip" => "skipped",
-                other => return Err(CliError::argument(format!("invalid status: '{}'", other))),
+            if !args.path.exists() {
+                return Err(CliError::not_found(format!(
+                    "context file not found: {}",
+                    args.path.display()
+                )));
+            }
+            let raw_text = fs::read_to_string(&args.path)?;
+            let context_data: serde_json::Value = serde_json::from_str(&raw_text)?;
+
+            let payload = json!({
+                "task_id": task_id,
+                "task_object_id": task_oid.as_str(),
+                "data": context_data,
+                "recorded_by": "orchestration record-context"
+            });
+
+            let title = format!("Context packet for {}", task_id);
+            let obj_ref = deposit_orchestration_object(ctx, "context_packet", Some(title), payload)?;
+
+            create_orchestration_relation(
+                ctx,
+                task_oid,
+                obj_ref.id.clone(),
+                "has_context",
+            )?;
+
+            let vr = VersionRef::new(obj_ref.id.clone(), obj_ref.version_id.clone());
+            if let Ok(stored_object) = store.read_version(&vr) {
+                let _ = mirror_surface(store, &stored_object);
+            }
+
+            emit(
+                as_json,
+                json!({
+                    "kind": "orchestration_context_packet",
+                    "task_id": task_id,
+                    "object_id": obj_ref.id.as_str(),
+                    "version_id": obj_ref.version_id.as_str(),
+                }),
+            );
+
+            Ok(())
+        }
+        OrchestrationAction::RecordGate(args) => {
+            require_initialized_workspace(store)?;
+            let index_ref = ctx
+                .index
+                .as_ref()
+                .ok_or_else(|| CliError::argument("index required"))?;
+
+            let (task_oid, _class, _task_summary, task_payload) =
+                find_orchestration_task(index_ref, store, &args.task_id)?.ok_or_else(|| {
+                    CliError::not_found(format!("task {} not found", args.task_id))
+                })?;
+
+            let dispatch_oid = if let Some(ref d_id) = args.dispatch_id {
+                let (oid, class, _, _) = find_orchestration_task(index_ref, store, d_id)?.ok_or_else(|| {
+                    CliError::not_found(format!("dispatch {} not found", d_id))
+                })?;
+                if class != "dispatch" {
+                    return Err(CliError::argument(format!("object {} is a {}, not a dispatch", d_id, class)));
+                }
+                Some(oid)
+            } else {
+                None
             };
+
+            let task_id = task_payload
+                .get("task_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+
+            let normalized_status = normalize_gate_status(&args.status);
 
             let mut log_path = String::new();
             let mut log_excerpt = String::new();
@@ -574,7 +726,7 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                 log_excerpt = excerpt;
             }
 
-            let payload = json!({
+            let mut payload = json!({
                 "task_id": task_id,
                 "task_object_id": task_oid.as_str(),
                 "command": args.command,
@@ -584,15 +736,30 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                 "recorded_by": "orchestration record-gate"
             });
 
+            if let Some(ref d_oid) = dispatch_oid {
+                if let Some(obj) = payload.as_object_mut() {
+                    obj.insert("dispatch_id".to_string(), json!(d_oid.as_str()));
+                }
+            }
+
             let title = format!("Gate result: {} for {}", args.command, task_id);
             let obj_ref = deposit_orchestration_object(ctx, "gate_result", Some(title), payload)?;
 
-            create_orchestration_relation(
-                ctx,
-                task_oid.clone(),
-                obj_ref.id.clone(),
-                "has_gate_result",
-            )?;
+            if let Some(d_oid) = dispatch_oid {
+                create_orchestration_relation(
+                    ctx,
+                    d_oid,
+                    obj_ref.id.clone(),
+                    "checked_by",
+                )?;
+            } else {
+                create_orchestration_relation(
+                    ctx,
+                    task_oid.clone(),
+                    obj_ref.id.clone(),
+                    "has_gate_result",
+                )?;
+            }
 
             let vr = VersionRef::new(obj_ref.id.clone(), obj_ref.version_id.clone());
             if let Ok(stored_object) = store.read_version(&vr) {
@@ -631,7 +798,7 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
             let task_arg = args.task_id.to_lowercase();
 
             let task_filter = QueryFilter {
-                class: Some("implementation_task".to_string()),
+                class: None, // Search all classes, find_orchestration_task already handles this better
                 ..Default::default()
             };
             let task_results = index_ref.query_objects(&task_filter)?;
@@ -681,10 +848,7 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                 .and_then(|v| v.as_str())
                 .unwrap_or("")
                 .to_string();
-            let decision = args.decision.to_lowercase();
-            if !["accepted", "rejected", "needs_revision"].contains(&decision.as_str()) {
-                return Err(CliError::argument("invalid decision"));
-            }
+            let decision = normalize_review_status(&args.decision);
 
             let prov = RuntimeProvenance {
                 actor: "operator".to_string(),
@@ -698,7 +862,7 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
             });
 
             let review_object_ref = runtime_surface.deposit_object(
-                "review_decision".to_string(),
+                "review".to_string(),
                 Some("object".to_string()),
                 Some(format!("Review for {}", args.task_id)),
                 review_payload,
@@ -707,6 +871,35 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
             )?;
 
             let task_oid = ObjectId::parse(task_summary.object_id.clone())?;
+
+            let closure_payload = json!({
+                "task_id": task_id,
+                "review_id": review_object_ref.id.as_str(),
+                "outcome": decision,
+            });
+
+            let closure_object_ref = runtime_surface.deposit_object(
+                "closure".to_string(),
+                Some("object".to_string()),
+                Some(format!("Closure for {}", args.task_id)),
+                closure_payload,
+                prov.clone(),
+                DepositValidationContext::default(),
+            )?;
+
+            create_orchestration_relation(
+                ctx,
+                review_object_ref.id.clone(),
+                closure_object_ref.id.clone(),
+                "causes",
+            )?;
+
+            create_orchestration_relation(
+                ctx,
+                closure_object_ref.id.clone(),
+                task_oid.clone(),
+                "closes",
+            )?;
             let head_stored = store.read_head(&task_oid)?.ok_or_else(|| {
                 CliError::not_found(format!("task {} head not found", args.task_id))
             })?;
@@ -752,12 +945,11 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
 
             let task_version_ref = write_object_and_index(store, index_ref, &new_task_object)?;
 
-            runtime_surface.create_relation(
+            create_orchestration_relation(
+                ctx,
                 task_oid.clone(),
                 review_object_ref.id.clone(),
-                "has_review_decision".to_string(),
-                json!({}),
-                prov,
+                "has_review",
             )?;
 
             index_ref.rebuild_from_store(store)?;
@@ -1785,6 +1977,48 @@ fn deposit_orchestration_object(
     )?;
     index_ref.rebuild_from_store(ctx.store)?;
     Ok(obj_ref)
+}
+
+fn normalize_work_item_status(status: &str) -> String {
+    match status.to_lowercase().as_str() {
+        "proposed" | "new" | "draft" => "proposed".to_string(),
+        "ready" | "todo" | "backlog" => "ready".to_string(),
+        "dispatched" | "running" | "started" | "in_progress" => "dispatched".to_string(),
+        "under_review" | "review" | "qa" => "under_review".to_string(),
+        "closed" | "done" | "completed" | "finished" => "closed".to_string(),
+        "followup_required" | "followup" | "partial" => "followup_required".to_string(),
+        "blocked" | "stuck" | "hold" => "blocked".to_string(),
+        other => other.to_string(),
+    }
+}
+
+fn normalize_dispatch_status(status: &str) -> String {
+    match status.to_lowercase().as_str() {
+        "queued" | "pending" | "waiting" => "queued".to_string(),
+        "running" | "in_progress" | "executing" => "running".to_string(),
+        "succeeded" | "success" | "done" | "passed" | "ok" => "succeeded".to_string(),
+        "failed" | "fail" | "error" | "err" => "failed".to_string(),
+        "cancelled" | "cancel" | "abort" | "stopped" => "cancelled".to_string(),
+        other => other.to_string(),
+    }
+}
+
+fn normalize_gate_status(status: &str) -> String {
+    match status.to_lowercase().as_str() {
+        "pass" | "passed" | "success" | "ok" => "pass".to_string(),
+        "fail" | "failed" | "error" => "fail".to_string(),
+        "skipped" | "skip" => "skipped".to_string(),
+        other => other.to_string(),
+    }
+}
+
+fn normalize_review_status(status: &str) -> String {
+    match status.to_lowercase().as_str() {
+        "unreviewed" | "pending" | "none" | "draft" | "proposed" => "unreviewed".to_string(),
+        "accepted" | "approve" | "approved" | "pass" | "ok" => "accepted".to_string(),
+        "rejected" | "reject" | "deny" | "denied" | "fail" => "rejected".to_string(),
+        other => other.to_string(),
+    }
 }
 
 fn create_orchestration_relation(
