@@ -39,7 +39,7 @@ In those 60 seconds, Earmark:
 2. Validated your input against the system's class definitions.
 3. Compiled a **task-specific input set** for the AI.
 4. Performed a **coordinated transition**, passing the extracted finding but withholding the source note for the final synthesis.
-5. Recorded the entire chain of evidence in the **durable work spine**.
+5. Recorded the entire chain of evidence in the **work spine**.
 
 View your results in a browser:
 ```bash

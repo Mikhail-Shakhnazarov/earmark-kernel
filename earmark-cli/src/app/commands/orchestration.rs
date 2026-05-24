@@ -23,14 +23,44 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
     let actor = ctx.actor;
 
     match &command.action {
-        OrchestrationAction::InitExample => {
+        OrchestrationAction::InitExample(args) => {
             require_initialized_workspace(store)?;
+
+            let relative_path = "examples/earmark-dev-orchestration/declarations/system.yaml";
+            let mut resolved_path = PathBuf::from(relative_path);
+
+            if let Some(ref root) = args.example_root {
+                resolved_path = root.join("declarations/system.yaml");
+            } else if !resolved_path.exists() {
+                // Try to find repository root by looking for Cargo.toml
+                let mut current = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+                let mut found = false;
+                for _ in 0..10 {
+                    if current.join("Cargo.toml").exists() {
+                        let candidate = current.join(relative_path);
+                        if candidate.exists() {
+                            resolved_path = candidate;
+                            found = true;
+                            break;
+                        }
+                    }
+                    if !current.pop() {
+                        break;
+                    }
+                }
+                if !found {
+                    return Err(CliError::not_found(format!(
+                        "could not find orchestration example at {}. Try passing --example-root",
+                        relative_path
+                    )));
+                }
+            }
 
             let version_ref = register_declaration_file(
                 store,
                 None,
                 DeclarationKind::System,
-                &PathBuf::from("examples/earmark-dev-orchestration/declarations/system.yaml"),
+                &resolved_path,
                 None,
                 actor,
             )?;
@@ -1536,12 +1566,44 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                 .ok_or_else(|| CliError::argument("index required for explain-dispatch"))?;
 
             let dispatch_arg = args.dispatch_id.to_lowercase();
-            let (dispatch_oid, _class, _summary, payload) =
-                find_orchestration_task(index_ref, store, &dispatch_arg)?.ok_or_else(|| {
-                    CliError::not_found(format!("dispatch {} not found", args.dispatch_id))
-                })?;
+            let dispatch_oid = if dispatch_arg == "latest" {
+                let filter = QueryFilter {
+                    class: Some("dispatch".to_string()),
+                    ..Default::default()
+                };
+                let results = index_ref.query_objects(&filter)?;
+                let mut candidates = Vec::new();
+                for summary in results {
+                    let oid = ObjectId::parse(summary.object_id.clone())?;
+                    if let Some(head) = store.read_head(&oid)? {
+                        candidates.push((oid, head.envelope.provenance.captured_at));
+                    }
+                }
+                candidates.sort_by_key(|c| c.1);
+                if let Some(best) = candidates.pop() {
+                    best.0
+                } else {
+                    return Err(CliError::not_found("no dispatch records found; create one with `em orchestration ingest-manifest ...`"));
+                }
+            } else {
+                let (oid, _class, _summary, _payload) =
+                    find_orchestration_task(index_ref, store, &dispatch_arg)?.ok_or_else(|| {
+                        CliError::not_found(format!("dispatch {} not found", args.dispatch_id))
+                    })?;
+                oid
+            };
 
-            let mut connected_objects = traverse_orchestration_graph(index_ref, store, &dispatch_oid)?;
+            let head = store.read_head(&dispatch_oid)?.ok_or_else(|| {
+                CliError::not_found(format!("dispatch {} head not found", dispatch_oid))
+            })?;
+            let vid = head.envelope.version_id.clone();
+            let vr = VersionRef::new(dispatch_oid.clone(), vid);
+            let stored = store.read_version(&vr)?;
+            let text = stored.payload.as_utf8()?;
+            let payload: serde_json::Value = serde_json::from_str(&text)?;
+
+            let mut connected_objects =
+                traverse_orchestration_graph(index_ref, store, &dispatch_oid)?;
             connected_objects.sort_by_key(|(_, _, _, captured_at)| *captured_at);
 
             let events: Vec<serde_json::Value> = connected_objects

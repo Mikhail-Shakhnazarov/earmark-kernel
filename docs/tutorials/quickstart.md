@@ -169,9 +169,9 @@ You ran a multi-stage workflow in one invocation:
 
 1. **Extraction**: Earmark compiled a **task-specific input set** containing only your source notes, then extracted findings. Each finding was linked back to its source automatically.
 
-2. **Synthesis**: Earmark performed a **coordinated transition**. It passed the findings to the next stage, but withheld the original source notes. The synthesis stage produced a summary using *only* the validated findings.
+2. **Synthesis**: Earmark performed a **coordinated transition**. It passed the findings to the next stage, but withheld the original source notes. The synthesis stage was constrained to receive *only* the validated findings.
 
-This ensures that the final summary is based strictly on the extracted evidence, not on ambient noise from the original logs. That's the power of the **durable work spine**.
+This reduces context leakage, helping ensure that the final summary is derived from the handed-off findings rather than from ambient noise in the original source material. Earmark records the context, output, and review state needed to challenge or repair a result. That's the power of the **work spine**.
 
 ## Next steps
 
