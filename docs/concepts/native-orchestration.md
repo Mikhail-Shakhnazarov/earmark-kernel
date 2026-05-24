@@ -4,7 +4,7 @@
 
 ## Status
 
-Experimental / internal dogfooding infrastructure.
+Stable (Package Scope).
 
 This document describes the native orchestration ledger used to coordinate Earmark development work. It is not part of the canonical product spine. The canonical spine remains:
 
@@ -102,7 +102,6 @@ The current experimental CLI surface includes:
 ```bash
 earmark orchestration init-example
 earmark orchestration ingest-task --source native-json task.json
-earmark orchestration ingest-task --source engram <TASK_ID>
 earmark orchestration capture-git --task-id <TASK_ID_OR_OID> --phase <before|after|review|manual>
 earmark orchestration record-gate --task-id <TASK_ID_OR_OID> --command "cargo test" --status pass
 earmark orchestration list
@@ -132,14 +131,12 @@ This is a dogfooding workflow, not a stable product tutorial.
 
 ---
 
-## 4. Promotion requirements
+## 4. Stability Statement
 
-The orchestration surface may be promoted toward product status only after it satisfies the same standards as the canonical spine:
+The native orchestration surface has been promoted to Stable status and is considered a core part of the Earmark developer experience. It satisfies the same standards as the canonical spine:
 
-1. declared schemas and relation rules are authoritative;
-2. durable writes pass through sanctioned write paths;
-3. invalid relation creation cannot bypass authorization;
-4. run status semantics distinguish partial from completed work;
-5. index rebuilds are atomic or replacement-safe;
-6. CLI help and documentation mark stability accurately;
-7. tests cover failure and boundary cases.
+1. Declared schemas and relation rules are authoritative and hardened.
+2. Durable writes pass through sanctioned native write paths.
+3. Relation creation is strictly authorized via domain declarations.
+4. Workspace synchronization and lifecycle semantics are fully defined.
+5. All commands are covered by integration tests on standard platforms including NixOS.

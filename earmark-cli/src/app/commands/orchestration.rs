@@ -251,13 +251,19 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                 source_type: "cli".to_string(),
             };
 
+            let mut headers = BTreeMap::new();
+            headers.insert("task_id".to_string(), earmark_core::HeaderValue::String(task_id.clone()));
+
             let object_ref = runtime_surface.deposit_object(
                 "executor_manifest".to_string(),
                 Some("object".to_string()),
                 Some(format!("Manifest for {}", task_id)),
                 payload,
                 prov,
-                DepositValidationContext::default(),
+                DepositValidationContext {
+                    namespace: None,
+                    headers,
+                },
             )?;
 
             index_ref.rebuild_from_store(store)?;
@@ -369,13 +375,19 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                 "manifest": manifest_ref,
             });
 
+            let mut headers = BTreeMap::new();
+            headers.insert("task_id".to_string(), earmark_core::HeaderValue::String(task_id.clone()));
+
             let object_ref = runtime_surface.deposit_object(
                 "executor_report".to_string(),
                 Some("object".to_string()),
                 Some(format!("Report for {}", task_id)),
                 payload,
                 prov,
-                DepositValidationContext::default(),
+                DepositValidationContext {
+                    namespace: None,
+                    headers,
+                },
             )?;
 
             index_ref.rebuild_from_store(store)?;
@@ -465,13 +477,19 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                     source_type: "cli".to_string(),
                 };
 
+                let mut headers = BTreeMap::new();
+                headers.insert("task_id".to_string(), earmark_core::HeaderValue::String(task.task_id.clone()));
+
                 let object_ref = runtime_surface.deposit_object(
                     "implementation_task".to_string(),
                     Some("object".to_string()),
                     Some(task.title.clone()),
                     payload,
                     prov,
-                    DepositValidationContext::default(),
+                    DepositValidationContext {
+                        namespace: None,
+                        headers,
+                    },
                 )?;
 
                 index_ref.rebuild_from_store(store)?;
@@ -1734,13 +1752,36 @@ fn deposit_orchestration_object(
         actor: "operator".to_string(),
         source_type: "cli".to_string(),
     };
+    let mut headers = BTreeMap::new();
+    if let Some(task_id) = payload.get("task_id").and_then(|v| v.as_str()) {
+        headers.insert("task_id".to_string(), earmark_core::HeaderValue::String(task_id.to_string()));
+    }
+    if let Some(command) = payload.get("command").and_then(|v| v.as_str()) {
+        headers.insert("command".to_string(), earmark_core::HeaderValue::String(command.to_string()));
+    }
+    if let Some(phase) = payload.get("phase").and_then(|v| v.as_str()) {
+        headers.insert("phase".to_string(), earmark_core::HeaderValue::String(phase.to_string()));
+    }
+    if let Some(commit) = payload.get("commit").and_then(|v| v.as_str()) {
+        headers.insert("commit".to_string(), earmark_core::HeaderValue::String(commit.to_string()));
+    }
+    if let Some(branch) = payload.get("branch").and_then(|v| v.as_str()) {
+        headers.insert("branch".to_string(), earmark_core::HeaderValue::String(branch.to_string()));
+    }
+    if let Some(status) = payload.get("status").and_then(|v| v.as_str()) {
+        headers.insert("status".to_string(), earmark_core::HeaderValue::String(status.to_string()));
+    }
+
     let obj_ref = runtime_surface.deposit_object(
         class.to_string(),
         Some("object".to_string()),
         title,
         payload,
         prov,
-        DepositValidationContext::default(),
+        DepositValidationContext {
+            namespace: None,
+            headers,
+        },
     )?;
     index_ref.rebuild_from_store(ctx.store)?;
     Ok(obj_ref)

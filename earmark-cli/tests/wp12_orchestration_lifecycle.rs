@@ -210,6 +210,7 @@ fn test_gate_status_normalization() {
     // Create a task to link gate results to
     let task_json_path = root.join("task.json");
     let payload = serde_json::json!({
+        "task_id": "gate-test-task",
         "title": "Gate test task",
         "goal": "Test normalization",
         "priority": "low",

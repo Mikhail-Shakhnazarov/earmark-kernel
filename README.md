@@ -156,7 +156,7 @@ For local development and pull-request expectations, see [CONTRIBUTING.md](./CON
 
 ## Acknowledgments
 
-Earmark owes an architectural debt to [Engram](https://github.com/vincents-ai/engram) and its creator, Vincent Palmer. Engram's treatment of durable project state, explicit context, and structured agent-operable knowledge helped open the direction that Earmark develops here.
+Earmark draws architectural inspiration from the concept of durable, explicit context, a direction significantly explored by creators in the AI tools space. Systems like [Engram](https://github.com/vincents-ai/engram) helped demonstrate the value of structured knowledge management for agent-operable workflows, providing a conceptual foundation that Earmark continues to develop in a fully native, Git-backed architecture.
 
 ## License
 
