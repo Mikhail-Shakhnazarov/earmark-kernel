@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # scripts/run-self-hosting-cycle.sh
-# Demonstrates a complete end-to-end self-hosting development cycle in Earmark.
+# Demonstrates a complete end-to-end self-hosting development cycle in Earmark
+# using native orchestration paths only.
 
 set -euo pipefail
 
@@ -12,40 +13,50 @@ cargo run --bin earmark-cli -- --root "$TMP" init
 echo "2. Initializing example orchestration declarations"
 cargo run --bin earmark-cli -- --root "$TMP" --json orchestration init-example
 
-echo "3. Ingesting Task EODP-A9 from Engram store"
-cargo run --bin earmark-cli -- --root "$TMP" --json orchestration ingest-task a98596b8
+echo "3. Creating native JSON task payload"
+TASK_ID="eodp-a7"
+cat > "$TMP/task.json" << EOF
+{
+  "task_id": "$TASK_ID",
+  "title": "Self-hosting cycle demonstration task",
+  "goal": "Demonstrate a complete self-hosting development cycle using only native Earmark orchestration paths.",
+  "priority": "high",
+  "status": "proposed"
+}
+EOF
 
-echo "4. Ingesting Dispatch Manifest"
-# We'll use our own EODP-A7 manifest as a realistic example
+echo "4. Ingesting Task from native JSON"
+cargo run --bin earmark-cli -- --root "$TMP" --json orchestration ingest-task --source native-json "$TMP/task.json"
+
+echo "5. Ingesting Dispatch Manifest"
 cargo run --bin earmark-cli -- --root "$TMP" --json orchestration ingest-manifest .orchestration/manifests/EODP-A7.md --attempt 1
 
-echo "5. Ingesting Executor Report"
-# We'll use one of the generated reports from EODP-A7
+echo "6. Ingesting Executor Report"
 REPORTS_DIR=".orchestration/reports"
 LATEST_REPORT=$(find "$REPORTS_DIR" -maxdepth 1 -name "EODP-A7--1-*.md" | sort | tail -n 1)
 if [ -n "$LATEST_REPORT" ]; then
   echo "Found report: $LATEST_REPORT"
   cargo run --bin earmark-cli -- --root "$TMP" --json orchestration ingest-report "$LATEST_REPORT" --attempt 1
 else
-  echo "No report found. Creating dummy report..."
-  DUMMY_REPORT="$TMP/dummy_report.md"
-  cat <<EOF > "$DUMMY_REPORT"
+  echo "No report found. Creating a minimal report..."
+  cat > "$TMP/report.md" << EOF
+task_uuid: $TASK_ID
+attempt_number: 1
 ## Objective
-Implement show.
-
+Demonstrate self-hosting cycle.
 ## Changed Files
-- earmark-cli/src/app/commands/orchestration.rs
+- scripts/run-self-hosting-cycle.sh
 EOF
-  cargo run --bin earmark-cli -- --root "$TMP" --json orchestration ingest-report "$DUMMY_REPORT" --task-id eodp-a7 --attempt 1
+  cargo run --bin earmark-cli -- --root "$TMP" --json orchestration ingest-report "$TMP/report.md" --task-id "$TASK_ID" --attempt 1
 fi
 
-echo "6. Querying Unified Diagnostic State (Show)"
-cargo run --bin earmark-cli -- --root "$TMP" --json orchestration show a98596b8
+echo "7. Querying Unified Diagnostic State (Show)"
+cargo run --bin earmark-cli -- --root "$TMP" --json orchestration show "$TASK_ID"
 
-echo "7. Recording Review Decision (Accept)"
-cargo run --bin earmark-cli -- --root "$TMP" --json orchestration review a98596b8 --decision accepted --comment "End-to-end self-hosting loop verified successfully."
+echo "8. Recording Review Decision (Accept)"
+cargo run --bin earmark-cli -- --root "$TMP" --json orchestration review "$TASK_ID" --decision accepted --comment "End-to-end self-hosting loop verified successfully."
 
-echo "8. Verifying Closed Task State"
-cargo run --bin earmark-cli -- --root "$TMP" --json orchestration show a98596b8
+echo "9. Verifying Closed Task State"
+cargo run --bin earmark-cli -- --root "$TMP" --json orchestration show "$TASK_ID"
 
 echo "=== Cycle Completed Successfully! ==="
