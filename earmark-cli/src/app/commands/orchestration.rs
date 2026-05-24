@@ -354,7 +354,7 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                 payload,
                 prov,
                 DepositValidationContext {
-                    namespace: Some("examples.earmark-dev".to_string()),
+                    namespace: resolve_orchestration_namespace(index_ref, store),
                     headers,
                 },
             )?;
@@ -494,7 +494,7 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                 payload,
                 prov,
                 DepositValidationContext {
-                    namespace: Some("examples.earmark-dev".to_string()),
+                    namespace: resolve_orchestration_namespace(index_ref, store),
                     headers,
                 },
             )?;
@@ -626,7 +626,7 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                     payload,
                     prov,
                     DepositValidationContext {
-                        namespace: Some("examples.earmark-dev".to_string()),
+                        namespace: resolve_orchestration_namespace(index_ref, store),
                         headers,
                     },
                 )?;
@@ -930,7 +930,7 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                 review_payload,
                 prov.clone(),
                 DepositValidationContext {
-                    namespace: Some("examples.earmark-dev".to_string()),
+                    namespace: resolve_orchestration_namespace(index_ref, store),
                     headers: BTreeMap::new(),
                 },
             )?;
@@ -950,7 +950,7 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                 closure_payload,
                 prov.clone(),
                 DepositValidationContext {
-                    namespace: Some("examples.earmark-dev".to_string()),
+                    namespace: resolve_orchestration_namespace(index_ref, store),
                     headers: BTreeMap::new(),
                 },
             )?;
@@ -2151,12 +2151,21 @@ fn deposit_orchestration_object(
         payload,
         prov,
         DepositValidationContext {
-            namespace: Some("examples.earmark-dev".to_string()),
+            namespace: resolve_orchestration_namespace(index_ref, ctx.store),
             headers,
         },
     )?;
     index_ref.rebuild_from_store(ctx.store)?;
     Ok(obj_ref)
+}
+
+fn resolve_orchestration_namespace(index: &DerivedIndex, store: &dyn ObjectStore) -> Option<String> {
+    if let Ok(oid) = ObjectId::parse("sys_earmark_dev_orchestration") {
+        if let Ok(Some(_)) = index.get_head(&oid) {
+            return Some("examples.earmark-dev".to_string());
+        }
+    }
+    None
 }
 
 fn normalize_work_item_status(status: &str) -> String {

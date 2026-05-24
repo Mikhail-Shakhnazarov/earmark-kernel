@@ -85,9 +85,9 @@ Search the corpus through the derived index.
 
 Submit a review for an object. Accepts by default; use `--reject` to deny.
 
-### `em surface compile --root <object_id> [--depth <n>] [--relation-type <type>] [--class <class>] [--evaluation <standing>]`
+### `em context compile --root <object_id> [--depth <n>] [--relation-type <type>] [--class <class>] [--epistemic <standing>]`
 
-Compile a task-specific work surface from one or more root objects. Flags like `--root`, `--relation-type`, and `--class` are repeatable. (Formerly `context compile`).
+Compile a task-specific work surface from one or more root objects. Flags like `--root`, `--relation-type`, and `--class` are repeatable.
 
 ## Workflow Execution
 
@@ -129,7 +129,7 @@ Relationship graph of artifacts produced during a run.
 
 Explain a task assignment's status and inputs.
 
-### `em result explain <id>`
+### `em change-set explain <id>`
 
 Explain what a transition produced (a "Change Set").
 
