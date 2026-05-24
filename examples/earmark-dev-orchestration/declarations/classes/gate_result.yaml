@@ -3,7 +3,17 @@ version: 0.1.0
 kind: object
 required_headers:
   - title
+  - task_id
+  - command
+  - status
 payload_schema: inline:any
-standing_rules: {}
+standing_rules:
+  allowed_standing:
+    kernel:process:
+      - pending
+      - pass
+      - fail
+      - error
+      - skipped
 relation_rules: []
 validators: []
