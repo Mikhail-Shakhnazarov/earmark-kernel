@@ -69,7 +69,10 @@ fn handle_undo_run(
         Vec::new(),
     );
 
-    write_object_and_index(ctx.store, ctx.index.as_ref().unwrap(), &object)?;
+    let index = ctx.index.as_ref().ok_or_else(|| {
+        CliError::argument("index required for undo — ensure workspace is initialized")
+    })?;
+    write_object_and_index(ctx.store, index, &object)?;
 
     emit(
         ctx.as_json,
@@ -90,7 +93,9 @@ fn handle_undo_run(
 
 fn calculate_undo_impact(ctx: &CommandContext, run: &RunRecord) -> Result<UndoImpact, CliError> {
     let store = ctx.store;
-    let index = ctx.index.as_ref().unwrap();
+    let index = ctx.index.as_ref().ok_or_else(|| {
+        CliError::argument("index required for undo impact calculation")
+    })?;
 
     let mut impact = UndoImpact {
         run_id: run.run_id.clone(),

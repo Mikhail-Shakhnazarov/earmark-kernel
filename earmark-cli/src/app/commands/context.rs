@@ -7,7 +7,9 @@ use std::collections::BTreeMap;
 
 pub fn handle(ctx: &CommandContext, command: &ContextCommand) -> Result<(), CliError> {
     let store = ctx.store;
-    let index = ctx.index.as_ref().expect("index required for context");
+    let index = ctx.index.as_ref().ok_or_else(|| {
+        CliError::argument("index required for context operations — ensure workspace is initialized")
+    })?;
     let provider_registry = ctx.provider_registry;
     let as_json = ctx.as_json;
 

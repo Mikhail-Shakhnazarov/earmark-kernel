@@ -17,12 +17,15 @@ use earmark_runtime_tools::{DepositValidationContext, RuntimeToolSurface};
 use earmark_store::{ObjectStore, StoredObject, StoredPayload};
 use serde_json::json;
 
+/// Main entry point for orchestration commands. Coordinates task ingestion,
+/// context capturing, manifest generation, and report indexing.
 pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<(), CliError> {
     let store = ctx.store;
     let as_json = ctx.as_json;
     let actor = ctx.actor;
 
     match &command.action {
+        /// Initializes an orchestration example in the current workspace.
         OrchestrationAction::InitExample(args) => {
             require_initialized_workspace(store)?;
 
@@ -88,6 +91,7 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
             );
             Ok(())
         }
+        /// Captures the current Git state as a `git_snapshot` for a specific task.
         OrchestrationAction::CaptureGit(args) => {
             require_initialized_workspace(store)?;
             let index_ref = ctx
@@ -201,6 +205,7 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
 
             Ok(())
         }
+        /// Ingests a markdown worker manifest and registers it as an `executor_manifest`.
         OrchestrationAction::IngestManifest(args) => {
             require_initialized_workspace(store)?;
 
@@ -387,6 +392,7 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
 
             Ok(())
         }
+        /// Ingests a markdown worker report and registers it as an `executor_report`.
         OrchestrationAction::IngestReport(args) => {
             require_initialized_workspace(store)?;
 
@@ -546,6 +552,7 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
 
             Ok(())
         }
+        /// Ingests work items from various sources (JSON, etc.) and registers them as `work_item`s.
         OrchestrationAction::IngestTask(args) => {
             require_initialized_workspace(store)?;
 
@@ -658,6 +665,7 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
 
             Ok(())
         }
+        /// Records a task-specific work surface context packet.
         OrchestrationAction::RecordContext(args) => {
             require_initialized_workspace(store)?;
             let index_ref = ctx
@@ -715,6 +723,7 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
 
             Ok(())
         }
+        /// Records the outcome of a local gate check for a task and attempt.
         OrchestrationAction::RecordGate(args) => {
             require_initialized_workspace(store)?;
             let index_ref = ctx
@@ -829,6 +838,7 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
 
             Ok(())
         }
+        /// Submits a human or automated review for a task and attempt.
         OrchestrationAction::Review(args) => {
             require_initialized_workspace(store)?;
 
@@ -1050,6 +1060,7 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
 
             Ok(())
         }
+        /// Shows the current status and latest artifacts for a specific orchestration task.
         OrchestrationAction::Show(args) => {
             require_initialized_workspace(store)?;
 
@@ -1338,6 +1349,7 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
 
             Ok(())
         }
+        /// Displays a visual timeline of orchestration events for a task.
         OrchestrationAction::Timeline(args) => {
             require_initialized_workspace(store)?;
 
@@ -1391,6 +1403,7 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
 
             Ok(())
         }
+        /// Lists all orchestration tasks registered in the workspace index.
         OrchestrationAction::List(args) => {
             require_initialized_workspace(store)?;
             let index_ref = ctx
@@ -1565,6 +1578,7 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
 
             Ok(())
         }
+        /// Explains a specific dispatch record, resolving 'latest' if requested.
         OrchestrationAction::ExplainDispatch(args) => {
             require_initialized_workspace(store)?;
             let index_ref = ctx
@@ -2159,7 +2173,7 @@ fn deposit_orchestration_object(
     Ok(obj_ref)
 }
 
-fn resolve_orchestration_namespace(index: &DerivedIndex, store: &dyn ObjectStore) -> Option<String> {
+fn resolve_orchestration_namespace(index: &DerivedIndex, _store: &dyn ObjectStore) -> Option<String> {
     if let Ok(oid) = ObjectId::parse("sys_earmark_dev_orchestration") {
         if let Ok(Some(_)) = index.get_head(&oid) {
             return Some("examples.earmark-dev".to_string());
