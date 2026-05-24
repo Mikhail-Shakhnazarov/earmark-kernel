@@ -171,8 +171,8 @@ fn test_orchestration_lifecycle_verification() {
         .clone();
 
     let parsed_show: Value = serde_json::from_slice(&show_output).unwrap();
-    assert_eq!(parsed_show["data"]["kind"], "orchestration_task_details");
-    assert_eq!(parsed_show["data"]["task_id"], "complete_lifecycle_task");
+    assert_eq!(parsed_show["data"]["kind"], "orchestration_work_item_show");
+    assert_eq!(parsed_show["data"]["work_item_id"], task_oid);
 
     let git_snapshots = parsed_show["data"]["git_snapshots"].as_array().unwrap();
     assert_eq!(git_snapshots.len(), 1);
@@ -399,4 +399,179 @@ fn test_workflow_declaration_class_validator() {
             }
         }
     }
+}
+
+#[test]
+fn test_explain_dispatch_latest_resolves_newest_dispatch() {
+    let (_dir, root) = setup_and_init_example();
+
+    // 1. Create a task
+    let task_json_path = root.join("task.json");
+    let payload = serde_json::json!({
+        "task_id": "latest-test-task",
+        "title": "Latest test task",
+        "goal": "Verify latest resolution",
+        "priority": "low",
+        "status": "proposed"
+    });
+    fs::write(&task_json_path, serde_json::to_string(&payload).unwrap()).unwrap();
+
+    workspace_command()
+        .arg("--root")
+        .arg(&root)
+        .arg("orchestration")
+        .arg("ingest-task")
+        .arg("--source")
+        .arg("native-json")
+        .arg(&task_json_path)
+        .assert()
+        .success();
+
+    // 2. Ingest manifest attempt 1
+    let manifest1_path = root.join("manifest1.md");
+    fs::write(
+        &manifest1_path,
+        "---\ntask_uuid: latest-test-task\nattempt_number: 1\n---\n## Objective\nAttempt 1",
+    )
+    .unwrap();
+
+    workspace_command()
+        .arg("--root")
+        .arg(&root)
+        .arg("orchestration")
+        .arg("ingest-manifest")
+        .arg(&manifest1_path)
+        .assert()
+        .success();
+
+    // Small sleep to ensure different timestamps if the resolution is low
+    std::thread::sleep(std::time::Duration::from_millis(100));
+
+    // 3. Ingest manifest attempt 2
+    let manifest2_path = root.join("manifest2.md");
+    fs::write(
+        &manifest2_path,
+        "---\ntask_uuid: latest-test-task\nattempt_number: 2\n---\n## Objective\nAttempt 2",
+    )
+    .unwrap();
+
+    workspace_command()
+        .arg("--root")
+        .arg(&root)
+        .arg("orchestration")
+        .arg("ingest-manifest")
+        .arg(&manifest2_path)
+        .assert()
+        .success();
+
+    // 4. em orchestration explain-dispatch latest
+    let explain_output = workspace_command()
+        .arg("--root")
+        .arg(&root)
+        .arg("--json")
+        .arg("orchestration")
+        .arg("explain-dispatch")
+        .arg("latest")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&explain_output).unwrap();
+    assert_eq!(parsed["data"]["kind"], "orchestration_dispatch_explanation");
+    assert_eq!(parsed["data"]["payload"]["attempt"], 2);
+}
+
+#[test]
+fn test_explain_dispatch_latest_no_dispatches() {
+    let (_dir, root) = setup_and_init_example();
+
+    let output = workspace_command()
+        .arg("--root")
+        .arg(&root)
+        .arg("--json")
+        .arg("orchestration")
+        .arg("explain-dispatch")
+        .arg("latest")
+        .assert()
+        .failure()
+        .get_output()
+        .clone();
+
+    let stdout_msg = String::from_utf8_lossy(&output.stdout);
+    let stderr_msg = String::from_utf8_lossy(&output.stderr);
+    let all_msg = format!("{}{}", stdout_msg, stderr_msg);
+    assert!(all_msg.contains("no dispatch records found"));
+}
+
+#[test]
+fn test_ingest_manifest_with_bullet_gates() {
+    let (_dir, root) = setup_and_init_example();
+
+    // 1. Create a task
+    let task_json_path = root.join("task.json");
+    let payload = serde_json::json!({
+        "task_id": "gates-bullets",
+        "title": "Gates bullets task",
+        "goal": "Verify bullet gates",
+        "priority": "low",
+        "status": "proposed"
+    });
+    fs::write(&task_json_path, serde_json::to_string(&payload).unwrap()).unwrap();
+
+    workspace_command()
+        .arg("--root")
+        .arg(&root)
+        .arg("orchestration")
+        .arg("ingest-task")
+        .arg("--source")
+        .arg("native-json")
+        .arg(&task_json_path)
+        .assert()
+        .success();
+
+    // 2. Ingest manifest with bullet gates
+    let manifest_path = root.join("manifest_bullets.md");
+    fs::write(
+        &manifest_path,
+        r#"---
+task_uuid: gates-bullets
+attempt_number: 1
+---
+
+## Objective
+
+Verify bullet gates are parsed.
+
+## Local Gates
+
+- cargo fmt --all -- --check
+- cargo test --workspace
+
+## Target Files
+
+- README.md
+"#,
+    )
+    .unwrap();
+
+    let ingest_output = workspace_command()
+        .arg("--root")
+        .arg(&root)
+        .arg("--json")
+        .arg("orchestration")
+        .arg("ingest-manifest")
+        .arg(&manifest_path)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&ingest_output).unwrap();
+    let gates = parsed["data"]["local_gates"].as_array().unwrap();
+    assert_eq!(gates.len(), 2);
+    assert!(gates[0].as_str().unwrap().contains("cargo fmt"));
+    assert!(gates[1].as_str().unwrap().contains("cargo test"));
 }

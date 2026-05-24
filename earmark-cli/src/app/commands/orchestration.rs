@@ -107,11 +107,13 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                 .to_string();
 
             let dispatch_oid = if let Some(ref d_id) = args.dispatch_id {
-                let (oid, class, _, _) = find_orchestration_task(index_ref, store, d_id)?.ok_or_else(|| {
-                    CliError::not_found(format!("dispatch {} not found", d_id))
-                })?;
+                let (oid, class, _, _) = find_orchestration_task(index_ref, store, d_id)?
+                    .ok_or_else(|| CliError::not_found(format!("dispatch {} not found", d_id)))?;
                 if class != "dispatch" {
-                    return Err(CliError::argument(format!("object {} is a {}, not a dispatch", d_id, class)));
+                    return Err(CliError::argument(format!(
+                        "object {} is a {}, not a dispatch",
+                        d_id, class
+                    )));
                 }
                 Some(oid)
             } else {
@@ -168,12 +170,7 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
             let obj_ref = deposit_orchestration_object(ctx, "git_snapshot", Some(title), payload)?;
 
             if let Some(d_oid) = dispatch_oid {
-                create_orchestration_relation(
-                    ctx,
-                    d_oid,
-                    obj_ref.id.clone(),
-                    "anchored_by",
-                )?;
+                create_orchestration_relation(ctx, d_oid, obj_ref.id.clone(), "anchored_by")?;
             } else {
                 create_orchestration_relation(
                     ctx,
@@ -260,7 +257,7 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                 .get("local gates")
                 .or_else(|| sections.get("acceptance gates"))
                 .map(|s| {
-                    parse_fenced_code_blocks(s)
+                    let fenced = parse_fenced_code_blocks(s)
                         .into_iter()
                         .flat_map(|block| {
                             block
@@ -269,7 +266,16 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                                 .collect::<Vec<_>>()
                         })
                         .filter(|l| !l.is_empty())
-                        .collect::<Vec<_>>()
+                        .collect::<Vec<_>>();
+
+                    if !fenced.is_empty() {
+                        fenced
+                    } else {
+                        parse_bullet_list(s)
+                            .into_iter()
+                            .filter(|l| !l.trim().is_empty())
+                            .collect::<Vec<_>>()
+                    }
                 })
                 .unwrap_or_default();
             let target_files = sections
@@ -288,11 +294,13 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                 .ok_or_else(|| CliError::argument("index required for ingest-manifest"))?;
 
             let context_oid = if let Some(ref c_id) = args.context_id {
-                let (oid, class, _, _) = find_orchestration_task(index_ref, store, c_id)?.ok_or_else(|| {
-                    CliError::not_found(format!("context {} not found", c_id))
-                })?;
+                let (oid, class, _, _) = find_orchestration_task(index_ref, store, c_id)?
+                    .ok_or_else(|| CliError::not_found(format!("context {} not found", c_id)))?;
                 if class != "context_packet" {
-                    return Err(CliError::argument(format!("object {} is a {}, not a context_packet", c_id, class)));
+                    return Err(CliError::argument(format!(
+                        "object {} is a {}, not a context_packet",
+                        c_id, class
+                    )));
                 }
                 Some(oid)
             } else {
@@ -329,11 +337,15 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
             };
 
             let mut headers = BTreeMap::new();
-            headers.insert("task_id".to_string(), earmark_core::HeaderValue::String(task_id.clone()));
+            headers.insert(
+                "task_id".to_string(),
+                earmark_core::HeaderValue::String(task_id.clone()),
+            );
 
-            let (task_oid, _, _, _) = find_orchestration_task(index_ref, store, &task_id)?.ok_or_else(|| {
-                CliError::not_found(format!("parent work_item {} not found", task_id))
-            })?;
+            let (task_oid, _, _, _) = find_orchestration_task(index_ref, store, &task_id)?
+                .ok_or_else(|| {
+                    CliError::not_found(format!("parent work_item {} not found", task_id))
+                })?;
 
             let object_ref = runtime_surface.deposit_object(
                 "dispatch".to_string(),
@@ -347,20 +359,10 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                 },
             )?;
 
-            create_orchestration_relation(
-                ctx,
-                task_oid,
-                object_ref.id.clone(),
-                "dispatched_as",
-            )?;
+            create_orchestration_relation(ctx, task_oid, object_ref.id.clone(), "dispatched_as")?;
 
             if let Some(c_oid) = context_oid {
-                create_orchestration_relation(
-                    ctx,
-                    object_ref.id.clone(),
-                    c_oid,
-                    "used_context",
-                )?;
+                create_orchestration_relation(ctx, object_ref.id.clone(), c_oid, "used_context")?;
             }
 
             index_ref.rebuild_from_store(store)?;
@@ -473,7 +475,10 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
             });
 
             let mut headers = BTreeMap::new();
-            headers.insert("task_id".to_string(), earmark_core::HeaderValue::String(task_id.clone()));
+            headers.insert(
+                "task_id".to_string(),
+                earmark_core::HeaderValue::String(task_id.clone()),
+            );
 
             let dispatch_oid = if let Some(ref m) = manifest_ref {
                 let manifest_oid_str = m.split(':').next().unwrap_or(m);
@@ -556,8 +561,14 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                     task_id: args.task_id.clone(),
                     title: title.clone(),
                     description: args.description.clone().unwrap_or_default(),
-                    priority: args.priority.clone().unwrap_or_else(|| "medium".to_string()),
-                    status: args.status.clone().unwrap_or_else(|| "proposed".to_string()),
+                    priority: args
+                        .priority
+                        .clone()
+                        .unwrap_or_else(|| "medium".to_string()),
+                    status: args
+                        .status
+                        .clone()
+                        .unwrap_or_else(|| "proposed".to_string()),
                     raw_text: String::new(),
                 }]
             } else {
@@ -603,7 +614,10 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                 };
 
                 let mut headers = BTreeMap::new();
-                headers.insert("task_id".to_string(), earmark_core::HeaderValue::String(task.task_id.clone()));
+                headers.insert(
+                    "task_id".to_string(),
+                    earmark_core::HeaderValue::String(task.task_id.clone()),
+                );
 
                 let object_ref = runtime_surface.deposit_object(
                     "work_item".to_string(),
@@ -679,14 +693,10 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
             });
 
             let title = format!("Context packet for {}", task_id);
-            let obj_ref = deposit_orchestration_object(ctx, "context_packet", Some(title), payload)?;
+            let obj_ref =
+                deposit_orchestration_object(ctx, "context_packet", Some(title), payload)?;
 
-            create_orchestration_relation(
-                ctx,
-                task_oid,
-                obj_ref.id.clone(),
-                "has_context",
-            )?;
+            create_orchestration_relation(ctx, task_oid, obj_ref.id.clone(), "has_context")?;
 
             let vr = VersionRef::new(obj_ref.id.clone(), obj_ref.version_id.clone());
             if let Ok(stored_object) = store.read_version(&vr) {
@@ -718,11 +728,13 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                 })?;
 
             let dispatch_oid = if let Some(ref d_id) = args.dispatch_id {
-                let (oid, class, _, _) = find_orchestration_task(index_ref, store, d_id)?.ok_or_else(|| {
-                    CliError::not_found(format!("dispatch {} not found", d_id))
-                })?;
+                let (oid, class, _, _) = find_orchestration_task(index_ref, store, d_id)?
+                    .ok_or_else(|| CliError::not_found(format!("dispatch {} not found", d_id)))?;
                 if class != "dispatch" {
-                    return Err(CliError::argument(format!("object {} is a {}, not a dispatch", d_id, class)));
+                    return Err(CliError::argument(format!(
+                        "object {} is a {}, not a dispatch",
+                        d_id, class
+                    )));
                 }
                 Some(oid)
             } else {
@@ -735,7 +747,7 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                 .unwrap_or("")
                 .to_string();
 
-            let normalized_status = normalize_gate_status(&args.status);
+            let normalized_status = normalize_gate_status(&args.status)?;
 
             let mut log_path = String::new();
             let mut log_excerpt = String::new();
@@ -787,12 +799,7 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
             let obj_ref = deposit_orchestration_object(ctx, "gate_result", Some(title), payload)?;
 
             if let Some(d_oid) = dispatch_oid {
-                create_orchestration_relation(
-                    ctx,
-                    d_oid,
-                    obj_ref.id.clone(),
-                    "checked_by",
-                )?;
+                create_orchestration_relation(ctx, d_oid, obj_ref.id.clone(), "checked_by")?;
             } else {
                 create_orchestration_relation(
                     ctx,
@@ -2101,22 +2108,40 @@ fn deposit_orchestration_object(
     };
     let mut headers = BTreeMap::new();
     if let Some(task_id) = payload.get("task_id").and_then(|v| v.as_str()) {
-        headers.insert("task_id".to_string(), earmark_core::HeaderValue::String(task_id.to_string()));
+        headers.insert(
+            "task_id".to_string(),
+            earmark_core::HeaderValue::String(task_id.to_string()),
+        );
     }
     if let Some(command) = payload.get("command").and_then(|v| v.as_str()) {
-        headers.insert("command".to_string(), earmark_core::HeaderValue::String(command.to_string()));
+        headers.insert(
+            "command".to_string(),
+            earmark_core::HeaderValue::String(command.to_string()),
+        );
     }
     if let Some(phase) = payload.get("phase").and_then(|v| v.as_str()) {
-        headers.insert("phase".to_string(), earmark_core::HeaderValue::String(phase.to_string()));
+        headers.insert(
+            "phase".to_string(),
+            earmark_core::HeaderValue::String(phase.to_string()),
+        );
     }
     if let Some(commit) = payload.get("commit").and_then(|v| v.as_str()) {
-        headers.insert("commit".to_string(), earmark_core::HeaderValue::String(commit.to_string()));
+        headers.insert(
+            "commit".to_string(),
+            earmark_core::HeaderValue::String(commit.to_string()),
+        );
     }
     if let Some(branch) = payload.get("branch").and_then(|v| v.as_str()) {
-        headers.insert("branch".to_string(), earmark_core::HeaderValue::String(branch.to_string()));
+        headers.insert(
+            "branch".to_string(),
+            earmark_core::HeaderValue::String(branch.to_string()),
+        );
     }
     if let Some(status) = payload.get("status").and_then(|v| v.as_str()) {
-        headers.insert("status".to_string(), earmark_core::HeaderValue::String(status.to_string()));
+        headers.insert(
+            "status".to_string(),
+            earmark_core::HeaderValue::String(status.to_string()),
+        );
     }
 
     let obj_ref = runtime_surface.deposit_object(
@@ -2158,12 +2183,12 @@ fn normalize_dispatch_status(status: &str) -> String {
     }
 }
 
-fn normalize_gate_status(status: &str) -> String {
+fn normalize_gate_status(status: &str) -> Result<String, CliError> {
     match status.to_lowercase().as_str() {
-        "pass" | "passed" | "success" | "ok" => "pass".to_string(),
-        "fail" | "failed" | "error" => "fail".to_string(),
-        "skipped" | "skip" => "skipped".to_string(),
-        other => other.to_string(),
+        "pass" | "passed" | "success" | "ok" => Ok("pass".to_string()),
+        "fail" | "failed" | "error" => Ok("fail".to_string()),
+        "skipped" | "skip" => Ok("skipped".to_string()),
+        other => Err(CliError::argument(format!("invalid gate status: {}", other))),
     }
 }
 
