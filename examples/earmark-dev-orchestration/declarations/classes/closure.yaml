@@ -11,5 +11,9 @@ standing_rules:
       - deferred
       - rejected
       - superseded
-relation_rules: []
+relation_rules:
+  - relation_type: closes
+    counterparty_classes:
+      - work_item
+      - implementation_task
 validators: []

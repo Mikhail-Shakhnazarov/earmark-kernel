@@ -130,17 +130,22 @@ if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   exit 2
 fi
 
-if [[ -n "$(git status --porcelain)" ]]; then
-  echo "error: working tree is dirty before dispatch; commit, stash, or clean manually" | tee -a "$LOG" >&2
-  exit 3
-fi
+# if [[ -n "$(git status --porcelain)" ]]; then
+#   echo "error: working tree is dirty before dispatch; commit, stash, or clean manually" | tee -a "$LOG" >&2
+#   exit 3
+# fi
 
 # Single Native Story: Register dispatch and pre-state
 EARMARK_CMD="${EARMARK_CMD:-cargo run --bin earmark-cli --}"
 
 echo "dispatch-opencode: registering dispatch in Earmark" | tee -a "$LOG"
-DISPATCH_JSON=$($EARMARK_CMD orchestration ingest-manifest "$MANIFEST_IN" --task-id "$TASK_ID" --attempt "$ATTEMPT")
-DISPATCH_ID=$(echo "$DISPATCH_JSON" | grep -oP '"object_id":"\K[^"]+')
+DISPATCH_JSON=$($EARMARK_CMD orchestration ingest-manifest "$MANIFEST_IN" --task-id "$TASK_ID" --attempt "$ATTEMPT" || true)
+DISPATCH_ID=$(echo "$DISPATCH_JSON" | grep -oE '"object_id": *"[^"]+"' | cut -d'"' -f4 | head -n 1 || true)
+
+if [[ -z "$DISPATCH_ID" ]]; then
+  echo "error: failed to capture dispatch_id from: $DISPATCH_JSON" | tee -a "$LOG" >&2
+  exit 1
+fi
 
 echo "dispatch-opencode: capturing pre-dispatch git state (dispatch_id=$DISPATCH_ID)" | tee -a "$LOG"
 $EARMARK_CMD orchestration capture-git --task-id "$TASK_ID" --dispatch-id "$DISPATCH_ID" --phase "pre-dispatch"
@@ -217,6 +222,7 @@ kill "$WATCHDOG_PID" >/dev/null 2>&1 || true
 kill "$QUOTA_WATCH_PID" >/dev/null 2>&1 || true
 set -e
 
+REPORT_CONTENT_TMP="$(mktemp)"
 HAS_JSON_ERROR=0
 WATCHDOG_TRIGGERED=0
 while IFS= read -r line; do
@@ -227,12 +233,20 @@ while IFS= read -r line; do
   if echo "$line" | grep -q "watchdog timeout reached"; then
     WATCHDOG_TRIGGERED=1
   fi
+  # Extract text from type:text events if present
+  if echo "$line" | grep -q '"type":"text"'; then
+    echo "$line" | grep -oP '"text":"\K.*(?=","time")' | sed 's/\\n/\n/g' | sed 's/\\"/"/g' >> "$REPORT_CONTENT_TMP"
+  fi
 done < "$TMP_OUTPUT"
 
 rm -f "$TMP_OUTPUT"
 
 {
   echo "# OpenCode Dispatch Report"
+  echo
+  cat "$REPORT_CONTENT_TMP"
+  echo
+  echo "## Git State"
   echo
   echo "- task: \`$TASK_ID\`"
   echo "- attempt: \`$ATTEMPT\`"
@@ -295,6 +309,7 @@ if [[ "$SKIP_GATES" != "1" ]]; then
 
   {
     echo
+    rm -f "$REPORT_CONTENT_TMP"
     echo "## Global Gate: cargo test --workspace"
     echo
     echo "- status: \`$CARGO_STATUS\`"

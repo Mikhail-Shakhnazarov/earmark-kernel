@@ -65,8 +65,8 @@ Object and version IDs will differ on each run. This registers the research synt
 Put a few source notes into the corpus:
 
 ```bash
-em deposit --class source_note --title "Context Boundaries" --body "AI context should be bounded, not ambient."
-em deposit --class source_note --title "Lineage" --body "Every derived object should trace back to its source."
+em deposit --class source_note --title "Context Limits" --body "AI context should be task-specific, not a messy history."
+em deposit --class source_note --title "Lineage" --body "Every derived result should trace back to its origin."
 ```
 
 > [!NOTE]
@@ -81,7 +81,7 @@ Expected output for each deposit:
   "kind": "object",
   "object_id": "obj_...",
   "version_id": "ver_...",
-  "title": "Context Boundaries"
+  "title": "Context Limits"
 }
 ```
 
@@ -101,8 +101,8 @@ Expected output (snippet):
     "object_id": "obj_...",
     "class": "source_note",
     "kind": "object",
-    "title": "Context Boundaries",
-    "summary": "AI context should be bounded, not ambient.",
+    "title": "Context Limits",
+    "summary": "AI context should be task-specific, not a messy history.",
     "standing_epistemic": "working",
     "standing_process": "active",
     "standing_review": "unreviewed",
@@ -128,8 +128,6 @@ Expected output (fields and counts will differ):
   "created_change_sets": ["obj_...", "obj_...", "obj_...", "obj_..."],
   "created_failures": [],
   "created_handoffs": ["obj_...", "obj_...", "obj_...", "obj_..."],
-  "event_count": 5,
-  "governance_event_count": 2,
   "output_count": 2,
   "packet_count": 4
 }
@@ -157,8 +155,6 @@ Summary: run run_... is completed
 
 Purpose: A run records the execution of a workflow system.
 Status: completed
-Started At: 2026-05-10T...
-Ended At: 2026-05-10T...
 
 Related Artifacts:
   Assignments: 4
@@ -169,13 +165,13 @@ Related Artifacts:
 
 ## What just happened?
 
-You ran an extraction-and-synthesis workflow in one invocation:
+You ran a multi-stage workflow in one invocation:
 
-1. **Extraction**: Earmark compiled a bounded work surface containing your source notes, then extracted findings. Each finding was linked to its source through a `derived_from` relation.
+1. **Extraction**: Earmark compiled a **task-specific input set** containing only your source notes, then extracted findings. Each finding was linked back to its source automatically.
 
-2. **Synthesis**: Earmark emitted a handoff from the extraction stage containing only the findings — not the original source notes. The synthesis stage produced a summary from that bounded input.
+2. **Synthesis**: Earmark performed a **coordinated transition**. It passed the findings to the next stage, but withheld the original source notes. The synthesis stage produced a summary using *only* the validated findings.
 
-The key thing: the synthesis stage never saw the raw source notes. It worked from the handoff. That's bounded continuation.
+This ensures that the final summary is based strictly on the extracted evidence, not on ambient noise from the original logs. That's the power of the **durable work spine**.
 
 ## Next steps
 

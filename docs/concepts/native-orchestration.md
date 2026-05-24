@@ -1,19 +1,12 @@
-# Native Orchestration Ledger
+# Native Orchestration
 
-© 2026 Mikhail Shakhnazarov
-
-## Status
-
-**Stable**. The native orchestration surface is now part of the canonical Earmark self-hosting toolkit.
-
-> [!NOTE]
-> This ledger implements the "Single Native Story" for orchestration, alignment with the core product spine (declarations → context → execution → artifacts → index).
+Earmark includes a stable, self-hosting orchestration layer designed specifically for managing long-running AI work. This layer ensures that every execution attempt is recorded, verified, and linked to its source code and resulting evidence.
 
 ---
 
-## 1. Canonical Lifecycle Graph
+## 1. The Workflow Spine
 
-The orchestration ledger follows a dispatch-centered causality model:
+The Earmark orchestration ledger follows a dispatch-centered model, ensuring that every step in the AI lifecycle is trackable:
 
 ```mermaid
 graph TD
@@ -28,66 +21,43 @@ graph TD
     CL -->|closes| WI
 ```
 
-### 1.1 `work_item`
-Represents the durable unit of planned development work.
-- **Relations**: `has_context`, `dispatched_as`, `has_review`.
-- **States**: `proposed`, `ready`, `dispatched`, `under_review`, `closed`, `blocked`.
+### Key Components
 
-### 1.2 `context_packet`
-The bounded set of instructions and references handed to an executor.
-- **Relations**: `used_context` (linked from dispatch).
-
-### 1.3 `dispatch`
-Records a specific execution attempt.
-- **Relations**: `anchored_by` (to git_snapshot), `checked_by` (to gate_result), `produced_evidence` (to evidence).
-- **States**: `queued`, `running`, `succeeded`, `failed`, `cancelled`.
-
-### 1.4 `git_snapshot`
-Captures repository state linked to a dispatch.
-- **Relations**: `anchored_by` (parent dispatch).
-
-### 1.5 `gate_result`
-Records outcomes of automated verification.
-- **Relations**: `checked_by` (parent dispatch).
-
-### 1.6 `review` & `closure`
-The final verification and disposition of a work item.
-- **Relations**: `review -> causes -> closure -> closes -> work_item`.
+- **Work Item (`work_item`)**: The durable record of a task (e.g., "Implement authentication").
+- **Context Packet (`context_packet`)**: The exact set of instructions and data handed to the AI.
+- **Dispatch (`dispatch`)**: A specific execution attempt. Records who ran the task and when.
+- **Git Snapshot (`git_snapshot`)**: Captures the exact code state used for the run.
+- **Gate Result (`gate_result`)**: Records the outcome of automated tests and checks.
+- **Review & Closure**: The human or system decision to accept the work and close the item.
 
 ---
 
-## 2. CLI Reference
+## 2. Quick CLI Reference
 
-The stable orchestration CLI surface includes:
+The orchestration toolset is exposed via the `em orchestration` surface:
 
 ```bash
-# Workspace & Declarations
-earmark orchestration init-example
+# Ingest a task from a JSON file or ad-hoc arguments
+em orchestration ingest-task pf-s1 --title "Public Facelift"
 
-# Intake & Preparation
-earmark orchestration ingest-task --source native-json task.json
-earmark orchestration record-context --task-id <ID> context.json
+# Record the code state and verification results
+em orchestration capture-git --task-id <ID> --dispatch-id <ID> --phase pre-dispatch
+em orchestration record-gate --task-id <ID> --dispatch-id <ID> --command "cargo test" --status pass
 
-# Dispatch & Execution
-earmark orchestration ingest-manifest manifest.md --task-id <ID> --context-id <ID>
-earmark orchestration capture-git --task-id <ID> --dispatch-id <ID> --phase pre-dispatch
-earmark orchestration record-gate --task-id <ID> --dispatch-id <ID> --command "test" --status pass
-earmark orchestration capture-git --task-id <ID> --dispatch-id <ID> --phase post-dispatch
-earmark orchestration ingest-report report.md --task-id <ID> --manifest <DISPATCH_ID>
-
-# Verification & Closure
-earmark orchestration review <ID> --decision accepted --comment "Done."
-earmark orchestration show <ID>
-earmark orchestration timeline <ID>
+# Review and close the work
+em orchestration review <ID> --decision accepted --comment "Final docs approved."
 ```
 
 ---
 
-## 3. Stability & Compliance
+## 3. Why Native Orchestration?
 
-The native orchestration layer satisfy all canonical criteria:
-1. **Canonical Lifecycle**: Fully implemented.
-2. **Hardened Relations**: Dispatch-centered causality is enforced.
-3. **Status Normalization**: Unified vocabulary across all objects.
-4. **Verified Closure**: Automatic structural closure via `review -> closure` linkage.
-5. **Nix-Verified**: Smoke paths are deterministic and reproducible.
+1. **Governance**: Every AI action is recorded in a tamper-evident ledger.
+2. **Reproducibility**: Link every generated artifact back to the exact code commit and input context.
+3. **Observability**: Use `em orchestration explain-dispatch` to see the full life-story of a specific run.
+4. **Resilience**: If a background run fails, the ledger preserves the logs and state for immediate debugging.
+
+---
+
+- [Durable Work Spine](staged-execution.md) — how transitions work
+- [Learning from Failure](failures.md) — how failed runs are recorded
