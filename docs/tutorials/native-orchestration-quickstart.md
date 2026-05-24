@@ -176,7 +176,7 @@ Record the code state before the worker began:
 em orchestration capture-git \
   --task-id pf-s1 \
   --phase pre-dispatch \
-  --commit "$(git rev-parse HEAD)"
+  --commit demo-pre-dispatch
 ```
 
 Expected output shape:
@@ -186,12 +186,15 @@ Expected output shape:
   "kind": "orchestration_git_snapshot",
   "task_id": "pf-s1",
   "phase": "pre-dispatch",
-  "commit": "abc123...",
+  "commit": "demo-pre-dispatch",
   "dirty": false
 }
 ```
 
 This deposits a `git_snapshot` object and links it to the work item.
+
+> [!TIP]
+> In a real project repository, omit `--commit` to let Earmark read the current Git `HEAD`, or pass an explicit commit hash.
 
 ## 6. Record a Gate Result
 
