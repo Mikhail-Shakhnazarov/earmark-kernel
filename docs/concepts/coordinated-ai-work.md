@@ -1,6 +1,6 @@
 # Coordinated AI Work
 
-AI-assisted work usually runs on ephemeral, ambient context. Earmark replaces this with a **durable work spine**.
+AI-assisted work usually runs on ephemeral, ambient context. Earmark replaces this with a **work spine**.
 
 ## The Ambient Context Problem
 
@@ -26,6 +26,6 @@ Earmark solves this by treating every stage as a **coordinated handover** of aut
 
 - **Inspectability:** You can look at any stage and see exactly what inputs were used to produce exactly what outputs.
 - **Resumability:** Because state is durable and locked to Git, anyone can pick up the work spine at any point.
-- **High Integrity:** Later steps are guaranteed to build only on validated earlier results, preventing "hallucinations" born from leftover context noise.
+- **High Integrity:** Later steps build only on validated earlier results, reducing the risk of errors born from leftover context noise.
 
 Coordinated AI work isn't just about getting an answer; it's about building a **durable corpus of knowledge** that remains authoritative long after the AI session ends.

@@ -11,7 +11,7 @@ pub struct OrchestrationCommand {
 #[derive(Subcommand)]
 pub enum OrchestrationAction {
     #[command(name = "init-example")]
-    InitExample,
+    InitExample(InitExampleArgs),
     CaptureGit(CaptureGitArgs),
     IngestManifest(IngestManifestArgs),
     IngestReport(IngestReportArgs),
@@ -23,6 +23,12 @@ pub enum OrchestrationAction {
     IngestTask(IngestTaskArgs),
     RecordContext(RecordContextArgs),
     ExplainDispatch(ExplainDispatchArgs),
+}
+
+#[derive(Args)]
+pub struct InitExampleArgs {
+    #[arg(long, help = "Optional path to the example root")]
+    pub example_root: Option<PathBuf>,
 }
 
 #[derive(Args)]

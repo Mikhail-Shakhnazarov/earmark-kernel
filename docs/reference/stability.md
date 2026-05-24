@@ -8,7 +8,7 @@ This document provides an overview of the current implementation status and stab
 |---|---|
 | `core` | Essential for the durable work spine. |
 | `supporting` | Tools for integration or inspection. |
-| `stable` | Fully hardened; ready for production use. |
+| `stable` | Operational; reliable for development and dogfooding. |
 | `beta` | Functional but may undergo minor semantic refinements. |
 
 ## Core Components (Crates)
@@ -50,8 +50,10 @@ This document provides an overview of the current implementation status and stab
 
 ## Current Maturity
 
-Earmark has completed its initial hardening phase, including:
+Earmark is **pre-release software**. It has completed its initial hardening phase, including:
 - **Canonical Relation Authorization**: Guarantees that only declared relations can be created.
 - **Transactional Index Rebuilds**: Ensures consistent workspace visibility.
 - **Durable Orchestration Ledger**: Provides self-hosting task management with full causality tracking.
 - **Git-Backed Durability**: Leverages proven version control for the work spine.
+
+The kernel and native orchestration are usable for coordinated AI work, while large-scale performance, web observability, and multi-user features are currently in development.

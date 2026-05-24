@@ -1,6 +1,6 @@
 # Limitations
 
-Earmark is in early release. While the core "work spine" and orchestration logic are stable, the following limitations apply to the current version:
+Earmark is in early release. While the core "work spine" and orchestration logic are operational, the following limitations apply to the current version:
 
 ## 1. Linux & NixOS Focus
 The current toolset and verification scripts are optimized for Linux (specifically NixOS). While the Rust core is cross-platform, the helper scripts and automated verification paths may require adjustments for macOS or Windows (WSL2 recommended).

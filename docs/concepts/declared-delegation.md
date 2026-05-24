@@ -13,10 +13,10 @@ When you tell an autonomous agent to "fix the bugs in this repo," the agent ofte
 
 Declared delegation turns exploration into **coordinated stages**:
 
-1. **Declared Intent:** You define a `work_item` (the goal) and its `task_materials` (the inputs).
+1. **Declared Intent:** You define a `work_item` (the goal) and its `context_packet` (the inputs).
 2. **Scaffolded Workspace:** Earmark creates a bounded surface. The AI sees *only* those materials.
-3. **Evidence-Based Results:** The AI produces a `change_set` and associated `evidence` (logs, tests, derivations).
-4. **Formal Closure:** The work only becomes part of the "canonical spine" once a `review` relation validates the outcome.
+3. **Evidence-Based Results:** The AI produces `evidence` (logs, tests, results, and git snapshots).
+4. **Formal Closure:** The work only becomes part of the **work spine** once a `review` relation validates the outcome.
 
 ### Contrast: Autonomous vs. Declared
 

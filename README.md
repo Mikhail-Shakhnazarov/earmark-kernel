@@ -30,7 +30,7 @@ Note A → [Finding 1] → Briefing
 ```
 1. **Stage 1 (Extraction):** Receives Note A. Produces Finding 1. Records exactly what changed.
 2. **Stage 2 (Synthesis):** Receives *only* Finding 1. It cannot see Note A.
-3. **Outcome:** The synthesis is guaranteed to be based only on the authoritative findings, not on ambient noise from the source.
+3. **Outcome:** The synthesis stage is constrained to receive only the authoritative findings, reducing context leakage from the source materials.
 
 ---
 
@@ -55,10 +55,11 @@ If you are new to Earmark, follow this path:
 | 3 | **[Quickstart](docs/tutorials/quickstart.md)** | Your first successful run in 5 minutes |
 | 4 | **[Practical Guide](docs/tutorials/practical-guide.md)** | Concrete examples and plain-language "Why" |
 | 5 | **[Research Synthesis Demo](docs/tutorials/research-synthesis-demo.md)** | A complete, multi-stage example |
-| 6 | **[Build a Domain](docs/tutorials/build-a-domain-definition.md)** | Create your own classes and workflows |
-| 7 | **[Concepts Overview](docs/concepts/coordinated-ai-work.md)** | Deep dive into the "Durable Spine" philosophy |
-| 8 | **[CLI Reference](docs/reference/cli.md)** | Command and schema lookup |
-| 9 | **[Limitations](docs/limitations.md)** | Known constraints and WIP status |
+| 6 | **[Native Orchestration Quickstart](docs/tutorials/native-orchestration-quickstart.md)** | Manage long-running AI work with dispatches, gates, and review |
+| 7 | **[Build a Domain](docs/tutorials/build-a-domain-definition.md)** | Create your own classes and workflows |
+| 8 | **[Concepts Overview](docs/concepts/coordinated-ai-work.md)** | Deep dive into the "Durable Spine" philosophy |
+| 9 | **[CLI Reference](docs/reference/cli.md)** | Command and schema lookup |
+| 10 | **[Limitations](docs/limitations.md)** | Known constraints and WIP status |
 
 ---
 
@@ -80,8 +81,15 @@ em system activate sys_research_synthesis
 # Deposit work materials
 em deposit --class source_note --title "Architecture Note" --body "AI context must be limited."
 
-# Run a coordinated task
+# Retrieve the object ID
+em query --class source_note
+
+# Run a coordinated task using the returned object_id
 em workflow run research_synthesis --system-id sys_research_synthesis --with <object_id>
+
+# Inspect the run
+em run explain latest
+em report run latest --output report.html
 ```
 
 ---
@@ -95,7 +103,8 @@ Earmark is built in Rust and uses:
 
 ### Current Status
 
-Earmark is **Stable** for local development and orchestration but remains pre-release. 
+Earmark is **pre-release software**. The local kernel and native orchestration path are usable for development and dogfooding, but packaging, multi-user operation, web-based observability, plugin loading, and large-scale performance remain active work.
+
 - **What Works:** Full ingestion, staged execution, relation authorization, and native orchestration.
 - **WIP:** Multi-actor coordination, advanced provider plugins, and web-based observability.
 

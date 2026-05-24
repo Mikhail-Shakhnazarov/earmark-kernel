@@ -185,6 +185,54 @@ Show detailed failure analysis.
 
 List capabilities of compiled-in providers.
 
+## Native Orchestration
+
+Self-hosting tools for tracking complex, multi-stage AI work programs.
+
+### `em orchestration init-example [--example-root <path>]`
+
+Register the example orchestration system. Resolve declarations from the specified root or detected repository.
+
+### `em orchestration ingest-task <id> [--title <text>] [--description <text>] [--priority <high|medium|low>] [--status <proposed|ready>]`
+
+Ingest a new task into the orchestration ledger.
+
+### `em orchestration record-context --task-id <id> <path>`
+
+Attach a context packet (JSON) to a task.
+
+### `em orchestration ingest-manifest <path> --task-id <id> [--attempt <n>] [--executor <name>]`
+
+Register a worker attempt (dispatch) from a markdown manifest.
+
+### `em orchestration capture-git --task-id <id> [--dispatch-id <id>] --phase <pre-dispatch|post-dispatch> [--commit <hash>]`
+
+Capture the current Git state (commit and dirty status) for a task/dispatch.
+
+### `em orchestration record-gate --task-id <id> [--dispatch-id <id>] --command <text> --status <pass|fail|skipped> [--log <path>]`
+
+Record the result of an automated check (gate).
+
+### `em orchestration ingest-report <path> --task-id <id> --manifest <dispatch_id> [--attempt <n>]`
+
+Record the worker's output (evidence) linked to a dispatch.
+
+### `em orchestration show <task_id>`
+
+Show full task detail, including all linked context, dispatches, evidence, and reviews.
+
+### `em orchestration timeline <task_id>`
+
+View a chronological timeline of orchestration events.
+
+### `em orchestration explain-dispatch <dispatch_id|latest>`
+
+Show the life-story of a specific dispatch, resolving `latest` to the most recent attempt.
+
+### `em orchestration review <task_id> --decision <accepted|rejected|needs_revision> [--comment <text>]`
+
+Submit a review decision. This creates `review` and `closure` objects and updates the task status.
+
 ## Reports
 
 ### `em report run <id> --output <path>`
