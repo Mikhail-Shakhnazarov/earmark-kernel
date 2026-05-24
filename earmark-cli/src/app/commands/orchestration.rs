@@ -427,23 +427,12 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
             let source = &args.source;
 
             let tasks = match source.as_str() {
-                "engram" => {
-                    let task = self::adapters::engram::ingest_from_engram(&args.task_id)?;
-                    vec![self::adapters::native_json::NativeTaskData {
-                        task_id: task.task_id,
-                        title: task.title,
-                        description: task.description,
-                        priority: task.priority,
-                        status: task.status,
-                        raw_text: task.raw_text,
-                    }]
-                }
                 "native-json" | "local-json" => {
                     self::adapters::native_json::ingest_from_json(&args.task_id)?
                 }
                 _ => {
                     return Err(CliError::argument(format!(
-                        "unsupported source: '{}'. Supported sources: 'engram', 'native-json', 'local-json'",
+                        "unsupported source: '{}'. Supported sources: 'native-json', 'local-json'",
                         source
                     )));
                 }

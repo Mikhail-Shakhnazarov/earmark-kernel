@@ -68,7 +68,7 @@ pub enum Commands {
     Init,
     #[command(about = "[BETA] Diagnose and repair workspace issues")]
     Doctor(DoctorArgs),
-    #[command(about = "[EXPERIMENTAL] Manage system registration")]
+    #[command(about = "[STABLE] Manage system registration")]
     System(SystemCommand),
     #[command(about = "[STABLE] Deposit an object into the store")]
     Deposit(DepositArgs),
@@ -90,7 +90,7 @@ pub enum Commands {
     Handoff(HandoffCommand),
     #[command(about = "[STABLE] Manage failures")]
     Failure(FailureCommand),
-    #[command(about = "[EXPERIMENTAL] Compile context")]
+    #[command(about = "[STABLE] Compile context")]
     Context(ContextCommand),
     #[command(about = "[BETA] Audit workspace events")]
     Audit(AuditCommand),
@@ -104,13 +104,13 @@ pub enum Commands {
     Catalog,
     #[command(about = "[STABLE] Show workspace status")]
     Status,
-    #[command(about = "[EXPERIMENTAL] Manage relations")]
+    #[command(about = "[STABLE] Manage relations")]
     Relation(RelationCommand),
-    #[command(about = "[EXPERIMENTAL] Manage standing requests")]
+    #[command(about = "[STABLE] Manage standing requests")]
     StandingRequest(StandingRequestCommand),
     #[command(about = "[BETA] Undo a run")]
     Undo(UndoCommand),
-    #[command(about = "[EXPERIMENTAL] Manage orchestration tasks")]
+    #[command(about = "[STABLE] Manage orchestration tasks")]
     Orchestration(OrchestrationCommand),
 }
 
@@ -130,6 +130,11 @@ impl Commands {
             | Self::Failure(_)
             | Self::Report(_)
             | Self::Review(_)
+            | Self::System(_)
+            | Self::Context(_)
+            | Self::Relation(_)
+            | Self::StandingRequest(_)
+            | Self::Orchestration(_)
             | Self::Catalog => CommandStability::Stable,
 
             Self::Doctor(_)
@@ -138,12 +143,6 @@ impl Commands {
             | Self::Provider(_)
             | Self::Completions { .. }
             | Self::Undo(_) => CommandStability::Beta,
-
-            Self::System(_)
-            | Self::Context(_)
-            | Self::Relation(_)
-            | Self::StandingRequest(_)
-            | Self::Orchestration(_) => CommandStability::Experimental,
         }
     }
 }
@@ -169,7 +168,7 @@ pub fn command_catalog() -> Vec<CommandDescriptor> {
         },
         CommandDescriptor {
             name: "system",
-            stability: CommandStability::Experimental,
+            stability: CommandStability::Stable,
             summary: "Manage system registration",
         },
         CommandDescriptor {
@@ -224,7 +223,7 @@ pub fn command_catalog() -> Vec<CommandDescriptor> {
         },
         CommandDescriptor {
             name: "context",
-            stability: CommandStability::Experimental,
+            stability: CommandStability::Stable,
             summary: "Compile context",
         },
         CommandDescriptor {
@@ -259,12 +258,12 @@ pub fn command_catalog() -> Vec<CommandDescriptor> {
         },
         CommandDescriptor {
             name: "relation",
-            stability: CommandStability::Experimental,
+            stability: CommandStability::Stable,
             summary: "Manage relations",
         },
         CommandDescriptor {
             name: "standing-request",
-            stability: CommandStability::Experimental,
+            stability: CommandStability::Stable,
             summary: "Manage standing requests",
         },
         CommandDescriptor {
@@ -274,7 +273,7 @@ pub fn command_catalog() -> Vec<CommandDescriptor> {
         },
         CommandDescriptor {
             name: "orchestration",
-            stability: CommandStability::Experimental,
+            stability: CommandStability::Stable,
             summary: "Manage orchestration tasks",
         },
     ]
