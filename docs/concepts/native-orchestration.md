@@ -4,7 +4,10 @@
 
 ## Status
 
-Stable (Package Scope).
+Internal package-candidate / dogfooding surface.
+
+> [!WARNING]
+> Native orchestration is currently a **package-candidate**. It is functional for local repository dogfooding but is not considered package-stable until the full lifecycle semantics (review-to-closure, follow-up spawn, and canonical relation grammar) have passed the final promotion gate.
 
 This document describes the native orchestration ledger used to coordinate Earmark development work. It is not part of the canonical product spine. The canonical spine remains:
 
@@ -133,10 +136,10 @@ This is a dogfooding workflow, not a stable product tutorial.
 
 ## 4. Stability Statement
 
-The native orchestration surface has been promoted to Stable status and is considered a core part of the Earmark developer experience. It satisfies the same standards as the canonical spine:
+The native orchestration surface is the intended self-hosting direction for Earmark. It is currently in a **dogfooding/candidate** phase. To reach Stable status, it must satisfy the following promotion criteria:
 
-1. Declared schemas and relation rules are authoritative and hardened.
-2. Durable writes pass through sanctioned native write paths.
-3. Relation creation is strictly authorized via domain declarations.
-4. Workspace synchronization and lifecycle semantics are fully defined.
-5. All commands are covered by integration tests on standard platforms including NixOS.
+1. **Canonical Lifecycle**: `work_item -> dispatch -> evidence/snapshot/gate -> review -> closure`.
+2. **Hardened Relations**: Dispatch-centered causality must be authoritative.
+3. **Status Normalization**: Unified vocabulary for execution and review states.
+4. **Verified Closure**: Substantive review must produce either complete closure or partial closure with follow-up work.
+5. **Nix-Verified**: All commands and the full self-hosting smoke path must pass in a clean Nix environment.
