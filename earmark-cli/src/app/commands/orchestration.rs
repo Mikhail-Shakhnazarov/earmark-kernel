@@ -2,12 +2,12 @@ pub mod adapters;
 
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::app::common::{require_initialized_workspace, CliError, CommandContext};
 use crate::app::{emit, mirror_surface, register_declaration_file};
 use crate::cli::*;
-use earmark_store::GitCanonicalStore;
+use earmark_store::{GitCanonicalStore, WorkspaceLayout};
 use earmark_core::{
     DimensionId, ObjectId, RuntimeProvenance, Standing, TokenId, VersionId, VersionRef,
 };
@@ -125,27 +125,30 @@ pub fn handle(ctx: &mut CommandContext, command: &OrchestrationCommand) -> Resul
                 None
             };
 
+            let repo_path = resolve_git_repo(ctx.store.root(), args.repo.as_ref())?;
+            let git_toplevel = run_git_cmd(&repo_path, &["rev-parse", "--show-toplevel"]).unwrap_or_else(|_| repo_path.display().to_string());
+
             let commit = match &args.commit {
                 Some(c) => c.clone(),
-                None => run_git_cmd(&["rev-parse", "HEAD"])?,
+                None => run_git_cmd(&repo_path, &["rev-parse", "HEAD"])?,
             };
 
-            let branch = run_git_cmd(&["branch", "--show-current"]).unwrap_or_default();
+            let branch = run_git_cmd(&repo_path, &["branch", "--show-current"]).unwrap_or_default();
 
-            let status_porcelain = run_git_cmd(&["status", "--porcelain"]).unwrap_or_default();
+            let status_porcelain = run_git_cmd(&repo_path, &["status", "--porcelain"]).unwrap_or_default();
             let dirty = !status_porcelain.is_empty();
 
-            let status_short = run_git_cmd(&["status", "--short"]).unwrap_or_default();
+            let status_short = run_git_cmd(&repo_path, &["status", "--short"]).unwrap_or_default();
 
             let base = args.base.clone().unwrap_or_default();
             let head = args.head.clone().unwrap_or_else(|| commit.clone());
 
             let diff_stat = if args.include_diff_stat {
                 if !base.is_empty() {
-                    run_git_cmd(&["diff", "--stat", &format!("{}..{}", base, head)])
+                    run_git_cmd(&repo_path, &["diff", "--stat", &format!("{}..{}", base, head)])
                         .unwrap_or_default()
                 } else {
-                    run_git_cmd(&["diff", "--stat"]).unwrap_or_default()
+                    run_git_cmd(&repo_path, &["diff", "--stat"]).unwrap_or_default()
                 }
             } else {
                 String::new()
@@ -162,6 +165,8 @@ pub fn handle(ctx: &mut CommandContext, command: &OrchestrationCommand) -> Resul
                 "dirty": dirty,
                 "status_short": status_short,
                 "diff_stat": diff_stat,
+                "repo_path": repo_path.display().to_string(),
+                "git_toplevel": git_toplevel,
                 "captured_by": "orchestration capture-git"
             });
 
@@ -202,7 +207,8 @@ pub fn handle(ctx: &mut CommandContext, command: &OrchestrationCommand) -> Resul
                     "snapshot_version_id": obj_ref.version_id.as_str(),
                     "phase": args.phase,
                     "commit": commit,
-                    "dirty": dirty
+                    "dirty": dirty,
+                    "repo_path": repo_path.display().to_string(),
                 }),
             );
 
@@ -2215,8 +2221,11 @@ fn create_orchestration_relation(
     Ok(())
 }
 
-fn run_git_cmd(args: &[&str]) -> Result<String, CliError> {
-    let output = std::process::Command::new("git").args(args).output();
+fn run_git_cmd(repo: &Path, args: &[&str]) -> Result<String, CliError> {
+    let output = std::process::Command::new("git")
+        .current_dir(repo)
+        .args(args)
+        .output();
     match output {
         Ok(out) => {
             if out.status.success() {
@@ -2224,12 +2233,53 @@ fn run_git_cmd(args: &[&str]) -> Result<String, CliError> {
             } else {
                 let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
                 Err(CliError::argument(format!(
-                    "git command failed: git {}. Error: {}",
+                    "git command failed at {}: git {}. Error: {}",
+                    repo.display(),
                     args.join(" "),
                     err
                 )))
             }
         }
-        Err(e) => Err(CliError::argument(format!("failed to execute git: {}", e))),
+        Err(e) => Err(CliError::argument(format!(
+            "failed to execute git at {}: {}",
+            repo.display(),
+            e
+        ))),
     }
+}
+
+fn resolve_git_repo(store_root: &Path, explicit_repo: Option<&PathBuf>) -> Result<PathBuf, CliError> {
+    if let Some(repo) = explicit_repo {
+        if repo.exists() {
+            return Ok(repo.clone());
+        } else {
+            return Err(CliError::argument(format!(
+                "explicit repository path does not exist: {}",
+                repo.display()
+            )));
+        }
+    }
+
+    // Try workspace root
+    if store_root.join(".git").exists() {
+        return Ok(store_root.to_path_buf());
+    }
+
+    // Try to find if we are in a worktree
+    let output = std::process::Command::new("git")
+        .current_dir(store_root)
+        .args(&["rev-parse", "--show-toplevel"])
+        .output();
+
+    if let Ok(out) = output {
+        if out.status.success() {
+            return Ok(PathBuf::from(
+                String::from_utf8_lossy(&out.stdout).trim().to_string(),
+            ));
+        }
+    }
+
+    Err(CliError::argument(
+        "no Git repository found. Please specify --repo <path>".to_string(),
+    ))
 }
