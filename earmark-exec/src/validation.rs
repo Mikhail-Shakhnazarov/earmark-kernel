@@ -379,7 +379,9 @@ pub fn validate_transition_change_set<S: CanonicalStore>(
             {
                 failures.push(format!(
                     "transition {} expected output contract {} but produced classes {:?}",
-                    transition.id.as_str(), contract, created_output_classes
+                    transition.id.as_str(),
+                    contract,
+                    created_output_classes
                 ));
             }
         }

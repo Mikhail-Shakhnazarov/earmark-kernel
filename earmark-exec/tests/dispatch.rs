@@ -245,7 +245,12 @@ fn request_with_provider_profile(provider_profile: VersionRef) -> ProviderReques
     ProviderRequest {
         request_id: "req_1".to_string(),
         run_id: earmark_core::RunId::parse("run_1").unwrap(),
-        work_packet: ObjectRef::new(ObjectId::generate(), VersionId::generate(), Kind::WorkPacket, None),
+        work_packet: ObjectRef::new(
+            ObjectId::generate(),
+            VersionId::generate(),
+            Kind::WorkPacket,
+            None,
+        ),
         provider_profile,
         instruction_text: "Do the thing".to_string(),
         context_text: None,

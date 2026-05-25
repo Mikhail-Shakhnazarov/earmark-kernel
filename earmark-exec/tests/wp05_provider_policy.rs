@@ -59,7 +59,12 @@ fn mock_request() -> ProviderRequest {
     ProviderRequest {
         request_id: "req_1".to_string(),
         run_id: earmark_core::RunId::parse("run_1").unwrap(),
-        work_packet: ObjectRef::new(ObjectId::generate(), VersionId::generate(), Kind::WorkPacket, None),
+        work_packet: ObjectRef::new(
+            ObjectId::generate(),
+            VersionId::generate(),
+            Kind::WorkPacket,
+            None,
+        ),
         provider_profile: VersionRef::new(ObjectId::generate(), VersionId::generate()),
         instruction_text: "Do something".to_string(),
         context_text: None,
@@ -718,7 +723,9 @@ fn test_transition_preserves_provider_record_warnings() {
     let mut emitted_objects = vec![];
     let mut governance_events = vec![];
     let mut compiled_context = Some(earmark_connected_context::WorkSurfaceManifest {
-        surface_id: earmark_core::TransitionId::parse("test").unwrap().to_string(),
+        surface_id: earmark_core::TransitionId::parse("test")
+            .unwrap()
+            .to_string(),
         compiled_context: VersionRef::new(
             earmark_core::ObjectId::parse("obj_00000000000000000000000000000006").unwrap(),
             earmark_core::VersionId::parse("ver_00000000000000000000000000000006").unwrap(),

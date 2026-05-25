@@ -564,7 +564,12 @@ fn test_http_provider_rejects_unsupported_lineage() {
     let request = earmark_core::ProviderRequest {
         request_id: "req_lineage_reject".to_string(),
         run_id: earmark_core::RunId::parse("run_lineage_reject").unwrap(),
-        work_packet: ObjectRef::new(ObjectId::generate(), VersionId::generate(), Kind::WorkPacket, None),
+        work_packet: ObjectRef::new(
+            ObjectId::generate(),
+            VersionId::generate(),
+            Kind::WorkPacket,
+            None,
+        ),
         provider_profile: VersionRef::new(ObjectId::generate(), VersionId::generate()),
         instruction_text: "hi".to_string(),
         context_text: None,
@@ -646,7 +651,12 @@ fn test_http_provider_rejects_unsupported_full_message_capture() {
     let request = earmark_core::ProviderRequest {
         request_id: "req_full_msg_reject".to_string(),
         run_id: earmark_core::RunId::parse("run_full_msg_reject").unwrap(),
-        work_packet: ObjectRef::new(ObjectId::generate(), VersionId::generate(), Kind::WorkPacket, None),
+        work_packet: ObjectRef::new(
+            ObjectId::generate(),
+            VersionId::generate(),
+            Kind::WorkPacket,
+            None,
+        ),
         provider_profile: VersionRef::new(ObjectId::generate(), VersionId::generate()),
         instruction_text: "hi".to_string(),
         context_text: None,

@@ -6,7 +6,7 @@ use earmark_index::QueryFilter;
 use earmark_store::ObjectStore;
 use serde_json::json;
 
-use super::common::*;
+use crate::app::commands::orchestration::common::*;
 
 pub fn handle_show(ctx: &mut CommandContext, args: &ShowTaskArgs) -> Result<(), CliError> {
     let store = ctx.store;
@@ -19,9 +19,8 @@ pub fn handle_show(ctx: &mut CommandContext, args: &ShowTaskArgs) -> Result<(), 
         .ok_or_else(|| CliError::argument("index required"))?;
 
     let (task_oid, class, _task_summary, task_payload) =
-        find_orchestration_task(index_ref, store, &args.task_id)?.ok_or_else(|| {
-            CliError::not_found(format!("object {} not found", args.task_id))
-        })?;
+        find_orchestration_task(index_ref, store, &args.task_id)?
+            .ok_or_else(|| CliError::not_found(format!("object {} not found", args.task_id)))?;
 
     let task_id = task_payload
         .get("task_id")
@@ -29,25 +28,31 @@ pub fn handle_show(ctx: &mut CommandContext, args: &ShowTaskArgs) -> Result<(), 
         .unwrap_or("")
         .to_string();
 
-    // Find git snapshots linked to THIS task OR linked to its dispatches
+    let nodes = super::graph::traverse_orchestration_graph(index_ref, store, &task_oid)?;
+
+    let mut context_packets = Vec::new();
+    let mut dispatches = Vec::new();
     let mut git_snapshots = Vec::new();
     let mut gate_results = Vec::new();
     let mut evidence_records = Vec::new();
     let mut review_records = Vec::new();
+    let mut closures = Vec::new();
+    let mut trace_events = Vec::new();
 
-    let relations = index_ref.relation_adjacency(&task_oid, false)?;
+    for node in nodes {
+        if node.object_id == task_oid {
+            continue;
+        }
 
-    for rel in relations {
-        let (_oid, class, _summary, payload) = match find_orchestration_task(index_ref, store, &rel.target_object_id) {
-            Ok(Some(data)) => data,
-            _ => continue,
-        };
-
-        match class.as_str() {
-            "git_snapshot" => git_snapshots.push(payload),
-            "gate_result" => gate_results.push(payload),
-            "evidence" => evidence_records.push(payload),
-            "review" => review_records.push(payload),
+        match node.class.as_str() {
+            "context_packet" => context_packets.push(node.payload),
+            "dispatch" => dispatches.push(node.payload),
+            "git_snapshot" => git_snapshots.push(node.payload),
+            "gate_result" => gate_results.push(node.payload),
+            "evidence" => evidence_records.push(node.payload),
+            "review" => review_records.push(node.payload),
+            "closure" => closures.push(node.payload),
+            "trace_event" => trace_events.push(node.payload),
             _ => {}
         }
     }
@@ -59,10 +64,14 @@ pub fn handle_show(ctx: &mut CommandContext, args: &ShowTaskArgs) -> Result<(), 
             "work_item_id": task_oid.as_str(),
             "task_id": task_id,
             "payload": task_payload,
+            "context_packets": context_packets,
+            "dispatches": dispatches,
             "git_snapshots": git_snapshots,
             "gate_results": gate_results,
             "evidence_records": evidence_records,
             "review_records": review_records,
+            "closures": closures,
+            "trace_events": trace_events,
         }),
     );
 
@@ -133,28 +142,23 @@ pub fn handle_timeline(ctx: &mut CommandContext, args: &ShowTaskArgs) -> Result<
         .as_mut()
         .ok_or_else(|| CliError::argument("index required"))?;
 
-    let (task_oid, _class, _task_summary, task_payload) =
-        find_orchestration_task(index_ref, store, &args.task_id)?.ok_or_else(|| {
-            CliError::not_found(format!("task {} not found", args.task_id))
-        })?;
+    let (task_oid, _class, _task_summary, _task_payload) =
+        find_orchestration_task(index_ref, store, &args.task_id)?
+            .ok_or_else(|| CliError::not_found(format!("task {} not found", args.task_id)))?;
+
+    let nodes = super::graph::traverse_orchestration_graph(index_ref, store, &task_oid)?;
+
+    // Sort by timestamp (currently 0) or we could try to use index summary info
+    // For now, BFS order is a decent approximation of causality, but let's try to sort
+    // if we had real timestamps. BFS usually discovers dispatches before evidence.
 
     let mut events = Vec::new();
-    events.push(json!({
-        "timestamp": 0, // Placeholder
-        "type": "work_item_created",
-        "payload": task_payload
-    }));
-
-    let relations = index_ref.relation_adjacency(&task_oid, false)?;
-    for rel in relations {
-        let (oid, class, _summary, payload) = match find_orchestration_task(index_ref, store, &rel.target_object_id) {
-            Ok(Some(data)) => data,
-            _ => continue,
-        };
+    for node in nodes {
         events.push(json!({
-            "type": class,
-            "object_id": oid.as_str(),
-            "payload": payload
+            "type": node.class,
+            "object_id": node.object_id.as_str(),
+            "payload": node.payload,
+            "timestamp": node.timestamp
         }));
     }
 
@@ -170,7 +174,10 @@ pub fn handle_timeline(ctx: &mut CommandContext, args: &ShowTaskArgs) -> Result<
     Ok(())
 }
 
-pub fn handle_explain_dispatch(ctx: &mut CommandContext, args: &ExplainDispatchArgs) -> Result<(), CliError> {
+pub fn handle_explain_dispatch(
+    ctx: &mut CommandContext,
+    args: &ExplainDispatchArgs,
+) -> Result<(), CliError> {
     let store = ctx.store;
     let as_json = ctx.as_json;
 
@@ -186,19 +193,22 @@ pub fn handle_explain_dispatch(ctx: &mut CommandContext, args: &ExplainDispatchA
             ..Default::default()
         };
         let results = index_ref.query_objects(&filter)?;
-        results.first().map(|s| s.object_id.clone()).ok_or_else(|| {
-            CliError::not_found("no dispatch records found".to_string())
-        })?
+        results
+            .first()
+            .map(|s| s.object_id.clone())
+            .ok_or_else(|| CliError::not_found("no dispatch records found".to_string()))?
     } else {
         args.dispatch_id.clone()
     };
 
-    let (oid, class, _summary, payload) = find_orchestration_task(index_ref, store, &dispatch_id)?.ok_or_else(|| {
-        CliError::not_found(format!("dispatch {} not found", dispatch_id))
-    })?;
+    let (oid, class, _summary, payload) = find_orchestration_task(index_ref, store, &dispatch_id)?
+        .ok_or_else(|| CliError::not_found(format!("dispatch {} not found", dispatch_id)))?;
 
     if class != "dispatch" {
-        return Err(CliError::argument(format!("object {} is a {}, not a dispatch", dispatch_id, class)));
+        return Err(CliError::argument(format!(
+            "object {} is a {}, not a dispatch",
+            dispatch_id, class
+        )));
     }
 
     emit(

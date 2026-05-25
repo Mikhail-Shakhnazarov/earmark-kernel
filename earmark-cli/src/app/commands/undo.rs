@@ -93,7 +93,10 @@ fn handle_undo_run(
     Ok(())
 }
 
-fn calculate_undo_impact(ctx: &mut CommandContext, run: &RunRecord) -> Result<UndoImpact, CliError> {
+fn calculate_undo_impact(
+    ctx: &mut CommandContext,
+    run: &RunRecord,
+) -> Result<UndoImpact, CliError> {
     let store = ctx.store;
     let index = ctx
         .index

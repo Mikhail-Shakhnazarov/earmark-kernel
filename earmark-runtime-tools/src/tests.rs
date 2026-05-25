@@ -1023,7 +1023,8 @@ fn test_create_relation_direction_enforcement() {
         vec![],
     );
     let class_ref = store.write_object(&stored).unwrap();
-    surface.index
+    surface
+        .index
         .upsert_head_object_from_store(&store, &class_ref.id)
         .unwrap();
 
@@ -1073,7 +1074,10 @@ fn test_create_relation_missing_classes_fails() {
             vec![],
         );
         let v = store.write_object(&stored).unwrap();
-        surface.index.upsert_head_object_from_store(&store, &v.id).unwrap();
+        surface
+            .index
+            .upsert_head_object_from_store(&store, &v.id)
+            .unwrap();
         v.id
     };
     let target_id = create_test_object(&store, surface.index, "some_class");
@@ -1179,7 +1183,8 @@ fn test_deposit_admission_enforcement() {
     );
 
     // 3. Activate system
-    surface.index
+    surface
+        .index
         .activate_system("governed_ns", "governed_system", &system_ref)
         .unwrap();
 
@@ -1288,7 +1293,8 @@ fn test_deposit_system_integrity_on_broken_class_ref() {
     );
 
     // 3. Activate
-    surface.index
+    surface
+        .index
         .activate_system("broken_ns", "broken_system", &system_ref)
         .unwrap();
 
@@ -1655,7 +1661,8 @@ fn test_malformed_relation_rule_fails_hard() {
         vec![],
     );
     let class_ref = store.write_object(&stored).unwrap();
-    surface.index
+    surface
+        .index
         .upsert_head_object_from_store(&store, &class_ref.id)
         .unwrap();
 

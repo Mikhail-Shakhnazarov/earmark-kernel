@@ -582,3 +582,309 @@ Verify bullet gates are parsed.
     assert!(gates[0].as_str().unwrap().contains("cargo fmt"));
     assert!(gates[1].as_str().unwrap().contains("cargo test"));
 }
+
+#[test]
+fn orchestration_writes_are_immediately_queryable_without_repair_rebuild() {
+    let (_dir, root) = setup_and_init_example();
+
+    // 1. Ingest a task
+    let task_json_path = root.join("task.json");
+    let payload = serde_json::json!({
+        "task_id": "incremental-test-task",
+        "title": "Incremental test task",
+        "goal": "Verify incremental indexing",
+        "priority": "low",
+        "status": "proposed"
+    });
+    fs::write(&task_json_path, serde_json::to_string(&payload).unwrap()).unwrap();
+
+    let ingest_output = workspace_command()
+        .arg("--root")
+        .arg(&root)
+        .arg("--json")
+        .arg("orchestration")
+        .arg("ingest-task")
+        .arg("--source")
+        .arg("native-json")
+        .arg(&task_json_path)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed_ingest: Value = serde_json::from_slice(&ingest_output).unwrap();
+    let task_oid = parsed_ingest["data"]["tasks"][0]["object_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    // 2. Immediately list/show it - should work WITHOUT rebuild
+    let list_output = workspace_command()
+        .arg("--root")
+        .arg(&root)
+        .arg("--json")
+        .arg("orchestration")
+        .arg("list")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed_list: Value = serde_json::from_slice(&list_output).unwrap();
+    assert!(parsed_list["data"]["tasks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|t| t["object_id"] == task_oid));
+
+    // 3. Ingest a dispatch
+    let manifest_path = root.join("manifest.md");
+    fs::write(
+        &manifest_path,
+        "---\ntask_uuid: incremental-test-task\nattempt_number: 1\n---\n## Objective\nIncrementality test",
+    )
+    .unwrap();
+
+    let dispatch_output = workspace_command()
+        .arg("--root")
+        .arg(&root)
+        .arg("--json")
+        .arg("orchestration")
+        .arg("ingest-manifest")
+        .arg(&manifest_path)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed_dispatch: Value = serde_json::from_slice(&dispatch_output).unwrap();
+    let dispatch_oid = parsed_dispatch["data"]["object_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    // 4. Immediately show it
+    let show_output = workspace_command()
+        .arg("--root")
+        .arg(&root)
+        .arg("--json")
+        .arg("orchestration")
+        .arg("show")
+        .arg(&task_oid)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let _parsed_show: Value = serde_json::from_slice(&show_output).unwrap();
+    // This currently needs Stage 4 (transitive graph) for dispatch artifact visibility if we show task_oid,
+    // but we can check if the dispatch itself is showable.
+    workspace_command()
+        .arg("--root")
+        .arg(&root)
+        .arg("--json")
+        .arg("orchestration")
+        .arg("show")
+        .arg(&dispatch_oid)
+        .assert()
+        .success();
+
+    // 5. Record a gate result
+    let gate_output = workspace_command()
+        .arg("--root")
+        .arg(&root)
+        .arg("--json")
+        .arg("orchestration")
+        .arg("record-gate")
+        .arg("--task-id")
+        .arg(&task_oid)
+        .arg("--command")
+        .arg("cargo test")
+        .arg("--status")
+        .arg("passed")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed_gate: Value = serde_json::from_slice(&gate_output).unwrap();
+    let gate_oid = parsed_gate["data"]["gate_object_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    // 6. Verify gate visibility
+    workspace_command()
+        .arg("--root")
+        .arg(&root)
+        .arg("--json")
+        .arg("orchestration")
+        .arg("show")
+        .arg(&gate_oid)
+        .assert()
+        .success();
+}
+
+#[test]
+fn test_record_context() {
+    let (_dir, root) = setup_and_init_example();
+
+    // 1. Ingest a task
+    let task_json_path = root.join("task.json");
+    let payload = serde_json::json!({
+        "task_id": "context-task",
+        "title": "Context task",
+        "goal": "Verify context recording",
+        "priority": "low",
+        "status": "proposed"
+    });
+    fs::write(&task_json_path, serde_json::to_string(&payload).unwrap()).unwrap();
+
+    let ingest_output = workspace_command()
+        .arg("--root")
+        .arg(&root)
+        .arg("--json")
+        .arg("orchestration")
+        .arg("ingest-task")
+        .arg("--source")
+        .arg("native-json")
+        .arg(&task_json_path)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed_ingest: Value = serde_json::from_slice(&ingest_output).unwrap();
+    let task_oid = parsed_ingest["data"]["tasks"][0]["object_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    // 2. Register JSON context
+    let json_context_path = root.join("context.json");
+    let json_payload = serde_json::json!({
+        "environment": "ci",
+        "tools": ["rustc", "cargo"]
+    });
+    fs::write(
+        &json_context_path,
+        serde_json::to_string(&json_payload).unwrap(),
+    )
+    .unwrap();
+
+    workspace_command()
+        .arg("--root")
+        .arg(&root)
+        .arg("--json")
+        .arg("orchestration")
+        .arg("record-context")
+        .arg("--task-id")
+        .arg(&task_oid)
+        .arg(&json_context_path)
+        .assert()
+        .success();
+
+    // 3. Register text context
+    let text_context_path = root.join("context.txt");
+    fs::write(&text_context_path, "Manual context notes").unwrap();
+
+    workspace_command()
+        .arg("--root")
+        .arg(&root)
+        .arg("--json")
+        .arg("orchestration")
+        .arg("record-context")
+        .arg("--task-id")
+        .arg(&task_oid)
+        .arg(&text_context_path)
+        .assert()
+        .success();
+}
+
+#[test]
+fn test_ingest_manifest_with_context_linking() {
+    let (_dir, root) = setup_and_init_example();
+
+    // 1. Ingest a task
+    let task_json_path = root.join("task.json");
+    let payload = serde_json::json!({
+        "task_id": "link-ctx-task",
+        "title": "Link context task",
+        "goal": "Verify context linking",
+        "priority": "low",
+        "status": "proposed"
+    });
+    fs::write(&task_json_path, serde_json::to_string(&payload).unwrap()).unwrap();
+
+    let ingest_output = workspace_command()
+        .arg("--root")
+        .arg(&root)
+        .arg("--json")
+        .arg("orchestration")
+        .arg("ingest-task")
+        .arg("--source")
+        .arg("native-json")
+        .arg(&task_json_path)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed_ingest: Value = serde_json::from_slice(&ingest_output).unwrap();
+    let task_oid = parsed_ingest["data"]["tasks"][0]["object_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    // 2. Record context
+    let context_path = root.join("context.json");
+    fs::write(&context_path, "{}").unwrap();
+
+    let context_output = workspace_command()
+        .arg("--root")
+        .arg(&root)
+        .arg("--json")
+        .arg("orchestration")
+        .arg("record-context")
+        .arg("--task-id")
+        .arg(&task_oid)
+        .arg(&context_path)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed_context: Value = serde_json::from_slice(&context_output).unwrap();
+    let context_oid = parsed_context["data"]["object_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    // 3. Ingest manifest with context_id
+    let manifest_path = root.join("manifest.md");
+    fs::write(
+        &manifest_path,
+        "---\ntask_uuid: link-ctx-task\nattempt_number: 1\n---\n## Objective\nLinking test",
+    )
+    .unwrap();
+
+    workspace_command()
+        .arg("--root")
+        .arg(&root)
+        .arg("--json")
+        .arg("orchestration")
+        .arg("ingest-manifest")
+        .arg("--context-id")
+        .arg(&context_oid)
+        .arg(&manifest_path)
+        .assert()
+        .success();
+}

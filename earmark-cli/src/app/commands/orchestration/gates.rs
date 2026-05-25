@@ -5,7 +5,7 @@ use crate::app::emit;
 use crate::cli::RecordGateArgs;
 use serde_json::json;
 
-use super::common::*;
+use crate::app::commands::orchestration::common::*;
 
 pub fn handle_record_gate(ctx: &mut CommandContext, args: &RecordGateArgs) -> Result<(), CliError> {
     let store = ctx.store;
@@ -18,9 +18,8 @@ pub fn handle_record_gate(ctx: &mut CommandContext, args: &RecordGateArgs) -> Re
         .ok_or_else(|| CliError::argument("index required"))?;
 
     let (task_oid, _class, _task_summary, task_payload) =
-        find_orchestration_task(index_ref, store, &args.task_id)?.ok_or_else(|| {
-            CliError::not_found(format!("task {} not found", args.task_id))
-        })?;
+        find_orchestration_task(index_ref, store, &args.task_id)?
+            .ok_or_else(|| CliError::not_found(format!("task {} not found", args.task_id)))?;
 
     let task_id = task_payload
         .get("task_id")
@@ -79,10 +78,25 @@ pub fn handle_record_gate(ctx: &mut CommandContext, args: &RecordGateArgs) -> Re
     );
 
     let title = format!("Gate result: {} for {}", args.command, task_id);
-    let obj_ref = deposit_orchestration_object(ctx.store, index_ref, ctx.provider_registry, "gate_result", Some(title), payload, headers)?;
+    let obj_ref = deposit_orchestration_object(
+        ctx.store,
+        index_ref,
+        ctx.provider_registry,
+        "gate_result",
+        Some(title),
+        payload,
+        headers,
+    )?;
 
     if let Some(d_oid) = dispatch_oid {
-        create_orchestration_relation(ctx.store, index_ref, ctx.provider_registry, d_oid, obj_ref.id.clone(), "gated_by")?;
+        create_orchestration_relation(
+            ctx.store,
+            index_ref,
+            ctx.provider_registry,
+            d_oid,
+            obj_ref.id.clone(),
+            "gated_by",
+        )?;
     } else {
         create_orchestration_relation(
             ctx.store,

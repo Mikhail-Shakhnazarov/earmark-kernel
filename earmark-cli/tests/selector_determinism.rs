@@ -39,7 +39,11 @@ fn make_run_record(run_id: &str, started_at: chrono::DateTime<Utc>) -> earmark_c
     }
 }
 
-fn write_run(store: &GitCanonicalStore, index: &mut DerivedIndex, record: &earmark_core::RunRecord) {
+fn write_run(
+    store: &GitCanonicalStore,
+    index: &mut DerivedIndex,
+    record: &earmark_core::RunRecord,
+) {
     let obj = StoredObject::new(
         Kind::RunRecord,
         None,

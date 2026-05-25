@@ -9,10 +9,13 @@ use earmark_runtime_tools::{DepositValidationContext, RuntimeToolSurface};
 use earmark_store::{GitCanonicalStore, ObjectStore};
 use serde_json::json;
 
-use super::common::*;
 use super::adapters;
+use crate::app::commands::orchestration::common::*;
 
-pub fn handle_ingest_manifest(ctx: &mut CommandContext, args: &IngestManifestArgs) -> Result<(), CliError> {
+pub fn handle_ingest_manifest(
+    ctx: &mut CommandContext,
+    args: &IngestManifestArgs,
+) -> Result<(), CliError> {
     let store = ctx.store;
     let as_json = ctx.as_json;
 
@@ -140,9 +143,7 @@ pub fn handle_ingest_manifest(ctx: &mut CommandContext, args: &IngestManifestArg
     }
 
     let (task_oid, _, _, _) = find_orchestration_task(index_ref, store, &task_id)?
-        .ok_or_else(|| {
-            CliError::not_found(format!("parent work_item {} not found", task_id))
-        })?;
+        .ok_or_else(|| CliError::not_found(format!("parent work_item {} not found", task_id)))?;
 
     let prov = RuntimeProvenance {
         actor: "operator".to_string(),
@@ -168,19 +169,28 @@ pub fn handle_ingest_manifest(ctx: &mut CommandContext, args: &IngestManifestArg
         Some(format!("Dispatch for {}", task_id)),
         payload,
         prov,
-        DepositValidationContext {
-            namespace,
-            headers,
-        },
+        DepositValidationContext { namespace, headers },
     )?;
 
-    create_orchestration_relation(ctx.store, index_ref, ctx.provider_registry, task_oid, object_ref.id.clone(), "dispatched_as")?;
+    create_orchestration_relation(
+        ctx.store,
+        index_ref,
+        ctx.provider_registry,
+        task_oid,
+        object_ref.id.clone(),
+        "dispatched_as",
+    )?;
 
     if let Some(c_oid) = context_oid {
-        create_orchestration_relation(ctx.store, index_ref, ctx.provider_registry, object_ref.id.clone(), c_oid, "used_context")?;
+        create_orchestration_relation(
+            ctx.store,
+            index_ref,
+            ctx.provider_registry,
+            object_ref.id.clone(),
+            c_oid,
+            "used_context",
+        )?;
     }
-
-    index_ref.rebuild_from_store(store)?;
 
     let vr = VersionRef::new(object_ref.id.clone(), object_ref.version_id.clone());
     let stored_object = ObjectStore::read_version(store, &vr)?;
@@ -203,7 +213,10 @@ pub fn handle_ingest_manifest(ctx: &mut CommandContext, args: &IngestManifestArg
     Ok(())
 }
 
-pub fn handle_ingest_report(ctx: &mut CommandContext, args: &IngestReportArgs) -> Result<(), CliError> {
+pub fn handle_ingest_report(
+    ctx: &mut CommandContext,
+    args: &IngestReportArgs,
+) -> Result<(), CliError> {
     let store = ctx.store;
     let as_json = ctx.as_json;
 
@@ -310,10 +323,7 @@ pub fn handle_ingest_report(ctx: &mut CommandContext, args: &IngestReportArgs) -
         Some(format!("Evidence for {}", task_id)),
         payload,
         prov,
-        DepositValidationContext {
-            namespace,
-            headers,
-        },
+        DepositValidationContext { namespace, headers },
     )?;
 
     if let Some(d_oid) = dispatch_oid {
@@ -326,8 +336,6 @@ pub fn handle_ingest_report(ctx: &mut CommandContext, args: &IngestReportArgs) -
             "produced_evidence",
         )?;
     }
-
-    runtime_surface.index.rebuild_from_store(store)?;
 
     let vr = VersionRef::new(object_ref.id.clone(), object_ref.version_id.clone());
     let stored_object = ObjectStore::read_version(store, &vr)?;
@@ -396,9 +404,7 @@ pub fn handle_ingest_task(ctx: &mut CommandContext, args: &IngestTaskArgs) -> Re
         }]
     } else {
         match source.as_str() {
-            "native-json" | "local-json" => {
-                adapters::native_json::ingest_from_json(&args.task_id)?
-            }
+            "native-json" | "local-json" => adapters::native_json::ingest_from_json(&args.task_id)?,
             _ => {
                 return Err(CliError::argument(format!(
                     "unsupported source: '{}'. Supported sources: 'native-json', 'local-json'",
@@ -449,13 +455,8 @@ pub fn handle_ingest_task(ctx: &mut CommandContext, args: &IngestTaskArgs) -> Re
             Some(task.title.clone()),
             payload,
             prov,
-            DepositValidationContext {
-                namespace,
-                headers,
-            },
+            DepositValidationContext { namespace, headers },
         )?;
-
-        index_ref.rebuild_from_store(store)?;
 
         let vr = VersionRef::new(object_ref.id.clone(), object_ref.version_id.clone());
         let stored_object = ObjectStore::read_version(store, &vr)?;
@@ -502,7 +503,7 @@ fn resolve_manifest_for_report(
         let vid = VersionId::parse(summary.version_id.clone())?;
         let vr = VersionRef::new(oid, vid);
         if let Ok(stored) = ObjectStore::read_version(store, &vr) {
-        if let Ok(text) = stored.payload.as_utf8().map(|s| s.to_string()) {
+            if let Ok(text) = stored.payload.as_utf8().map(|s| s.to_string()) {
                 if let Ok(payload) = serde_json::from_str::<serde_json::Value>(&text) {
                     let tid = payload.get("task_id").and_then(|v| v.as_str());
                     let att = payload.get("attempt").and_then(|v| v.as_u64());
@@ -525,7 +526,10 @@ fn parse_manifest_sections(text: &str) -> BTreeMap<String, String> {
     for line in text.lines() {
         if line.starts_with("# ") || line.starts_with("## ") {
             if !current_content.is_empty() {
-                sections.insert(current_section.clone(), current_content.join("\n").trim().to_string());
+                sections.insert(
+                    current_section.clone(),
+                    current_content.join("\n").trim().to_string(),
+                );
                 current_content.clear();
             }
             current_section = line.trim_start_matches('#').trim().to_lowercase();
@@ -534,7 +538,10 @@ fn parse_manifest_sections(text: &str) -> BTreeMap<String, String> {
         }
     }
     if !current_content.is_empty() {
-        sections.insert(current_section, current_content.join("\n").trim().to_string());
+        sections.insert(
+            current_section,
+            current_content.join("\n").trim().to_string(),
+        );
     }
     sections
 }
@@ -594,7 +601,10 @@ fn parse_bullet_list(text: &str) -> Vec<String> {
 }
 
 fn parse_files_changed(sections: &BTreeMap<String, String>) -> Vec<String> {
-    if let Some(content) = sections.get("files changed").or_else(|| sections.get("affected files")) {
+    if let Some(content) = sections
+        .get("files changed")
+        .or_else(|| sections.get("affected files"))
+    {
         parse_bullet_list(content)
     } else {
         Vec::new()

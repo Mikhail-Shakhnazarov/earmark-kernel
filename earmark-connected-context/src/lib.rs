@@ -224,10 +224,7 @@ impl CompiledContextService {
             })
             .collect::<Result<Vec<_>, ProjectError>>()?;
 
-        let surface_id = format!(
-            "ws_{}",
-            Utc::now().timestamp_nanos_opt().unwrap_or(0)
-        );
+        let surface_id = format!("ws_{}", Utc::now().timestamp_nanos_opt().unwrap_or(0));
         let surface_dir = store
             .root()
             .join(".earmark")
@@ -918,7 +915,8 @@ mod tests {
         let standing =
             BTreeMap::from([("kernel:review".to_string(), vec!["accepted".to_string()])]);
         let selected =
-            collect_selected_objects(&store, &mut index, &template_with_standing(standing)).unwrap();
+            collect_selected_objects(&store, &mut index, &template_with_standing(standing))
+                .unwrap();
         let ids = selected
             .iter()
             .map(|r| r.object_id.clone())
@@ -1092,7 +1090,8 @@ mod tests {
         let standing =
             BTreeMap::from([("kernel:review".to_string(), vec!["accepted".to_string()])]);
         let selected =
-            collect_selected_objects(&store, &mut index, &template_with_standing(standing)).unwrap();
+            collect_selected_objects(&store, &mut index, &template_with_standing(standing))
+                .unwrap();
         let ids = selected
             .iter()
             .map(|r| r.object_id.clone())

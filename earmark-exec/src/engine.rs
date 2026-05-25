@@ -111,7 +111,8 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
         let initial_contracts_set = crate::validation::initial_contracts(&effective_inputs);
         let mut available_contracts = initial_contracts_set.clone();
 
-        let ready_seed_ids: Vec<TransitionId> = if let Some(handoff_id) = &request.handoff_manifest {
+        let ready_seed_ids: Vec<TransitionId> = if let Some(handoff_id) = &request.handoff_manifest
+        {
             let handoff = load_handoff(self.store, handoff_id)?;
 
             if let Some(template_id) = &handoff.compiled_context_template_id {
@@ -319,7 +320,11 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
             let message = format!(
                 "workflow execution finished with {} transitions unreached: {}",
                 remaining.len(),
-                remaining.iter().map(|id| id.as_str()).collect::<Vec<_>>().join(", ")
+                remaining
+                    .iter()
+                    .map(|id| id.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
             );
             record_transition(
                 &mut record,

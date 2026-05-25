@@ -6,8 +6,8 @@ use crate::provider::{provider_metadata_synthetic_source, provider_response_is_s
 use crate::relation::persist_relation_canonical;
 use chrono::Utc;
 use earmark_core::{
-    ChangeSetDraft, ChangeSetId, ChangeSetValidationResult, HandoffManifestId, IntoObjectId,
-    InstructionPayload, Kind, ObjectRef, Provenance, ProviderResponse, RelationCreationMode,
+    ChangeSetDraft, ChangeSetId, ChangeSetValidationResult, HandoffManifestId, InstructionPayload,
+    IntoObjectId, Kind, ObjectRef, Provenance, ProviderResponse, RelationCreationMode,
     RelationPayload, RunRecord, Standing, TransformationFailure, TransitionAssignment,
     TransitionId, REL_TYPE_REQUESTS_STANDING, REL_TYPE_RESULTED_IN_FAILURE,
 };
@@ -168,7 +168,10 @@ pub(crate) fn persist_transformation_failure<S: CanonicalStore>(
     )
     .class("transformation_failure")
     .provenance(Provenance::direct_input("execution_engine"))
-    .header("title", format!("Failure {}", assignment.transition_id.as_str()))
+    .header(
+        "title",
+        format!("Failure {}", assignment.transition_id.as_str()),
+    )
     .build()
     .map_err(ExecError::IncompleteExecution)?;
     let version_ref = write_object_and_index(store, index, &stored)?;
