@@ -3,7 +3,7 @@ version: 0.1.0
 description: Compile report, git changes, gate results for review decision.
 select:
   classes:
-    - executor_report
+    - evidence
     - git_change_summary
     - gate_result
   standing: {}

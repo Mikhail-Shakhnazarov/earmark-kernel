@@ -3,13 +3,13 @@ name: task_to_manifest
 version: 0.1.0
 purpose: Generate an executor manifest from an implementation task.
 input_classes:
-  - implementation_task
+  - work_item
 output_classes:
-  - executor_manifest
+  - dispatch
 execution_policy: runtime_permitted
 provider_profile: null
 trace_policy: summary
-register: executor_manifest
+register: dispatch
 ---
 
 # Manifest Generation

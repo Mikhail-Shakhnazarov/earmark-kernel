@@ -3,8 +3,8 @@ version: 0.1.0
 description: Compile task, manifest, and pre-execution git state for the execution phase.
 select:
   classes:
-    - implementation_task
-    - executor_manifest
+    - work_item
+    - dispatch
     - git_snapshot
   standing: {}
   relations:
