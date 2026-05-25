@@ -3,7 +3,7 @@ use crate::relation_logic::{
 };
 use earmark_core::{
     ChangeSetDraft, ChangeSetValidationResult, ClassDefinition, Kind, ObjectId, ObjectRef,
-    Standing, SystemDefinition, VersionId, WorkflowGuard, WorkflowOperationKind,
+    Standing, SystemDefinition, TransitionId, VersionId, WorkflowGuard, WorkflowOperationKind,
 };
 use earmark_index::DerivedIndex;
 use earmark_store::{CanonicalStore, StoredObject};
@@ -53,7 +53,7 @@ pub fn deadlock_warnings(ir: &ExecutionIr) -> Vec<String> {
         .collect()
 }
 
-pub(crate) fn entry_transition_ids(ir: &ExecutionIr) -> Vec<String> {
+pub(crate) fn entry_transition_ids(ir: &ExecutionIr) -> Vec<TransitionId> {
     ir.transitions
         .iter()
         .filter(|transition| !ir.edges.iter().any(|edge| edge.to == transition.id))
@@ -61,7 +61,7 @@ pub(crate) fn entry_transition_ids(ir: &ExecutionIr) -> Vec<String> {
         .collect()
 }
 
-pub(crate) fn incoming_edges(ir: &ExecutionIr) -> HashMap<String, Vec<ExecutionEdge>> {
+pub(crate) fn incoming_edges(ir: &ExecutionIr) -> HashMap<TransitionId, Vec<ExecutionEdge>> {
     let mut incoming = HashMap::new();
     for edge in &ir.edges {
         incoming
@@ -72,7 +72,7 @@ pub(crate) fn incoming_edges(ir: &ExecutionIr) -> HashMap<String, Vec<ExecutionE
     incoming
 }
 
-pub(crate) fn outgoing_edges(ir: &ExecutionIr) -> HashMap<String, Vec<ExecutionEdge>> {
+pub(crate) fn outgoing_edges(ir: &ExecutionIr) -> HashMap<TransitionId, Vec<ExecutionEdge>> {
     let mut outgoing = HashMap::new();
     for edge in &ir.edges {
         outgoing
@@ -97,8 +97,8 @@ pub(crate) fn initial_contracts(inputs: &[ObjectRef]) -> BTreeSet<String> {
 pub(crate) fn transition_is_ready(
     transition: &ExecutionTransition,
     available_contracts: &BTreeSet<String>,
-    executed: &BTreeSet<String>,
-    incoming: &HashMap<String, Vec<ExecutionEdge>>,
+    executed: &BTreeSet<TransitionId>,
+    incoming: &HashMap<TransitionId, Vec<ExecutionEdge>>,
     ir: &ExecutionIr,
     request: &WorkflowRunRequest,
     active_objects: &[ObjectRef],
@@ -131,7 +131,10 @@ pub(crate) fn transition_guards_allow(
     active_objects: &[ObjectRef],
 ) -> Result<bool, ExecError> {
     for guard in ir.guards.iter().filter(|guard| {
-        guard.id == transition.id || guard.id == format!("transition:{}", transition.id)
+        guard.id == transition.id.as_str()
+            || guard.id == format!("transition:{}", transition.id.as_str())
+            || guard.id == transition.id.name()
+            || guard.id == format!("transition:{}", transition.id.name())
     }) {
         let expression = resolve_guard_expression(&guard.expression, &ir.guards)?;
         if !evaluate_guard_expression(&expression, request, available_contracts, active_objects)? {
@@ -237,7 +240,7 @@ pub(crate) fn evaluate_guard_expression(
 
 pub fn validate_transition_change_set<S: CanonicalStore>(
     store: &S,
-    index: &DerivedIndex,
+    index: &mut DerivedIndex,
     system: &SystemDefinition,
     transition: &ExecutionTransition,
     assignment: &earmark_core::TransitionAssignment,
@@ -367,7 +370,7 @@ pub fn validate_transition_change_set<S: CanonicalStore>(
         {
             failures.push(format!(
                 "transition {} declared output contract(s) {:?} but produced no object-class outputs",
-                transition.id, transition.output_contracts
+                transition.id.as_str(), transition.output_contracts
             ));
         }
         for contract in &transition.output_contracts {
@@ -376,7 +379,7 @@ pub fn validate_transition_change_set<S: CanonicalStore>(
             {
                 failures.push(format!(
                     "transition {} expected output contract {} but produced classes {:?}",
-                    transition.id, contract, created_output_classes
+                    transition.id.as_str(), contract, created_output_classes
                 ));
             }
         }

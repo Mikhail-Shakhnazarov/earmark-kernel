@@ -50,13 +50,13 @@ fn test_six_step_flow_via_runtime_tool_surface() {
     let root = dir.path();
     let store = GitCanonicalStore::new(root);
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(root).unwrap();
+    let mut index = DerivedIndex::open(root).unwrap();
     let mut registry = ProviderRegistry::default();
     registry.register(Arc::new(MockAdapter));
 
-    let surface = RuntimeToolSurface {
+    let mut surface = RuntimeToolSurface {
         store: &store,
-        index: &index,
+        index: &mut index,
         provider_service: &registry,
     };
 
@@ -233,13 +233,13 @@ guards: []
     let system_ref = store.write_object(&system_obj).unwrap();
     let system_vref = VersionRef::new(system_ref.id, system_ref.version_id);
 
-    index.rebuild_from_store(&store).unwrap();
+    surface.index.rebuild_from_store(&store).unwrap();
 
     // EXECUTION
 
     let outcome = surface
         .run_workflow(WorkflowRunRequest {
-            run_id: "run_1".to_string(),
+            run_id: earmark_core::RunId::parse("run_1").unwrap(),
             system_definition: system_vref,
             workflow: VersionRef::new(workflow_ref.id, workflow_ref.version_id),
             inputs: vec![ObjectRef::new(

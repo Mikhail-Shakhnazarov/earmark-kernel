@@ -359,7 +359,7 @@ pub(crate) fn explain_declaration_file<S: CanonicalStore>(
 
 pub(crate) fn register_declaration_file<S: CanonicalStore>(
     store: &S,
-    index: Option<&DerivedIndex>,
+    index: Option<&mut DerivedIndex>,
     kind: DeclarationKind,
     path: &PathBuf,
     registry: Option<&BTreeMap<PathBuf, VersionRef>>,

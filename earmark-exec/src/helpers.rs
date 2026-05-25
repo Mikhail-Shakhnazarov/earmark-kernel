@@ -1,8 +1,8 @@
 use chrono::Utc;
 use earmark_connected_context::WorkSurfaceManifest;
 use earmark_core::{
-    projection::project_visibility, Kind, ObjectRef, RunRecord, RunStatus, StandingRegistry,
-    TokenRecord, TransitionAssignment, VersionRef, WorkPacket, WorkPacketConstraints,
+    projection::project_visibility, Kind, ObjectRef, RunId, RunRecord, RunStatus, StandingRegistry,
+    TokenRecord, TransitionAssignment, TransitionId, VersionRef, WorkPacket, WorkPacketConstraints,
     WorkSurfaceRef, WorkflowDefinition,
 };
 use earmark_store::{CanonicalStore, StoredObject, StoredPayload};
@@ -23,7 +23,8 @@ pub(crate) fn compile_workflow(workflow: &WorkflowDefinition) -> Result<Executio
         .operations
         .iter()
         .map(|operation| {
-            if !seen_ids.insert(operation.id.clone()) {
+            let transition_id = TransitionId::parse(&operation.id)?;
+            if !seen_ids.insert(transition_id.clone()) {
                 return Err(ExecError::InvalidWorkflow(format!(
                     "duplicate transition id {}",
                     operation.id
@@ -35,7 +36,7 @@ pub(crate) fn compile_workflow(workflow: &WorkflowDefinition) -> Result<Executio
                 ));
             }
             Ok(ExecutionTransition {
-                id: operation.id.clone(),
+                id: transition_id,
                 operation: operation.kind.clone(),
                 input_contracts: operation.input_contracts.clone(),
                 output_contracts: operation.output_contracts.clone(),
@@ -50,12 +51,14 @@ pub(crate) fn compile_workflow(workflow: &WorkflowDefinition) -> Result<Executio
     let edges = workflow
         .edges
         .iter()
-        .map(|t| ExecutionEdge {
-            from: t.from.clone(),
-            to: t.to.clone(),
-            condition: t.condition.clone(),
+        .map(|t| {
+            Ok(ExecutionEdge {
+                from: TransitionId::parse(&t.from)?,
+                to: TransitionId::parse(&t.to)?,
+                condition: t.condition.clone(),
+            })
         })
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>, ExecError>>()?;
 
     Ok(ExecutionIr {
         transitions,
@@ -65,7 +68,7 @@ pub(crate) fn compile_workflow(workflow: &WorkflowDefinition) -> Result<Executio
 }
 
 pub(crate) fn new_run_record(
-    run_id: String,
+    run_id: RunId,
     system_definition: VersionRef,
     workflow: VersionRef,
     initial_marking: Vec<TokenRecord>,
@@ -90,7 +93,7 @@ pub(crate) fn new_run_record(
 
 pub(crate) fn record_transition(
     record: &mut RunRecord,
-    transition_id: String,
+    transition_id: TransitionId,
     event_type: &str,
     consumed: Vec<ObjectRef>,
     produced: Vec<ObjectRef>,
@@ -142,7 +145,7 @@ pub fn work_packet_from_compiled_context(
 
 pub fn store_work_packet<S: CanonicalStore>(
     store: &S,
-    index: &DerivedIndex,
+    index: &mut DerivedIndex,
     work_packet: &WorkPacket,
 ) -> Result<StoredObject, ExecError> {
     let stored = StoredObject::builder(
@@ -160,8 +163,8 @@ pub fn store_work_packet<S: CanonicalStore>(
 
 pub(crate) fn reject_duplicate_active_assignment<S: CanonicalStore>(
     store: &S,
-    run_id: &str,
-    transition_id: &str,
+    run_id: &RunId,
+    transition_id: &TransitionId,
 ) -> Result<(), ExecError> {
     let now = Utc::now();
     for object in store.scan_objects()?.scanned_objects {
@@ -169,7 +172,7 @@ pub(crate) fn reject_duplicate_active_assignment<S: CanonicalStore>(
             continue;
         }
         let assignment: TransitionAssignment = serde_json::from_slice(&object.payload.bytes)?;
-        if assignment.run_id != run_id || assignment.transition_id != transition_id {
+        if &assignment.run_id != run_id || &assignment.transition_id != transition_id {
             continue;
         }
 

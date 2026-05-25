@@ -4,8 +4,9 @@ use std::path::{Path, PathBuf};
 use chrono::Utc;
 use earmark_core::{
     parse_json, parse_yaml, ClassDefinition, CompiledContextTemplate, DimensionId, Envelope,
-    InstructionPayload, Kind, ObjectId, ProviderProfile, RelationPayload, StandingPolicy,
-    SystemDefinition, TokenId, UndoRecord, VersionRef, WorkflowDefinition,
+    InstructionPayload, Kind, ObjectId, ProviderProfile, RelationPayload, RunId, StandingPolicy,
+    SystemDefinition, TokenId, TransitionAssignmentId, TransitionId, UndoRecord, VersionRef,
+    WorkflowDefinition,
 };
 use earmark_store::{CanonicalStore, SkippedEntry, StoredPayload};
 use rusqlite::{params, Connection, OptionalExtension};
@@ -115,14 +116,14 @@ impl DerivedIndex {
         self.path.with_file_name("index_dirty.json")
     }
 
-    pub fn mark_dirty(&self, marker: IndexDirtyMarker) -> Result<(), IndexError> {
+    pub fn mark_dirty(&mut self, marker: IndexDirtyMarker) -> Result<(), IndexError> {
         let path = self.dirty_marker_path();
         let json = serde_json::to_string_pretty(&marker)?;
         std::fs::write(path, json)?;
         Ok(())
     }
 
-    pub fn clear_dirty(&self) -> Result<(), IndexError> {
+    pub fn clear_dirty(&mut self) -> Result<(), IndexError> {
         let path = self.dirty_marker_path();
         if path.exists() {
             std::fs::remove_file(path)?;
@@ -262,43 +263,53 @@ impl DerivedIndex {
     }
 
     pub fn claim_active_assignment(
-        &self,
-        run_id: &str,
-        transition_id: &str,
-        assignment_id: &str,
+        &mut self,
+        run_id: &RunId,
+        transition_id: &TransitionId,
+        assignment_id: &TransitionAssignmentId,
     ) -> Result<(), IndexError> {
         let claimed_at = Utc::now().to_rfc3339();
         let updated = self.conn.execute(
             "INSERT INTO active_assignment_claims (run_id, transition_id, assignment_id, claimed_at)
              VALUES (?1, ?2, ?3, ?4)
              ON CONFLICT(run_id, transition_id) DO NOTHING",
-            params![run_id, transition_id, assignment_id, claimed_at],
+            params![
+                run_id.as_str(),
+                transition_id.as_str(),
+                assignment_id.as_str(),
+                claimed_at
+            ],
         )?;
         if updated == 0 {
             return Err(IndexError::Conflict(format!(
                 "active assignment already claimed for run {} transition {}",
-                run_id, transition_id
+                run_id.as_str(),
+                transition_id.as_str()
             )));
         }
         Ok(())
     }
 
     pub fn release_active_assignment(
-        &self,
-        run_id: &str,
-        transition_id: &str,
-        assignment_id: &str,
+        &mut self,
+        run_id: &RunId,
+        transition_id: &TransitionId,
+        assignment_id: &TransitionAssignmentId,
     ) -> Result<(), IndexError> {
         self.conn.execute(
             "DELETE FROM active_assignment_claims WHERE run_id = ?1 AND transition_id = ?2 AND assignment_id = ?3",
-            params![run_id, transition_id, assignment_id],
+            params![
+                run_id.as_str(),
+                transition_id.as_str(),
+                assignment_id.as_str()
+            ],
         )?;
         Ok(())
     }
 
-    pub fn rebuild_from_store<S: CanonicalStore>(
-        &self,
-        store: &S,
+    pub fn rebuild_from_store(
+        &mut self,
+        store: &dyn CanonicalStore,
     ) -> Result<IndexRebuildReport, IndexError> {
         store.init_layout()?;
 
@@ -312,16 +323,16 @@ impl DerivedIndex {
         };
         self.mark_dirty(marker)?;
 
-        self.conn.execute("BEGIN TRANSACTION", [])?;
+        let tx = self.conn.transaction()?;
 
-        let run_rebuild = || -> Result<IndexRebuildReport, IndexError> {
-            self.conn.execute("DELETE FROM objects", [])?;
-            self.conn.execute("DELETE FROM heads", [])?;
-            self.conn.execute("DELETE FROM relations", [])?;
-            self.conn.execute("DELETE FROM object_standing", [])?;
-            self.conn.execute("DELETE FROM undo_records", [])?;
-            self.conn.execute("DELETE FROM undone_objects", [])?;
-            self.conn.execute("DELETE FROM undone_relations", [])?;
+        let report = {
+            tx.execute("DELETE FROM objects", [])?;
+            tx.execute("DELETE FROM heads", [])?;
+            tx.execute("DELETE FROM relations", [])?;
+            tx.execute("DELETE FROM object_standing", [])?;
+            tx.execute("DELETE FROM undo_records", [])?;
+            tx.execute("DELETE FROM undone_objects", [])?;
+            tx.execute("DELETE FROM undone_relations", [])?;
 
             let diagnostics = store.scan_objects()?;
             let indexed_objects = diagnostics.scanned_objects.len();
@@ -334,7 +345,7 @@ impl DerivedIndex {
 
                 let title = envelope.title();
                 let metadata = extract_object_metadata(&envelope, &payload)?;
-                project_auxiliary_tables(&self.conn, &envelope, &payload)?;
+                project_auxiliary_tables_tx(&tx, &envelope, &payload)?;
 
                 let summary = metadata.summary;
                 let system_id = metadata.system_id;
@@ -350,7 +361,7 @@ impl DerivedIndex {
                 let created_at = envelope.created_at.to_rfc3339();
                 let updated_at = envelope.updated_at.to_rfc3339();
 
-                self.conn.execute(
+                tx.execute(
                     "INSERT OR REPLACE INTO objects (
                         version_id, object_id, kind, class, title, summary,
                         payload_ref, created_at, updated_at, system_id, namespace, declaration_identity, searchable_text, headers
@@ -374,116 +385,113 @@ impl DerivedIndex {
                 )?;
 
                 for (dim, token) in envelope.standing.iter() {
-                    self.conn.execute(
+                    tx.execute(
                         "INSERT OR REPLACE INTO object_standing (version_id, object_id, dimension, token) VALUES (?1, ?2, ?3, ?4)",
                         params![
-                            envelope.version_id.as_str(),
-                            envelope.id.as_str(),
-                            dim.as_str(),
-                            token.as_str(),
+                            envelope.version_id.as_ref(),
+                            envelope.id.as_ref(),
+                            dim.as_ref(),
+                            token.as_ref(),
                         ],
                     )?;
                 }
             }
 
-            for object_id in seen {
-                let object_id = ObjectId::parse(object_id)?;
+            for object_id_str in seen {
+                let object_id = ObjectId::parse(object_id_str)?;
                 if let Some(head) = store.read_head_ref(&object_id)? {
-                    self.conn.execute(
+                    tx.execute(
                         "INSERT OR REPLACE INTO heads (object_id, version_id) VALUES (?1, ?2)",
-                        params![head.id.as_str(), head.version_id.as_str()],
+                        params![head.id.as_ref(), head.version_id.as_ref()],
                     )?;
                 }
             }
-            Ok(IndexRebuildReport {
+            IndexRebuildReport {
                 indexed_objects,
                 skipped_entries,
-            })
+            }
         };
 
-        match run_rebuild() {
-            Ok(report) => {
-                self.conn.execute("COMMIT", [])?;
-                if report.skipped_entries.is_empty() {
-                    self.clear_dirty()?;
-                }
-                Ok(report)
-            }
-            Err(e) => {
-                let _ = self.conn.execute("ROLLBACK", []);
-                Err(e)
-            }
+        tx.commit()?;
+        if report.skipped_entries.is_empty() {
+            self.clear_dirty()?;
         }
+        Ok(report)
     }
 
-    pub fn upsert_head_object_from_store<S: CanonicalStore>(
-        &self,
-        store: &S,
+    pub fn upsert_head_object_from_store(
+        &mut self,
+        store: &dyn CanonicalStore,
         object_id: &ObjectId,
     ) -> Result<(), IndexError> {
         let Some(head) = store.read_head(object_id)? else {
             self.conn.execute(
                 "DELETE FROM heads WHERE object_id = ?1",
-                params![object_id.as_str()],
+                params![object_id.as_ref()],
             )?;
             return Ok(());
         };
 
-        let envelope = head.envelope.clone();
-        let payload = head.payload.clone();
-        let title = envelope.title();
-        let metadata = extract_object_metadata(&envelope, &payload)?;
-        project_auxiliary_tables(&self.conn, &envelope, &payload)?;
+        let tx = self.conn.transaction()?;
 
-        let summary = metadata.summary;
-        let system_id = metadata.system_id;
-        let namespace = metadata.namespace;
-        let declaration_identity = metadata.declaration_identity;
-        let searchable_text = metadata.searchable_text;
+        {
+            let envelope = head.envelope.clone();
+            let payload = head.payload.clone();
+            let title = envelope.title();
+            let metadata = extract_object_metadata(&envelope, &payload)?;
+            project_auxiliary_tables_tx(&tx, &envelope, &payload)?;
 
-        self.conn.execute(
-            "INSERT OR REPLACE INTO objects (
-                version_id, object_id, kind, class, title, summary,
-                payload_ref, created_at, updated_at, system_id, namespace, declaration_identity, searchable_text, headers
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
-            params![
-                envelope.version_id.as_str().to_string(),
-                envelope.id.as_str().to_string(),
-                envelope.kind.as_str().to_string(),
-                envelope.class.clone(),
-                title,
-                summary,
-                envelope.payload_ref.0.clone(),
-                envelope.created_at.to_rfc3339(),
-                envelope.updated_at.to_rfc3339(),
-                system_id,
-                namespace,
-                declaration_identity,
-                searchable_text,
-                serde_json::to_string(&envelope.headers).unwrap_or_default(),
-            ],
-        )?;
-        self.conn.execute(
-            "INSERT OR REPLACE INTO heads (object_id, version_id) VALUES (?1, ?2)",
-            params![envelope.id.as_str(), envelope.version_id.as_str()],
-        )?;
+            let summary = metadata.summary;
+            let system_id = metadata.system_id;
+            let namespace = metadata.namespace;
+            let declaration_identity = metadata.declaration_identity;
+            let searchable_text = metadata.searchable_text;
 
-        let version_id_str = envelope.version_id.as_str();
-        self.conn.execute(
-            "DELETE FROM object_standing WHERE version_id = ?1",
-            params![version_id_str],
-        )?;
-        for (dim, token) in envelope.standing.iter() {
-            self.conn.execute(
-                "INSERT INTO object_standing (version_id, object_id, dimension, token) VALUES (?1, ?2, ?3, ?4)",
+            tx.execute(
+                "INSERT OR REPLACE INTO objects (
+                    version_id, object_id, kind, class, title, summary,
+                    payload_ref, created_at, updated_at, system_id, namespace, declaration_identity, searchable_text, headers
+                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
                 params![
-                    version_id_str,
-                    envelope.id.as_str(),
-                    dim.as_str(),
-                    token.as_str(),
+                    envelope.version_id.as_ref(),
+                    envelope.id.as_ref(),
+                    envelope.kind.as_str(),
+                    envelope.class.clone(),
+                    title,
+                    summary,
+                    envelope.payload_ref.0.clone(),
+                    envelope.created_at.to_rfc3339(),
+                    envelope.updated_at.to_rfc3339(),
+                    system_id,
+                    namespace,
+                    declaration_identity,
+                    searchable_text,
+                    serde_json::to_string(&envelope.headers).unwrap_or_default(),
                 ],
             )?;
+            tx.execute(
+                "INSERT OR REPLACE INTO heads (object_id, version_id) VALUES (?1, ?2)",
+                params![envelope.id.as_ref(), envelope.version_id.as_ref()],
+            )?;
+
+            let version_id_str = envelope.version_id.as_ref();
+            tx.execute(
+                "DELETE FROM object_standing WHERE version_id = ?1",
+                params![version_id_str],
+            )?;
+            for (dim, token) in envelope.standing.iter() {
+                tx.execute(
+                    "INSERT INTO object_standing (version_id, object_id, dimension, token) VALUES (?1, ?2, ?3, ?4)",
+                    params![
+                        version_id_str,
+                        envelope.id.as_ref(),
+                        dim.as_ref(),
+                        token.as_ref(),
+                    ],
+                )?;
+            }
         }
+        tx.commit()?;
         Ok(())
     }
 
@@ -611,7 +619,7 @@ impl DerivedIndex {
     }
 
     pub fn activate_system(
-        &self,
+        &mut self,
         namespace: &str,
         system_id: &str,
         version_ref: &VersionRef,
@@ -996,7 +1004,7 @@ fn extract_object_metadata(
     }
 }
 
-fn project_auxiliary_tables(
+fn project_auxiliary_tables_tx(
     conn: &Connection,
     envelope: &Envelope,
     payload: &StoredPayload,
@@ -1008,10 +1016,10 @@ fn project_auxiliary_tables(
             conn.execute(
                 "INSERT OR REPLACE INTO relations (version_id, relation_object_id, source_object_id, target_object_id, relation_type, scope) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                 params![
-                    envelope.version_id.as_str().to_string(),
-                    envelope.id.as_str().to_string(),
-                    parsed.source.id.as_str().to_string(),
-                    parsed.target.id.as_str().to_string(),
+                    envelope.version_id.as_ref(),
+                    envelope.id.as_ref(),
+                    parsed.source.id.as_ref(),
+                    parsed.target.id.as_ref(),
                     parsed.relation_type,
                     parsed.scope,
                 ],
@@ -1023,8 +1031,8 @@ fn project_auxiliary_tables(
             conn.execute(
                 "INSERT OR REPLACE INTO undo_records (undo_record_id, target_run_id, created_at) VALUES (?1, ?2, ?3)",
                 params![
-                    envelope.id.as_str().to_string(),
-                    parsed.target_run_id.clone(),
+                    envelope.id.as_ref(),
+                    parsed.target_run_id.as_ref(),
                     envelope.created_at.to_rfc3339(),
                 ],
             )?;
@@ -1032,9 +1040,9 @@ fn project_auxiliary_tables(
                 conn.execute(
                     "INSERT OR REPLACE INTO undone_objects (object_id, undo_record_id, target_run_id) VALUES (?1, ?2, ?3)",
                     params![
-                        oid.as_str().to_string(),
-                        envelope.id.as_str().to_string(),
-                        parsed.target_run_id.clone(),
+                        oid.as_ref(),
+                        envelope.id.as_ref(),
+                        parsed.target_run_id.as_ref(),
                     ],
                 )?;
             }
@@ -1042,9 +1050,9 @@ fn project_auxiliary_tables(
                 conn.execute(
                     "INSERT OR REPLACE INTO undone_relations (relation_object_id, undo_record_id, target_run_id) VALUES (?1, ?2, ?3)",
                     params![
-                        rid.as_str().to_string(),
-                        envelope.id.as_str().to_string(),
-                        parsed.target_run_id.clone(),
+                        rid.as_ref(),
+                        envelope.id.as_ref(),
+                        parsed.target_run_id.as_ref(),
                     ],
                 )?;
             }

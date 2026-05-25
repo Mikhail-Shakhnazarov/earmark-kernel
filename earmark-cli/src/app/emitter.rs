@@ -4,7 +4,10 @@ pub(crate) fn emit(as_json: bool, value: serde_json::Value) {
     } else {
         match render_explanation(&value) {
             Some(explanation) => println!("{}", explanation),
-            None => println!("{}", serde_json::to_string_pretty(&value).unwrap()),
+            None => match serde_json::to_string_pretty(&value) {
+                Ok(s) => println!("{}", s),
+                Err(e) => eprintln!("Error serializing output to JSON: {}", e),
+            },
         }
     }
 }

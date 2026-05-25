@@ -1071,7 +1071,7 @@ fn validate_namespace(namespace: &str) -> Result<(), String> {
 
 pub fn activate_system_definition<S: CanonicalStore>(
     store: &S,
-    index: &DerivedIndex,
+    index: &mut DerivedIndex,
     system_id: &str,
 ) -> Result<ActiveSystemRecord, DeriveError> {
     let found = index.find_system_definition(system_id)?.ok_or_else(|| {

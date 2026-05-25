@@ -27,7 +27,7 @@ use serde_json::json;
 use std::collections::BTreeMap;
 use std::fs;
 
-pub(crate) fn handle_run(ctx: &CommandContext, command: RunCommand) -> Result<(), CliError> {
+pub(crate) fn handle_run(ctx: &mut CommandContext, command: RunCommand) -> Result<(), CliError> {
     let store = ctx.store;
     let as_json = ctx.as_json;
 
@@ -57,11 +57,13 @@ pub(crate) fn handle_run(ctx: &CommandContext, command: RunCommand) -> Result<()
             );
         }
         RunAction::Show { run_id } => {
-            let ledger = load_run_record_by_id(store, &run_id)?;
+            let rid = resolve_run_id(store, &run_id)?;
+            let ledger = load_run_record_by_id(store, &rid)?;
             emit(as_json, serde_json::to_value(ledger)?);
         }
         RunAction::Timeline { run_id } => {
-            let mut ledger = load_run_record_by_id(store, &run_id)?;
+            let rid = resolve_run_id(store, &run_id)?;
+            let mut ledger = load_run_record_by_id(store, &rid)?;
             let resolved_id = ledger.run_id.clone();
             ledger.events.sort_by_key(|event| event.timestamp);
             emit(
@@ -80,12 +82,13 @@ pub(crate) fn handle_run(ctx: &CommandContext, command: RunCommand) -> Result<()
                         "handoffs": ledger.manifests,
                     },
                     "related": run_related_artifacts(store, &resolved_id)?,
-                    "next_commands": next_commands_for_run(&resolved_id),
+                    "next_commands": next_commands_for_run(resolved_id.as_str()),
                 }),
             );
         }
         RunAction::Artifacts { run_id } => {
-            let ledger = load_run_record_by_id(store, &run_id)?;
+            let rid = resolve_run_id(store, &run_id)?;
+            let ledger = load_run_record_by_id(store, &rid)?;
             let resolved_id = ledger.run_id.clone();
             emit(
                 as_json,
@@ -94,12 +97,13 @@ pub(crate) fn handle_run(ctx: &CommandContext, command: RunCommand) -> Result<()
                     "id": resolved_id,
                     "summary": format!("artifacts for run {}", resolved_id),
                     "artifact": run_related_artifacts(store, &resolved_id)?,
-                    "next_commands": next_commands_for_run(&resolved_id),
+                    "next_commands": next_commands_for_run(resolved_id.as_str()),
                 }),
             );
         }
         RunAction::Explain { run_id } => {
-            let ledger = load_run_record_by_id(store, &run_id)?;
+            let rid = resolve_run_id(store, &run_id)?;
+            let ledger = load_run_record_by_id(store, &rid)?;
             let resolved_id = ledger.run_id.clone();
             emit(
                 as_json,
@@ -109,12 +113,13 @@ pub(crate) fn handle_run(ctx: &CommandContext, command: RunCommand) -> Result<()
                     "summary": format!("run {} is {}", resolved_id, format!("{:?}", ledger.status).to_lowercase()),
                     "artifact": ledger,
                     "related": run_related_artifacts(store, &resolved_id)?,
-                    "next_commands": next_commands_for_run(&resolved_id),
+                    "next_commands": next_commands_for_run(resolved_id.as_str()),
                 }),
             );
         }
         RunAction::Graph { run_id } => {
-            let ledger = load_run_record_by_id(store, &run_id)?;
+            let rid = resolve_run_id(store, &run_id)?;
+            let ledger = load_run_record_by_id(store, &rid)?;
             let resolved_id = ledger.run_id.clone();
             emit(
                 as_json,
@@ -123,7 +128,7 @@ pub(crate) fn handle_run(ctx: &CommandContext, command: RunCommand) -> Result<()
                     "id": resolved_id,
                     "summary": format!("relationship graph for run {}", resolved_id),
                     "graph": build_run_graph(store, &resolved_id)?,
-                    "next_commands": next_commands_for_run(&resolved_id),
+                    "next_commands": next_commands_for_run(resolved_id.as_str()),
                 }),
             );
         }
@@ -132,11 +137,11 @@ pub(crate) fn handle_run(ctx: &CommandContext, command: RunCommand) -> Result<()
 }
 
 pub(crate) fn handle_declare(
-    ctx: &CommandContext,
+    ctx: &mut CommandContext,
     command: DeclareCommand,
 ) -> Result<(), CliError> {
     let store = ctx.store;
-    let index = ctx.index;
+    let index = &mut ctx.index;
     let as_json = ctx.as_json;
     let actor = ctx.actor;
 
@@ -191,7 +196,7 @@ pub(crate) fn handle_declare(
             tracing::info!(kind = %args.kind.as_str(), path = %args.path.display(), "registering declaration");
             let version_ref = register_declaration_file(
                 store,
-                index.as_ref(),
+                index.as_mut(),
                 args.kind,
                 &args.path,
                 None,
@@ -199,7 +204,7 @@ pub(crate) fn handle_declare(
             )?;
             if matches!(args.kind, DeclarationKind::System) {
                 let idx = index
-                    .as_ref()
+                    .as_mut()
                     .ok_or_else(|| CliError::WorkspaceNotInitialized {
                         status: WorkspaceLayoutStatus {
                             root_exists: false,
@@ -275,7 +280,7 @@ pub(crate) fn handle_declare(
 }
 
 pub(crate) fn handle_assignment(
-    ctx: &CommandContext,
+    ctx: &mut CommandContext,
     command: AssignmentCommand,
 ) -> Result<(), CliError> {
     let store = ctx.store;
@@ -319,8 +324,8 @@ pub(crate) fn handle_assignment(
                 }
                 let assignment: earmark_core::TransitionAssignment =
                     serde_json::from_slice(&object.payload.bytes)?;
-                if let Some(run_id) = &run_id {
-                    if &assignment.run_id != run_id {
+                if let Some(rid) = &run_id {
+                    if assignment.run_id != *rid {
                         continue;
                     }
                 }
@@ -340,7 +345,7 @@ pub(crate) fn handle_assignment(
 }
 
 pub(crate) fn handle_change_set(
-    ctx: &CommandContext,
+    ctx: &mut CommandContext,
     command: ChangeSetCommand,
 ) -> Result<(), CliError> {
     let store = ctx.store;
@@ -382,8 +387,8 @@ pub(crate) fn handle_change_set(
                 }
                 let change_set: earmark_core::ChangeSet =
                     serde_json::from_slice(&object.payload.bytes)?;
-                if let Some(run_id) = &run_id {
-                    if &change_set.run_id != run_id {
+                if let Some(rid) = &run_id {
+                    if change_set.run_id != *rid {
                         continue;
                     }
                 }
@@ -396,7 +401,7 @@ pub(crate) fn handle_change_set(
 }
 
 pub(crate) fn handle_handoff(
-    ctx: &CommandContext,
+    ctx: &mut CommandContext,
     command: HandoffCommand,
 ) -> Result<(), CliError> {
     let store = ctx.store;
@@ -440,8 +445,8 @@ pub(crate) fn handle_handoff(
                 }
                 let handoff: earmark_core::HandoffManifest =
                     serde_json::from_slice(&object.payload.bytes)?;
-                if let Some(run_id) = &run_id {
-                    if &handoff.run_id != run_id {
+                if let Some(rid) = &run_id {
+                    if handoff.run_id != *rid {
                         continue;
                     }
                 }
@@ -454,7 +459,7 @@ pub(crate) fn handle_handoff(
 }
 
 pub(crate) fn handle_failure(
-    ctx: &CommandContext,
+    ctx: &mut CommandContext,
     command: FailureCommand,
 ) -> Result<(), CliError> {
     let store = ctx.store;
@@ -489,7 +494,7 @@ pub(crate) fn handle_failure(
             transition_id,
         } => {
             let run_id = resolve_optional_run_id(store, run_id)?;
-            let failures = list_failures(store, run_id.as_deref(), transition_id.as_deref())?;
+            let failures = list_failures(store, run_id.as_ref(), transition_id.as_deref())?;
             emit(
                 as_json,
                 json!({
@@ -503,7 +508,7 @@ pub(crate) fn handle_failure(
     Ok(())
 }
 
-pub(crate) fn handle_audit(ctx: &CommandContext, command: AuditCommand) -> Result<(), CliError> {
+pub(crate) fn handle_audit(ctx: &mut CommandContext, command: AuditCommand) -> Result<(), CliError> {
     let store = ctx.store;
     let as_json = ctx.as_json;
 
@@ -516,7 +521,7 @@ pub(crate) fn handle_audit(ctx: &CommandContext, command: AuditCommand) -> Resul
             let mut failures = Vec::new();
             failures.extend(list_failures(
                 store,
-                run_id.as_deref(),
+                run_id.as_ref(),
                 transition_id.as_deref(),
             )?);
             emit(
@@ -541,9 +546,9 @@ pub(crate) fn handle_audit(ctx: &CommandContext, command: AuditCommand) -> Resul
     Ok(())
 }
 
-pub(crate) fn handle_report(ctx: &CommandContext, command: ReportCommand) -> Result<(), CliError> {
+pub(crate) fn handle_report(ctx: &mut CommandContext, command: ReportCommand) -> Result<(), CliError> {
     let store = ctx.store;
-    let index = ctx.index;
+    let index = &mut ctx.index;
     let as_json = ctx.as_json;
 
     match command.action {
@@ -585,7 +590,7 @@ pub(crate) fn handle_report(ctx: &CommandContext, command: ReportCommand) -> Res
                 store,
                 index
                     .as_ref()
-                    .expect("index available for workspace command"),
+                    .ok_or_else(|| CliError::argument("Index not available. This command must be run within an Earmark workspace."))?,
                 &target_id,
             )?;
             if let Some(parent) = output.parent() {
@@ -607,7 +612,7 @@ pub(crate) fn handle_report(ctx: &CommandContext, command: ReportCommand) -> Res
 }
 
 pub(crate) fn handle_provider(
-    ctx: &CommandContext,
+    ctx: &mut CommandContext,
     command: ProviderCommand,
 ) -> Result<(), CliError> {
     let as_json = ctx.as_json;
@@ -626,9 +631,9 @@ pub(crate) fn handle_provider(
     Ok(())
 }
 
-pub(crate) fn handle_status(ctx: &CommandContext) -> Result<(), CliError> {
+pub(crate) fn handle_status(ctx: &mut CommandContext) -> Result<(), CliError> {
     let store = ctx.store;
-    let index = ctx.index;
+    let index = &mut ctx.index;
     let as_json = ctx.as_json;
 
     let (object_count, active_system_count) = require_index(index)?.counts()?;
@@ -675,7 +680,7 @@ pub(crate) fn handle_status(ctx: &CommandContext) -> Result<(), CliError> {
 }
 
 pub(crate) fn handle_relation(
-    ctx: &CommandContext,
+    ctx: &mut CommandContext,
     command: RelationCommand,
 ) -> Result<(), CliError> {
     let store = ctx.store;
@@ -780,11 +785,11 @@ pub(crate) fn handle_relation(
 }
 
 pub(crate) fn handle_standing_request(
-    ctx: &CommandContext,
+    ctx: &mut CommandContext,
     command: StandingRequestCommand,
 ) -> Result<(), CliError> {
     let store = ctx.store;
-    let index = ctx.index;
+    let index = &mut ctx.index;
     let as_json = ctx.as_json;
 
     match command.action {
@@ -838,7 +843,7 @@ pub(crate) fn handle_standing_request(
             );
         }
         StandingRequestAction::Approve { request_id, reason } => {
-            let index = require_index(index)?;
+            let index = require_index_mut(index)?;
             let id = earmark_core::ObjectId::parse(&request_id)
                 .map_err(|e| CliError::argument(e.to_string()))?;
             let head_ref = index
@@ -857,7 +862,7 @@ pub(crate) fn handle_standing_request(
             );
         }
         StandingRequestAction::Reject { request_id, reason } => {
-            let index = require_index(index)?;
+            let index = require_index_mut(index)?;
             let id = earmark_core::ObjectId::parse(&request_id)
                 .map_err(|e| CliError::argument(e.to_string()))?;
             let head_ref = index
@@ -880,7 +885,7 @@ pub(crate) fn handle_standing_request(
             policy,
             reason,
         } => {
-            let index = require_index(index)?;
+            let index = require_index_mut(index)?;
             let id = earmark_core::ObjectId::parse(&request_id)
                 .map_err(|e| CliError::argument(e.to_string()))?;
             let head_ref = index
@@ -915,6 +920,26 @@ pub(crate) fn handle_standing_request(
 fn require_index(index: &Option<DerivedIndex>) -> Result<&DerivedIndex, CliError> {
     index
         .as_ref()
+        .ok_or_else(|| CliError::WorkspaceNotInitialized {
+            status: WorkspaceLayoutStatus {
+                root_exists: false,
+                git_exists: false,
+                manifest_exists: false,
+                canonical_dir_exists: false,
+                objects_dir_exists: false,
+                payloads_dir_exists: false,
+                heads_dir_exists: false,
+                derived_dir_exists: false,
+                work_surfaces_dir_exists: false,
+                declarations_dir_exists: false,
+                corpus_dir_exists: false,
+            },
+        })
+}
+
+fn require_index_mut(index: &mut Option<DerivedIndex>) -> Result<&mut DerivedIndex, CliError> {
+    index
+        .as_mut()
         .ok_or_else(|| CliError::WorkspaceNotInitialized {
             status: WorkspaceLayoutStatus {
                 root_exists: false,

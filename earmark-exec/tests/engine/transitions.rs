@@ -4,13 +4,13 @@ use super::*;
 fn test_transform_emits_standing_request() {
     let dir = tempdir().unwrap();
     let store_path = dir.path().join("store");
-    let index_path = dir.path().join("index");
+    let mut index_path = dir.path().join("index");
     std::fs::create_dir_all(&store_path).unwrap();
     std::fs::create_dir_all(&index_path).unwrap();
 
     let store = GitCanonicalStore::new(&store_path);
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(&index_path).unwrap();
+    let mut index = DerivedIndex::open(&index_path).unwrap();
 
     let class_def = ClassDefinition {
         name: "finding".to_string(),
@@ -209,14 +209,14 @@ guards: []
 
     index.rebuild_from_store(&store).unwrap();
     let registry = ProviderRegistry::default();
-    let engine = ExecutionEngine {
+    let mut engine = ExecutionEngine {
         store: &store,
-        index: &index,
+        index: &mut index,
         provider_service: &registry,
     };
 
     let result = engine.run_workflow(WorkflowRunRequest {
-        run_id: "run1".to_string(),
+        run_id: earmark_core::RunId::parse("run1").unwrap(),
         system_definition: system_ref.clone(),
         workflow: VersionRef::new(workflow_ref.id, workflow_ref.version_id),
         inputs: vec![note.object_ref()],

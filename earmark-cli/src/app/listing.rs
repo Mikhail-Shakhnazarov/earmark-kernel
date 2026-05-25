@@ -24,17 +24,11 @@ pub(crate) fn list_run_records<S: CanonicalStore>(
 
 pub(crate) fn load_run_record_by_id<S: CanonicalStore>(
     store: &S,
-    run_id: &str,
+    run_id: &earmark_core::RunId,
 ) -> Result<earmark_core::RunRecord, CliError> {
     let ledgers = list_run_records(store)?;
-    if run_id == "latest" {
-        return ledgers
-            .last()
-            .cloned()
-            .ok_or_else(|| CliError::not_found("no runs found".to_string()));
-    }
     for ledger in ledgers {
-        if ledger.run_id == run_id {
+        if ledger.run_id == *run_id {
             return Ok(ledger);
         }
     }
@@ -63,11 +57,11 @@ pub(crate) fn list_assignments<S: CanonicalStore>(
 
 pub(crate) fn list_assignments_by_run<S: CanonicalStore>(
     store: &S,
-    run_id: &str,
+    run_id: &earmark_core::RunId,
 ) -> Result<Vec<earmark_core::TransitionAssignment>, CliError> {
     Ok(list_assignments(store)?
         .into_iter()
-        .filter(|assignment| assignment.run_id == run_id)
+        .filter(|assignment| assignment.run_id == *run_id)
         .collect())
 }
 
@@ -87,11 +81,11 @@ pub(crate) fn list_change_sets<S: CanonicalStore>(
 
 pub(crate) fn list_change_sets_by_run<S: CanonicalStore>(
     store: &S,
-    run_id: &str,
+    run_id: &earmark_core::RunId,
 ) -> Result<Vec<earmark_core::ChangeSet>, CliError> {
     Ok(list_change_sets(store)?
         .into_iter()
-        .filter(|change_set| change_set.run_id == run_id)
+        .filter(|change_set| change_set.run_id == *run_id)
         .collect())
 }
 
@@ -111,11 +105,11 @@ pub(crate) fn list_handoffs<S: CanonicalStore>(
 
 pub(crate) fn list_handoffs_by_run<S: CanonicalStore>(
     store: &S,
-    run_id: &str,
+    run_id: &earmark_core::RunId,
 ) -> Result<Vec<earmark_core::HandoffManifest>, CliError> {
     Ok(list_handoffs(store)?
         .into_iter()
-        .filter(|handoff| handoff.run_id == run_id)
+        .filter(|handoff| handoff.run_id == *run_id)
         .collect())
 }
 
@@ -136,29 +130,29 @@ pub(crate) fn list_failure_objects<S: CanonicalStore>(
 
 pub(crate) fn list_failures_by_run<S: CanonicalStore>(
     store: &S,
-    run_id: &str,
+    run_id: &earmark_core::RunId,
 ) -> Result<Vec<String>, CliError> {
     Ok(list_failure_objects(store)?
         .into_iter()
-        .filter(|(_, failure)| failure.run_id == run_id)
+        .filter(|(_, failure)| failure.run_id == *run_id)
         .map(|(id, _)| id)
         .collect())
 }
 
 pub(crate) fn list_failures<S: CanonicalStore>(
     store: &S,
-    run_id: Option<&str>,
+    run_id: Option<&earmark_core::RunId>,
     transition_id: Option<&str>,
 ) -> Result<Vec<serde_json::Value>, CliError> {
     let mut failures = Vec::new();
     for (failure_id, failure) in list_failure_objects(store)? {
-        if let Some(run_id) = run_id {
-            if failure.run_id != run_id {
+        if let Some(rid) = run_id {
+            if failure.run_id != **rid {
                 continue;
             }
         }
         if let Some(transition_id) = transition_id {
-            if failure.transition_id != transition_id {
+            if failure.transition_id.as_str() != transition_id {
                 continue;
             }
         }
@@ -177,7 +171,7 @@ pub(crate) fn list_failures<S: CanonicalStore>(
 
 pub(crate) fn run_related_artifacts<S: CanonicalStore>(
     store: &S,
-    run_id: &str,
+    run_id: &earmark_core::RunId,
 ) -> Result<serde_json::Value, CliError> {
     let assignments = list_assignments_by_run(store, run_id)?
         .into_iter()
@@ -217,7 +211,7 @@ pub(crate) fn run_related_artifacts<S: CanonicalStore>(
 
 pub(crate) fn list_provider_records_by_run<S: CanonicalStore>(
     store: &S,
-    run_id: &str,
+    run_id: &earmark_core::RunId,
 ) -> Result<Vec<ProviderRecord>, CliError> {
     let mut records = Vec::new();
     for object in store.scan_objects()?.scanned_objects {
@@ -228,7 +222,7 @@ pub(crate) fn list_provider_records_by_run<S: CanonicalStore>(
             continue;
         }
         let record: ProviderRecord = serde_json::from_slice(&object.payload.bytes)?;
-        if record.run_id == run_id {
+        if record.run_id == *run_id {
             records.push(record);
         }
     }

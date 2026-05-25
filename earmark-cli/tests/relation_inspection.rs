@@ -129,7 +129,7 @@ validators: []
         use earmark_store::*;
 
         let store = GitCanonicalStore::new(dir.path());
-        let index = DerivedIndex::open(dir.path()).unwrap();
+        let mut index = DerivedIndex::open(dir.path()).unwrap();
 
         let payload = RelationPayload {
             source: ObjectRef::new(
@@ -151,7 +151,7 @@ validators: []
 
         let rel_ref = earmark_exec::persist_relation_canonical(
             &store,
-            &index,
+            &mut index,
             payload,
             Provenance::direct_input("system"),
             RelationCreationMode::PrivilegedSystem,
@@ -211,7 +211,7 @@ validators: []
         use std::collections::BTreeMap;
 
         let store = GitCanonicalStore::new(dir.path());
-        let index = DerivedIndex::open(dir.path()).unwrap();
+        let mut index = DerivedIndex::open(dir.path()).unwrap();
 
         let source_id = ObjectId::parse(&id1).unwrap();
         let target_id = ObjectId::parse(&id2).unwrap();
@@ -251,7 +251,7 @@ validators: []
         );
         let rel_ref2 = earmark_exec::persist_relation_canonical(
             &store,
-            &index,
+            &mut index,
             payload,
             Provenance::direct_input("test"),
             RelationCreationMode::Declared,

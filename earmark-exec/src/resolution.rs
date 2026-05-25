@@ -26,7 +26,7 @@ pub(crate) fn resolve_version<S: CanonicalStore>(
 
 pub(crate) fn resolve_version_for_kind<S: CanonicalStore>(
     store: &S,
-    index: &DerivedIndex,
+    index: &mut DerivedIndex,
     version: &VersionRef,
     expected_kind: Kind,
 ) -> Result<VersionRef, ExecError> {
@@ -60,7 +60,7 @@ pub(crate) fn resolve_version_for_kind<S: CanonicalStore>(
 
 pub(crate) fn load_instruction<S: CanonicalStore>(
     store: &S,
-    index: &DerivedIndex,
+    index: &mut DerivedIndex,
     version: &VersionRef,
 ) -> Result<InstructionPayload, ExecError> {
     let resolved = resolve_version_for_kind(store, index, version, Kind::Instruction)?;
@@ -72,7 +72,7 @@ pub(crate) fn load_instruction<S: CanonicalStore>(
 
 pub(crate) fn load_provider_profile<S: CanonicalStore>(
     store: &S,
-    index: &DerivedIndex,
+    index: &mut DerivedIndex,
     version: &VersionRef,
 ) -> Result<ProviderProfile, ExecError> {
     let resolved = resolve_version_for_kind(store, index, version, Kind::ProviderProfile)?;
@@ -82,7 +82,7 @@ pub(crate) fn load_provider_profile<S: CanonicalStore>(
 
 pub(crate) fn load_standing_policy<S: CanonicalStore>(
     store: &S,
-    index: &DerivedIndex,
+    index: &mut DerivedIndex,
     version: &VersionRef,
 ) -> Result<StandingPolicy, ExecError> {
     let resolved = resolve_version_for_kind(store, index, version, Kind::Policy)?;
@@ -92,7 +92,7 @@ pub(crate) fn load_standing_policy<S: CanonicalStore>(
 
 pub(crate) fn load_system_definition<S: CanonicalStore>(
     store: &S,
-    index: &DerivedIndex,
+    index: &mut DerivedIndex,
     version: &VersionRef,
 ) -> Result<SystemDefinition, ExecError> {
     let resolved = resolve_version_for_kind(store, index, version, Kind::SystemDefinition)?;
@@ -102,7 +102,7 @@ pub(crate) fn load_system_definition<S: CanonicalStore>(
 
 pub(crate) fn load_class_definition<S: CanonicalStore>(
     store: &S,
-    index: &DerivedIndex,
+    index: &mut DerivedIndex,
     version: &VersionRef,
 ) -> Result<ClassDefinition, ExecError> {
     let resolved = resolve_version_for_kind(store, index, version, Kind::Object)?;
@@ -112,7 +112,7 @@ pub(crate) fn load_class_definition<S: CanonicalStore>(
 
 pub(crate) fn load_workflow<S: CanonicalStore>(
     store: &S,
-    index: &DerivedIndex,
+    index: &mut DerivedIndex,
     version: &VersionRef,
 ) -> Result<WorkflowDefinition, ExecError> {
     let resolved = resolve_version_for_kind(store, index, version, Kind::Workflow)?;
@@ -122,7 +122,7 @@ pub(crate) fn load_workflow<S: CanonicalStore>(
 
 pub(crate) fn resolve_continuation_inputs<S: CanonicalStore>(
     store: &S,
-    index: &DerivedIndex,
+    index: &mut DerivedIndex,
     request: &WorkflowRunRequest,
 ) -> Result<Vec<ObjectRef>, ExecError> {
     let sources = usize::from(!request.inputs.is_empty())

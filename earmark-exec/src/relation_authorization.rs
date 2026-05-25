@@ -10,7 +10,7 @@ use earmark_store::CanonicalStore;
 /// Authorizes a relation creation request against the system class rules.
 pub fn authorize_relation_creation<S: CanonicalStore>(
     store: &S,
-    index: &DerivedIndex,
+    index: &mut DerivedIndex,
     relation_type: &str,
     source: &ObjectRef,
     target: &ObjectRef,

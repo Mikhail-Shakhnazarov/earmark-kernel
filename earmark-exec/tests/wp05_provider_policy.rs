@@ -20,7 +20,7 @@ fn setup_env() -> (GitCanonicalStore, DerivedIndex) {
     let root = dir.keep();
     let store = GitCanonicalStore::new(root.clone());
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(&root).unwrap();
+    let mut index = DerivedIndex::open(&root).unwrap();
     (store, index)
 }
 
@@ -58,9 +58,9 @@ fn mock_profile(allowed_ops: Vec<&str>) -> ProviderProfile {
 fn mock_request() -> ProviderRequest {
     ProviderRequest {
         request_id: "req_1".to_string(),
-        run_id: "run_1".to_string(),
-        work_packet: ObjectRef::new(ObjectId::new(), VersionId::new(), Kind::WorkPacket, None),
-        provider_profile: VersionRef::new(ObjectId::new(), VersionId::new()),
+        run_id: earmark_core::RunId::parse("run_1").unwrap(),
+        work_packet: ObjectRef::new(ObjectId::generate(), VersionId::generate(), Kind::WorkPacket, None),
+        provider_profile: VersionRef::new(ObjectId::generate(), VersionId::generate()),
         instruction_text: "Do something".to_string(),
         context_text: None,
         input_text: "Do something".to_string(),
@@ -134,8 +134,8 @@ fn test_dispatch_exposure_enforces_prose_block() {
     // Request with a prose input (Kind::Object, no special class)
     let mut request = mock_request();
     request.inputs = vec![ObjectRef::new(
-        ObjectId::new(),
-        VersionId::new(),
+        ObjectId::generate(),
+        VersionId::generate(),
         Kind::Object,
         None,
     )];
@@ -154,8 +154,8 @@ fn test_dispatch_exposure_enforces_structured_block() {
     // Request with a structured input (Kind::Instruction)
     let mut request = mock_request();
     request.inputs = vec![ObjectRef::new(
-        ObjectId::new(),
-        VersionId::new(),
+        ObjectId::generate(),
+        VersionId::generate(),
         Kind::Instruction,
         None,
     )];
@@ -188,8 +188,8 @@ fn test_dispatch_exposure_allows_matching_inputs() {
 
     let mut request = mock_request();
     request.inputs = vec![ObjectRef::new(
-        ObjectId::new(),
-        VersionId::new(),
+        ObjectId::generate(),
+        VersionId::generate(),
         Kind::Object,
         None,
     )];
@@ -254,16 +254,16 @@ fn test_synthetic_marking_integrity() {
 fn test_work_packet_honest_constraints() {
     let (_store, _index) = setup_env();
     let request = WorkflowRunRequest {
-        run_id: "run_1".to_string(),
-        system_definition: VersionRef::new(ObjectId::new(), VersionId::new()),
-        workflow: VersionRef::new(ObjectId::new(), VersionId::new()),
+        run_id: earmark_core::RunId::parse("run_1").unwrap(),
+        system_definition: VersionRef::new(ObjectId::generate(), VersionId::generate()),
+        workflow: VersionRef::new(ObjectId::generate(), VersionId::generate()),
         inputs: vec![],
         handoff_manifest: None,
         transition_assignment: None,
         operator_approved: true,
     };
     let transition = ExecutionTransition {
-        id: "t1".to_string(),
+        id: earmark_core::TransitionId::parse("t1").unwrap(),
         operation: WorkflowOperationKind::Transform,
         input_contracts: vec![],
         output_contracts: vec![],
@@ -274,7 +274,7 @@ fn test_work_packet_honest_constraints() {
     };
     let manifest = earmark_connected_context::WorkSurfaceManifest {
         surface_id: "s1".to_string(),
-        compiled_context: VersionRef::new(ObjectId::new(), VersionId::new()),
+        compiled_context: VersionRef::new(ObjectId::generate(), VersionId::generate()),
         work_packet: None,
         generated_at: chrono::Utc::now(),
         objects: vec![],
@@ -335,10 +335,8 @@ fn test_response_contract_enforcement_allows_defaults() {
 
 #[test]
 fn test_transition_enforces_honest_work_packet_defaults() {
-    let (store, index) = setup_env();
+    let (store, mut index) = setup_env();
     let registry = default_provider_registry();
-    let engine = ExecutionEngine::new(&store, &index, &registry);
-
     // 1. Setup minimal objects
     let class_def = earmark_core::ClassDefinition {
         name: "candidate_output".to_string(),
@@ -386,7 +384,7 @@ fn test_transition_enforces_honest_work_packet_defaults() {
 
     let ir = ExecutionIr {
         transitions: vec![ExecutionTransition {
-            id: "t1".to_string(),
+            id: earmark_core::TransitionId::parse("t1").unwrap(),
             operation: WorkflowOperationKind::CompileContext,
             input_contracts: vec![],
             output_contracts: vec![],
@@ -446,7 +444,7 @@ fn test_transition_enforces_honest_work_packet_defaults() {
     index.rebuild_from_store(&store).unwrap();
 
     let request = WorkflowRunRequest {
-        run_id: "run_1".to_string(),
+        run_id: earmark_core::RunId::parse("run_1").unwrap(),
         system_definition: VersionRef::new(
             earmark_core::ObjectId::parse("obj_00000000000000000000000000000002").unwrap(),
             earmark_core::VersionId::parse("ver_00000000000000000000000000000002").unwrap(),
@@ -491,6 +489,8 @@ fn test_transition_enforces_honest_work_packet_defaults() {
         governance_events: &mut governance_events,
         compiled_context: &mut compiled_context,
     };
+
+    let mut engine = ExecutionEngine::new(&store, &mut index, &registry);
 
     // 2. Execute transition
     engine
@@ -555,7 +555,7 @@ fn test_transition_preserves_provider_record_warnings() {
         }
     }
 
-    let engine = ExecutionEngine::new(&store, &index, &WarningProvider);
+    let (store, mut index) = setup_env();
 
     // Setup minimal environment for transform
     let class_def_2 = earmark_core::ClassDefinition {
@@ -667,7 +667,7 @@ fn test_transition_preserves_provider_record_warnings() {
 
     let ir = ExecutionIr {
         transitions: vec![ExecutionTransition {
-            id: "t1".to_string(),
+            id: earmark_core::TransitionId::parse("t1").unwrap(),
             operation: WorkflowOperationKind::Transform,
             input_contracts: vec![],
             output_contracts: vec![],
@@ -681,7 +681,7 @@ fn test_transition_preserves_provider_record_warnings() {
     };
 
     let request = WorkflowRunRequest {
-        run_id: "run_1".to_string(),
+        run_id: earmark_core::RunId::parse("run_1").unwrap(),
         system_definition: VersionRef::new(
             earmark_core::ObjectId::parse("obj_00000000000000000000000000000004").unwrap(),
             earmark_core::VersionId::parse("ver_00000000000000000000000000000004").unwrap(),
@@ -718,7 +718,7 @@ fn test_transition_preserves_provider_record_warnings() {
     let mut emitted_objects = vec![];
     let mut governance_events = vec![];
     let mut compiled_context = Some(earmark_connected_context::WorkSurfaceManifest {
-        surface_id: "test".to_string(),
+        surface_id: earmark_core::TransitionId::parse("test").unwrap().to_string(),
         compiled_context: VersionRef::new(
             earmark_core::ObjectId::parse("obj_00000000000000000000000000000006").unwrap(),
             earmark_core::VersionId::parse("ver_00000000000000000000000000000006").unwrap(),
@@ -738,6 +738,8 @@ fn test_transition_preserves_provider_record_warnings() {
         governance_events: &mut governance_events,
         compiled_context: &mut compiled_context,
     };
+
+    let mut engine = ExecutionEngine::new(&store, &mut index, &WarningProvider);
 
     // 2. Execute transition
     engine

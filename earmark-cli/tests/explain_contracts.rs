@@ -48,12 +48,12 @@ fn declare_explain_contracts() {
 fn run_explain_contracts() {
     let dir = setup_workspace();
     let store = GitCanonicalStore::new(dir.path());
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
 
     let run_record = earmark_core::RunRecord {
-        run_id: "test_run".to_string(),
-        system_definition: VersionRef::new(ObjectId::new(), VersionId::new()),
-        workflow: VersionRef::new(ObjectId::new(), VersionId::new()),
+        run_id: earmark_core::RunId::parse("test_run").unwrap(),
+        system_definition: VersionRef::new(ObjectId::generate(), VersionId::generate()),
+        workflow: VersionRef::new(ObjectId::generate(), VersionId::generate()),
         status: earmark_core::RunStatus::Running,
         started_at: Utc::now(),
         ended_at: None,
@@ -77,7 +77,7 @@ fn run_explain_contracts() {
         vec![],
     );
 
-    write_object_and_index(&store, &index, &obj).unwrap();
+    write_object_and_index(&store, &mut index, &obj).unwrap();
 
     let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
     cmd.arg("--root")
@@ -101,12 +101,12 @@ fn run_explain_contracts() {
 fn assignment_explain_contracts() {
     let dir = setup_workspace();
     let store = GitCanonicalStore::new(dir.path());
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
 
     let assignment = earmark_core::TransitionAssignment {
-        id: earmark_core::TransitionAssignmentId::new(),
-        run_id: "test_run".to_string(),
-        transition_id: "t1".to_string(),
+        id: earmark_core::TransitionAssignmentId::generate(),
+        run_id: earmark_core::RunId::parse("test_run").unwrap(),
+        transition_id: earmark_core::TransitionId::parse("t1").unwrap(),
         assigned_to: "agent_1".to_string(),
         status: earmark_core::AssignmentStatus::Assigned,
         input_object_ids: vec![],
@@ -130,7 +130,7 @@ fn assignment_explain_contracts() {
         vec![],
     );
 
-    write_object_and_index(&store, &index, &obj).unwrap();
+    write_object_and_index(&store, &mut index, &obj).unwrap();
 
     let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
     cmd.arg("--root")
@@ -154,13 +154,13 @@ fn assignment_explain_contracts() {
 fn changeset_explain_contracts() {
     let dir = setup_workspace();
     let store = GitCanonicalStore::new(dir.path());
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
 
     let changeset = earmark_core::ChangeSet {
-        id: earmark_core::ChangeSetId::new(),
-        run_id: "test_run".to_string(),
-        transition_id: "t1".to_string(),
-        assignment_id: Some(earmark_core::TransitionAssignmentId::new()),
+        id: earmark_core::ChangeSetId::generate(),
+        run_id: earmark_core::RunId::parse("test_run").unwrap(),
+        transition_id: earmark_core::TransitionId::parse("t1").unwrap(),
+        assignment_id: Some(earmark_core::TransitionAssignmentId::generate()),
         agent_id: None,
         input_object_ids: vec![],
         created_object_ids: vec![],
@@ -186,7 +186,7 @@ fn changeset_explain_contracts() {
         vec![],
     );
 
-    write_object_and_index(&store, &index, &obj).unwrap();
+    write_object_and_index(&store, &mut index, &obj).unwrap();
 
     let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
     cmd.arg("--root")
@@ -210,14 +210,14 @@ fn changeset_explain_contracts() {
 fn handoff_explain_contracts() {
     let dir = setup_workspace();
     let store = GitCanonicalStore::new(dir.path());
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
 
     let handoff = earmark_core::HandoffManifest {
-        id: earmark_core::HandoffManifestId::new(),
-        run_id: "test_run".to_string(),
-        from_transition_id: "t1".to_string(),
-        to_transition_id: Some("t2".to_string()),
-        source_change_set_id: earmark_core::ChangeSetId::new(),
+        id: earmark_core::HandoffManifestId::generate(),
+        run_id: earmark_core::RunId::parse("test_run").unwrap(),
+        from_transition_id: earmark_core::TransitionId::parse("t1").unwrap(),
+        to_transition_id: Some(earmark_core::TransitionId::parse("t2").unwrap()),
+        source_change_set_id: earmark_core::ChangeSetId::generate(),
         source_assignment_id: None,
         root_object_ids: vec![],
         inherited_input_object_ids: vec![],
@@ -244,7 +244,7 @@ fn handoff_explain_contracts() {
         vec![],
     );
 
-    write_object_and_index(&store, &index, &obj).unwrap();
+    write_object_and_index(&store, &mut index, &obj).unwrap();
 
     let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
     cmd.arg("--root")
@@ -268,12 +268,12 @@ fn handoff_explain_contracts() {
 fn failure_explain_contracts() {
     let dir = setup_workspace();
     let store = GitCanonicalStore::new(dir.path());
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
 
     let failure = earmark_core::TransformationFailure {
-        run_id: "test_run".to_string(),
-        transition_id: "t1".to_string(),
-        assignment_id: earmark_core::TransitionAssignmentId::new(),
+        run_id: earmark_core::RunId::parse("test_run").unwrap(),
+        transition_id: earmark_core::TransitionId::parse("t1").unwrap(),
+        assignment_id: earmark_core::TransitionAssignmentId::generate(),
         failed_change_set_id: None,
         error_type: "test_error".to_string(),
         message: "something went wrong".to_string(),
@@ -292,7 +292,7 @@ fn failure_explain_contracts() {
         vec![],
     );
 
-    write_object_and_index(&store, &index, &obj).unwrap();
+    write_object_and_index(&store, &mut index, &obj).unwrap();
 
     let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
     cmd.arg("--root")
@@ -316,11 +316,11 @@ fn failure_explain_contracts() {
 fn relation_explain_contracts() {
     let dir = setup_workspace();
     let store = GitCanonicalStore::new(dir.path());
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
 
     let relation = earmark_core::RelationPayload {
-        source: ObjectRef::new(ObjectId::new(), VersionId::new(), Kind::Object, None),
-        target: ObjectRef::new(ObjectId::new(), VersionId::new(), Kind::Object, None),
+        source: ObjectRef::new(ObjectId::generate(), VersionId::generate(), Kind::Object, None),
+        target: ObjectRef::new(ObjectId::generate(), VersionId::generate(), Kind::Object, None),
         relation_type: "test_relation".to_string(),
         qualifiers: BTreeMap::new(),
         scope: None,
@@ -336,7 +336,7 @@ fn relation_explain_contracts() {
         vec![],
     );
 
-    write_object_and_index(&store, &index, &obj).unwrap();
+    write_object_and_index(&store, &mut index, &obj).unwrap();
 
     let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
     cmd.arg("--root")

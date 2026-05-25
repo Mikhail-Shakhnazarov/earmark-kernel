@@ -5,7 +5,7 @@ use crate::app::emit;
 use crate::cli::*;
 use serde_json::json;
 
-pub fn dispatch(ctx: &CommandContext, cli: Cli) -> Result<(), CliError> {
+pub fn dispatch(ctx: &mut CommandContext, cli: Cli) -> Result<(), CliError> {
     match cli.command {
         Commands::Init => crate::app::commands::init_doctor::handle_init(ctx)?,
         Commands::Doctor(args) => crate::app::commands::init_doctor::handle_doctor(ctx, &args)?,

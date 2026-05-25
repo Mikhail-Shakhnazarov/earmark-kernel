@@ -29,8 +29,8 @@ fn base_workflow() -> WorkflowDeclaration {
             input_contracts: vec![],
             output_contracts: vec![],
             instruction: Some(FlexibleVersionRef::Ref(earmark_core::VersionRef::new(
-                earmark_core::ObjectId::new(),
-                earmark_core::VersionId::new(),
+                earmark_core::ObjectId::generate(),
+                earmark_core::VersionId::generate(),
             ))),
             compiled_context: None,
             policy: None,
@@ -473,8 +473,8 @@ fn workflow_compile_context_requires_compiled_context() {
     // With compiled_context it should pass
     wf.operations[0].compiled_context =
         Some(FlexibleVersionRef::Ref(earmark_core::VersionRef::new(
-            earmark_core::ObjectId::new(),
-            earmark_core::VersionId::new(),
+            earmark_core::ObjectId::generate(),
+            earmark_core::VersionId::generate(),
         )));
     assert!(validate_workflow_definition(&wf).is_ok());
 }
@@ -810,8 +810,8 @@ fn valid_workflow_example_passes() {
                 output_contracts: vec!["work_surface".to_string()],
                 instruction: None,
                 compiled_context: Some(FlexibleVersionRef::Ref(earmark_core::VersionRef::new(
-                    earmark_core::ObjectId::new(),
-                    earmark_core::VersionId::new(),
+                    earmark_core::ObjectId::generate(),
+                    earmark_core::VersionId::generate(),
                 ))),
                 policy: None,
                 provider_profile: None,
@@ -822,8 +822,8 @@ fn valid_workflow_example_passes() {
                 input_contracts: vec!["source_note".to_string()],
                 output_contracts: vec!["finding".to_string()],
                 instruction: Some(FlexibleVersionRef::Ref(earmark_core::VersionRef::new(
-                    earmark_core::ObjectId::new(),
-                    earmark_core::VersionId::new(),
+                    earmark_core::ObjectId::generate(),
+                    earmark_core::VersionId::generate(),
                 ))),
                 compiled_context: None,
                 policy: None,

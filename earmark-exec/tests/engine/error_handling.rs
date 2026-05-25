@@ -5,7 +5,7 @@ fn request_with_inputs_and_handoff_manifest_fails() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     let note = StoredObject::new(
         Kind::Object,
         Some("note".to_string()),
@@ -18,11 +18,11 @@ fn request_with_inputs_and_handoff_manifest_fails() {
     store.write_object(&note).unwrap();
     let (system_ref, workflow_ref) = review_only_fixture(&store, "note");
     let handoff = HandoffManifest {
-        id: earmark_core::HandoffManifestId::new(),
-        run_id: "stage_a".to_string(),
-        from_transition_id: "op_transform".to_string(),
-        to_transition_id: Some("op_review".to_string()),
-        source_change_set_id: earmark_core::ChangeSetId::new(),
+        id: earmark_core::HandoffManifestId::generate(),
+        run_id: earmark_core::RunId::parse("stage_a").unwrap(),
+        from_transition_id: earmark_core::TransitionId::parse("op_transform").unwrap(),
+        to_transition_id: Some(earmark_core::TransitionId::parse("op_review").unwrap()),
+        source_change_set_id: earmark_core::ChangeSetId::generate(),
         source_assignment_id: None,
         root_object_ids: vec![note.envelope.id.clone()],
         inherited_input_object_ids: vec![],
@@ -42,15 +42,15 @@ fn request_with_inputs_and_handoff_manifest_fails() {
 
     index.rebuild_from_store(&store).unwrap();
     let registry = ProviderRegistry::default();
-    let engine = ExecutionEngine {
+    let mut engine = ExecutionEngine {
         store: &store,
-        index: &index,
+        index: &mut index,
         provider_service: &registry,
     };
 
     let error = engine
         .run_workflow(WorkflowRunRequest {
-            run_id: "conflict_run".to_string(),
+            run_id: earmark_core::RunId::parse("conflict_run").unwrap(),
             system_definition: system_ref,
             workflow: workflow_ref,
             inputs: vec![note.object_ref()],
@@ -71,7 +71,7 @@ fn request_with_handoff_manifest_and_transition_assignment_fails() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     let note = StoredObject::new(
         Kind::Object,
         Some("note".to_string()),
@@ -84,11 +84,11 @@ fn request_with_handoff_manifest_and_transition_assignment_fails() {
     store.write_object(&note).unwrap();
     let (system_ref, workflow_ref) = review_only_fixture(&store, "note");
     let handoff = HandoffManifest {
-        id: earmark_core::HandoffManifestId::new(),
-        run_id: "stage_a".to_string(),
-        from_transition_id: "op_transform".to_string(),
-        to_transition_id: Some("op_review".to_string()),
-        source_change_set_id: earmark_core::ChangeSetId::new(),
+        id: earmark_core::HandoffManifestId::generate(),
+        run_id: earmark_core::RunId::parse("stage_a").unwrap(),
+        from_transition_id: earmark_core::TransitionId::parse("op_transform").unwrap(),
+        to_transition_id: Some(earmark_core::TransitionId::parse("op_review").unwrap()),
+        source_change_set_id: earmark_core::ChangeSetId::generate(),
         source_assignment_id: None,
         root_object_ids: vec![note.envelope.id.clone()],
         inherited_input_object_ids: vec![],
@@ -106,9 +106,9 @@ fn request_with_handoff_manifest_and_transition_assignment_fails() {
     };
     persist_handoff_manifest(&store, &handoff);
     let assignment = earmark_core::TransitionAssignment {
-        id: earmark_core::TransitionAssignmentId::new(),
-        run_id: "claim_run".to_string(),
-        transition_id: "op_review".to_string(),
+        id: earmark_core::TransitionAssignmentId::generate(),
+        run_id: earmark_core::RunId::parse("claim_run").unwrap(),
+        transition_id: earmark_core::TransitionId::parse("op_review").unwrap(),
         assigned_to: "operator".to_string(),
         status: earmark_core::AssignmentStatus::Assigned,
         input_object_ids: vec![note.envelope.id.clone()],
@@ -125,15 +125,15 @@ fn request_with_handoff_manifest_and_transition_assignment_fails() {
 
     index.rebuild_from_store(&store).unwrap();
     let registry = ProviderRegistry::default();
-    let engine = ExecutionEngine {
+    let mut engine = ExecutionEngine {
         store: &store,
-        index: &index,
+        index: &mut index,
         provider_service: &registry,
     };
 
     let error = engine
         .run_workflow(WorkflowRunRequest {
-            run_id: "conflict_claim_run".to_string(),
+            run_id: earmark_core::RunId::parse("conflict_claim_run").unwrap(),
             system_definition: system_ref,
             workflow: workflow_ref,
             inputs: vec![],
@@ -154,7 +154,7 @@ fn workflow_run_fails_when_transform_output_class_is_undeclared() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
 
     let note = StoredObject::new(
         Kind::Object,
@@ -321,15 +321,15 @@ guards: []
 
     index.rebuild_from_store(&store).unwrap();
     let registry = ProviderRegistry::default();
-    let engine = ExecutionEngine {
+    let mut engine = ExecutionEngine {
         store: &store,
-        index: &index,
+        index: &mut index,
         provider_service: &registry,
     };
 
     let error = engine
         .run_workflow(WorkflowRunRequest {
-            run_id: "run_invalid_class".to_string(),
+            run_id: earmark_core::RunId::parse("run_invalid_class").unwrap(),
             system_definition: VersionRef::new(
                 system_ref.id.clone(),
                 system_ref.version_id.clone(),
@@ -350,7 +350,7 @@ guards: []
         .filter(|obj| obj.envelope.kind == Kind::ChangeSet)
         .map(|obj| serde_json::from_slice::<ChangeSet>(&obj.payload.bytes).unwrap())
         .filter(|change_set| {
-            change_set.run_id == "run_invalid_class" && change_set.transition_id == "op_transform"
+            change_set.run_id.as_str() == "run_invalid_class" && change_set.transition_id.as_str() == "tr_op_transform"
         })
         .collect::<Vec<_>>();
     assert_eq!(failed_deltas.len(), 1);
@@ -363,7 +363,7 @@ guards: []
         .filter(|obj| obj.envelope.kind == Kind::TransitionAssignment)
         .map(|obj| serde_json::from_slice::<TransitionAssignment>(&obj.payload.bytes).unwrap())
         .filter(|assignment| {
-            assignment.run_id == "run_invalid_class" && assignment.transition_id == "op_transform"
+            assignment.run_id.as_str() == "run_invalid_class" && assignment.transition_id.as_str() == "tr_op_transform"
         })
         .collect::<Vec<_>>();
     let blocked_claim = blocked_claims
@@ -413,7 +413,7 @@ fn workflow_run_fails_when_output_standing_violates_class_rules() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
 
     let note = StoredObject::new(
         Kind::Object,
@@ -610,15 +610,15 @@ guards: []
 
     index.rebuild_from_store(&store).unwrap();
     let registry = ProviderRegistry::default();
-    let engine = ExecutionEngine {
+    let mut engine = ExecutionEngine {
         store: &store,
-        index: &index,
+        index: &mut index,
         provider_service: &registry,
     };
 
     let error = engine
         .run_workflow(WorkflowRunRequest {
-            run_id: "run_invalid_standing".to_string(),
+            run_id: earmark_core::RunId::parse("run_invalid_standing").unwrap(),
             system_definition: VersionRef::new(
                 system_ref.id.clone(),
                 system_ref.version_id.clone(),
@@ -644,7 +644,7 @@ fn workflow_run_fails_when_declared_transition_is_unreachable() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
 
     let note = StoredObject::new(
         Kind::Object,
@@ -855,15 +855,15 @@ guards: []
 
     index.rebuild_from_store(&store).unwrap();
     let registry = ProviderRegistry::default();
-    let engine = ExecutionEngine {
+    let mut engine = ExecutionEngine {
         store: &store,
-        index: &index,
+        index: &mut index,
         provider_service: &registry,
     };
 
     let outcome = engine
         .run_workflow(WorkflowRunRequest {
-            run_id: "run_test_incomplete".to_string(),
+            run_id: earmark_core::RunId::parse("run_test_incomplete").unwrap(),
             system_definition: VersionRef::new(
                 system_ref.id.clone(),
                 system_ref.version_id.clone(),
@@ -902,7 +902,7 @@ fn test_mixed_source_rejection_no_side_effects() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
 
     let note = StoredObject::new(
         Kind::Object,
@@ -920,9 +920,9 @@ fn test_mixed_source_rejection_no_side_effects() {
     let (system_ref, workflow_ref) = review_only_fixture(&store, "note");
 
     let assignment = earmark_core::TransitionAssignment {
-        id: earmark_core::TransitionAssignmentId::new(),
-        run_id: "mixed_run".to_string(),
-        transition_id: "op_review".to_string(),
+        id: earmark_core::TransitionAssignmentId::generate(),
+        run_id: earmark_core::RunId::parse("mixed_run").unwrap(),
+        transition_id: earmark_core::TransitionId::parse("op_review").unwrap(),
         assigned_to: "operator".to_string(),
         status: earmark_core::AssignmentStatus::Assigned,
         input_object_ids: vec![note.envelope.id.clone()],
@@ -939,14 +939,14 @@ fn test_mixed_source_rejection_no_side_effects() {
 
     index.rebuild_from_store(&store).unwrap();
     let registry = ProviderRegistry::default();
-    let engine = ExecutionEngine {
+    let mut engine = ExecutionEngine {
         store: &store,
-        index: &index,
+        index: &mut index,
         provider_service: &registry,
     };
 
     let result = engine.run_workflow(WorkflowRunRequest {
-        run_id: "mixed_request_run".to_string(),
+        run_id: earmark_core::RunId::parse("mixed_request_run").unwrap(),
         system_definition: system_ref,
         workflow: workflow_ref,
         inputs: vec![note.object_ref()],
@@ -976,16 +976,16 @@ fn handoff_continuation_with_invalid_target_fails() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
 
     let (system_ref, workflow_ref) = review_only_fixture(&store, "note");
 
     let handoff = HandoffManifest {
-        id: earmark_core::HandoffManifestId::new(),
-        run_id: "dummy_run".to_string(),
-        from_transition_id: "op_prev".to_string(),
-        to_transition_id: Some("op_nonexistent".to_string()),
-        source_change_set_id: earmark_core::ChangeSetId::new(),
+        id: earmark_core::HandoffManifestId::generate(),
+        run_id: earmark_core::RunId::parse("dummy_run").unwrap(),
+        from_transition_id: earmark_core::TransitionId::parse("op_prev").unwrap(),
+        to_transition_id: Some(earmark_core::TransitionId::parse("op_nonexistent").unwrap()),
+        source_change_set_id: earmark_core::ChangeSetId::generate(),
         source_assignment_id: None,
         root_object_ids: vec![],
         inherited_input_object_ids: vec![],
@@ -1005,14 +1005,14 @@ fn handoff_continuation_with_invalid_target_fails() {
 
     index.rebuild_from_store(&store).unwrap();
     let registry = ProviderRegistry::default();
-    let engine = ExecutionEngine {
+    let mut engine = ExecutionEngine {
         store: &store,
-        index: &index,
+        index: &mut index,
         provider_service: &registry,
     };
 
     let result = engine.run_workflow(WorkflowRunRequest {
-        run_id: "invalid_target_run".to_string(),
+        run_id: earmark_core::RunId::parse("invalid_target_run").unwrap(),
         system_definition: system_ref,
         workflow: workflow_ref,
         inputs: vec![],
@@ -1036,7 +1036,7 @@ fn test_transformation_failure_recorded_on_error() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
 
     let note = StoredObject::new(
         Kind::Object,
@@ -1079,14 +1079,14 @@ guards: []
 
     index.rebuild_from_store(&store).unwrap();
     let registry = ProviderRegistry::default();
-    let engine = ExecutionEngine {
+    let mut engine = ExecutionEngine {
         store: &store,
-        index: &index,
+        index: &mut index,
         provider_service: &registry,
     };
 
     let result = engine.run_workflow(WorkflowRunRequest {
-        run_id: "fail_run".to_string(),
+        run_id: earmark_core::RunId::parse("fail_run").unwrap(),
         system_definition: system_ref,
         workflow: VersionRef::new(workflow_ref.id, workflow_ref.version_id),
         inputs: vec![note.object_ref()],
@@ -1148,8 +1148,8 @@ guards: []
         .unwrap()
         .contains(delta_id.as_str()));
 
-    assert_eq!(failure.run_id, "fail_run");
-    assert_eq!(failure.transition_id, "op_fail");
+    assert_eq!(failure.run_id, "run_fail_run");
+    assert_eq!(failure.transition_id, "tr_op_fail");
     assert_eq!(failure.error_type, "invalid_workflow");
     assert!(!failure.input_object_ids.is_empty());
 }

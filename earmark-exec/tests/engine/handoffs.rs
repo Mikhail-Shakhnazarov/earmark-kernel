@@ -5,7 +5,7 @@ fn successor_run_can_reconstruct_inputs_from_handoff_manifest() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
 
     let note = StoredObject::new(
         Kind::Object,
@@ -222,15 +222,15 @@ guards: []
 
     index.rebuild_from_store(&store).unwrap();
     let registry = ProviderRegistry::default();
-    let engine = ExecutionEngine {
+    let mut engine = ExecutionEngine {
         store: &store,
-        index: &index,
+        index: &mut index,
         provider_service: &registry,
     };
 
     let first_outcome = engine
         .run_workflow(WorkflowRunRequest {
-            run_id: "run_stage_a".to_string(),
+            run_id: earmark_core::RunId::parse("run_stage_a").unwrap(),
             system_definition: VersionRef::new(
                 system_ref.id.clone(),
                 system_ref.version_id.clone(),
@@ -256,14 +256,14 @@ guards: []
         .filter(|obj| obj.envelope.kind == Kind::HandoffManifest)
         .map(|obj| serde_json::from_slice::<HandoffManifest>(&obj.payload.bytes).unwrap())
         .find(|manifest| {
-            manifest.run_id == "run_stage_a" && manifest.from_transition_id == "op_transform"
+            manifest.run_id.as_str() == "run_stage_a" && manifest.from_transition_id.as_str() == "tr_op_transform"
         })
         .unwrap()
         .id;
 
     let second_outcome = engine
         .run_workflow(WorkflowRunRequest {
-            run_id: "run_stage_b".to_string(),
+            run_id: earmark_core::RunId::parse("run_stage_b").unwrap(),
             system_definition: VersionRef::new(
                 system_ref.id.clone(),
                 system_ref.version_id.clone(),
@@ -280,7 +280,7 @@ guards: []
         .record
         .events
         .iter()
-        .any(|event| event.transition == "op_review"));
+        .any(|event| event.transition.as_str() == "tr_op_review"));
 }
 
 #[test]
@@ -288,7 +288,7 @@ fn claim_reference_continuation_uses_bounded_inputs() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
 
     let note = StoredObject::new(
         Kind::Object,
@@ -303,9 +303,9 @@ fn claim_reference_continuation_uses_bounded_inputs() {
     let (system_ref, workflow_ref) = review_only_fixture(&store, "note");
 
     let assignment = earmark_core::TransitionAssignment {
-        id: earmark_core::TransitionAssignmentId::new(),
-        run_id: "claim_run".to_string(),
-        transition_id: "op_review".to_string(),
+        id: earmark_core::TransitionAssignmentId::generate(),
+        run_id: earmark_core::RunId::parse("claim_run").unwrap(),
+        transition_id: earmark_core::TransitionId::parse("op_review").unwrap(),
         assigned_to: "operator".to_string(),
         status: earmark_core::AssignmentStatus::Assigned,
         input_object_ids: vec![note.envelope.id.clone()],
@@ -322,15 +322,15 @@ fn claim_reference_continuation_uses_bounded_inputs() {
 
     index.rebuild_from_store(&store).unwrap();
     let registry = ProviderRegistry::default();
-    let engine = ExecutionEngine {
+    let mut engine = ExecutionEngine {
         store: &store,
-        index: &index,
+        index: &mut index,
         provider_service: &registry,
     };
 
     let outcome = engine
         .run_workflow(WorkflowRunRequest {
-            run_id: "claim_resume_run".to_string(),
+            run_id: earmark_core::RunId::parse("claim_resume_run").unwrap(),
             system_definition: system_ref,
             workflow: workflow_ref,
             inputs: vec![],
@@ -344,7 +344,7 @@ fn claim_reference_continuation_uses_bounded_inputs() {
         .record
         .events
         .iter()
-        .any(|event| event.transition == "op_review"));
+        .any(|event| event.transition.as_str() == "tr_op_review"));
 }
 
 #[test]
@@ -352,7 +352,7 @@ fn claim_reference_continuation_uses_handoff_manifest() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
 
     let summary = StoredObject::new(
         Kind::Object,
@@ -367,11 +367,11 @@ fn claim_reference_continuation_uses_handoff_manifest() {
     let (system_ref, workflow_ref) = review_only_fixture(&store, "status_summary");
 
     let handoff = HandoffManifest {
-        id: earmark_core::HandoffManifestId::new(),
-        run_id: "stage_a".to_string(),
-        from_transition_id: "op_transform".to_string(),
-        to_transition_id: Some("op_review".to_string()),
-        source_change_set_id: earmark_core::ChangeSetId::new(),
+        id: earmark_core::HandoffManifestId::generate(),
+        run_id: earmark_core::RunId::parse("stage_a").unwrap(),
+        from_transition_id: earmark_core::TransitionId::parse("op_transform").unwrap(),
+        to_transition_id: Some(earmark_core::TransitionId::parse("op_review").unwrap()),
+        source_change_set_id: earmark_core::ChangeSetId::generate(),
         source_assignment_id: None,
         root_object_ids: vec![summary.envelope.id.clone()],
         inherited_input_object_ids: vec![],
@@ -390,9 +390,9 @@ fn claim_reference_continuation_uses_handoff_manifest() {
     persist_handoff_manifest(&store, &handoff);
 
     let assignment = earmark_core::TransitionAssignment {
-        id: earmark_core::TransitionAssignmentId::new(),
-        run_id: "claim_run".to_string(),
-        transition_id: "op_review".to_string(),
+        id: earmark_core::TransitionAssignmentId::generate(),
+        run_id: earmark_core::RunId::parse("claim_run").unwrap(),
+        transition_id: earmark_core::TransitionId::parse("op_review").unwrap(),
         assigned_to: "operator".to_string(),
         status: earmark_core::AssignmentStatus::Assigned,
         input_object_ids: vec![],
@@ -409,15 +409,15 @@ fn claim_reference_continuation_uses_handoff_manifest() {
 
     index.rebuild_from_store(&store).unwrap();
     let registry = ProviderRegistry::default();
-    let engine = ExecutionEngine {
+    let mut engine = ExecutionEngine {
         store: &store,
-        index: &index,
+        index: &mut index,
         provider_service: &registry,
     };
 
     let outcome = engine
         .run_workflow(WorkflowRunRequest {
-            run_id: "claim_resume_handoff_run".to_string(),
+            run_id: earmark_core::RunId::parse("claim_resume_handoff_run").unwrap(),
             system_definition: system_ref,
             workflow: workflow_ref,
             inputs: vec![],
@@ -431,7 +431,7 @@ fn claim_reference_continuation_uses_handoff_manifest() {
         .record
         .events
         .iter()
-        .any(|event| event.transition == "op_review"));
+        .any(|event| event.transition.as_str() == "tr_op_review"));
 }
 
 #[test]
@@ -439,7 +439,7 @@ fn within_workflow_handoff_continuation_runs_successor_not_predecessor() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
 
     let source_note_class = ClassDefinition {
         name: "source_note".to_string(),
@@ -691,15 +691,15 @@ guards: []
 
     index.rebuild_from_store(&store).unwrap();
     let registry = ProviderRegistry::default();
-    let engine = ExecutionEngine {
+    let mut engine = ExecutionEngine {
         store: &store,
-        index: &index,
+        index: &mut index,
         provider_service: &registry,
     };
 
     let first_outcome = engine
         .run_workflow(WorkflowRunRequest {
-            run_id: "run_first".to_string(),
+            run_id: earmark_core::RunId::parse("run_first").unwrap(),
             system_definition: system_ref.clone(),
             workflow: workflow_ref.clone(),
             inputs: vec![source_note.object_ref()],
@@ -719,12 +719,12 @@ guards: []
         .iter()
         .filter(|o| o.envelope.kind == Kind::HandoffManifest)
         .map(|o| serde_json::from_slice::<HandoffManifest>(&o.payload.bytes).unwrap())
-        .find(|h| h.from_transition_id == "op_extract")
+        .find(|h| h.from_transition_id == "tr_op_extract")
         .expect("handoff from op_extract not found");
 
     assert_eq!(
         handoff_obj.to_transition_id.as_deref(),
-        Some("op_summarize"),
+        Some("tr_op_summarize"),
         "handoff should target op_summarize"
     );
 
@@ -739,7 +739,7 @@ guards: []
 
     let second_outcome = engine
         .run_workflow(WorkflowRunRequest {
-            run_id: "run_second".to_string(),
+            run_id: earmark_core::RunId::parse("run_second").unwrap(),
             system_definition: system_ref,
             workflow: workflow_ref,
             inputs: vec![],
@@ -765,7 +765,7 @@ guards: []
         1,
         "should have exactly one continuation event"
     );
-    assert_eq!(continuation_events[0].transition, "op_summarize");
+    assert_eq!(continuation_events[0].transition, "tr_op_summarize");
     assert!(continuation_events[0]
         .message
         .as_deref()
@@ -776,7 +776,7 @@ guards: []
         .record
         .events
         .iter()
-        .filter(|e| e.transition == "op_summarize")
+        .filter(|e| e.transition == "tr_op_summarize")
         .collect();
     assert!(
         !summarize_events.is_empty(),
@@ -787,7 +787,7 @@ guards: []
         .record
         .events
         .iter()
-        .filter(|e| e.transition == "op_proj")
+        .filter(|e| e.transition == "tr_op_proj")
         .collect();
     assert!(
         proj_events.is_empty(),
@@ -798,7 +798,7 @@ guards: []
         .record
         .events
         .iter()
-        .filter(|e| e.transition == "op_extract")
+        .filter(|e| e.transition == "tr_op_extract")
         .collect();
     assert!(
         extract_events.is_empty(),

@@ -902,8 +902,8 @@ mod tests {
 
         let review = GovernanceService::create_review_object(
             earmark_core::ObjectRef {
-                id: ObjectId::new(),
-                version_id: earmark_core::VersionId::new(),
+                id: ObjectId::generate(),
+                version_id: earmark_core::VersionId::generate(),
                 kind: Kind::Object,
                 class: Some("artifact".to_string()),
             },

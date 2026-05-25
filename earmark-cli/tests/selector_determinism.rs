@@ -22,9 +22,9 @@ fn setup_workspace() -> tempfile::TempDir {
 
 fn make_run_record(run_id: &str, started_at: chrono::DateTime<Utc>) -> earmark_core::RunRecord {
     earmark_core::RunRecord {
-        run_id: run_id.to_string(),
-        system_definition: VersionRef::new(ObjectId::new(), VersionId::new()),
-        workflow: VersionRef::new(ObjectId::new(), VersionId::new()),
+        run_id: earmark_core::RunId::parse(run_id).unwrap(),
+        system_definition: VersionRef::new(ObjectId::generate(), VersionId::generate()),
+        workflow: VersionRef::new(ObjectId::generate(), VersionId::generate()),
         status: earmark_core::RunStatus::Completed,
         started_at,
         ended_at: None,
@@ -39,7 +39,7 @@ fn make_run_record(run_id: &str, started_at: chrono::DateTime<Utc>) -> earmark_c
     }
 }
 
-fn write_run(store: &GitCanonicalStore, index: &DerivedIndex, record: &earmark_core::RunRecord) {
+fn write_run(store: &GitCanonicalStore, index: &mut DerivedIndex, record: &earmark_core::RunRecord) {
     let obj = StoredObject::new(
         Kind::RunRecord,
         None,
@@ -56,7 +56,7 @@ fn write_run(store: &GitCanonicalStore, index: &DerivedIndex, record: &earmark_c
 fn list_run_records_deterministic_order() {
     let dir = setup_workspace();
     let store = GitCanonicalStore::new(dir.path());
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
 
     let now = Utc::now();
 
@@ -66,7 +66,7 @@ fn list_run_records_deterministic_order() {
         make_run_record("obj_c", now),
     ];
     for rec in &records {
-        write_run(&store, &index, rec);
+        write_run(&store, &mut index, rec);
     }
 
     let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
@@ -81,15 +81,15 @@ fn list_run_records_deterministic_order() {
 
     assert_eq!(runs.len(), 3);
     assert_eq!(
-        runs[0]["run_id"], "obj_a",
+        runs[0]["run_id"], "run_obj_a",
         "first run should be obj_a (lexicographic tie-break)"
     );
     assert_eq!(
-        runs[1]["run_id"], "obj_b",
+        runs[1]["run_id"], "run_obj_b",
         "second run should be obj_b (lexicographic tie-break)"
     );
     assert_eq!(
-        runs[2]["run_id"], "obj_c",
+        runs[2]["run_id"], "run_obj_c",
         "third run should be obj_c (lexicographic tie-break)"
     );
 }
@@ -98,7 +98,7 @@ fn list_run_records_deterministic_order() {
 fn latest_resolves_to_last_lexicographically_when_timestamps_equal() {
     let dir = setup_workspace();
     let store = GitCanonicalStore::new(dir.path());
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
 
     let now = Utc::now();
 
@@ -107,7 +107,7 @@ fn latest_resolves_to_last_lexicographically_when_timestamps_equal() {
         make_run_record("obj_z_latest", now),
     ];
     for rec in &records {
-        write_run(&store, &index, rec);
+        write_run(&store, &mut index, rec);
     }
 
     let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
@@ -121,7 +121,7 @@ fn latest_resolves_to_last_lexicographically_when_timestamps_equal() {
     let parsed: Value = serde_json::from_slice(&output).unwrap();
 
     assert_eq!(
-        parsed["data"]["run_id"], "obj_z_latest",
+        parsed["data"]["run_id"], "run_obj_z_latest",
         "latest should pick obj_z_latest (lexicographically greater at same timestamp)"
     );
 }
@@ -130,7 +130,7 @@ fn latest_resolves_to_last_lexicographically_when_timestamps_equal() {
 fn latest_respects_temporal_order_when_timestamps_differ() {
     let dir = setup_workspace();
     let store = GitCanonicalStore::new(dir.path());
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
 
     let now = Utc::now();
     let later = now + chrono::Duration::seconds(10);
@@ -140,7 +140,7 @@ fn latest_respects_temporal_order_when_timestamps_differ() {
         make_run_record("obj_newer", later),
     ];
     for rec in &records {
-        write_run(&store, &index, rec);
+        write_run(&store, &mut index, rec);
     }
 
     let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
@@ -154,7 +154,7 @@ fn latest_respects_temporal_order_when_timestamps_differ() {
     let parsed: Value = serde_json::from_slice(&output).unwrap();
 
     assert_eq!(
-        parsed["data"]["run_id"], "obj_newer",
+        parsed["data"]["run_id"], "run_obj_newer",
         "latest should pick obj_newer (later timestamp)"
     );
 }
@@ -163,7 +163,7 @@ fn latest_respects_temporal_order_when_timestamps_differ() {
 fn list_order_respects_temporal_then_lexicographic() {
     let dir = setup_workspace();
     let store = GitCanonicalStore::new(dir.path());
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
 
     let early = Utc::now();
     let late = early + chrono::Duration::hours(1);
@@ -174,7 +174,7 @@ fn list_order_respects_temporal_then_lexicographic() {
         make_run_record("obj_m_late", late),
     ];
     for rec in &records {
-        write_run(&store, &index, rec);
+        write_run(&store, &mut index, rec);
     }
 
     let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
@@ -189,15 +189,15 @@ fn list_order_respects_temporal_then_lexicographic() {
 
     assert_eq!(runs.len(), 3);
     assert_eq!(
-        runs[0]["run_id"], "obj_a_early",
+        runs[0]["run_id"], "run_obj_a_early",
         "first: obj_a_early (earliest time, then lexicographic)"
     );
     assert_eq!(
-        runs[1]["run_id"], "obj_z_early",
+        runs[1]["run_id"], "run_obj_z_early",
         "second: obj_z_early (earliest time, then lexicographic)"
     );
     assert_eq!(
-        runs[2]["run_id"], "obj_m_late",
+        runs[2]["run_id"], "run_obj_m_late",
         "third: obj_m_late (later time)"
     );
 }

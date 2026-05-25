@@ -19,7 +19,7 @@ fn test_handoff_class_exclusion() {
     let root = dir.path();
     let store = GitCanonicalStore::new(root);
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(root).unwrap();
+    let mut index = DerivedIndex::open(root).unwrap();
 
     // 1. Create a root object of class "finding"
     let root_obj = StoredObject::new(
@@ -31,7 +31,7 @@ fn test_handoff_class_exclusion() {
         StoredPayload::from_json_bytes(b"root".to_vec()),
         vec![],
     );
-    let root_ref = write_object_and_index(&store, &index, &root_obj).unwrap();
+    let root_ref = write_object_and_index(&store, &mut index, &root_obj).unwrap();
 
     // 2. Create a related object of class "source_note" (not allowed)
     let note_obj = StoredObject::new(
@@ -43,7 +43,7 @@ fn test_handoff_class_exclusion() {
         StoredPayload::from_json_bytes(b"note".to_vec()),
         vec![],
     );
-    let note_ref = write_object_and_index(&store, &index, &note_obj).unwrap();
+    let note_ref = write_object_and_index(&store, &mut index, &note_obj).unwrap();
 
     // Create relation
     let rel = StoredObject::new(
@@ -74,15 +74,15 @@ fn test_handoff_class_exclusion() {
         ),
         vec![],
     );
-    write_object_and_index(&store, &index, &rel).unwrap();
+    write_object_and_index(&store, &mut index, &rel).unwrap();
 
     // 3. Create handoff allowing only "finding"
     let handoff = HandoffManifest {
-        id: earmark_core::HandoffManifestId::new(),
-        run_id: "run1".to_string(),
-        from_transition_id: "t1".to_string(),
+        id: earmark_core::HandoffManifestId::generate(),
+        run_id: earmark_core::RunId::parse("run1").unwrap(),
+        from_transition_id: earmark_core::TransitionId::parse("t1").unwrap(),
         to_transition_id: None,
-        source_change_set_id: ChangeSetId::new(),
+        source_change_set_id: earmark_core::ChangeSetId::generate(),
         source_assignment_id: None,
         root_object_ids: vec![root_ref.id.clone()],
         inherited_input_object_ids: vec![],
@@ -100,7 +100,7 @@ fn test_handoff_class_exclusion() {
     };
 
     // 4. Reconstruct
-    let inputs = reconstruct_successor_inputs_from_handoff(&store, &index, &handoff).unwrap();
+    let inputs = reconstruct_successor_inputs_from_handoff(&store, &mut index, &handoff).unwrap();
 
     // Should only contain the finding, not the source_note
     assert_eq!(inputs.len(), 1);
@@ -113,7 +113,7 @@ fn test_handoff_standing_exclusion() {
     let root = dir.path();
     let store = GitCanonicalStore::new(root);
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(root).unwrap();
+    let mut index = DerivedIndex::open(root).unwrap();
 
     // 1. Create a root object (Accepted)
     let mut standing_accepted = Standing::default();
@@ -129,7 +129,7 @@ fn test_handoff_standing_exclusion() {
         StoredPayload::from_json_bytes(b"root".to_vec()),
         vec![],
     );
-    let root_ref = write_object_and_index(&store, &index, &root_obj).unwrap();
+    let root_ref = write_object_and_index(&store, &mut index, &root_obj).unwrap();
 
     // 2. Create a related object (Rejected)
     let mut standing_rejected = Standing::default();
@@ -145,7 +145,7 @@ fn test_handoff_standing_exclusion() {
         StoredPayload::from_json_bytes(b"rejected".to_vec()),
         vec![],
     );
-    let rejected_ref = write_object_and_index(&store, &index, &rejected_obj).unwrap();
+    let rejected_ref = write_object_and_index(&store, &mut index, &rejected_obj).unwrap();
 
     // Create relation
     let rel = StoredObject::new(
@@ -176,15 +176,15 @@ fn test_handoff_standing_exclusion() {
         ),
         vec![],
     );
-    write_object_and_index(&store, &index, &rel).unwrap();
+    write_object_and_index(&store, &mut index, &rel).unwrap();
 
     // 3. Create handoff requiring review: accepted
     let handoff = HandoffManifest {
-        id: earmark_core::HandoffManifestId::new(),
-        run_id: "run1".to_string(),
-        from_transition_id: "t1".to_string(),
+        id: earmark_core::HandoffManifestId::generate(),
+        run_id: earmark_core::RunId::parse("run1").unwrap(),
+        from_transition_id: earmark_core::TransitionId::parse("t1").unwrap(),
         to_transition_id: None,
-        source_change_set_id: ChangeSetId::new(),
+        source_change_set_id: earmark_core::ChangeSetId::generate(),
         source_assignment_id: None,
         root_object_ids: vec![root_ref.id.clone()],
         inherited_input_object_ids: vec![],
@@ -205,7 +205,7 @@ fn test_handoff_standing_exclusion() {
     };
 
     // 4. Reconstruct
-    let inputs = reconstruct_successor_inputs_from_handoff(&store, &index, &handoff).unwrap();
+    let inputs = reconstruct_successor_inputs_from_handoff(&store, &mut index, &handoff).unwrap();
 
     // Should only contain the accepted object
     assert_eq!(inputs.len(), 1);
@@ -218,26 +218,26 @@ fn test_handoff_depth_limit() {
     let root = dir.path();
     let store = GitCanonicalStore::new(root);
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(root).unwrap();
+    let mut index = DerivedIndex::open(root).unwrap();
 
     // Create a chain of 4 objects: A -> B -> C -> D
     // Depth limit is 2, so A (0), B (1), C (2) should be admitted, D (3) should NOT.
 
-    let a = write_object_and_index(&store, &index, &simple_obj("a")).unwrap();
-    let b = write_object_and_index(&store, &index, &simple_obj("b")).unwrap();
-    let c = write_object_and_index(&store, &index, &simple_obj("c")).unwrap();
-    let d = write_object_and_index(&store, &index, &simple_obj("d")).unwrap();
+    let a = write_object_and_index(&store, &mut index, &simple_obj("a")).unwrap();
+    let b = write_object_and_index(&store, &mut index, &simple_obj("b")).unwrap();
+    let c = write_object_and_index(&store, &mut index, &simple_obj("c")).unwrap();
+    let d = write_object_and_index(&store, &mut index, &simple_obj("d")).unwrap();
 
-    write_rel(&store, &index, &a, &b, "linked");
-    write_rel(&store, &index, &b, &c, "linked");
-    write_rel(&store, &index, &c, &d, "linked");
+    write_rel(&store, &mut index, &a, &b, "linked");
+    write_rel(&store, &mut index, &b, &c, "linked");
+    write_rel(&store, &mut index, &c, &d, "linked");
 
     let handoff = HandoffManifest {
-        id: earmark_core::HandoffManifestId::new(),
-        run_id: "run1".to_string(),
-        from_transition_id: "t1".to_string(),
+        id: earmark_core::HandoffManifestId::generate(),
+        run_id: earmark_core::RunId::parse("run1").unwrap(),
+        from_transition_id: earmark_core::TransitionId::parse("t1").unwrap(),
         to_transition_id: None,
-        source_change_set_id: ChangeSetId::new(),
+        source_change_set_id: earmark_core::ChangeSetId::generate(),
         source_assignment_id: None,
         root_object_ids: vec![a.id.clone()],
         inherited_input_object_ids: vec![],
@@ -254,7 +254,7 @@ fn test_handoff_depth_limit() {
         created_at: Utc::now(),
     };
 
-    let inputs = reconstruct_successor_inputs_from_handoff(&store, &index, &handoff).unwrap();
+    let inputs = reconstruct_successor_inputs_from_handoff(&store, &mut index, &handoff).unwrap();
 
     assert_eq!(inputs.len(), 3); // A, B, C
     let ids: std::collections::BTreeSet<_> =
@@ -279,7 +279,7 @@ fn simple_obj(title: &str) -> StoredObject {
 
 fn write_rel<S: CanonicalStore>(
     store: &S,
-    index: &DerivedIndex,
+    index: &mut DerivedIndex,
     source: &earmark_core::VersionRef,
     target: &earmark_core::VersionRef,
     rel_type: &str,
@@ -353,21 +353,21 @@ fn test_handoff_cycle_handling() {
     let root = dir.path();
     let store = GitCanonicalStore::new(root);
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(root).unwrap();
+    let mut index = DerivedIndex::open(root).unwrap();
 
     // Create a cycle: A -> B -> A
-    let a = write_object_and_index(&store, &index, &simple_obj("a")).unwrap();
-    let b = write_object_and_index(&store, &index, &simple_obj("b")).unwrap();
+    let a = write_object_and_index(&store, &mut index, &simple_obj("a")).unwrap();
+    let b = write_object_and_index(&store, &mut index, &simple_obj("b")).unwrap();
 
-    write_rel(&store, &index, &a, &b, "linked");
-    write_rel(&store, &index, &b, &a, "linked");
+    write_rel(&store, &mut index, &a, &b, "linked");
+    write_rel(&store, &mut index, &b, &a, "linked");
 
     let handoff = HandoffManifest {
-        id: earmark_core::HandoffManifestId::new(),
-        run_id: "run1".to_string(),
-        from_transition_id: "t1".to_string(),
+        id: earmark_core::HandoffManifestId::generate(),
+        run_id: earmark_core::RunId::parse("run1").unwrap(),
+        from_transition_id: earmark_core::TransitionId::parse("t1").unwrap(),
         to_transition_id: None,
-        source_change_set_id: ChangeSetId::new(),
+        source_change_set_id: earmark_core::ChangeSetId::generate(),
         source_assignment_id: None,
         root_object_ids: vec![a.id.clone()],
         inherited_input_object_ids: vec![],
@@ -384,7 +384,7 @@ fn test_handoff_cycle_handling() {
         created_at: Utc::now(),
     };
 
-    let inputs = reconstruct_successor_inputs_from_handoff(&store, &index, &handoff).unwrap();
+    let inputs = reconstruct_successor_inputs_from_handoff(&store, &mut index, &handoff).unwrap();
 
     // Should contain A and B, and terminate.
     assert_eq!(inputs.len(), 2);
@@ -396,7 +396,7 @@ fn test_handoff_object_limit_exhaustion() {
     let root = dir.path();
     let store = GitCanonicalStore::new(root);
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(root).unwrap();
+    let mut index = DerivedIndex::open(root).unwrap();
 
     // Use batch to speed up setup
     let root_obj = simple_obj("root");
@@ -408,7 +408,7 @@ fn test_handoff_object_limit_exhaustion() {
         batch.objects.push(simple_obj(&format!("child_{}", i)));
     }
 
-    let refs = write_batch_and_index(&store, &index, &batch).unwrap();
+    let refs = write_batch_and_index(&store, &mut index, &batch).unwrap();
     let root_ref = &refs[0];
 
     let mut rel_batch = BatchWrite {
@@ -446,14 +446,14 @@ fn test_handoff_object_limit_exhaustion() {
         );
         rel_batch.objects.push(rel);
     }
-    write_batch_and_index(&store, &index, &rel_batch).unwrap();
+    write_batch_and_index(&store, &mut index, &rel_batch).unwrap();
 
     let handoff = HandoffManifest {
-        id: earmark_core::HandoffManifestId::new(),
-        run_id: "run1".to_string(),
-        from_transition_id: "t1".to_string(),
+        id: earmark_core::HandoffManifestId::generate(),
+        run_id: earmark_core::RunId::parse("run1").unwrap(),
+        from_transition_id: earmark_core::TransitionId::parse("t1").unwrap(),
         to_transition_id: None,
-        source_change_set_id: ChangeSetId::new(),
+        source_change_set_id: earmark_core::ChangeSetId::generate(),
         source_assignment_id: None,
         root_object_ids: vec![root_ref.id.clone()],
         inherited_input_object_ids: vec![],
@@ -470,7 +470,7 @@ fn test_handoff_object_limit_exhaustion() {
         created_at: Utc::now(),
     };
 
-    let res = reconstruct_successor_inputs_from_handoff(&store, &index, &handoff);
+    let res = reconstruct_successor_inputs_from_handoff(&store, &mut index, &handoff);
     assert!(res.is_err());
     assert!(res
         .unwrap_err()
@@ -484,13 +484,13 @@ fn test_handoff_relation_limit_exhaustion() {
     let root = dir.path();
     let store = GitCanonicalStore::new(root);
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(root).unwrap();
+    let mut index = DerivedIndex::open(root).unwrap();
 
     let target = simple_obj("target");
     let source = simple_obj("source");
     let refs = write_batch_and_index(
         &store,
-        &index,
+        &mut index,
         &BatchWrite {
             message: "setup".to_string(),
             objects: vec![target.clone(), source.clone()],
@@ -535,14 +535,14 @@ fn test_handoff_relation_limit_exhaustion() {
         );
         rel_batch.objects.push(rel);
     }
-    write_batch_and_index(&store, &index, &rel_batch).unwrap();
+    write_batch_and_index(&store, &mut index, &rel_batch).unwrap();
 
     let handoff = HandoffManifest {
-        id: earmark_core::HandoffManifestId::new(),
-        run_id: "run1".to_string(),
-        from_transition_id: "t1".to_string(),
+        id: earmark_core::HandoffManifestId::generate(),
+        run_id: earmark_core::RunId::parse("run1").unwrap(),
+        from_transition_id: earmark_core::TransitionId::parse("t1").unwrap(),
         to_transition_id: None,
-        source_change_set_id: ChangeSetId::new(),
+        source_change_set_id: earmark_core::ChangeSetId::generate(),
         source_assignment_id: None,
         root_object_ids: vec![source_ref.id.clone()],
         inherited_input_object_ids: vec![],
@@ -559,7 +559,7 @@ fn test_handoff_relation_limit_exhaustion() {
         created_at: Utc::now(),
     };
 
-    let res = reconstruct_successor_inputs_from_handoff(&store, &index, &handoff);
+    let res = reconstruct_successor_inputs_from_handoff(&store, &mut index, &handoff);
     assert!(res.is_err());
     assert!(res
         .unwrap_err()

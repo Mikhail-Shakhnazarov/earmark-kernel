@@ -5,14 +5,11 @@ use crate::config::resolve_system_id;
 use earmark_declarations::activate_system_definition;
 use serde_json::json;
 
-pub fn handle(ctx: &CommandContext, command: &SystemCommand) -> Result<(), CliError> {
+pub fn handle(ctx: &mut CommandContext, command: &SystemCommand) -> Result<(), CliError> {
     let store = ctx.store;
-    let index = ctx
-        .index
-        .as_ref()
-        .ok_or_else(|| {
-            CliError::argument("index required for system commands — ensure workspace is initialized")
-        })?;
+    let index = ctx.index.as_mut().ok_or_else(|| {
+        CliError::argument("index required for system commands — ensure workspace is initialized")
+    })?;
     let config = ctx.config;
     let as_json = ctx.as_json;
     let actor = ctx.actor;
@@ -44,7 +41,7 @@ pub fn handle(ctx: &CommandContext, command: &SystemCommand) -> Result<(), CliEr
                     "system id required: pass --system-id, set EM_SYSTEM_ID, or set default_system_id in config"
                 )
             })?;
-            let active = activate_system_definition(store, &index, &system_id)?;
+            let active = activate_system_definition(store, index, &system_id)?;
             emit(
                 as_json,
                 json!({

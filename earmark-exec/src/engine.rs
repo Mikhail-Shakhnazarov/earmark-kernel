@@ -2,7 +2,9 @@ use chrono::Utc;
 use earmark_connected_context::{
     CompiledContextCompiler, WorkSurfaceManifest, DEFAULT_COMPILED_CONTEXT_COMPILER,
 };
-use earmark_core::{Kind, RunStatus, ScalarOrRef, TokenRecord, VersionId, VersionRef};
+use earmark_core::{
+    Kind, RunStatus, ScalarOrRef, TokenRecord, TransitionId, VersionId, VersionRef,
+};
 use earmark_index::DerivedIndex;
 use earmark_store::CanonicalStore;
 use std::collections::{BTreeSet, HashMap, VecDeque};
@@ -24,14 +26,14 @@ use crate::validation::{
 
 pub struct ExecutionEngine<'a, S: CanonicalStore> {
     pub store: &'a S,
-    pub index: &'a DerivedIndex,
+    pub index: &'a mut DerivedIndex,
     pub provider_service: &'a dyn ProviderService,
 }
 
 impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
     pub fn new(
         store: &'a S,
-        index: &'a DerivedIndex,
+        index: &'a mut DerivedIndex,
         provider_service: &'a dyn ProviderService,
     ) -> Self {
         Self {
@@ -42,14 +44,14 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
     }
 
     pub fn run_workflow(
-        &self,
+        &mut self,
         request: WorkflowRunRequest,
     ) -> Result<WorkflowRunOutcome, ExecError> {
         self.run_workflow_with_context_compiler(request, &DEFAULT_COMPILED_CONTEXT_COMPILER)
     }
 
     pub(crate) fn run_workflow_with_context_compiler<C: CompiledContextCompiler<S>>(
-        &self,
+        &mut self,
         request: WorkflowRunRequest,
         context_compiler: &C,
     ) -> Result<WorkflowRunOutcome, ExecError> {
@@ -83,7 +85,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
         if !warnings.is_empty() {
             record_transition(
                 &mut record,
-                "analysis".to_string(),
+                TransitionId::parse("analysis")?,
                 "warning",
                 vec![],
                 vec![],
@@ -109,7 +111,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
         let initial_contracts_set = crate::validation::initial_contracts(&effective_inputs);
         let mut available_contracts = initial_contracts_set.clone();
 
-        let ready_seed_ids: Vec<String> = if let Some(handoff_id) = &request.handoff_manifest {
+        let ready_seed_ids: Vec<TransitionId> = if let Some(handoff_id) = &request.handoff_manifest {
             let handoff = load_handoff(self.store, handoff_id)?;
 
             if let Some(template_id) = &handoff.compiled_context_template_id {
@@ -139,7 +141,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                         return Err(ExecError::InvalidWorkflow(format!(
                             "handoff {} targets transition {}, which is not present in workflow {}",
                             handoff_id.as_str(),
-                            target_id,
+                            target_id.as_str(),
                             request.workflow.id.as_str()
                         )));
                     }
@@ -180,7 +182,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
             let transition = transition_map.get(&transition_id).ok_or_else(|| {
                 ExecError::InvalidWorkflow(format!(
                     "transition {} missing from workflow",
-                    transition_id
+                    transition_id.as_str()
                 ))
             })?;
             if transition_is_ready(
@@ -204,7 +206,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
             let transition = transition_map.get(&transition_id).ok_or_else(|| {
                 ExecError::InvalidWorkflow(format!(
                     "transition {} missing from compiled graph",
-                    transition_id
+                    transition_id.as_str()
                 ))
             })?;
 
@@ -275,8 +277,8 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                         vec![],
                         Some(format!(
                             "edge {} -> {} blocked by condition {}",
-                            edge.from,
-                            edge.to,
+                            edge.from.as_str(),
+                            edge.to.as_str(),
                             edge.condition
                                 .clone()
                                 .unwrap_or_else(|| "<none>".to_string())
@@ -288,7 +290,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                 let successor = transition_map.get(&edge.to).ok_or_else(|| {
                     ExecError::InvalidWorkflow(format!(
                         "successor transition {} missing from compiled graph",
-                        edge.to
+                        edge.to.as_str()
                     ))
                 })?;
 
@@ -317,11 +319,11 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
             let message = format!(
                 "workflow execution finished with {} transitions unreached: {}",
                 remaining.len(),
-                remaining.join(", ")
+                remaining.iter().map(|id| id.as_str()).collect::<Vec<_>>().join(", ")
             );
             record_transition(
                 &mut record,
-                "analysis".to_string(),
+                TransitionId::parse("analysis")?,
                 "partial_execution",
                 final_marking.clone(),
                 vec![],

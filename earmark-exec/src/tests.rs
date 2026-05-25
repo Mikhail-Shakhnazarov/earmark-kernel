@@ -41,7 +41,7 @@ fn test_execution_ir_compilation() {
 
     let ir = crate::helpers::compile_workflow(&workflow).unwrap();
     assert_eq!(ir.transitions.len(), 1);
-    assert_eq!(ir.transitions[0].id, "op1");
+    assert_eq!(ir.transitions[0].id, "tr_op1");
     assert_eq!(
         ir.transitions[0].operation,
         WorkflowOperationKind::Transform
@@ -53,10 +53,10 @@ fn test_engine_initialization() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     let registry = crate::provider::ProviderRegistry::default();
 
-    let _engine = crate::engine::ExecutionEngine::new(&store, &index, &registry);
+    let _engine = crate::engine::ExecutionEngine::new(&store, &mut index, &registry);
 }
 
 struct NoopProviderService;
@@ -80,10 +80,10 @@ fn test_engine_accepts_provider_service_test_double() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     let provider = NoopProviderService;
 
-    let _engine = crate::engine::ExecutionEngine::new(&store, &index, &provider);
+    let _engine = crate::engine::ExecutionEngine::new(&store, &mut index, &provider);
 }
 
 #[test]
@@ -137,14 +137,14 @@ impl ProviderService for BrokenProvider {
             record: earmark_core::ProviderRecord {
                 record_id: "prec_1".to_string(),
                 request_id: "req_1".to_string(),
-                run_id: "run_1".to_string(),
+                run_id: earmark_core::RunId::parse("run_1").unwrap(),
                 work_packet: earmark_core::ObjectRef::new(
-                    ObjectId::new(),
-                    VersionId::new(),
+                    ObjectId::generate(),
+                    VersionId::generate(),
                     earmark_core::Kind::WorkPacket,
                     None,
                 ),
-                provider_profile: VersionRef::new(ObjectId::new(), VersionId::new()),
+                provider_profile: VersionRef::new(ObjectId::generate(), VersionId::generate()),
                 provider: "broken".to_string(),
                 model: "broken".to_string(),
                 status: ProviderResponseStatus::Completed,
@@ -163,14 +163,14 @@ fn mock_adapter_provide_sets_synthetic_metadata() {
     let adapter = MockAdapter;
     let request = ProviderRequest {
         request_id: "req_test".to_string(),
-        run_id: "run_test".to_string(),
+        run_id: earmark_core::RunId::parse("run_test").unwrap(),
         work_packet: ObjectRef::new(
-            ObjectId::new(),
-            VersionId::new(),
+            ObjectId::generate(),
+            VersionId::generate(),
             earmark_core::Kind::WorkPacket,
             None,
         ),
-        provider_profile: VersionRef::new(ObjectId::new(), VersionId::new()),
+        provider_profile: VersionRef::new(ObjectId::generate(), VersionId::generate()),
         instruction_text: "do work".to_string(),
         context_text: None,
         input_text: "do work".to_string(),
@@ -230,14 +230,14 @@ fn mock_adapter_provide_sets_synthetic_metadata() {
 fn provider_record_from_response_preserves_synthetic_metadata() {
     let request = ProviderRequest {
         request_id: "req_test".to_string(),
-        run_id: "run_test".to_string(),
+        run_id: earmark_core::RunId::parse("run_test").unwrap(),
         work_packet: ObjectRef::new(
-            ObjectId::new(),
-            VersionId::new(),
+            ObjectId::generate(),
+            VersionId::generate(),
             earmark_core::Kind::WorkPacket,
             None,
         ),
-        provider_profile: VersionRef::new(ObjectId::new(), VersionId::new()),
+        provider_profile: VersionRef::new(ObjectId::generate(), VersionId::generate()),
         instruction_text: "do work".to_string(),
         context_text: None,
         input_text: "do work".to_string(),
@@ -352,10 +352,10 @@ fn delegated_transform_output_sets_synthetic_headers() {
             .unwrap();
     let instr_ref = store.write_object(&instr_stored).unwrap();
 
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     let artifacts = crate::persistence::create_delegated_transform_output(
         &store,
-        &index,
+        &mut index,
         &instruction,
         &["finding".to_string()],
         &[input_obj_ref],
@@ -384,11 +384,11 @@ fn test_delegated_outcome_with_none_response_returns_error_instead_of_panicking(
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(dir.path()).unwrap();
-    let engine = crate::engine::ExecutionEngine::new(&store, &index, &BrokenProvider);
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
+    let mut engine = crate::engine::ExecutionEngine::new(&store, &mut index, &BrokenProvider);
 
     let prof = earmark_core::ProviderProfile {
-        name: "test".to_string(),
+        name: earmark_core::TransitionId::parse("test").unwrap().to_string(),
         version: "1".to_string(),
         description: None,
         provider: "broken".to_string(),
@@ -426,9 +426,9 @@ fn test_delegated_outcome_with_none_response_returns_error_instead_of_panicking(
     let prof_ref = engine.store.write_object(&prof_obj).unwrap();
 
     let instruction = earmark_core::InstructionPayload {
-        name: "test".to_string(),
+        name: earmark_core::TransitionId::parse("test").unwrap().to_string(),
         version: "1.0.0".to_string(),
-        purpose: "test".to_string(),
+        purpose: earmark_core::TransitionId::parse("test").unwrap().to_string(),
         input_classes: vec!["note".to_string()],
         output_classes: vec!["summary".to_string()],
         execution_policy: "delegated".to_string(),
@@ -466,7 +466,7 @@ fn test_delegated_outcome_with_none_response_returns_error_instead_of_panicking(
 
     let ir = crate::ir::ExecutionIr {
         transitions: vec![crate::ir::ExecutionTransition {
-            id: "trans_1".to_string(),
+            id: earmark_core::TransitionId::parse("trans_1").unwrap(),
             operation: WorkflowOperationKind::Transform,
             input_contracts: vec![],
             output_contracts: vec![],
@@ -490,10 +490,10 @@ fn test_delegated_outcome_with_none_response_returns_error_instead_of_panicking(
     let mut governance_events = vec![];
     let mut compiled_context = Some(earmark_connected_context::WorkSurfaceManifest {
         surface_id: "surf_1".to_string(),
-        compiled_context: earmark_core::VersionRef::new(ObjectId::new(), VersionId::new()),
+        compiled_context: earmark_core::VersionRef::new(ObjectId::generate(), VersionId::generate()),
         work_packet: Some(earmark_core::ObjectRef::new(
-            ObjectId::new(),
-            VersionId::new(),
+            ObjectId::generate(),
+            VersionId::generate(),
             earmark_core::Kind::WorkPacket,
             None,
         )),
@@ -512,28 +512,28 @@ fn test_delegated_outcome_with_none_response_returns_error_instead_of_panicking(
         compiled_context: &mut compiled_context,
     };
 
-    let sys_ref = VersionRef::new(ObjectId::new(), VersionId::new());
+    let sys_ref = VersionRef::new(ObjectId::generate(), VersionId::generate());
     let mut record = crate::helpers::new_run_record(
-        "run_1".to_string(),
+        earmark_core::RunId::parse("run_1").unwrap(),
         sys_ref.clone(),
-        VersionRef::new(ObjectId::new(), VersionId::new()),
+        VersionRef::new(ObjectId::generate(), VersionId::generate()),
         vec![],
     );
 
     let result = engine.execute_transition(
         &crate::ir::WorkflowRunRequest {
-            run_id: "run_1".to_string(),
+            run_id: earmark_core::RunId::parse("run_1").unwrap(),
             system_definition: sys_ref.clone(),
-            workflow: VersionRef::new(ObjectId::new(), VersionId::new()),
+            workflow: VersionRef::new(ObjectId::generate(), VersionId::generate()),
             handoff_manifest: None,
             transition_assignment: None,
             operator_approved: false,
             inputs: vec![],
         },
         &earmark_core::SystemDefinition {
-            system_id: "test".to_string(),
-            namespace: "test".to_string(),
-            title: "test".to_string(),
+            system_id: earmark_core::TransitionId::parse("test").unwrap().to_string(),
+            namespace: earmark_core::TransitionId::parse("test").unwrap().to_string(),
+            title: earmark_core::TransitionId::parse("test").unwrap().to_string(),
             description: None,
             runtime_profile: earmark_core::RuntimeProfile {
                 execution_surface: "local".to_string(),
@@ -573,7 +573,7 @@ fn test_privileged_relation_creation_and_validation() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
 
     let source = StoredObject::builder(
         earmark_core::Kind::Object,
@@ -611,7 +611,7 @@ fn test_privileged_relation_creation_and_validation() {
 
     let rel_ref = crate::persist_relation_canonical(
         &store,
-        &index,
+        &mut index,
         rel_payload,
         earmark_core::Provenance::direct_input("runtime"),
         earmark_core::RelationCreationMode::PrivilegedSystem,
@@ -629,9 +629,9 @@ fn test_privileged_relation_creation_and_validation() {
 
     // Validation should pass even if class rules don't exist for this relation type
     let system = earmark_core::SystemDefinition {
-        system_id: "test".to_string(),
-        namespace: "test".to_string(),
-        title: "test".to_string(),
+        system_id: earmark_core::TransitionId::parse("test").unwrap().to_string(),
+        namespace: earmark_core::TransitionId::parse("test").unwrap().to_string(),
+        title: earmark_core::TransitionId::parse("test").unwrap().to_string(),
         description: None,
         runtime_profile: earmark_core::RuntimeProfile {
             execution_surface: "local".to_string(),
@@ -652,10 +652,10 @@ fn test_privileged_relation_creation_and_validation() {
 
     let (result, _) = crate::validation::validate_transition_change_set(
         &store,
-        &index,
+        &mut index,
         &system,
         &crate::ir::ExecutionTransition {
-            id: "test".to_string(),
+            id: earmark_core::TransitionId::parse("test").unwrap(),
             operation: WorkflowOperationKind::Transform,
             input_contracts: vec![],
             output_contracts: vec![],
@@ -665,10 +665,10 @@ fn test_privileged_relation_creation_and_validation() {
             provider_profile: None,
         },
         &earmark_core::TransitionAssignment {
-            id: earmark_core::TransitionAssignmentId::new(),
-            run_id: "run".to_string(),
-            transition_id: "test".to_string(),
-            assigned_to: "test".to_string(),
+            id: earmark_core::TransitionAssignmentId::generate(),
+            run_id: earmark_core::RunId::parse("run").unwrap(),
+            transition_id: earmark_core::TransitionId::parse("test").unwrap(),
+            assigned_to: earmark_core::TransitionId::parse("test").unwrap().to_string(),
             status: earmark_core::AssignmentStatus::Assigned,
             input_object_ids: vec![],
             handoff_manifest_id: None,
@@ -704,11 +704,11 @@ fn test_privileged_relation_enforcement_failure() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
 
     let payload = earmark_core::RelationPayload {
-        source: ObjectRef::new(ObjectId::new(), VersionId::new(), Kind::Object, None),
-        target: ObjectRef::new(ObjectId::new(), VersionId::new(), Kind::Object, None),
+        source: ObjectRef::new(ObjectId::generate(), VersionId::generate(), Kind::Object, None),
+        target: ObjectRef::new(ObjectId::generate(), VersionId::generate(), Kind::Object, None),
         relation_type: "some_ordinary_type".to_string(),
         qualifiers: BTreeMap::new(),
         scope: None,
@@ -716,7 +716,7 @@ fn test_privileged_relation_enforcement_failure() {
 
     let result = crate::persist_relation_canonical(
         &store,
-        &index,
+        &mut index,
         payload,
         earmark_core::Provenance::direct_input("test"),
         earmark_core::RelationCreationMode::PrivilegedSystem,
@@ -736,9 +736,9 @@ fn test_resolution_error_propagation() {
     let root = dir.path();
     let store = GitCanonicalStore::new(root);
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(root).unwrap();
+    let mut index = DerivedIndex::open(root).unwrap();
 
-    let obj_id = ObjectId::new();
+    let obj_id = ObjectId::generate();
     let head_path = store
         .root()
         .join(".earmark/canonical/heads")
@@ -752,7 +752,7 @@ fn test_resolution_error_propagation() {
     ); // latest
 
     let res =
-        crate::resolution::resolve_version_for_kind(&store, &index, &version_ref, Kind::Workflow);
+        crate::resolution::resolve_version_for_kind(&store, &mut index, &version_ref, Kind::Workflow);
 
     assert!(res.is_err());
     // It should NOT be IncompleteExecution (which would mean it fell back and failed),
@@ -769,9 +769,9 @@ fn test_redaction_applied_to_provider_record_from_failure() {
     std::env::set_var("EARMARK_TEST_REDACT_BEARER", "dummy");
     let request = ProviderRequest {
         request_id: "req_redact".to_string(),
-        run_id: "run_redact".to_string(),
-        work_packet: ObjectRef::new(ObjectId::new(), VersionId::new(), Kind::WorkPacket, None),
-        provider_profile: VersionRef::new(ObjectId::new(), VersionId::new()),
+        run_id: earmark_core::RunId::parse("run_redact").unwrap(),
+        work_packet: ObjectRef::new(ObjectId::generate(), VersionId::generate(), Kind::WorkPacket, None),
+        provider_profile: VersionRef::new(ObjectId::generate(), VersionId::generate()),
         instruction_text: "do work".to_string(),
         context_text: None,
         input_text: "do work".to_string(),
@@ -785,7 +785,7 @@ fn test_redaction_applied_to_provider_record_from_failure() {
         issued_at: chrono::Utc::now(),
     };
     let profile = ProviderProfile {
-        name: "test".to_string(),
+        name: earmark_core::TransitionId::parse("test").unwrap().to_string(),
         version: "1".to_string(),
         description: None,
         provider: "test_provider".to_string(),
@@ -847,9 +847,9 @@ fn test_redaction_applied_to_provider_record_from_failure() {
 fn test_provider_record_from_failure_redacts_url_credentials() {
     let request = ProviderRequest {
         request_id: "req_redact_url".to_string(),
-        run_id: "run_redact_url".to_string(),
-        work_packet: ObjectRef::new(ObjectId::new(), VersionId::new(), Kind::WorkPacket, None),
-        provider_profile: VersionRef::new(ObjectId::new(), VersionId::new()),
+        run_id: earmark_core::RunId::parse("run_redact_url").unwrap(),
+        work_packet: ObjectRef::new(ObjectId::generate(), VersionId::generate(), Kind::WorkPacket, None),
+        provider_profile: VersionRef::new(ObjectId::generate(), VersionId::generate()),
         instruction_text: "do work".to_string(),
         context_text: None,
         input_text: "do work".to_string(),
@@ -863,7 +863,7 @@ fn test_provider_record_from_failure_redacts_url_credentials() {
         issued_at: chrono::Utc::now(),
     };
     let profile = ProviderProfile {
-        name: "test".to_string(),
+        name: earmark_core::TransitionId::parse("test").unwrap().to_string(),
         version: "1".to_string(),
         description: None,
         provider: "test_provider".to_string(),
@@ -906,7 +906,7 @@ fn test_resolved_endpoint_identity_does_not_leak_raw_env_value() {
         version: "1".to_string(),
         description: None,
         provider: "http_generation".to_string(),
-        model: "test".to_string(),
+        model: earmark_core::TransitionId::parse("test").unwrap().to_string(),
         endpoint_env: Some("EARMARK_TEST_ENDPOINT_SECRET".to_string()),
         auth_env: None,
         budget: earmark_core::ProviderBudget::default(),
@@ -1023,9 +1023,9 @@ fn test_resolved_endpoint_identity_redacts_env_name_when_empty() {
 fn test_provider_circuit_key_redacts_sensitive_env_name() {
     let request = ProviderRequest {
         request_id: "req_circuit_redact".to_string(),
-        run_id: "run_circuit_redact".to_string(),
-        work_packet: ObjectRef::new(ObjectId::new(), VersionId::new(), Kind::WorkPacket, None),
-        provider_profile: VersionRef::new(ObjectId::new(), VersionId::new()),
+        run_id: earmark_core::RunId::parse("run_circuit_redact").unwrap(),
+        work_packet: ObjectRef::new(ObjectId::generate(), VersionId::generate(), Kind::WorkPacket, None),
+        provider_profile: VersionRef::new(ObjectId::generate(), VersionId::generate()),
         instruction_text: "do work".to_string(),
         context_text: None,
         input_text: "do work".to_string(),
@@ -1083,7 +1083,7 @@ fn test_fail_closed_blocked_domain_rejects_before_http() {
         version: "1".to_string(),
         description: None,
         provider: "http_generation".to_string(),
-        model: "test".to_string(),
+        model: earmark_core::TransitionId::parse("test").unwrap().to_string(),
         endpoint_env: None,
         auth_env: None,
         budget: earmark_core::ProviderBudget::default(),

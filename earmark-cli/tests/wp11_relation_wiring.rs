@@ -84,7 +84,7 @@ fn link_objects(
     relation_type: &str,
 ) {
     let store = GitCanonicalStore::new(root);
-    let index = DerivedIndex::open(root).unwrap();
+    let mut index = DerivedIndex::open(root).unwrap();
 
     let source_oid = ObjectId::parse(source_id).unwrap();
     let target_oid = ObjectId::parse(target_id).unwrap();
@@ -139,7 +139,7 @@ fn link_objects(
 
     earmark_exec::persist_relation_canonical(
         &store,
-        &index,
+        &mut index,
         payload,
         Provenance::direct_input("test"),
         RelationCreationMode::Declared,

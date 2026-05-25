@@ -2,7 +2,8 @@ use crate::app::common::{CliError, CommandContext};
 use crate::app::{emit, list_change_sets, list_change_sets_by_run, load_run_record_by_id};
 use crate::cli::{UndoAction, UndoCommand};
 use earmark_core::{
-    ChangeSetId, Kind, ObjectId, Provenance, RunRecord, Standing, UndoRecord, UndoRecordId,
+    ChangeSetId, IntoObjectId, Kind, ObjectId, Provenance, RunRecord, Standing, UndoRecord,
+    UndoRecordId,
 };
 use earmark_exec::persistence_helpers::write_object_and_index;
 use earmark_store::{PayloadEncoding, StoredObject, StoredPayload};
@@ -20,18 +21,19 @@ pub struct UndoImpact {
     pub blocking_reasons: Vec<String>,
 }
 
-pub fn handle(ctx: &CommandContext, command: &UndoCommand) -> Result<(), CliError> {
+pub fn handle(ctx: &mut CommandContext, command: &UndoCommand) -> Result<(), CliError> {
     match &command.action {
         UndoAction::Run { run_id, reason } => handle_undo_run(ctx, run_id, reason.as_deref()),
     }
 }
 
 fn handle_undo_run(
-    ctx: &CommandContext,
+    ctx: &mut CommandContext,
     run_id: &str,
     reason: Option<&str>,
 ) -> Result<(), CliError> {
-    let run = load_run_record_by_id(ctx.store, run_id)?;
+    let rid = crate::app::resolve::resolve_run_id(ctx.store, run_id)?;
+    let run = load_run_record_by_id(ctx.store, &rid)?;
     let impact = calculate_undo_impact(ctx, &run)?;
 
     if !impact.blocking_reasons.is_empty() {
@@ -43,7 +45,7 @@ fn handle_undo_run(
     }
 
     let undo_record = UndoRecord {
-        id: UndoRecordId::new(),
+        id: UndoRecordId::generate(),
         target_run_id: run.run_id.clone(),
         reverted_change_set_ids: impact.change_set_ids.clone(),
         created_object_ids: impact.created_object_ids.clone(),
@@ -69,7 +71,7 @@ fn handle_undo_run(
         Vec::new(),
     );
 
-    let index = ctx.index.as_ref().ok_or_else(|| {
+    let index = ctx.index.as_mut().ok_or_else(|| {
         CliError::argument("index required for undo — ensure workspace is initialized")
     })?;
     write_object_and_index(ctx.store, index, &object)?;
@@ -91,14 +93,15 @@ fn handle_undo_run(
     Ok(())
 }
 
-fn calculate_undo_impact(ctx: &CommandContext, run: &RunRecord) -> Result<UndoImpact, CliError> {
+fn calculate_undo_impact(ctx: &mut CommandContext, run: &RunRecord) -> Result<UndoImpact, CliError> {
     let store = ctx.store;
-    let index = ctx.index.as_ref().ok_or_else(|| {
-        CliError::argument("index required for undo impact calculation")
-    })?;
+    let index = ctx
+        .index
+        .as_mut()
+        .ok_or_else(|| CliError::argument("index required for undo impact calculation"))?;
 
     let mut impact = UndoImpact {
-        run_id: run.run_id.clone(),
+        run_id: run.run_id.as_str().to_string(),
         change_set_ids: Vec::new(),
         created_object_ids: Vec::new(),
         created_relation_ids: Vec::new(),
@@ -107,7 +110,7 @@ fn calculate_undo_impact(ctx: &CommandContext, run: &RunRecord) -> Result<UndoIm
     };
 
     // 1. Check if already undone
-    if let Some(undo_id) = index.is_run_undone(&run.run_id)? {
+    if let Some(undo_id) = index.is_run_undone(run.run_id.as_str())? {
         impact.blocking_reasons.push(format!(
             "run {} is already undone by {}",
             run.run_id, undo_id
@@ -148,7 +151,7 @@ fn calculate_undo_impact(ctx: &CommandContext, run: &RunRecord) -> Result<UndoIm
     let our_first_cs_time = run.started_at;
 
     for cs in sorted_change_sets {
-        if cs.run_id == run.run_id {
+        if cs.run_id.as_str() == run.run_id.as_str() {
             continue;
         }
         if cs.created_at <= our_first_cs_time {
@@ -156,7 +159,7 @@ fn calculate_undo_impact(ctx: &CommandContext, run: &RunRecord) -> Result<UndoIm
         }
 
         // Check if the consuming change set is itself undone
-        if index.is_run_undone(&cs.run_id)?.is_some() {
+        if index.is_run_undone(cs.run_id.as_str())?.is_some() {
             continue;
         }
 

@@ -38,4 +38,10 @@ relation_rules:
   - relation_type: has_review_decision
     counterparty_classes:
       - review_decision
+  - relation_type: has_review
+    counterparty_classes:
+      - review
+  - relation_type: has_closure
+    counterparty_classes:
+      - closure
 validators: []

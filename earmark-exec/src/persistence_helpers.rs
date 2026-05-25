@@ -6,7 +6,7 @@ use earmark_store::{BatchWrite, CanonicalStore, StoredObject};
 
 pub fn write_object_and_index<S: CanonicalStore>(
     store: &S,
-    index: &DerivedIndex,
+    index: &mut DerivedIndex,
     object: &StoredObject,
 ) -> Result<VersionRef, ExecError> {
     let marker = IndexDirtyMarker {
@@ -50,7 +50,7 @@ pub fn write_object_and_index<S: CanonicalStore>(
 /// this function may become an internal detail.
 pub fn write_batch_and_index<S: CanonicalStore>(
     store: &S,
-    index: &DerivedIndex,
+    index: &mut DerivedIndex,
     batch: &BatchWrite,
 ) -> Result<Vec<VersionRef>, ExecError> {
     let marker = IndexDirtyMarker {

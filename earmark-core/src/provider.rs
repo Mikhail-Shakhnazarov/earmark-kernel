@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-use crate::ids::{ObjectRef, VersionRef};
+use crate::ids::{ObjectRef, RunId, VersionRef};
 use crate::values::{ScalarValue, Timestamp};
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
@@ -123,7 +123,7 @@ impl ProviderResponseFormat {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ProviderRequest {
     pub request_id: String,
-    pub run_id: String,
+    pub run_id: RunId,
     pub work_packet: ObjectRef,
     pub provider_profile: VersionRef,
     pub instruction_text: String,
@@ -160,7 +160,7 @@ pub struct ProviderUsage {
 pub struct ProviderRecord {
     pub record_id: String,
     pub request_id: String,
-    pub run_id: String,
+    pub run_id: RunId,
     pub work_packet: ObjectRef,
     pub provider_profile: VersionRef,
     pub provider: String,

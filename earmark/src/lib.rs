@@ -114,8 +114,8 @@ impl EarmarkWorkspace {
         })
     }
 
-    fn surface(&self) -> RuntimeToolSurface<'_, GitCanonicalStore> {
-        RuntimeToolSurface::new(&self.store, &self.index, &self.provider_registry)
+    fn surface(&mut self) -> RuntimeToolSurface<'_, GitCanonicalStore> {
+        RuntimeToolSurface::new(&self.store, &mut self.index, &self.provider_registry)
     }
 
     pub fn register_system_from_path(
@@ -141,15 +141,15 @@ impl EarmarkWorkspace {
             StoredPayload::from_yaml(to_yaml(&system)?),
             vec![],
         );
-        write_object_and_index(&self.store, &self.index, &object)?;
+        write_object_and_index(&self.store, &mut self.index, &object)?;
 
-        let active = activate_system_definition(&self.store, &self.index, &system.system_id)?;
+        let active = activate_system_definition(&self.store, &mut self.index, &system.system_id)?;
         self.default_system_id = Some(active.system_id);
         Ok(())
     }
 
     fn load_system_definition_any(
-        &self,
+        &mut self,
         system_path: &Path,
     ) -> Result<earmark_core::SystemDefinition, EarmarkError> {
         let content = std::fs::read_to_string(system_path)?;
@@ -163,7 +163,7 @@ impl EarmarkWorkspace {
     }
 
     fn register_path_manifest(
-        &self,
+        &mut self,
         manifest_path: &Path,
         manifest: PathSystemManifest,
     ) -> Result<earmark_core::SystemDefinition, EarmarkError> {
@@ -256,7 +256,7 @@ impl EarmarkWorkspace {
                 StoredPayload::from_yaml(to_yaml(&resolved)?),
                 vec![],
             );
-            let vref = write_object_and_index(&self.store, &self.index, &object)?;
+            let vref = write_object_and_index(&self.store, &mut self.index, &object)?;
             registry.insert(canonicalized(&p), vref.clone());
             workflows.push(vref);
         }
@@ -290,7 +290,7 @@ impl EarmarkWorkspace {
     }
 
     fn register_many<F>(
-        &self,
+        &mut self,
         manifest_path: &Path,
         paths: &[String],
         kind: Kind,
@@ -316,7 +316,7 @@ impl EarmarkWorkspace {
                 payload,
                 vec![],
             );
-            let vref = write_object_and_index(&self.store, &self.index, &object)?;
+            let vref = write_object_and_index(&self.store, &mut self.index, &object)?;
             registry.insert(canonicalized(&p), vref.clone());
             out.push(vref);
         }
@@ -324,7 +324,7 @@ impl EarmarkWorkspace {
     }
 
     pub fn deposit_markdown(
-        &self,
+        &mut self,
         class: &str,
         title: &str,
         body: &str,
@@ -348,7 +348,7 @@ impl EarmarkWorkspace {
     }
 
     pub fn run_workflow(
-        &self,
+        &mut self,
         workflow_id: &str,
         inputs: impl IntoIterator<Item = impl AsRef<str>>,
     ) -> Result<WorkflowRun, EarmarkError> {
@@ -381,7 +381,7 @@ impl EarmarkWorkspace {
         }
 
         let req = WorkflowRunRequest {
-            run_id: format!("run_{}", uuid_like()),
+            run_id: earmark_core::RunId::parse(format!("run_{}", uuid_like()))?,
             system_definition,
             workflow,
             inputs: input_refs,
@@ -392,7 +392,7 @@ impl EarmarkWorkspace {
 
         let out = self.surface().run_workflow(req)?;
         Ok(WorkflowRun {
-            run_id: out.record.run_id,
+            run_id: out.record.run_id.to_string(),
         })
     }
 
@@ -426,7 +426,7 @@ impl EarmarkWorkspace {
             );
             let loaded = self.store.read_version(&version_ref)?;
             let record: RunRecord = serde_json::from_slice(&loaded.payload.bytes)?;
-            if record.run_id == run_id {
+            if record.run_id.as_str() == run_id {
                 return Ok(record);
             }
         }
@@ -576,7 +576,7 @@ impl CliBackedWorkspace {
     }
 
     pub fn run_workflow(
-        &self,
+        &mut self,
         workflow_id: &str,
         inputs: impl IntoIterator<Item = impl AsRef<str>>,
     ) -> Result<WorkflowRun, EarmarkError> {

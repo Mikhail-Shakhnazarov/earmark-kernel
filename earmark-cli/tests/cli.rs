@@ -1123,7 +1123,7 @@ fn doctor_reports_dirty_index_without_implicit_repair() {
         .assert()
         .success();
 
-    let index = DerivedIndex::open(root).unwrap();
+    let mut index = DerivedIndex::open(root).unwrap();
     index
         .mark_dirty(IndexDirtyMarker {
             schema_version: "v1".to_string(),
@@ -1184,7 +1184,7 @@ fn doctor_repair_index_rebuilds_and_clears_dirty_marker() {
         .assert()
         .success();
 
-    let index = DerivedIndex::open(root).unwrap();
+    let mut index = DerivedIndex::open(root).unwrap();
     index
         .mark_dirty(IndexDirtyMarker {
             schema_version: "v1".to_string(),
@@ -1254,7 +1254,7 @@ fn doctor_repair_index_reports_partial_when_canonical_entries_are_skipped() {
         .assert()
         .success();
 
-    let index = DerivedIndex::open(root).unwrap();
+    let mut index = DerivedIndex::open(root).unwrap();
     index
         .mark_dirty(IndexDirtyMarker {
             schema_version: "v1".to_string(),
@@ -1565,7 +1565,7 @@ fn demo_path_research_synthesis_full_workflow() {
         .arg("--json")
         .arg("run")
         .arg("artifacts")
-        .arg(&run_id)
+        .arg(run_id.as_str())
         .assert()
         .success()
         .get_output()
@@ -1736,7 +1736,7 @@ fn failure_cli_inspection_commands_with_real_failure() {
     // Create objects and run a failing workflow via Rust API
     let (failure_id, run_id) = {
         let store = GitCanonicalStore::new(dir.path());
-        let index = DerivedIndex::open(dir.path()).unwrap();
+        let mut index = DerivedIndex::open(dir.path()).unwrap();
 
         let note = StoredObject::new(
             Kind::Object,
@@ -1809,14 +1809,14 @@ guards: []
         index.rebuild_from_store(&store).unwrap();
 
         let registry = ProviderRegistry::default();
-        let engine = ExecutionEngine {
+        let mut engine = ExecutionEngine {
             store: &store,
-            index: &index,
+            index: &mut index,
             provider_service: &registry,
         };
 
         let result = engine.run_workflow(WorkflowRunRequest {
-            run_id: "cli_test_fail_run".to_string(),
+            run_id: earmark_core::RunId::parse("cli_test_fail_run").unwrap(),
             system_definition: VersionRef::new(system_ref.id, system_ref.version_id),
             workflow: VersionRef::new(workflow_ref.id, workflow_ref.version_id),
             inputs: vec![note.object_ref()],
@@ -1857,7 +1857,7 @@ guards: []
     let parsed: Value = serde_json::from_slice(&output).unwrap();
     assert_eq!(parsed["ok"], true);
     assert_eq!(parsed["data"]["kind"], "failure");
-    assert_eq!(parsed["data"]["related"]["run_id"], run_id);
+    assert_eq!(parsed["data"]["related"]["run_id"], run_id.as_str());
     assert!(parsed["data"]["next_commands"].as_array().unwrap().len() >= 2);
     assert!(parsed["data"]["artifact"]["input_object_ids"].is_array());
 
@@ -1870,7 +1870,7 @@ guards: []
         .arg("failure")
         .arg("list")
         .arg("--run-id")
-        .arg(&run_id)
+        .arg(run_id.as_str())
         .assert()
         .success()
         .get_output()
@@ -1894,7 +1894,7 @@ guards: []
         .arg("--json")
         .arg("run")
         .arg("artifacts")
-        .arg(&run_id)
+        .arg(run_id.as_str())
         .assert()
         .success()
         .get_output()
@@ -2118,7 +2118,7 @@ fn latest_run_resolves_correctly() {
     use std::collections::BTreeMap;
 
     let store = GitCanonicalStore::new(dir.path());
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
 
     let system = SystemDefinition {
         system_id: "test_system".to_string(),
@@ -2188,25 +2188,25 @@ guards: []
     index.rebuild_from_store(&store).unwrap();
 
     let registry = ProviderRegistry::default();
-    let engine = ExecutionEngine {
-        store: &store,
-        index: &index,
-        provider_service: &registry,
-    };
-
     let sys_def = VersionRef::new(system_ref.id.clone(), system_ref.version_id.clone());
     let wf_def = VersionRef::new(workflow_ref.id.clone(), workflow_ref.version_id.clone());
-
     // Run records are persisted even on failure
-    let _ = engine.run_workflow(WorkflowRunRequest {
-        run_id: "run_first".to_string(),
-        system_definition: sys_def.clone(),
-        workflow: wf_def.clone(),
-        inputs: vec![note.object_ref()],
-        handoff_manifest: None,
-        transition_assignment: None,
-        operator_approved: true,
-    });
+    {
+        let mut engine = ExecutionEngine {
+            store: &store,
+            index: &mut index,
+            provider_service: &registry,
+        };
+        let _ = engine.run_workflow(WorkflowRunRequest {
+            run_id: earmark_core::RunId::parse("run_first").unwrap(),
+            system_definition: sys_def.clone(),
+            workflow: wf_def.clone(),
+            inputs: vec![note.object_ref()],
+            handoff_manifest: None,
+            transition_assignment: None,
+            operator_approved: true,
+        });
+    }
 
     let note2 = StoredObject::new(
         earmark_core::Kind::Object,
@@ -2220,15 +2220,22 @@ guards: []
     store.write_object(&note2).unwrap();
     index.rebuild_from_store(&store).unwrap();
 
-    let _ = engine.run_workflow(WorkflowRunRequest {
-        run_id: "run_second".to_string(),
-        system_definition: sys_def,
-        workflow: wf_def,
-        inputs: vec![note2.object_ref()],
-        handoff_manifest: None,
-        transition_assignment: None,
-        operator_approved: true,
-    });
+    {
+        let mut engine = ExecutionEngine {
+            store: &store,
+            index: &mut index,
+            provider_service: &registry,
+        };
+        let _ = engine.run_workflow(WorkflowRunRequest {
+            run_id: earmark_core::RunId::parse("run_second").unwrap(),
+            system_definition: sys_def,
+            workflow: wf_def,
+            inputs: vec![note2.object_ref()],
+            handoff_manifest: None,
+            transition_assignment: None,
+            operator_approved: true,
+        });
+    }
 
     // Now test that 'latest' resolves to the most recent run
     let output = Command::cargo_bin("earmark-cli")
@@ -2274,7 +2281,7 @@ fn run_show_and_explain_are_distinct() {
     use std::collections::BTreeMap;
 
     let store = GitCanonicalStore::new(dir.path());
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
 
     let system = SystemDefinition {
         system_id: "test_system".to_string(),
@@ -2348,14 +2355,14 @@ guards: []
     index.rebuild_from_store(&store).unwrap();
 
     let registry = ProviderRegistry::default();
-    let engine = ExecutionEngine {
+    let mut engine = ExecutionEngine {
         store: &store,
-        index: &index,
+        index: &mut index,
         provider_service: &registry,
     };
 
     let result = engine.run_workflow(WorkflowRunRequest {
-        run_id: "run_show_vs_explain".to_string(),
+        run_id: earmark_core::RunId::parse("run_show_vs_explain").unwrap(),
         system_definition: VersionRef::new(system_ref.id, system_ref.version_id),
         workflow: VersionRef::new(workflow_ref.id, workflow_ref.version_id),
         inputs: vec![note.object_ref()],
@@ -2375,7 +2382,7 @@ guards: []
         .arg("--json")
         .arg("run")
         .arg("show")
-        .arg(&run_id)
+        .arg(run_id.as_str())
         .assert()
         .success()
         .get_output()
@@ -2409,7 +2416,7 @@ guards: []
         .arg("--json")
         .arg("run")
         .arg("explain")
-        .arg(&run_id)
+        .arg(run_id.as_str())
         .assert()
         .success()
         .get_output()
