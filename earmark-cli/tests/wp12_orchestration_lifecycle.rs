@@ -38,6 +38,13 @@ fn setup_and_init_example() -> (tempfile::TempDir, PathBuf) {
         .assert()
         .success();
 
+    // 3. git init (required for capture-git)
+    std::process::Command::new("git")
+        .arg("init")
+        .current_dir(&root)
+        .output()
+        .unwrap();
+
     (dir, root)
 }
 

@@ -47,6 +47,8 @@ pub struct CaptureGitArgs {
     pub include_diff_stat: bool,
     #[arg(long)]
     pub commit: Option<String>,
+    #[arg(long, help = "Optional path to the repository to capture from")]
+    pub repo: Option<PathBuf>,
 }
 
 #[derive(Args)]
