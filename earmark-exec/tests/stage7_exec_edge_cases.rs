@@ -11,7 +11,7 @@ fn setup_store_and_index() -> (tempfile::TempDir, GitCanonicalStore, DerivedInde
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     (dir, store, index)
 }
 
@@ -36,7 +36,7 @@ fn create_object(
 
 fn register_class(
     store: &GitCanonicalStore,
-    index: &DerivedIndex,
+    index: &mut DerivedIndex,
     name: &str,
     relation_rules: Vec<earmark_core::RelationRule>,
 ) {
@@ -68,13 +68,13 @@ fn register_class(
 
 #[test]
 fn test_unauthorized_relation_rejected_if_no_rule() {
-    let (_dir, store, index) = setup_store_and_index();
+    let (_dir, store, mut index) = setup_store_and_index();
 
     let source_ref = create_object(&store, Kind::Object, Some("note"), "source");
     let target_ref = create_object(&store, Kind::Object, Some("finding"), "target");
 
-    register_class(&store, &index, "note", vec![]);
-    register_class(&store, &index, "finding", vec![]);
+    register_class(&store, &mut index, "note", vec![]);
+    register_class(&store, &mut index, "finding", vec![]);
 
     let payload = RelationPayload {
         source: source_ref.clone(),
@@ -86,7 +86,7 @@ fn test_unauthorized_relation_rejected_if_no_rule() {
 
     let res = earmark_exec::persist_relation_canonical(
         &store,
-        &index,
+        &mut index,
         payload,
         Provenance::direct_input("test"),
         earmark_core::RelationCreationMode::Declared,
@@ -100,14 +100,14 @@ fn test_unauthorized_relation_rejected_if_no_rule() {
 
 #[test]
 fn test_counterparty_class_restriction_respected() {
-    let (_dir, store, index) = setup_store_and_index();
+    let (_dir, store, mut index) = setup_store_and_index();
 
     let source_ref = create_object(&store, Kind::Object, Some("note"), "source");
     let target_ref = create_object(&store, Kind::Object, Some("unsupported_class"), "target");
 
     register_class(
         &store,
-        &index,
+        &mut index,
         "note",
         vec![earmark_core::RelationRule {
             relation_type: "references".to_string(),
@@ -116,8 +116,8 @@ fn test_counterparty_class_restriction_respected() {
             authorizing_endpoint: Some("source".to_string()),
         }],
     );
-    register_class(&store, &index, "finding", vec![]);
-    register_class(&store, &index, "unsupported_class", vec![]);
+    register_class(&store, &mut index, "finding", vec![]);
+    register_class(&store, &mut index, "unsupported_class", vec![]);
 
     let payload = RelationPayload {
         source: source_ref.clone(),
@@ -129,7 +129,7 @@ fn test_counterparty_class_restriction_respected() {
 
     let res = earmark_exec::persist_relation_canonical(
         &store,
-        &index,
+        &mut index,
         payload,
         Provenance::direct_input("test"),
         earmark_core::RelationCreationMode::Declared,
@@ -143,14 +143,14 @@ fn test_counterparty_class_restriction_respected() {
 
 #[test]
 fn test_direction_restrictions_respected() {
-    let (_dir, store, index) = setup_store_and_index();
+    let (_dir, store, mut index) = setup_store_and_index();
 
     let source_ref = create_object(&store, Kind::Object, Some("note"), "source");
     let target_ref = create_object(&store, Kind::Object, Some("finding"), "target");
 
     register_class(
         &store,
-        &index,
+        &mut index,
         "note",
         vec![earmark_core::RelationRule {
             relation_type: "references".to_string(),
@@ -159,7 +159,7 @@ fn test_direction_restrictions_respected() {
             authorizing_endpoint: Some("source".to_string()),
         }],
     );
-    register_class(&store, &index, "finding", vec![]);
+    register_class(&store, &mut index, "finding", vec![]);
 
     let payload = RelationPayload {
         source: source_ref.clone(),
@@ -171,7 +171,7 @@ fn test_direction_restrictions_respected() {
 
     let res = earmark_exec::persist_relation_canonical(
         &store,
-        &index,
+        &mut index,
         payload,
         Provenance::direct_input("test"),
         earmark_core::RelationCreationMode::Declared,

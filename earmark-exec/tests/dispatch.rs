@@ -238,14 +238,14 @@ fn profile(provider: &str, model: &str) -> ProviderProfile {
 }
 
 fn request() -> ProviderRequest {
-    request_with_provider_profile(VersionRef::new(ObjectId::new(), VersionId::new()))
+    request_with_provider_profile(VersionRef::new(ObjectId::generate(), VersionId::generate()))
 }
 
 fn request_with_provider_profile(provider_profile: VersionRef) -> ProviderRequest {
     ProviderRequest {
         request_id: "req_1".to_string(),
-        run_id: "run_1".to_string(),
-        work_packet: ObjectRef::new(ObjectId::new(), VersionId::new(), Kind::WorkPacket, None),
+        run_id: earmark_core::RunId::parse("run_1").unwrap(),
+        work_packet: ObjectRef::new(ObjectId::generate(), VersionId::generate(), Kind::WorkPacket, None),
         provider_profile,
         instruction_text: "Do the thing".to_string(),
         context_text: None,
@@ -263,7 +263,7 @@ fn request_with_provider_profile(provider_profile: VersionRef) -> ProviderReques
 
 #[test]
 fn dispatch_resolution_precedence() {
-    let operation = VersionRef::new(ObjectId::new(), VersionId::new());
+    let operation = VersionRef::new(ObjectId::generate(), VersionId::generate());
     let instruction = earmark_core::InstructionPayload {
         name: "instr".to_string(),
         version: "1".to_string(),
@@ -271,12 +271,12 @@ fn dispatch_resolution_precedence() {
         input_classes: vec![],
         output_classes: vec![],
         execution_policy: "runtime_dispatch_permitted".to_string(),
-        provider_profile: Some(VersionRef::new(ObjectId::new(), VersionId::new()).into()),
+        provider_profile: Some(VersionRef::new(ObjectId::generate(), VersionId::generate()).into()),
         trace_policy: "summary".to_string(),
         register: "machined".to_string(),
         body: earmark_core::MarkdownBody::new("body".to_string()),
     };
-    let system = VersionRef::new(ObjectId::new(), VersionId::new());
+    let system = VersionRef::new(ObjectId::generate(), VersionId::generate());
 
     assert_eq!(
         resolve_provider_profile(Some(&operation), Some(&instruction), Some(&system)),
@@ -358,7 +358,7 @@ fn circuit_opens_after_repeated_failures() {
     let mut registry = ProviderRegistry::default();
     registry.register(Arc::new(AlwaysFailAdapter));
     let prof = profile("always_fail", "down");
-    let provider_profile = VersionRef::new(ObjectId::new(), VersionId::new());
+    let provider_profile = VersionRef::new(ObjectId::generate(), VersionId::generate());
     for _ in 0..5 {
         let _ = provide_with_registry(
             &registry,
@@ -413,7 +413,7 @@ fn circuit_isolated_by_provider_profile_identity() {
     registry.register(Arc::new(AlwaysFailAdapter));
     let prof = profile("always_fail", "down");
 
-    let first_profile = VersionRef::new(ObjectId::new(), VersionId::new());
+    let first_profile = VersionRef::new(ObjectId::generate(), VersionId::generate());
     for _ in 0..5 {
         let _ = provide_with_registry(
             &registry,
@@ -431,7 +431,7 @@ fn circuit_isolated_by_provider_profile_identity() {
     .unwrap_err();
     assert!(first_err.message.contains("circuit open"));
 
-    let second_profile = VersionRef::new(ObjectId::new(), VersionId::new());
+    let second_profile = VersionRef::new(ObjectId::generate(), VersionId::generate());
     let second_err = provide_with_registry(
         &registry,
         &prof,

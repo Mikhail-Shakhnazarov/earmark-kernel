@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 /// This is the shared canonical path for all relation creation in the workspace.
 pub fn persist_relation_canonical<S: CanonicalStore>(
     store: &S,
-    index: &DerivedIndex,
+    index: &mut DerivedIndex,
     payload: RelationPayload,
     provenance: Provenance,
     mode: RelationCreationMode,

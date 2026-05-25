@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use crate::app::common::{require_initialized_workspace, CliError, CommandContext};
 use crate::app::{emit, mirror_surface, register_declaration_file};
 use crate::cli::*;
+use earmark_store::GitCanonicalStore;
 use earmark_core::{
     DimensionId, ObjectId, RuntimeProvenance, Standing, TokenId, VersionId, VersionRef,
 };
@@ -19,13 +20,13 @@ use serde_json::json;
 
 /// Main entry point for orchestration commands. Coordinates task ingestion,
 /// context capturing, manifest generation, and report indexing.
-pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<(), CliError> {
+pub fn handle(ctx: &mut CommandContext, command: &OrchestrationCommand) -> Result<(), CliError> {
     let store = ctx.store;
     let as_json = ctx.as_json;
     let actor = ctx.actor;
 
     match &command.action {
-        /// Initializes an orchestration example in the current workspace.
+        // Initializes an orchestration example in the current workspace.
         OrchestrationAction::InitExample(args) => {
             require_initialized_workspace(store)?;
 
@@ -70,7 +71,7 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
 
             let index = ctx
                 .index
-                .as_ref()
+                .as_mut()
                 .ok_or_else(|| CliError::argument("index required for activation"))?;
             index.rebuild_from_store(store)?;
 
@@ -91,12 +92,12 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
             );
             Ok(())
         }
-        /// Captures the current Git state as a `git_snapshot` for a specific task.
+        // Captures the current Git state as a `git_snapshot` for a specific task.
         OrchestrationAction::CaptureGit(args) => {
             require_initialized_workspace(store)?;
             let index_ref = ctx
                 .index
-                .as_ref()
+                .as_mut()
                 .ok_or_else(|| CliError::argument("index required"))?;
 
             let (task_oid, _class, _task_summary, task_payload) =
@@ -171,13 +172,15 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
             }
 
             let title = format!("Git snapshot: {} for {}", args.phase, task_id);
-            let obj_ref = deposit_orchestration_object(ctx, "git_snapshot", Some(title), payload)?;
+            let obj_ref = deposit_orchestration_object(ctx.store, index_ref, ctx.provider_registry, "git_snapshot", Some(title), payload)?;
 
             if let Some(d_oid) = dispatch_oid {
-                create_orchestration_relation(ctx, d_oid, obj_ref.id.clone(), "anchored_by")?;
+                create_orchestration_relation(ctx.store, index_ref, ctx.provider_registry, d_oid, obj_ref.id.clone(), "anchored_by")?;
             } else {
                 create_orchestration_relation(
-                    ctx,
+                    ctx.store,
+                    index_ref,
+                    ctx.provider_registry,
                     task_oid.clone(),
                     obj_ref.id.clone(),
                     "has_git_snapshot",
@@ -205,7 +208,6 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
 
             Ok(())
         }
-        /// Ingests a markdown worker manifest and registers it as an `executor_manifest`.
         OrchestrationAction::IngestManifest(args) => {
             require_initialized_workspace(store)?;
 
@@ -295,7 +297,7 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
 
             let index_ref = ctx
                 .index
-                .as_ref()
+                .as_mut()
                 .ok_or_else(|| CliError::argument("index required for ingest-manifest"))?;
 
             let context_oid = if let Some(ref c_id) = args.context_id {
@@ -330,11 +332,10 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                 }
             }
 
-            let runtime_surface = RuntimeToolSurface {
-                store,
-                index: index_ref,
-                provider_service: ctx.provider_registry,
-            };
+            let (task_oid, _, _, _) = find_orchestration_task(index_ref, store, &task_id)?
+                .ok_or_else(|| {
+                    CliError::not_found(format!("parent work_item {} not found", task_id))
+                })?;
 
             let prov = RuntimeProvenance {
                 actor: "operator".to_string(),
@@ -347,10 +348,12 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                 earmark_core::HeaderValue::String(task_id.clone()),
             );
 
-            let (task_oid, _, _, _) = find_orchestration_task(index_ref, store, &task_id)?
-                .ok_or_else(|| {
-                    CliError::not_found(format!("parent work_item {} not found", task_id))
-                })?;
+            let namespace = resolve_orchestrationnamespace(index_ref, store);
+            let mut runtime_surface = RuntimeToolSurface {
+                store,
+                index: index_ref,
+                provider_service: ctx.provider_registry,
+            };
 
             let object_ref = runtime_surface.deposit_object(
                 "dispatch".to_string(),
@@ -359,15 +362,15 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                 payload,
                 prov,
                 DepositValidationContext {
-                    namespace: resolve_orchestration_namespace(index_ref, store),
+                    namespace,
                     headers,
                 },
             )?;
 
-            create_orchestration_relation(ctx, task_oid, object_ref.id.clone(), "dispatched_as")?;
+            create_orchestration_relation(ctx.store, index_ref, ctx.provider_registry, task_oid, object_ref.id.clone(), "dispatched_as")?;
 
             if let Some(c_oid) = context_oid {
-                create_orchestration_relation(ctx, object_ref.id.clone(), c_oid, "used_context")?;
+                create_orchestration_relation(ctx.store, index_ref, ctx.provider_registry, object_ref.id.clone(), c_oid, "used_context")?;
             }
 
             index_ref.rebuild_from_store(store)?;
@@ -392,7 +395,7 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
 
             Ok(())
         }
-        /// Ingests a markdown worker report and registers it as an `executor_report`.
+        // Ingests a markdown worker report and registers it as an `executor_report`.
         OrchestrationAction::IngestReport(args) => {
             require_initialized_workspace(store)?;
 
@@ -452,16 +455,17 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
             } else {
                 let index_ref = ctx
                     .index
-                    .as_ref()
+                    .as_mut()
                     .ok_or_else(|| CliError::argument("index required for ingest-report"))?;
                 resolve_manifest_for_report(store, index_ref, &task_id, attempt)?
             };
 
             let index_ref = ctx
                 .index
-                .as_ref()
+                .as_mut()
                 .ok_or_else(|| CliError::argument("index required for ingest-report"))?;
-            let runtime_surface = RuntimeToolSurface {
+            let namespace = resolve_orchestrationnamespace(index_ref, store);
+            let mut runtime_surface = RuntimeToolSurface {
                 store,
                 index: index_ref,
                 provider_service: ctx.provider_registry,
@@ -500,21 +504,23 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                 payload,
                 prov,
                 DepositValidationContext {
-                    namespace: resolve_orchestration_namespace(index_ref, store),
+                    namespace: namespace.clone().clone(),
                     headers,
                 },
             )?;
 
             if let Some(d_oid) = dispatch_oid {
                 create_orchestration_relation(
-                    ctx,
+                    ctx.store,
+                    runtime_surface.index,
+                    ctx.provider_registry,
                     d_oid,
                     object_ref.id.clone(),
                     "produced_evidence",
                 )?;
             }
 
-            index_ref.rebuild_from_store(store)?;
+            runtime_surface.index.rebuild_from_store(store)?;
 
             let vr = VersionRef::new(object_ref.id.clone(), object_ref.version_id.clone());
             let stored_object = store.read_version(&vr)?;
@@ -552,13 +558,13 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
 
             Ok(())
         }
-        /// Ingests work items from various sources (JSON, etc.) and registers them as `work_item`s.
+        // Ingests work items from various sources (JSON, etc.) and registers them as `work_item`s.
         OrchestrationAction::IngestTask(args) => {
             require_initialized_workspace(store)?;
 
             let index_ref = ctx
                 .index
-                .as_ref()
+                .as_mut()
                 .ok_or_else(|| CliError::argument("index required for ingest-task"))?;
 
             let source = &args.source;
@@ -609,7 +615,8 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                     "raw_text": task.raw_text,
                 });
 
-                let runtime_surface = RuntimeToolSurface {
+                let namespace = resolve_orchestrationnamespace(index_ref, store);
+            let mut runtime_surface = RuntimeToolSurface {
                     store,
                     index: index_ref,
                     provider_service: ctx.provider_registry,
@@ -633,7 +640,7 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                     payload,
                     prov,
                     DepositValidationContext {
-                        namespace: resolve_orchestration_namespace(index_ref, store),
+                        namespace,
                         headers,
                     },
                 )?;
@@ -665,12 +672,12 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
 
             Ok(())
         }
-        /// Records a task-specific work surface context packet.
+        // Records a task-specific work surface context packet.
         OrchestrationAction::RecordContext(args) => {
             require_initialized_workspace(store)?;
             let index_ref = ctx
                 .index
-                .as_ref()
+                .as_mut()
                 .ok_or_else(|| CliError::argument("index required"))?;
 
             let (task_oid, _class, _task_summary, task_payload) =
@@ -702,9 +709,9 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
 
             let title = format!("Context packet for {}", task_id);
             let obj_ref =
-                deposit_orchestration_object(ctx, "context_packet", Some(title), payload)?;
+                deposit_orchestration_object(ctx.store, index_ref, ctx.provider_registry, "context_packet", Some(title), payload)?;
 
-            create_orchestration_relation(ctx, task_oid, obj_ref.id.clone(), "has_context")?;
+            create_orchestration_relation(ctx.store, index_ref, ctx.provider_registry, task_oid, obj_ref.id.clone(), "has_context")?;
 
             let vr = VersionRef::new(obj_ref.id.clone(), obj_ref.version_id.clone());
             if let Ok(stored_object) = store.read_version(&vr) {
@@ -723,12 +730,12 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
 
             Ok(())
         }
-        /// Records the outcome of a local gate check for a task and attempt.
+        // Records the outcome of a local gate check for a task and attempt.
         OrchestrationAction::RecordGate(args) => {
             require_initialized_workspace(store)?;
             let index_ref = ctx
                 .index
-                .as_ref()
+                .as_mut()
                 .ok_or_else(|| CliError::argument("index required"))?;
 
             let (task_oid, _class, _task_summary, task_payload) =
@@ -805,13 +812,15 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
             }
 
             let title = format!("Gate result: {} for {}", args.command, task_id);
-            let obj_ref = deposit_orchestration_object(ctx, "gate_result", Some(title), payload)?;
+            let obj_ref = deposit_orchestration_object(ctx.store, index_ref, ctx.provider_registry, "gate_result", Some(title), payload)?;
 
             if let Some(d_oid) = dispatch_oid {
-                create_orchestration_relation(ctx, d_oid, obj_ref.id.clone(), "checked_by")?;
+                create_orchestration_relation(ctx.store, index_ref, ctx.provider_registry, d_oid, obj_ref.id.clone(), "checked_by")?;
             } else {
                 create_orchestration_relation(
-                    ctx,
+                    ctx.store,
+                    index_ref,
+                    ctx.provider_registry,
                     task_oid.clone(),
                     obj_ref.id.clone(),
                     "has_gate_result",
@@ -838,82 +847,19 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
 
             Ok(())
         }
-        /// Submits a human or automated review for a task and attempt.
+        // Submits a human or automated review for a task and attempt.
         OrchestrationAction::Review(args) => {
             require_initialized_workspace(store)?;
 
             let index_ref = ctx
                 .index
-                .as_ref()
+                .as_mut()
                 .ok_or_else(|| CliError::argument("index required for review"))?;
 
-            let runtime_surface = RuntimeToolSurface {
-                store,
-                index: index_ref,
-                provider_service: ctx.provider_registry,
-            };
-
-            let task_arg = args.task_id.to_lowercase();
-
-            let task_filter = QueryFilter {
-                class: None, // Search all classes, find_orchestration_task already handles this better
-                ..Default::default()
-            };
-            let task_results = index_ref.query_objects(&task_filter)?;
-
-            let mut found_task: Option<(ObjectSummary, serde_json::Value)> = None;
-            let mut candidates = Vec::new();
-            for summary in &task_results {
-                let oid = match ObjectId::parse(summary.object_id.clone()) {
-                    Ok(o) => o,
-                    Err(_) => continue,
-                };
-                let vid = match VersionId::parse(summary.version_id.clone()) {
-                    Ok(v) => v,
-                    Err(_) => continue,
-                };
-                let vr = VersionRef::new(oid, vid);
-                let stored = match store.read_version(&vr) {
-                    Ok(s) => s,
-                    Err(_) => continue,
-                };
-                let text = match stored.payload.as_utf8() {
-                    Ok(t) => t,
-                    Err(_) => continue,
-                };
-                let payload: serde_json::Value = match serde_json::from_str(&text) {
-                    Ok(p) => p,
-                    Err(_) => continue,
-                };
-                let tid = match payload.get("task_id").and_then(|v| v.as_str()) {
-                    Some(t) => t.to_lowercase(),
-                    None => continue,
-                };
-                let oid_lower = summary.object_id.to_lowercase();
-                if oid_lower == task_arg
-                    || oid_lower.starts_with(&task_arg)
-                    || tid.starts_with(&task_arg)
-                {
-                    candidates.push((summary.clone(), payload));
-                }
-            }
-
-            // Prioritize work_item or implementation_task
-            for (summary, payload) in &candidates {
-                let class = summary.class.as_deref().unwrap_or("");
-                if class == "work_item" || class == "implementation_task" {
-                    found_task = Some((summary.clone(), payload.clone()));
-                    break;
-                }
-            }
-
-            // Fallback to first candidate if no priority class found
-            if found_task.is_none() {
-                found_task = candidates.into_iter().next();
-            }
-
-            let (task_summary, task_payload) = found_task
-                .ok_or_else(|| CliError::not_found(format!("task {} not found", args.task_id)))?;
+            let (task_oid, _class, _task_summary, task_payload) =
+                find_orchestration_task(index_ref, store, &args.task_id)?.ok_or_else(|| {
+                    CliError::not_found(format!("task {} not found", args.task_id))
+                })?;
 
             let task_id = task_payload
                 .get("task_id")
@@ -933,103 +879,121 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
                 "comment": args.comment.clone().unwrap_or_default(),
             });
 
-            let review_object_ref = runtime_surface.deposit_object(
-                "review".to_string(),
-                Some("object".to_string()),
-                Some(format!("Review for {}", args.task_id)),
-                review_payload,
-                prov.clone(),
-                DepositValidationContext {
-                    namespace: resolve_orchestration_namespace(index_ref, store),
-                    headers: BTreeMap::new(),
-                },
-            )?;
+            let (review_object_ref, _closure_object_ref, task_version_ref) = {
+                let namespace = resolve_orchestrationnamespace(index_ref, store);
+                let mut runtime_surface = RuntimeToolSurface {
+                    store,
+                    index: index_ref,
+                    provider_service: ctx.provider_registry,
+                };
 
-            let task_oid = ObjectId::parse(task_summary.object_id.clone())?;
+                let review_object_ref = runtime_surface.deposit_object(
+                    "review".to_string(),
+                    Some("object".to_string()),
+                    Some(format!("Review for {}", args.task_id)),
+                    review_payload,
+                    prov.clone(),
+                    DepositValidationContext {
+                        namespace: namespace.clone(),
+                        headers: BTreeMap::new(),
+                    },
+                )?;
 
-            let closure_payload = json!({
-                "task_id": task_id,
-                "review_id": review_object_ref.id.as_str(),
-                "outcome": decision,
-            });
+                let closure_payload = json!({
+                    "task_id": task_id,
+                    "review_id": review_object_ref.id.as_str(),
+                    "outcome": decision,
+                });
 
-            let closure_object_ref = runtime_surface.deposit_object(
-                "closure".to_string(),
-                Some("object".to_string()),
-                Some(format!("Closure for {}", args.task_id)),
-                closure_payload,
-                prov.clone(),
-                DepositValidationContext {
-                    namespace: resolve_orchestration_namespace(index_ref, store),
-                    headers: BTreeMap::new(),
-                },
-            )?;
+                let closure_object_ref = runtime_surface.deposit_object(
+                    "closure".to_string(),
+                    Some("object".to_string()),
+                    Some(format!("Closure for {}", args.task_id)),
+                    closure_payload,
+                    prov.clone(),
+                    DepositValidationContext {
+                        namespace,
+                        headers: BTreeMap::new(),
+                    },
+                )?;
 
-            create_orchestration_relation(
-                ctx,
-                review_object_ref.id.clone(),
-                closure_object_ref.id.clone(),
-                "causes",
-            )?;
+                create_orchestration_relation(
+                    ctx.store,
+                    runtime_surface.index,
+                    ctx.provider_registry,
+                    review_object_ref.id.clone(),
+                    closure_object_ref.id.clone(),
+                    "causes",
+                )?;
 
-            create_orchestration_relation(
-                ctx,
-                closure_object_ref.id.clone(),
-                task_oid.clone(),
-                "closes",
-            )?;
-            let head_stored = store.read_head(&task_oid)?.ok_or_else(|| {
-                CliError::not_found(format!("task {} head not found", args.task_id))
-            })?;
+                create_orchestration_relation(
+                    ctx.store,
+                    runtime_surface.index,
+                    ctx.provider_registry,
+                    closure_object_ref.id.clone(),
+                    task_oid.clone(),
+                    "closes",
+                )?;
 
-            let (process_token, review_token) = match decision.as_str() {
-                "accepted" => ("closed", "accepted"),
-                "rejected" => ("closed", "rejected"),
-                "needs_revision" => ("proposed", "needs_revision"),
-                _ => unreachable!(),
+                let head_stored = store.read_head(&task_oid)?.ok_or_else(|| {
+                    CliError::not_found(format!("task {} head not found", args.task_id))
+                })?;
+
+                let (process_token, review_token) = match decision.as_str() {
+                    "accepted" => ("closed", "accepted"),
+                    "rejected" => ("closed", "rejected"),
+                    "needs_revision" => ("proposed", "needs_revision"),
+                    _ => unreachable!(),
+                };
+
+                let mut standing_values = BTreeMap::new();
+                standing_values.insert(
+                    DimensionId::from_static("kernel:process"),
+                    TokenId::from_static(process_token),
+                );
+                standing_values.insert(
+                    DimensionId::from_static("kernel:review"),
+                    TokenId::from_static(review_token),
+                );
+                let standing = Standing {
+                    values: standing_values,
+                };
+
+                let mapped_status = match decision.as_str() {
+                    "accepted" => "implemented",
+                    "rejected" => "closed",
+                    "needs_revision" => "proposed",
+                    _ => unreachable!(),
+                };
+
+                let mut updated_payload = task_payload.clone();
+                if let Some(obj) = updated_payload.as_object_mut() {
+                    obj.insert("status".to_string(), json!(mapped_status));
+                }
+
+                let new_task_object = StoredObject::with_parent(
+                    &head_stored,
+                    standing,
+                    head_stored.envelope.headers.clone(),
+                    StoredPayload::from_json_bytes(serde_json::to_vec_pretty(&updated_payload)?),
+                );
+
+                let task_version_ref =
+                    write_object_and_index(store, runtime_surface.index, &new_task_object)?;
+
+                create_orchestration_relation(
+                    ctx.store,
+                    runtime_surface.index,
+                    ctx.provider_registry,
+                    task_oid.clone(),
+                    review_object_ref.id.clone(),
+                    "has_review",
+                )?;
+
+                runtime_surface.index.rebuild_from_store(store)?;
+
+                (review_object_ref, closure_object_ref, task_version_ref)
             };
-
-            let mut standing_values = BTreeMap::new();
-            standing_values.insert(
-                DimensionId::from_static("kernel:process"),
-                TokenId::from_static(process_token),
-            );
-            standing_values.insert(
-                DimensionId::from_static("kernel:review"),
-                TokenId::from_static(review_token),
-            );
-            let standing = Standing {
-                values: standing_values,
-            };
-
-            let mapped_status = match decision.as_str() {
-                "accepted" => "implemented",
-                "rejected" => "closed",
-                "needs_revision" => "proposed",
-                _ => unreachable!(),
-            };
-
-            let mut updated_payload = task_payload.clone();
-            if let Some(obj) = updated_payload.as_object_mut() {
-                obj.insert("status".to_string(), json!(mapped_status));
-            }
-
-            let new_task_object = StoredObject::with_parent(
-                &head_stored,
-                standing,
-                head_stored.envelope.headers.clone(),
-                StoredPayload::from_json_bytes(serde_json::to_vec_pretty(&updated_payload)?),
-            );
-
-            let task_version_ref = write_object_and_index(store, index_ref, &new_task_object)?;
-
-            create_orchestration_relation(
-                ctx,
-                task_oid.clone(),
-                review_object_ref.id.clone(),
-                "has_review",
-            )?;
-
             index_ref.rebuild_from_store(store)?;
 
             let review_vr = VersionRef::new(
@@ -1060,13 +1024,13 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
 
             Ok(())
         }
-        /// Shows the current status and latest artifacts for a specific orchestration task.
+        // Shows the current status and latest artifacts for a specific orchestration task.
         OrchestrationAction::Show(args) => {
             require_initialized_workspace(store)?;
 
             let index_ref = ctx
                 .index
-                .as_ref()
+                .as_mut()
                 .ok_or_else(|| CliError::argument("index required for show"))?;
 
             let task_arg = args.task_id.to_lowercase();
@@ -1349,13 +1313,13 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
 
             Ok(())
         }
-        /// Displays a visual timeline of orchestration events for a task.
+        // Displays a visual timeline of orchestration events for a task.
         OrchestrationAction::Timeline(args) => {
             require_initialized_workspace(store)?;
 
             let index_ref = ctx
                 .index
-                .as_ref()
+                .as_mut()
                 .ok_or_else(|| CliError::argument("index required for timeline"))?;
 
             let task_arg = args.task_id.to_lowercase();
@@ -1403,17 +1367,18 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
 
             Ok(())
         }
-        /// Lists all orchestration tasks registered in the workspace index.
+        // Lists all orchestration tasks registered in the workspace index.
         OrchestrationAction::List(args) => {
             require_initialized_workspace(store)?;
             let index_ref = ctx
                 .index
-                .as_ref()
+                .as_mut()
                 .ok_or_else(|| CliError::argument("index required"))?;
 
             let terminal_statuses: std::collections::HashSet<&str> = [
                 "closed",
                 "completed",
+                "implemented",
                 "deferred",
                 "rejected",
                 "superseded",
@@ -1578,12 +1543,12 @@ pub fn handle(ctx: &CommandContext, command: &OrchestrationCommand) -> Result<()
 
             Ok(())
         }
-        /// Explains a specific dispatch record, resolving 'latest' if requested.
+        // Explains a specific dispatch record, resolving 'latest' if requested.
         OrchestrationAction::ExplainDispatch(args) => {
             require_initialized_workspace(store)?;
             let index_ref = ctx
                 .index
-                .as_ref()
+                .as_mut()
                 .ok_or_else(|| CliError::argument("index required for explain-dispatch"))?;
 
             let dispatch_arg = args.dispatch_id.to_lowercase();
@@ -1822,7 +1787,7 @@ fn resolve_manifest_for_report(
 #[allow(clippy::type_complexity)]
 fn traverse_orchestration_graph(
     index: &DerivedIndex,
-    store: &dyn ObjectStore,
+    store: &GitCanonicalStore,
     start_id: &ObjectId,
 ) -> Result<
     Vec<(
@@ -1871,11 +1836,12 @@ fn traverse_orchestration_graph(
             Ok(s) => s,
             _ => continue,
         };
-        let text = match stored.payload.as_utf8() {
+        let text_owned = match stored.payload.as_utf8() {
             Ok(t) => t,
             _ => continue,
         };
-        let payload: serde_json::Value = match serde_json::from_str(&text) {
+        let text = text_owned.as_str();
+        let payload: serde_json::Value = match serde_json::from_str(text) {
             Ok(p) => p,
             _ => continue,
         };
@@ -2004,7 +1970,7 @@ fn get_object_summary_text(class: &str, payload: &serde_json::Value) -> String {
 
 fn find_orchestration_task(
     index: &DerivedIndex,
-    store: &dyn ObjectStore,
+    store: &GitCanonicalStore,
     task_arg: &str,
 ) -> Result<Option<(ObjectId, String, ObjectSummary, serde_json::Value)>, CliError> {
     let task_arg = task_arg.to_lowercase();
@@ -2041,11 +2007,12 @@ fn find_orchestration_task(
                 Ok(s) => s,
                 Err(_) => continue,
             };
-            let text = match stored.payload.as_utf8() {
+            let text_owned = match stored.payload.as_utf8() {
                 Ok(t) => t,
                 Err(_) => continue,
             };
-            let payload: serde_json::Value = match serde_json::from_str(&text) {
+            let text = text_owned.as_str();
+            let payload: serde_json::Value = match serde_json::from_str(text) {
                 Ok(p) => p,
                 Err(_) => continue,
             };
@@ -2057,28 +2024,28 @@ fn find_orchestration_task(
                 .map(|s| s.to_lowercase())
                 .unwrap_or_default();
 
-            let is_work_item = *class == "work_item";
+            let is_primary_task = *class == "work_item" || *class == "implementation_task";
 
             let score = if oid_lower == task_arg {
-                if is_work_item {
+                if is_primary_task {
                     8
                 } else {
                     7
                 }
             } else if oid_lower.starts_with(&task_arg) {
-                if is_work_item {
+                if is_primary_task {
                     6
                 } else {
                     5
                 }
             } else if !tid.is_empty() && tid == task_arg {
-                if is_work_item {
+                if is_primary_task {
                     4
                 } else {
                     3
                 }
             } else if !tid.is_empty() && tid.starts_with(&task_arg) {
-                if is_work_item {
+                if is_primary_task {
                     2
                 } else {
                     1
@@ -2102,19 +2069,18 @@ fn find_orchestration_task(
 }
 
 fn deposit_orchestration_object(
-    ctx: &CommandContext,
+    store: &GitCanonicalStore,
+    index: &mut DerivedIndex,
+    provider_registry: &dyn earmark_exec::ProviderService,
     class: &str,
     title: Option<String>,
     payload: serde_json::Value,
 ) -> Result<earmark_core::ObjectRef, CliError> {
-    let index_ref = ctx
-        .index
-        .as_ref()
-        .ok_or_else(|| CliError::argument("index required"))?;
-    let runtime_surface = RuntimeToolSurface {
-        store: ctx.store,
-        index: index_ref,
-        provider_service: ctx.provider_registry,
+    let namespace = resolve_orchestrationnamespace(index, store);
+    let mut runtime_surface = RuntimeToolSurface {
+        store,
+        index,
+        provider_service: provider_registry,
     };
     let prov = RuntimeProvenance {
         actor: "operator".to_string(),
@@ -2165,15 +2131,18 @@ fn deposit_orchestration_object(
         payload,
         prov,
         DepositValidationContext {
-            namespace: resolve_orchestration_namespace(index_ref, ctx.store),
+            namespace,
             headers,
         },
     )?;
-    index_ref.rebuild_from_store(ctx.store)?;
+    index.rebuild_from_store(store)?;
     Ok(obj_ref)
 }
 
-fn resolve_orchestration_namespace(index: &DerivedIndex, _store: &dyn ObjectStore) -> Option<String> {
+fn resolve_orchestrationnamespace(
+    index: &DerivedIndex,
+    _store: &GitCanonicalStore,
+) -> Option<String> {
     if let Ok(oid) = ObjectId::parse("sys_earmark_dev_orchestration") {
         if let Ok(Some(_)) = index.get_head(&oid) {
             return Some("examples.earmark-dev".to_string());
@@ -2228,26 +2197,24 @@ fn normalize_review_status(status: &str) -> String {
 }
 
 fn create_orchestration_relation(
-    ctx: &CommandContext,
+    store: &GitCanonicalStore,
+    index: &mut DerivedIndex,
+    provider_registry: &dyn earmark_exec::ProviderService,
     source: ObjectId,
     target: ObjectId,
     relation_type: &str,
 ) -> Result<(), CliError> {
-    let index_ref = ctx
-        .index
-        .as_ref()
-        .ok_or_else(|| CliError::argument("index required"))?;
-    let runtime_surface = RuntimeToolSurface {
-        store: ctx.store,
-        index: index_ref,
-        provider_service: ctx.provider_registry,
+    let mut runtime_surface = RuntimeToolSurface {
+        store,
+        index,
+        provider_service: provider_registry,
     };
     let prov = RuntimeProvenance {
         actor: "operator".to_string(),
         source_type: "cli".to_string(),
     };
     runtime_surface.create_relation(source, target, relation_type.to_string(), json!({}), prov)?;
-    index_ref.rebuild_from_store(ctx.store)?;
+    index.rebuild_from_store(store)?;
     Ok(())
 }
 

@@ -162,7 +162,8 @@ impl CompiledContextService {
                     path: store
                         .version_path(&version)
                         .strip_prefix(store.root())
-                        .unwrap()
+                        .map(|p| p.to_path_buf())
+                        .unwrap_or_else(|_| store.version_path(&version))
                         .display()
                         .to_string(),
                     excerpt_range: None,
@@ -215,7 +216,8 @@ impl CompiledContextService {
                     path: store
                         .version_path(&relation_ref)
                         .strip_prefix(store.root())
-                        .unwrap()
+                        .map(|p| p.to_path_buf())
+                        .unwrap_or_else(|_| store.version_path(&relation_ref))
                         .display()
                         .to_string(),
                 })
@@ -224,7 +226,7 @@ impl CompiledContextService {
 
         let surface_id = format!(
             "ws_{}",
-            Utc::now().timestamp_nanos_opt().unwrap_or_default()
+            Utc::now().timestamp_nanos_opt().unwrap_or(0)
         );
         let surface_dir = store
             .root()
@@ -816,7 +818,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let store = GitCanonicalStore::new(dir.path());
         store.init_layout().unwrap();
-        let index = DerivedIndex::open(dir.path()).unwrap();
+        let mut index = DerivedIndex::open(dir.path()).unwrap();
 
         let a = object("a", Standing::default());
         let b = object("b", Standing::default());
@@ -827,7 +829,7 @@ mod tests {
         index.rebuild_from_store(&store).unwrap();
 
         let selected =
-            collect_selected_objects(&store, &index, &template_with_standing(BTreeMap::new()))
+            collect_selected_objects(&store, &mut index, &template_with_standing(BTreeMap::new()))
                 .unwrap();
         let ids = selected
             .iter()
@@ -843,7 +845,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let store = GitCanonicalStore::new(dir.path());
         store.init_layout().unwrap();
-        let index = DerivedIndex::open(dir.path()).unwrap();
+        let mut index = DerivedIndex::open(dir.path()).unwrap();
 
         let a = object("a", Standing::default());
         let b = object("b", Standing::default());
@@ -857,7 +859,7 @@ mod tests {
         index.rebuild_from_store(&store).unwrap();
 
         let selected =
-            collect_selected_objects(&store, &index, &template_with_standing(BTreeMap::new()))
+            collect_selected_objects(&store, &mut index, &template_with_standing(BTreeMap::new()))
                 .unwrap();
         let ids = selected
             .iter()
@@ -871,7 +873,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let store = GitCanonicalStore::new(dir.path());
         store.init_layout().unwrap();
-        let index = DerivedIndex::open(dir.path()).unwrap();
+        let mut index = DerivedIndex::open(dir.path()).unwrap();
 
         let a = object("a", Standing::default());
         let b = object("b", Standing::default());
@@ -888,7 +890,7 @@ mod tests {
         index.rebuild_from_store(&store).unwrap();
 
         let selected =
-            collect_selected_objects(&store, &index, &template_with_standing(BTreeMap::new()))
+            collect_selected_objects(&store, &mut index, &template_with_standing(BTreeMap::new()))
                 .unwrap();
         let d_count = selected
             .iter()
@@ -902,7 +904,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let store = GitCanonicalStore::new(dir.path());
         store.init_layout().unwrap();
-        let index = DerivedIndex::open(dir.path()).unwrap();
+        let mut index = DerivedIndex::open(dir.path()).unwrap();
 
         let accepted = object("accepted", standing_kernel("working", "accepted", "active"));
         let rejected = object("rejected", standing_kernel("working", "rejected", "active"));
@@ -916,7 +918,7 @@ mod tests {
         let standing =
             BTreeMap::from([("kernel:review".to_string(), vec!["accepted".to_string()])]);
         let selected =
-            collect_selected_objects(&store, &index, &template_with_standing(standing)).unwrap();
+            collect_selected_objects(&store, &mut index, &template_with_standing(standing)).unwrap();
         let ids = selected
             .iter()
             .map(|r| r.object_id.clone())
@@ -930,7 +932,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let store = GitCanonicalStore::new(dir.path());
         store.init_layout().unwrap();
-        let index = DerivedIndex::open(dir.path()).unwrap();
+        let mut index = DerivedIndex::open(dir.path()).unwrap();
 
         let finding = StoredObject::new(
             Kind::Object,
@@ -959,7 +961,7 @@ mod tests {
 
         let selection = collect_selection(
             &store,
-            &index,
+            &mut index,
             &template_with_select(
                 vec!["finding".to_string()],
                 BTreeMap::new(),
@@ -982,7 +984,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let store = GitCanonicalStore::new(dir.path());
         store.init_layout().unwrap();
-        let index = DerivedIndex::open(dir.path()).unwrap();
+        let mut index = DerivedIndex::open(dir.path()).unwrap();
 
         let accepted = object("accepted", standing_kernel("working", "accepted", "active"));
         let rejected = object("rejected", standing_kernel("working", "rejected", "active"));
@@ -997,7 +999,7 @@ mod tests {
             BTreeMap::from([("kernel:review".to_string(), vec!["accepted".to_string()])]);
         let selection = collect_selection(
             &store,
-            &index,
+            &mut index,
             &template_with_select(
                 vec!["note".to_string()],
                 standing,
@@ -1021,7 +1023,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let store = GitCanonicalStore::new(dir.path());
         store.init_layout().unwrap();
-        let index = DerivedIndex::open(dir.path()).unwrap();
+        let mut index = DerivedIndex::open(dir.path()).unwrap();
 
         let accepted = object("accepted", standing_kernel("working", "accepted", "active"));
         let rejected = object("rejected", standing_kernel("working", "rejected", "active"));
@@ -1036,7 +1038,7 @@ mod tests {
             BTreeMap::from([("kernel:review".to_string(), vec!["accepted".to_string()])]);
         let selection = collect_selection(
             &store,
-            &index,
+            &mut index,
             &template_with_select(
                 vec!["note".to_string()],
                 standing,
@@ -1062,7 +1064,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let store = GitCanonicalStore::new(dir.path());
         store.init_layout().unwrap();
-        let index = DerivedIndex::open(dir.path()).unwrap();
+        let mut index = DerivedIndex::open(dir.path()).unwrap();
 
         let accepted = object("accepted", standing_kernel("working", "accepted", "active"));
         let rejected = object("rejected", standing_kernel("working", "rejected", "active"));
@@ -1090,7 +1092,7 @@ mod tests {
         let standing =
             BTreeMap::from([("kernel:review".to_string(), vec!["accepted".to_string()])]);
         let selected =
-            collect_selected_objects(&store, &index, &template_with_standing(standing)).unwrap();
+            collect_selected_objects(&store, &mut index, &template_with_standing(standing)).unwrap();
         let ids = selected
             .iter()
             .map(|r| r.object_id.clone())
@@ -1105,7 +1107,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let store = GitCanonicalStore::new(dir.path());
         store.init_layout().unwrap();
-        let index = DerivedIndex::open(dir.path()).unwrap();
+        let mut index = DerivedIndex::open(dir.path()).unwrap();
 
         let finding = StoredObject::new(
             Kind::Object,
@@ -1134,7 +1136,7 @@ mod tests {
 
         let selection = collect_selection(
             &store,
-            &index,
+            &mut index,
             &template_with_select(
                 vec!["finding".to_string()],
                 BTreeMap::new(),
@@ -1153,7 +1155,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let store = GitCanonicalStore::new(dir.path());
         store.init_layout().unwrap();
-        let index = DerivedIndex::open(dir.path()).unwrap();
+        let mut index = DerivedIndex::open(dir.path()).unwrap();
 
         let finding = StoredObject::new(
             Kind::Object,
@@ -1202,7 +1204,7 @@ mod tests {
 
         let reg = kernel_registry();
         let manifest =
-            CompiledContextService::compile(&store, &index, &template_ref, None, &reg).unwrap();
+            CompiledContextService::compile(&store, &mut index, &template_ref, None, &reg).unwrap();
 
         assert_eq!(manifest.objects.len(), 1);
         assert_eq!(manifest.boundary_relations.len(), 1);
@@ -1237,7 +1239,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let store = GitCanonicalStore::new(dir.path());
         store.init_layout().unwrap();
-        let index = DerivedIndex::open(dir.path()).unwrap();
+        let mut index = DerivedIndex::open(dir.path()).unwrap();
 
         let a = object("a", Standing::default());
         let b = object("b", Standing::default());
@@ -1249,7 +1251,7 @@ mod tests {
         let mut template = template_with_standing(BTreeMap::new());
         template.select.expansion.include_boundary_relations = true;
 
-        let selection = collect_selection(&store, &index, &template).unwrap();
+        let selection = collect_selection(&store, &mut index, &template).unwrap();
 
         assert_eq!(selection.objects.len(), 2);
         assert_eq!(selection.boundary_relations.len(), 0);
@@ -1260,7 +1262,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let store = GitCanonicalStore::new(dir.path());
         store.init_layout().unwrap();
-        let index = DerivedIndex::open(dir.path()).unwrap();
+        let mut index = DerivedIndex::open(dir.path()).unwrap();
 
         let finding = StoredObject::new(
             Kind::Object,
@@ -1296,7 +1298,7 @@ mod tests {
         );
         template.select.expansion.include_boundary_relations = true;
 
-        let selection = collect_selection(&store, &index, &template).unwrap();
+        let selection = collect_selection(&store, &mut index, &template).unwrap();
 
         assert_eq!(selection.objects.len(), 1);
         assert_eq!(selection.boundary_relations.len(), 0);
@@ -1307,7 +1309,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let store = GitCanonicalStore::new(dir.path());
         store.init_layout().unwrap();
-        let index = DerivedIndex::open(dir.path()).unwrap();
+        let mut index = DerivedIndex::open(dir.path()).unwrap();
 
         let accepted = object("accepted", standing_kernel("working", "accepted", "active"));
         let rejected = object("rejected", standing_kernel("working", "rejected", "active"));
@@ -1330,7 +1332,7 @@ mod tests {
         let mut template = template_with_standing(standing);
         template.select.expansion.include_boundary_relations = true;
 
-        let selection = collect_selection(&store, &index, &template).unwrap();
+        let selection = collect_selection(&store, &mut index, &template).unwrap();
 
         assert_eq!(selection.objects.len(), 1);
         assert_eq!(selection.boundary_relations.len(), 1);
@@ -1347,7 +1349,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let store = GitCanonicalStore::new(dir.path());
         store.init_layout().unwrap();
-        let index = DerivedIndex::open(dir.path()).unwrap();
+        let mut index = DerivedIndex::open(dir.path()).unwrap();
 
         let finding = StoredObject::new(
             Kind::Object,
@@ -1396,7 +1398,7 @@ mod tests {
 
         let reg = kernel_registry();
         let manifest =
-            CompiledContextService::compile(&store, &index, &template_ref, None, &reg).unwrap();
+            CompiledContextService::compile(&store, &mut index, &template_ref, None, &reg).unwrap();
         let evidence = render_evidence_pack(&manifest);
 
         assert!(evidence.contains("# Boundary Relations"));
@@ -1499,7 +1501,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let store = GitCanonicalStore::new(dir.path());
         store.init_layout().unwrap();
-        let index = DerivedIndex::open(dir.path()).unwrap();
+        let mut index = DerivedIndex::open(dir.path()).unwrap();
 
         let included = object("included", Standing::default());
         let hidden_obj = object("hidden", standing_with_visibility("hidden"));
@@ -1522,7 +1524,7 @@ mod tests {
 
         let reg = visibility_registry();
         let manifest =
-            CompiledContextService::compile(&store, &index, &template_ref, None, &reg).unwrap();
+            CompiledContextService::compile(&store, &mut index, &template_ref, None, &reg).unwrap();
 
         let ids: BTreeSet<_> = manifest
             .objects
@@ -1539,7 +1541,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let store = GitCanonicalStore::new(dir.path());
         store.init_layout().unwrap();
-        let index = DerivedIndex::open(dir.path()).unwrap();
+        let mut index = DerivedIndex::open(dir.path()).unwrap();
 
         let visible = object("visible", standing_with_visibility("standard_only"));
         store.write_object(&visible).unwrap();
@@ -1560,7 +1562,7 @@ mod tests {
 
         let reg = visibility_registry();
         let manifest =
-            CompiledContextService::compile(&store, &index, &template_ref, None, &reg).unwrap();
+            CompiledContextService::compile(&store, &mut index, &template_ref, None, &reg).unwrap();
 
         let ids: BTreeSet<_> = manifest
             .objects
@@ -1575,7 +1577,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let store = GitCanonicalStore::new(dir.path());
         store.init_layout().unwrap();
-        let index = DerivedIndex::open(dir.path()).unwrap();
+        let mut index = DerivedIndex::open(dir.path()).unwrap();
 
         let obj = object("default", Standing::default());
         store.write_object(&obj).unwrap();
@@ -1596,7 +1598,7 @@ mod tests {
 
         let reg = visibility_registry();
         let manifest =
-            CompiledContextService::compile(&store, &index, &template_ref, None, &reg).unwrap();
+            CompiledContextService::compile(&store, &mut index, &template_ref, None, &reg).unwrap();
 
         let ids: BTreeSet<_> = manifest
             .objects
@@ -1611,7 +1613,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let store = GitCanonicalStore::new(dir.path());
         store.init_layout().unwrap();
-        let index = DerivedIndex::open(dir.path()).unwrap();
+        let mut index = DerivedIndex::open(dir.path()).unwrap();
 
         let included = object("included", Standing::default());
         let hidden_obj = object("hidden", standing_with_visibility("hidden"));
@@ -1634,7 +1636,7 @@ mod tests {
 
         let reg = visibility_registry();
         let manifest =
-            CompiledContextService::compile(&store, &index, &template_ref, None, &reg).unwrap();
+            CompiledContextService::compile(&store, &mut index, &template_ref, None, &reg).unwrap();
 
         let ids: BTreeSet<_> = manifest
             .objects
@@ -1651,7 +1653,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let store = GitCanonicalStore::new(dir.path());
         store.init_layout().unwrap();
-        let index = DerivedIndex::open(dir.path()).unwrap();
+        let mut index = DerivedIndex::open(dir.path()).unwrap();
 
         let hidden_obj = object("hidden", standing_with_visibility("hidden"));
         store.write_object(&hidden_obj).unwrap();
@@ -1672,7 +1674,7 @@ mod tests {
 
         let reg = visibility_registry();
         let manifest =
-            CompiledContextService::compile(&store, &index, &template_ref, None, &reg).unwrap();
+            CompiledContextService::compile(&store, &mut index, &template_ref, None, &reg).unwrap();
 
         assert!(
             manifest
@@ -1689,7 +1691,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let store = GitCanonicalStore::new(dir.path());
         store.init_layout().unwrap();
-        let index = DerivedIndex::open(dir.path()).unwrap();
+        let mut index = DerivedIndex::open(dir.path()).unwrap();
 
         let finding = StoredObject::new(
             Kind::Object,
@@ -1738,7 +1740,7 @@ mod tests {
 
         let reg = visibility_registry();
         let manifest =
-            CompiledContextService::compile(&store, &index, &template_ref, None, &reg).unwrap();
+            CompiledContextService::compile(&store, &mut index, &template_ref, None, &reg).unwrap();
 
         // Excluded endpoint's payload must not leak
         let evidence = render_evidence_pack(&manifest);
@@ -1767,7 +1769,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let store = GitCanonicalStore::new(dir.path());
         store.init_layout().unwrap();
-        let index = DerivedIndex::open(dir.path()).unwrap();
+        let mut index = DerivedIndex::open(dir.path()).unwrap();
 
         // 1. Create a cycle A -> B -> C -> A
         let a = object_with_class("a", "class_a", Standing::default());
@@ -1828,7 +1830,7 @@ mod tests {
 
         let reg = visibility_registry();
         let manifest =
-            CompiledContextService::compile(&store, &index, &template_ref, None, &reg).unwrap();
+            CompiledContextService::compile(&store, &mut index, &template_ref, None, &reg).unwrap();
 
         let object_ids: BTreeSet<String> = manifest
             .objects

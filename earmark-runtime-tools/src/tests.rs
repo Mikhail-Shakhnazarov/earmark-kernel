@@ -18,14 +18,14 @@ use tempfile::tempdir;
 fn setup_surface(dir: &std::path::Path) -> (GitCanonicalStore, DerivedIndex, ProviderRegistry) {
     let store = GitCanonicalStore::new(dir);
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(dir).unwrap();
+    let mut index = DerivedIndex::open(dir).unwrap();
     let registry = ProviderRegistry::default();
     (store, index, registry)
 }
 
 fn register_class_definition(
     store: &GitCanonicalStore,
-    index: &DerivedIndex,
+    index: &mut DerivedIndex,
     name: &str,
     rules: Vec<earmark_core::RelationRule>,
 ) -> earmark_core::VersionRef {
@@ -68,7 +68,7 @@ fn register_class_definition(
 
 fn register_simple_class(
     store: &GitCanonicalStore,
-    index: &DerivedIndex,
+    index: &mut DerivedIndex,
     name: &str,
     rel_type: &str,
     target_class: &str,
@@ -113,10 +113,10 @@ impl<S: CanonicalStore> CompiledContextCompiler<S> for FakeContextCompiler {
 #[test]
 fn test_compile_work_surface_supports_context_compiler_substitution() {
     let dir = tempdir().unwrap();
-    let (store, index, registry) = setup_surface(dir.path());
-    let surface = RuntimeToolSurface {
+    let (store, mut index, registry) = setup_surface(dir.path());
+    let mut surface = RuntimeToolSurface {
         store: &store,
-        index: &index,
+        index: &mut index,
         provider_service: &registry,
     };
     let compiler = FakeContextCompiler;
@@ -134,17 +134,17 @@ fn test_compile_work_surface_supports_context_compiler_substitution() {
 #[test]
 fn test_duplicate_active_assignment_rejection() {
     let dir = tempdir().unwrap();
-    let (store, index, registry) = setup_surface(dir.path());
-    let surface = RuntimeToolSurface {
+    let (store, mut index, registry) = setup_surface(dir.path());
+    let mut surface = RuntimeToolSurface {
         store: &store,
-        index: &index,
+        index: &mut index,
         provider_service: &registry,
     };
 
     let _assignment1 = surface
         .assign_transition(
-            "run1".to_string(),
-            "trans1".to_string(),
+            earmark_core::RunId::parse("run1").unwrap(),
+            earmark_core::TransitionId::parse("trans1").unwrap(),
             "agentA".to_string(),
             vec![],
             None,
@@ -153,8 +153,8 @@ fn test_duplicate_active_assignment_rejection() {
 
     let err = surface
         .assign_transition(
-            "run1".to_string(),
-            "trans1".to_string(),
+            earmark_core::RunId::parse("run1").unwrap(),
+            earmark_core::TransitionId::parse("trans1").unwrap(),
             "agentB".to_string(),
             vec![],
             None,
@@ -166,17 +166,17 @@ fn test_duplicate_active_assignment_rejection() {
 #[test]
 fn test_assignment_completion_creating_a_change_set() {
     let dir = tempdir().unwrap();
-    let (store, index, registry) = setup_surface(dir.path());
-    let surface = RuntimeToolSurface {
+    let (store, mut index, registry) = setup_surface(dir.path());
+    let mut surface = RuntimeToolSurface {
         store: &store,
-        index: &index,
+        index: &mut index,
         provider_service: &registry,
     };
 
     let assignment = surface
         .assign_transition(
-            "run1".to_string(),
-            "trans1".to_string(),
+            earmark_core::RunId::parse("run1").unwrap(),
+            earmark_core::TransitionId::parse("trans1").unwrap(),
             "agentA".to_string(),
             vec![],
             None,
@@ -198,16 +198,16 @@ fn test_assignment_completion_creating_a_change_set() {
         .complete_transition_assignment(assignment.id.clone(), draft, "agentA".to_string())
         .unwrap();
     assert_eq!(change_set.assignment_id, Some(assignment.id));
-    assert_eq!(change_set.run_id, "run1");
+    assert_eq!(change_set.run_id, "run_run1");
 }
 
 #[test]
 fn test_loading_missing_handoff_manifest() {
     let dir = tempdir().unwrap();
-    let (store, index, registry) = setup_surface(dir.path());
-    let surface = RuntimeToolSurface {
+    let (store, mut index, registry) = setup_surface(dir.path());
+    let mut surface = RuntimeToolSurface {
         store: &store,
-        index: &index,
+        index: &mut index,
         provider_service: &registry,
     };
 
@@ -222,16 +222,16 @@ fn test_loading_missing_handoff_manifest() {
 #[test]
 fn test_relation_qualifier_json_conversion_failure() {
     let dir = tempdir().unwrap();
-    let (store, index, registry) = setup_surface(dir.path());
-    let surface = RuntimeToolSurface {
+    let (store, mut index, registry) = setup_surface(dir.path());
+    let mut surface = RuntimeToolSurface {
         store: &store,
-        index: &index,
+        index: &mut index,
         provider_service: &registry,
     };
 
     register_class_definition(
         &store,
-        &index,
+        surface.index,
         "test",
         vec![earmark_core::RelationRule {
             relation_type: "rel".to_string(),
@@ -290,16 +290,16 @@ fn test_relation_qualifier_json_conversion_failure() {
 #[test]
 fn test_compile_connected_context_honors_depth_and_filters() {
     let dir = tempdir().unwrap();
-    let (store, index, registry) = setup_surface(dir.path());
-    let surface = RuntimeToolSurface {
+    let (store, mut index, registry) = setup_surface(dir.path());
+    let mut surface = RuntimeToolSurface {
         store: &store,
-        index: &index,
+        index: &mut index,
         provider_service: &registry,
     };
 
-    register_simple_class(&store, &index, "root", "supports", "mid");
-    register_simple_class(&store, &index, "mid", "blocks", "far");
-    register_class_definition(&store, &index, "far", vec![]);
+    register_simple_class(&store, surface.index, "root", "supports", "mid");
+    register_simple_class(&store, surface.index, "mid", "blocks", "far");
+    register_class_definition(&store, surface.index, "far", vec![]);
 
     let root = surface
         .deposit_object(
@@ -401,15 +401,15 @@ fn test_compile_connected_context_honors_depth_and_filters() {
 #[test]
 fn test_compile_connected_context_respects_standing_filters() {
     let dir = tempdir().unwrap();
-    let (store, index, registry) = setup_surface(dir.path());
-    let surface = RuntimeToolSurface {
+    let (store, mut index, registry) = setup_surface(dir.path());
+    let mut surface = RuntimeToolSurface {
         store: &store,
-        index: &index,
+        index: &mut index,
         provider_service: &registry,
     };
 
-    register_simple_class(&store, &index, "root", "supports", "neighbor");
-    register_class_definition(&store, &index, "neighbor", vec![]);
+    register_simple_class(&store, surface.index, "root", "supports", "neighbor");
+    register_class_definition(&store, surface.index, "neighbor", vec![]);
 
     let root = surface
         .deposit_object(
@@ -516,17 +516,17 @@ fn test_compile_connected_context_respects_standing_filters() {
 #[test]
 fn test_assignment_lifecycle_release() {
     let dir = tempdir().unwrap();
-    let (store, index, registry) = setup_surface(dir.path());
-    let surface = RuntimeToolSurface {
+    let (store, mut index, registry) = setup_surface(dir.path());
+    let mut surface = RuntimeToolSurface {
         store: &store,
-        index: &index,
+        index: &mut index,
         provider_service: &registry,
     };
 
     let assignment = surface
         .assign_transition(
-            "run1".to_string(),
-            "trans1".to_string(),
+            earmark_core::RunId::parse("run1").unwrap(),
+            earmark_core::TransitionId::parse("trans1").unwrap(),
             "agentA".to_string(),
             vec![],
             None,
@@ -541,17 +541,17 @@ fn test_assignment_lifecycle_release() {
 #[test]
 fn test_assignment_lifecycle_expire() {
     let dir = tempdir().unwrap();
-    let (store, index, registry) = setup_surface(dir.path());
-    let surface = RuntimeToolSurface {
+    let (store, mut index, registry) = setup_surface(dir.path());
+    let mut surface = RuntimeToolSurface {
         store: &store,
-        index: &index,
+        index: &mut index,
         provider_service: &registry,
     };
 
     let assignment = surface
         .assign_transition(
-            "run1".to_string(),
-            "trans1".to_string(),
+            earmark_core::RunId::parse("run1").unwrap(),
+            earmark_core::TransitionId::parse("trans1").unwrap(),
             "agentA".to_string(),
             vec![],
             None,
@@ -566,17 +566,17 @@ fn test_assignment_lifecycle_expire() {
 #[test]
 fn test_assignment_lifecycle_supersede() {
     let dir = tempdir().unwrap();
-    let (store, index, registry) = setup_surface(dir.path());
-    let surface = RuntimeToolSurface {
+    let (store, mut index, registry) = setup_surface(dir.path());
+    let mut surface = RuntimeToolSurface {
         store: &store,
-        index: &index,
+        index: &mut index,
         provider_service: &registry,
     };
 
     let assignment = surface
         .assign_transition(
-            "run1".to_string(),
-            "trans1".to_string(),
+            earmark_core::RunId::parse("run1").unwrap(),
+            earmark_core::TransitionId::parse("trans1").unwrap(),
             "agentA".to_string(),
             vec![],
             None,
@@ -595,17 +595,17 @@ fn test_assignment_lifecycle_supersede() {
 #[test]
 fn test_assignment_lifecycle_resume() {
     let dir = tempdir().unwrap();
-    let (store, index, registry) = setup_surface(dir.path());
-    let surface = RuntimeToolSurface {
+    let (store, mut index, registry) = setup_surface(dir.path());
+    let mut surface = RuntimeToolSurface {
         store: &store,
-        index: &index,
+        index: &mut index,
         provider_service: &registry,
     };
 
     let assignment1 = surface
         .assign_transition(
-            "run1".to_string(),
-            "trans1".to_string(),
+            earmark_core::RunId::parse("run1").unwrap(),
+            earmark_core::TransitionId::parse("trans1").unwrap(),
             "agentA".to_string(),
             vec![],
             None,
@@ -623,18 +623,18 @@ fn test_assignment_lifecycle_resume() {
 #[test]
 fn test_resume_fails_if_active_duplicate_exists() {
     let dir = tempdir().unwrap();
-    let (store, index, registry) = setup_surface(dir.path());
-    let surface = RuntimeToolSurface {
+    let (store, mut index, registry) = setup_surface(dir.path());
+    let mut surface = RuntimeToolSurface {
         store: &store,
-        index: &index,
+        index: &mut index,
         provider_service: &registry,
     };
 
     // Create expired assignment
     let assignment1 = surface
         .assign_transition(
-            "run1".to_string(),
-            "trans1".to_string(),
+            earmark_core::RunId::parse("run1").unwrap(),
+            earmark_core::TransitionId::parse("trans1").unwrap(),
             "agentA".to_string(),
             vec![],
             None,
@@ -645,8 +645,8 @@ fn test_resume_fails_if_active_duplicate_exists() {
     // Create parallel active assignment (same run/trans) - this shouldn't be blocked by expired
     let _assignment2 = surface
         .assign_transition(
-            "run1".to_string(),
-            "trans1".to_string(),
+            earmark_core::RunId::parse("run1").unwrap(),
+            earmark_core::TransitionId::parse("trans1").unwrap(),
             "agentB".to_string(),
             vec![],
             None,
@@ -663,14 +663,14 @@ fn test_resume_fails_if_active_duplicate_exists() {
 #[test]
 fn test_compile_connected_context_terminates_on_cycle() {
     let dir = tempdir().unwrap();
-    let (store, index, registry) = setup_surface(dir.path());
-    let surface = RuntimeToolSurface {
+    let (store, mut index, registry) = setup_surface(dir.path());
+    let mut surface = RuntimeToolSurface {
         store: &store,
-        index: &index,
+        index: &mut index,
         provider_service: &registry,
     };
 
-    register_simple_class(&store, &index, "node", "linked", "node");
+    register_simple_class(&store, surface.index, "node", "linked", "node");
 
     let a = surface
         .deposit_object(
@@ -733,14 +733,14 @@ fn test_compile_connected_context_terminates_on_cycle() {
 #[test]
 fn test_compile_connected_context_dedupes_relation_refs() {
     let dir = tempdir().unwrap();
-    let (store, index, registry) = setup_surface(dir.path());
-    let surface = RuntimeToolSurface {
+    let (store, mut index, registry) = setup_surface(dir.path());
+    let mut surface = RuntimeToolSurface {
         store: &store,
-        index: &index,
+        index: &mut index,
         provider_service: &registry,
     };
 
-    register_simple_class(&store, &index, "node", "linked", "node");
+    register_simple_class(&store, surface.index, "node", "linked", "node");
 
     let a = surface
         .deposit_object(
@@ -832,7 +832,7 @@ fn test_compile_connected_context_dedupes_relation_refs() {
 
 fn create_test_object(
     store: &GitCanonicalStore,
-    index: &DerivedIndex,
+    index: &mut DerivedIndex,
     class: &str,
 ) -> earmark_core::ObjectId {
     let stored = earmark_store::StoredObject::new(
@@ -861,17 +861,17 @@ fn create_test_object(
 #[test]
 fn test_create_relation_enforces_rules() {
     let dir = tempdir().unwrap();
-    let (store, index, registry) = setup_surface(dir.path());
-    let surface = RuntimeToolSurface {
+    let (store, mut index, registry) = setup_surface(dir.path());
+    let mut surface = RuntimeToolSurface {
         store: &store,
-        index: &index,
+        index: &mut index,
         provider_service: &registry,
     };
 
     // 1. Setup classes
     register_class_definition(
         &store,
-        &index,
+        surface.index,
         "finding",
         vec![earmark_core::RelationRule {
             relation_type: "references".to_string(),
@@ -880,13 +880,13 @@ fn test_create_relation_enforces_rules() {
             authorizing_endpoint: None,
         }],
     );
-    register_class_definition(&store, &index, "source_note", vec![]);
-    register_class_definition(&store, &index, "summary", vec![]);
+    register_class_definition(&store, surface.index, "source_note", vec![]);
+    register_class_definition(&store, surface.index, "summary", vec![]);
 
     // 2. Setup objects
-    let source_id = create_test_object(&store, &index, "finding");
-    let target_note_id = create_test_object(&store, &index, "source_note");
-    let target_summary_id = create_test_object(&store, &index, "summary");
+    let source_id = create_test_object(&store, surface.index, "finding");
+    let target_note_id = create_test_object(&store, surface.index, "source_note");
+    let target_summary_id = create_test_object(&store, surface.index, "summary");
 
     let provenance = earmark_core::RuntimeProvenance {
         actor: "test_actor".to_string(),
@@ -932,16 +932,16 @@ fn test_create_relation_enforces_rules() {
 #[test]
 fn test_create_relation_direction_enforcement() {
     let dir = tempdir().unwrap();
-    let (store, index, registry) = setup_surface(dir.path());
-    let surface = RuntimeToolSurface {
+    let (store, mut index, registry) = setup_surface(dir.path());
+    let mut surface = RuntimeToolSurface {
         store: &store,
-        index: &index,
+        index: &mut index,
         provider_service: &registry,
     };
 
     register_class_definition(
         &store,
-        &index,
+        surface.index,
         "a",
         vec![
             earmark_core::RelationRule {
@@ -958,10 +958,10 @@ fn test_create_relation_direction_enforcement() {
             },
         ],
     );
-    register_class_definition(&store, &index, "b", vec![]);
+    register_class_definition(&store, surface.index, "b", vec![]);
 
-    let source_id = create_test_object(&store, &index, "a");
-    let target_id = create_test_object(&store, &index, "b");
+    let source_id = create_test_object(&store, surface.index, "a");
+    let target_id = create_test_object(&store, surface.index, "b");
 
     let provenance = earmark_core::RuntimeProvenance {
         actor: "test_actor".to_string(),
@@ -1023,11 +1023,11 @@ fn test_create_relation_direction_enforcement() {
         vec![],
     );
     let class_ref = store.write_object(&stored).unwrap();
-    index
+    surface.index
         .upsert_head_object_from_store(&store, &class_ref.id)
         .unwrap();
 
-    let source_bad_id = create_test_object(&store, &index, "bad_direction");
+    let source_bad_id = create_test_object(&store, surface.index, "bad_direction");
     let count_before = surface.index.relation_count().unwrap();
     let err = surface
         .create_relation(
@@ -1049,10 +1049,10 @@ fn test_create_relation_direction_enforcement() {
 #[test]
 fn test_create_relation_missing_classes_fails() {
     let dir = tempdir().unwrap();
-    let (store, index, registry) = setup_surface(dir.path());
-    let surface = RuntimeToolSurface {
+    let (store, mut index, registry) = setup_surface(dir.path());
+    let mut surface = RuntimeToolSurface {
         store: &store,
-        index: &index,
+        index: &mut index,
         provider_service: &registry,
     };
 
@@ -1073,10 +1073,10 @@ fn test_create_relation_missing_classes_fails() {
             vec![],
         );
         let v = store.write_object(&stored).unwrap();
-        index.upsert_head_object_from_store(&store, &v.id).unwrap();
+        surface.index.upsert_head_object_from_store(&store, &v.id).unwrap();
         v.id
     };
-    let target_id = create_test_object(&store, &index, "some_class");
+    let target_id = create_test_object(&store, surface.index, "some_class");
 
     let count_before = surface.index.relation_count().unwrap();
     let err = surface
@@ -1095,7 +1095,7 @@ fn test_create_relation_missing_classes_fails() {
     assert_eq!(surface.index.relation_count().unwrap(), count_before);
 
     // Case 2: Missing class definition
-    let source_id_with_class = create_test_object(&store, &index, "missing_class");
+    let source_id_with_class = create_test_object(&store, surface.index, "missing_class");
     let err = surface
         .create_relation(
             source_id_with_class,
@@ -1111,7 +1111,7 @@ fn test_create_relation_missing_classes_fails() {
 
 fn register_system_definition(
     store: &GitCanonicalStore,
-    index: &DerivedIndex,
+    index: &mut DerivedIndex,
     system_id: &str,
     namespace: &str,
     classes: Vec<VersionRef>,
@@ -1158,28 +1158,28 @@ fn register_system_definition(
 #[test]
 fn test_deposit_admission_enforcement() {
     let dir = tempdir().unwrap();
-    let (store, index, registry) = setup_surface(dir.path());
-    let surface = RuntimeToolSurface {
+    let (store, mut index, registry) = setup_surface(dir.path());
+    let mut surface = RuntimeToolSurface {
         store: &store,
-        index: &index,
+        index: &mut index,
         provider_service: &registry,
     };
 
     // 1. Register classes
-    let class_a_ref = register_class_definition(&store, &index, "class_a", vec![]);
-    let _class_b_ref = register_class_definition(&store, &index, "class_b", vec![]);
+    let class_a_ref = register_class_definition(&store, surface.index, "class_a", vec![]);
+    let _class_b_ref = register_class_definition(&store, surface.index, "class_b", vec![]);
 
     // 2. Register system that only admits class_a
     let system_ref = register_system_definition(
         &store,
-        &index,
+        surface.index,
         "governed_system",
         "governed_ns",
         vec![class_a_ref],
     );
 
     // 3. Activate system
-    index
+    surface.index
         .activate_system("governed_ns", "governed_system", &system_ref)
         .unwrap();
 
@@ -1265,10 +1265,10 @@ fn test_deposit_admission_enforcement() {
 #[test]
 fn test_deposit_system_integrity_on_broken_class_ref() {
     let dir = tempdir().unwrap();
-    let (store, index, registry) = setup_surface(dir.path());
-    let surface = RuntimeToolSurface {
+    let (store, mut index, registry) = setup_surface(dir.path());
+    let mut surface = RuntimeToolSurface {
         store: &store,
-        index: &index,
+        index: &mut index,
         provider_service: &registry,
     };
 
@@ -1281,14 +1281,14 @@ fn test_deposit_system_integrity_on_broken_class_ref() {
     // 2. Register system with that broken ref
     let system_ref = register_system_definition(
         &store,
-        &index,
+        surface.index,
         "broken_system",
         "broken_ns",
         vec![broken_ref],
     );
 
     // 3. Activate
-    index
+    surface.index
         .activate_system("broken_ns", "broken_system", &system_ref)
         .unwrap();
 
@@ -1316,10 +1316,10 @@ fn test_deposit_system_integrity_on_broken_class_ref() {
 #[test]
 fn test_endpoint_authorized_relations() {
     let dir = tempdir().unwrap();
-    let (store, index, registry) = setup_surface(dir.path());
-    let surface = RuntimeToolSurface {
+    let (store, mut index, registry) = setup_surface(dir.path());
+    let mut surface = RuntimeToolSurface {
         store: &store,
-        index: &index,
+        index: &mut index,
         provider_service: &registry,
     };
 
@@ -1332,7 +1332,7 @@ fn test_endpoint_authorized_relations() {
     // class_a allows outgoing 'linked_to' to class_b
     register_class_definition(
         &store,
-        &index,
+        surface.index,
         "class_a",
         vec![earmark_core::RelationRule {
             relation_type: "linked_to".to_string(),
@@ -1342,7 +1342,7 @@ fn test_endpoint_authorized_relations() {
         }],
     );
     // class_b allows nothing
-    register_class_definition(&store, &index, "class_b", vec![]);
+    register_class_definition(&store, surface.index, "class_b", vec![]);
 
     let obj_a = surface
         .deposit_object(
@@ -1378,11 +1378,11 @@ fn test_endpoint_authorized_relations() {
 
     // 2. Target-only authorization
     // class_c allows nothing
-    register_class_definition(&store, &index, "class_c", vec![]);
+    register_class_definition(&store, surface.index, "class_c", vec![]);
     // class_d allows incoming 'mentions' from class_c
     register_class_definition(
         &store,
-        &index,
+        surface.index,
         "class_d",
         vec![earmark_core::RelationRule {
             relation_type: "mentions".to_string(),
@@ -1461,7 +1461,7 @@ fn test_endpoint_authorized_relations() {
     // class_e allows bidirectional 'partner' with class_f, either can authorize
     register_class_definition(
         &store,
-        &index,
+        surface.index,
         "class_e",
         vec![earmark_core::RelationRule {
             relation_type: "partner".to_string(),
@@ -1471,7 +1471,7 @@ fn test_endpoint_authorized_relations() {
         }],
     );
     // class_f allows nothing
-    register_class_definition(&store, &index, "class_f", vec![]);
+    register_class_definition(&store, surface.index, "class_f", vec![]);
 
     let obj_e = surface
         .deposit_object(
@@ -1518,9 +1518,9 @@ fn test_endpoint_authorized_relations() {
 
     // 4. Rejection Case
     // class_g allows nothing
-    register_class_definition(&store, &index, "class_g", vec![]);
+    register_class_definition(&store, surface.index, "class_g", vec![]);
     // class_h allows nothing
-    register_class_definition(&store, &index, "class_h", vec![]);
+    register_class_definition(&store, surface.index, "class_h", vec![]);
 
     let obj_g = surface
         .deposit_object(
@@ -1557,10 +1557,10 @@ fn test_endpoint_authorized_relations() {
 #[test]
 fn test_relation_rule_ordering_is_non_semantic() {
     let dir = tempdir().unwrap();
-    let (store, index, registry) = setup_surface(dir.path());
-    let surface = RuntimeToolSurface {
+    let (store, mut index, registry) = setup_surface(dir.path());
+    let mut surface = RuntimeToolSurface {
         store: &store,
-        index: &index,
+        index: &mut index,
         provider_service: &registry,
     };
 
@@ -1574,7 +1574,7 @@ fn test_relation_rule_ordering_is_non_semantic() {
     // 2. rule that DOES match counterparty class_b
     register_class_definition(
         &store,
-        &index,
+        surface.index,
         "class_a",
         vec![
             earmark_core::RelationRule {
@@ -1591,10 +1591,10 @@ fn test_relation_rule_ordering_is_non_semantic() {
             },
         ],
     );
-    register_class_definition(&store, &index, "class_b", vec![]);
+    register_class_definition(&store, surface.index, "class_b", vec![]);
 
-    let obj_a = create_test_object(&store, &index, "class_a");
-    let obj_b = create_test_object(&store, &index, "class_b");
+    let obj_a = create_test_object(&store, surface.index, "class_a");
+    let obj_b = create_test_object(&store, surface.index, "class_b");
 
     // Should succeed because the second rule matches (central resolver evaluates all rules and continues on counterparty mismatch)
     surface
@@ -1605,10 +1605,10 @@ fn test_relation_rule_ordering_is_non_semantic() {
 #[test]
 fn test_malformed_relation_rule_fails_hard() {
     let dir = tempdir().unwrap();
-    let (store, index, registry) = setup_surface(dir.path());
-    let surface = RuntimeToolSurface {
+    let (store, mut index, registry) = setup_surface(dir.path());
+    let mut surface = RuntimeToolSurface {
         store: &store,
-        index: &index,
+        index: &mut index,
         provider_service: &registry,
     };
 
@@ -1655,14 +1655,14 @@ fn test_malformed_relation_rule_fails_hard() {
         vec![],
     );
     let class_ref = store.write_object(&stored).unwrap();
-    index
+    surface.index
         .upsert_head_object_from_store(&store, &class_ref.id)
         .unwrap();
 
-    register_class_definition(&store, &index, "class_b", vec![]);
+    register_class_definition(&store, surface.index, "class_b", vec![]);
 
-    let obj_a = create_test_object(&store, &index, "malformed_rules");
-    let obj_b = create_test_object(&store, &index, "class_b");
+    let obj_a = create_test_object(&store, surface.index, "malformed_rules");
+    let obj_b = create_test_object(&store, surface.index, "class_b");
 
     let err = surface
         .create_relation(obj_a, obj_b, "broken".to_string(), json!({}), provenance)

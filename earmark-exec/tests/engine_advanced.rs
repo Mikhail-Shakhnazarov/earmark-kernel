@@ -16,7 +16,7 @@ fn guarded_edge_blocking() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     let registry = ProviderRegistry::default();
 
     let system = SystemDefinition {
@@ -112,13 +112,13 @@ fn guarded_edge_blocking() {
     store.write_object(&start_obj).unwrap();
 
     index.rebuild_from_store(&store).unwrap();
-    let engine = ExecutionEngine {
+    let mut engine = ExecutionEngine {
         store: &store,
-        index: &index,
+        index: &mut index,
         provider_service: &registry,
     };
     let request = WorkflowRunRequest {
-        run_id: "test-run".to_string(),
+        run_id: earmark_core::RunId::parse("test-run").unwrap(),
         system_definition: system_ref,
         workflow: workflow_ref,
         inputs: vec![start_obj.object_ref()],
@@ -136,8 +136,8 @@ fn guarded_edge_blocking() {
         .iter()
         .map(|e| e.transition.as_str())
         .collect();
-    assert!(transition_ids.contains(&"start_op"));
-    assert!(!transition_ids.contains(&"guarded_op"));
+    assert!(transition_ids.contains(&"tr_start_op"));
+    assert!(!transition_ids.contains(&"tr_guarded_op"));
 
     let objects = store.scan_objects().unwrap().scanned_objects;
     let ledger_obj = objects
@@ -159,7 +159,7 @@ fn branching_execution() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     let registry = ProviderRegistry::default();
 
     let system = SystemDefinition {
@@ -270,13 +270,13 @@ fn branching_execution() {
     store.write_object(&start_obj).unwrap();
 
     index.rebuild_from_store(&store).unwrap();
-    let engine = ExecutionEngine {
+    let mut engine = ExecutionEngine {
         store: &store,
-        index: &index,
+        index: &mut index,
         provider_service: &registry,
     };
     let request = WorkflowRunRequest {
-        run_id: "branch-run".to_string(),
+        run_id: earmark_core::RunId::parse("branch-run").unwrap(),
         system_definition: system_ref,
         workflow: workflow_ref,
         inputs: vec![start_obj.object_ref()],
@@ -292,9 +292,9 @@ fn branching_execution() {
         .iter()
         .map(|e| e.transition.as_str())
         .collect();
-    assert!(ids.contains(&"root"));
-    assert!(ids.contains(&"branch1"));
-    assert!(ids.contains(&"branch2"));
+    assert!(ids.contains(&"tr_root"));
+    assert!(ids.contains(&"tr_branch1"));
+    assert!(ids.contains(&"tr_branch2"));
 }
 
 #[test]
@@ -302,7 +302,7 @@ fn parallel_transform_leak_bug() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     let registry = ProviderRegistry::default();
 
     // Setup compiled_context
@@ -543,13 +543,13 @@ fn parallel_transform_leak_bug() {
     store.write_object(&start_obj).unwrap();
 
     index.rebuild_from_store(&store).unwrap();
-    let engine = ExecutionEngine {
+    let mut engine = ExecutionEngine {
         store: &store,
-        index: &index,
+        index: &mut index,
         provider_service: &registry,
     };
     let request = WorkflowRunRequest {
-        run_id: "leak-run".to_string(),
+        run_id: earmark_core::RunId::parse("leak-run").unwrap(),
         system_definition: system_ref,
         workflow: workflow_ref,
         inputs: vec![start_obj.object_ref()],
@@ -563,13 +563,13 @@ fn parallel_transform_leak_bug() {
         .record
         .events
         .iter()
-        .find(|e| e.transition == "branch1")
+        .find(|e| e.transition == "tr_branch1")
         .unwrap();
     let b2 = outcome
         .record
         .events
         .iter()
-        .find(|e| e.transition == "branch2")
+        .find(|e| e.transition == "tr_branch2")
         .unwrap();
     let handoffs = store
         .scan_objects()
@@ -581,7 +581,7 @@ fn parallel_transform_leak_bug() {
             serde_json::from_slice::<earmark_core::HandoffManifest>(&obj.payload.bytes).unwrap()
         })
         .filter(|manifest| {
-            manifest.run_id == "leak-run" && manifest.from_transition_id == "project"
+            manifest.run_id == "run_leak-run" && manifest.from_transition_id == "tr_project"
         })
         .collect::<Vec<_>>();
 
@@ -592,10 +592,10 @@ fn parallel_transform_leak_bug() {
     assert_eq!(handoffs.len(), 2);
     assert!(handoffs
         .iter()
-        .any(|manifest| manifest.to_transition_id.as_deref() == Some("branch1")));
+        .any(|manifest| manifest.to_transition_id.as_deref() == Some("tr_branch1")));
     assert!(handoffs
         .iter()
-        .any(|manifest| manifest.to_transition_id.as_deref() == Some("branch2")));
+        .any(|manifest| manifest.to_transition_id.as_deref() == Some("tr_branch2")));
 }
 
 #[test]
@@ -603,10 +603,10 @@ fn execution_error_persists_failed_delta() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     let registry = ProviderRegistry::default();
 
-    let instruction = create_simple_instruction(&store, &index, "fail", "fail", "always fail");
+    let instruction = create_simple_instruction(&store, &mut index, "fail", "fail", "always fail");
     let instruction_ref = instruction;
 
     let workflow = earmark_core::WorkflowDefinition {
@@ -687,13 +687,13 @@ fn execution_error_persists_failed_delta() {
     store.write_object(&start_obj).unwrap();
 
     index.rebuild_from_store(&store).unwrap();
-    let engine = ExecutionEngine {
+    let mut engine = ExecutionEngine {
         store: &store,
-        index: &index,
+        index: &mut index,
         provider_service: &registry,
     };
     let request = WorkflowRunRequest {
-        run_id: "run-fail".to_string(),
+        run_id: earmark_core::RunId::parse("run-fail").unwrap(),
         system_definition: system_ref,
         workflow: workflow_ref,
         inputs: vec![start_obj.object_ref()],
@@ -719,7 +719,7 @@ fn execution_error_persists_failed_delta() {
 
 fn create_simple_instruction(
     store: &GitCanonicalStore,
-    index: &DerivedIndex,
+    index: &mut DerivedIndex,
     name: &str,
     purpose: &str,
     body: &str,
@@ -757,7 +757,7 @@ fn test_workflow_completion_semantics() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     let registry = ProviderRegistry::default();
 
     let system = SystemDefinition {
@@ -851,15 +851,15 @@ fn test_workflow_completion_semantics() {
     store.write_object(&start_obj).unwrap();
     index.rebuild_from_store(&store).unwrap();
 
-    let engine = ExecutionEngine {
+    let mut engine = ExecutionEngine {
         store: &store,
-        index: &index,
+        index: &mut index,
         provider_service: &registry,
     };
 
     let outcome = engine
         .run_workflow(WorkflowRunRequest {
-            run_id: "linear-run".to_string(),
+            run_id: earmark_core::RunId::parse("linear-run").unwrap(),
             system_definition: system_ref.clone(),
             workflow: linear_wf_ref,
             inputs: vec![start_obj.object_ref()],
@@ -919,7 +919,7 @@ fn test_workflow_completion_semantics() {
 
     let outcome_partial = engine
         .run_workflow(WorkflowRunRequest {
-            run_id: "partial-run".to_string(),
+            run_id: earmark_core::RunId::parse("partial-run").unwrap(),
             system_definition: system_ref,
             workflow: partial_wf_ref,
             inputs: vec![start_obj.object_ref()],
@@ -938,7 +938,7 @@ fn test_workflow_completion_semantics() {
         .record
         .events
         .iter()
-        .find(|e| e.transition == "analysis" && e.event_type == "partial_execution")
+        .find(|e| e.transition == "tr_analysis" && e.event_type == "partial_execution")
         .expect("analysis transition not found");
 
     let msg = analysis_event.message.as_ref().expect("message expected");

@@ -5,7 +5,7 @@ fn workflow_run_materializes_packet_and_run_ledger() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
 
     let note = StoredObject::new(
         Kind::Object,
@@ -211,15 +211,15 @@ guards: []
 
     index.rebuild_from_store(&store).unwrap();
     let registry = ProviderRegistry::default();
-    let engine = ExecutionEngine {
+    let mut engine = ExecutionEngine {
         store: &store,
-        index: &index,
+        index: &mut index,
         provider_service: &registry,
     };
 
     let outcome = engine
         .run_workflow(WorkflowRunRequest {
-            run_id: "run_test_1".to_string(),
+            run_id: earmark_core::RunId::parse("run_test_1").unwrap(),
             system_definition: VersionRef::new(
                 system_ref.id.clone(),
                 system_ref.version_id.clone(),
@@ -246,8 +246,8 @@ guards: []
         .map(|obj| serde_json::from_slice::<HandoffManifest>(&obj.payload.bytes).unwrap())
         .collect::<Vec<_>>();
     assert!(handoffs.iter().any(|manifest| {
-        manifest.from_transition_id == "op_project"
-            && manifest.to_transition_id.as_deref() == Some("op_transform")
+        manifest.from_transition_id == "tr_op_project"
+            && manifest.to_transition_id.as_deref() == Some("tr_op_transform")
             && manifest
                 .allowed_input_classes
                 .iter()

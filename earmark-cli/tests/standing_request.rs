@@ -26,10 +26,10 @@ fn inject_standing_request(
     status: StandingRequestStatus,
 ) -> (ObjectId, VersionId) {
     let store = GitCanonicalStore::new(root);
-    let index = DerivedIndex::open(root).unwrap();
+    let mut index = DerivedIndex::open(root).unwrap();
 
     let request = StandingTransitionRequest {
-        target_object_id: ObjectId::new(),
+        target_object_id: ObjectId::generate(),
         dimension: "kernel:epistemic".to_string(),
         from_value: "working".to_string(),
         to_value: "supported".to_string(),
@@ -53,13 +53,13 @@ fn inject_standing_request(
         vec![],
     );
 
-    write_object_and_index(&store, &index, &obj).unwrap();
+    write_object_and_index(&store, &mut index, &obj).unwrap();
     (obj.envelope.id.clone(), obj.envelope.version_id.clone())
 }
 
 fn inject_standing_policy(root: &std::path::Path) -> ObjectId {
     let store = GitCanonicalStore::new(root);
-    let index = DerivedIndex::open(root).unwrap();
+    let mut index = DerivedIndex::open(root).unwrap();
 
     let policy = earmark_core::StandingPolicy {
         name: "test-policy".to_string(),
@@ -92,7 +92,7 @@ fn inject_standing_policy(root: &std::path::Path) -> ObjectId {
         vec![],
     );
 
-    write_object_and_index(&store, &index, &obj).unwrap();
+    write_object_and_index(&store, &mut index, &obj).unwrap();
     obj.envelope.id.clone()
 }
 
@@ -190,7 +190,7 @@ fn standing_request_apply_outputs_machine_readable_json() {
 
     // Applying needs a target object to change its standing
     let store = GitCanonicalStore::new(dir.path());
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     let target_obj = StoredObject::new(
         Kind::Object,
         Some("note".to_string()),
@@ -203,7 +203,7 @@ fn standing_request_apply_outputs_machine_readable_json() {
         },
         vec![],
     );
-    write_object_and_index(&store, &index, &target_obj).unwrap();
+    write_object_and_index(&store, &mut index, &target_obj).unwrap();
     let target_id = target_obj.envelope.id.clone();
 
     // Now create an approved request for this target
@@ -228,7 +228,7 @@ fn standing_request_apply_outputs_machine_readable_json() {
         },
         vec![],
     );
-    write_object_and_index(&store, &index, &req_obj).unwrap();
+    write_object_and_index(&store, &mut index, &req_obj).unwrap();
     let req_id = req_obj.envelope.id.clone();
 
     let policy_id = inject_standing_policy(dir.path());

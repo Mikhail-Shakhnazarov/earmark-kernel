@@ -5,9 +5,9 @@ use earmark_governance::GovernanceService;
 use earmark_store::ObjectStore;
 use serde_json::json;
 
-pub fn handle(ctx: &CommandContext, args: &ReviewArgs) -> Result<(), CliError> {
+pub fn handle(ctx: &mut CommandContext, args: &ReviewArgs) -> Result<(), CliError> {
     let store = ctx.store;
-    let index = ctx.index.as_ref().ok_or_else(|| {
+    let index = ctx.index.as_mut().ok_or_else(|| {
         CliError::argument("index required for review — ensure workspace is initialized")
     })?;
     let as_json = ctx.as_json;

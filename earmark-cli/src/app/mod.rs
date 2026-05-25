@@ -39,10 +39,10 @@ pub fn run(cli: Cli) -> Result<(), common::CliError> {
         return Ok(());
     }
 
-    let bootstrapped = bootstrap::bootstrap(&cli)?;
-    let ctx = common::CommandContext {
+    let mut bootstrapped = bootstrap::bootstrap(&cli)?;
+    let mut ctx = common::CommandContext {
         store: &bootstrapped.store,
-        index: &bootstrapped.index,
+        index: &mut bootstrapped.index,
         config: &bootstrapped.config,
         as_json: bootstrapped.as_json,
         provider_registry: &bootstrapped.provider_registry,
@@ -59,7 +59,7 @@ pub fn run(cli: Cli) -> Result<(), common::CliError> {
         as_json: ctx.as_json,
     });
 
-    let result = dispatch::dispatch(&ctx, cli);
+    let result = dispatch::dispatch(&mut ctx, cli);
     crate::metrics::record_command_result(command_name, result.is_ok(), started.elapsed());
     result
 }

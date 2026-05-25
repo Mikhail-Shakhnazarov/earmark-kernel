@@ -7,7 +7,7 @@ use serde_json::json;
 
 pub(crate) fn build_run_graph<S: CanonicalStore>(
     store: &S,
-    run_id: &str,
+    run_id: &earmark_core::RunId,
 ) -> Result<serde_json::Value, CliError> {
     let assignments = list_assignments_by_run(store, run_id)?;
     let change_sets = list_change_sets_by_run(store, run_id)?;
@@ -18,7 +18,7 @@ pub(crate) fn build_run_graph<S: CanonicalStore>(
     let mut edges = Vec::new();
 
     nodes.push(json!({
-        "id": run_id,
+        "id": run_id.as_str(),
         "kind": "run",
         "label": format!("Run: {}", run_id)
     }));
@@ -30,7 +30,7 @@ pub(crate) fn build_run_graph<S: CanonicalStore>(
             "label": format!("Assignment: {}", a.transition_id)
         }));
         edges.push(json!({
-            "from": run_id,
+            "from": run_id.as_str(),
             "to": a.id.as_str(),
             "label": "created"
         }));

@@ -179,16 +179,16 @@ fn test_http_provider_e2e_content_rendering() {
 
     let request = earmark_core::ProviderRequest {
         request_id: "req_e2e".to_string(),
-        run_id: "run_e2e".to_string(),
+        run_id: earmark_core::RunId::parse("run_e2e").unwrap(),
         work_packet: ObjectRef::new(
-            earmark_core::ObjectId::new(),
-            earmark_core::VersionId::new(),
+            earmark_core::ObjectId::generate(),
+            earmark_core::VersionId::generate(),
             Kind::WorkPacket,
             None,
         ),
         provider_profile: VersionRef::new(
-            earmark_core::ObjectId::new(),
-            earmark_core::VersionId::new(),
+            earmark_core::ObjectId::generate(),
+            earmark_core::VersionId::generate(),
         ),
         instruction_text: instruction.body.as_str().to_string(),
         context_text: None,
@@ -257,7 +257,7 @@ fn test_http_provider_rendering_with_manifest() {
     // 2. Manifest
     let manifest = WorkSurfaceManifest {
         surface_id: "surf1".to_string(),
-        compiled_context: VersionRef::new(ObjectId::new(), VersionId::new()),
+        compiled_context: VersionRef::new(ObjectId::generate(), VersionId::generate()),
         work_packet: None,
         generated_at: chrono::Utc::now(),
         objects: vec![WorkSurfaceObject {
@@ -563,9 +563,9 @@ fn test_http_provider_rejects_unsupported_lineage() {
 
     let request = earmark_core::ProviderRequest {
         request_id: "req_lineage_reject".to_string(),
-        run_id: "run_lineage_reject".to_string(),
-        work_packet: ObjectRef::new(ObjectId::new(), VersionId::new(), Kind::WorkPacket, None),
-        provider_profile: VersionRef::new(ObjectId::new(), VersionId::new()),
+        run_id: earmark_core::RunId::parse("run_lineage_reject").unwrap(),
+        work_packet: ObjectRef::new(ObjectId::generate(), VersionId::generate(), Kind::WorkPacket, None),
+        provider_profile: VersionRef::new(ObjectId::generate(), VersionId::generate()),
         instruction_text: "hi".to_string(),
         context_text: None,
         input_text: "hi".to_string(),
@@ -645,9 +645,9 @@ fn test_http_provider_rejects_unsupported_full_message_capture() {
 
     let request = earmark_core::ProviderRequest {
         request_id: "req_full_msg_reject".to_string(),
-        run_id: "run_full_msg_reject".to_string(),
-        work_packet: ObjectRef::new(ObjectId::new(), VersionId::new(), Kind::WorkPacket, None),
-        provider_profile: VersionRef::new(ObjectId::new(), VersionId::new()),
+        run_id: earmark_core::RunId::parse("run_full_msg_reject").unwrap(),
+        work_packet: ObjectRef::new(ObjectId::generate(), VersionId::generate(), Kind::WorkPacket, None),
+        provider_profile: VersionRef::new(ObjectId::generate(), VersionId::generate()),
         instruction_text: "hi".to_string(),
         context_text: None,
         input_text: "hi".to_string(),

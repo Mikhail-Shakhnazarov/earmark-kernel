@@ -14,12 +14,12 @@ fn test_schema_enforcement() {
     let tmp = tempdir().unwrap();
     let store = GitCanonicalStore::new(tmp.path());
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(tmp.path()).unwrap();
+    let mut index = DerivedIndex::open(tmp.path()).unwrap();
     let providers = ProviderRegistry::default();
 
-    let surface = RuntimeToolSurface {
+    let mut surface = RuntimeToolSurface {
         store: &store,
-        index: &index,
+        index: &mut index,
         provider_service: &providers,
     };
 
@@ -58,7 +58,7 @@ fn test_schema_enforcement() {
     );
 
     store.write_object(&class_obj).unwrap();
-    index.rebuild_from_store(&store).unwrap();
+    surface.index.rebuild_from_store(&store).unwrap();
 
     let prov = RuntimeProvenance {
         actor: "tester".to_string(),

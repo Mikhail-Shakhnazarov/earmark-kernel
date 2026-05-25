@@ -17,7 +17,7 @@ pub(crate) fn resolve_object_ref<S: CanonicalStore>(
 pub(crate) fn resolve_run_id<S: CanonicalStore>(
     store: &S,
     run_id: &str,
-) -> Result<String, CliError> {
+) -> Result<earmark_core::RunId, CliError> {
     if run_id == "latest" {
         let ledgers = list_run_records(store)?;
         return ledgers
@@ -25,13 +25,13 @@ pub(crate) fn resolve_run_id<S: CanonicalStore>(
             .map(|l| l.run_id.clone())
             .ok_or_else(|| CliError::not_found("no runs found".to_string()));
     }
-    Ok(run_id.to_string())
+    Ok(earmark_core::RunId::parse(run_id.to_string())?)
 }
 
 pub(crate) fn resolve_optional_run_id<S: CanonicalStore>(
     store: &S,
     run_id: Option<String>,
-) -> Result<Option<String>, CliError> {
+) -> Result<Option<earmark_core::RunId>, CliError> {
     match run_id {
         Some(id) => Ok(Some(resolve_run_id(store, &id)?)),
         None => Ok(None),

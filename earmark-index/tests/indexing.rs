@@ -29,7 +29,7 @@ fn rebuild_index_from_canonical_state() {
     );
     store.write_object(&obj).unwrap();
 
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     index.rebuild_from_store(&store).unwrap();
     let rows = index
         .query_objects(&QueryFilter {
@@ -88,7 +88,7 @@ fn relation_adjacency_query() {
     );
     store.write_object(&relation).unwrap();
 
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     index.rebuild_from_store(&store).unwrap();
     let adjacency = index.relation_adjacency(&a.envelope.id, false).unwrap();
     assert_eq!(adjacency.len(), 1);
@@ -137,7 +137,7 @@ fn active_system_definition_activation() {
     );
     let version = store.write_object(&stored).unwrap();
 
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     index.rebuild_from_store(&store).unwrap();
     let active = index
         .activate_system(&system.namespace, &system.system_id, &version)
@@ -201,7 +201,7 @@ fn symbolic_resolution_uses_explicit_declaration_identity_not_title_or_class() {
     );
     let collision_ref = store.write_object(&collision_obj).unwrap();
 
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     index.rebuild_from_store(&store).unwrap();
 
     let resolved = index
@@ -234,7 +234,7 @@ fn test_upsert_head_object_coherence() {
 
     let version_ref = store.write_object(&obj).unwrap();
 
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     index
         .upsert_head_object_from_store(&store, &version_ref.id)
         .unwrap();
@@ -274,7 +274,7 @@ fn test_index_count_after_rebuild() {
         store.write_object(&obj).unwrap();
     }
 
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     index.rebuild_from_store(&store).unwrap();
 
     let canonical_count = store.scan_objects().unwrap().scanned_objects.len() as u64;
@@ -330,7 +330,7 @@ fn test_rebuild_preserves_active_systems() {
     );
     let version = store.write_object(&stored).unwrap();
 
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     index.rebuild_from_store(&store).unwrap();
     index
         .activate_system("test/ns", "test-system", &version)
@@ -385,7 +385,7 @@ fn test_rebuild_objects_by_kind_and_class() {
     );
     store.write_object(&instruction).unwrap();
 
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     index.rebuild_from_store(&store).unwrap();
 
     let objects = index.get_objects_by_kind(Kind::Object).unwrap();
@@ -446,7 +446,7 @@ fn test_open_existing_reads_correct_counts() {
     );
     store.write_object(&obj).unwrap();
 
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     index.rebuild_from_store(&store).unwrap();
     drop(index);
 
@@ -502,7 +502,7 @@ fn test_relation_count_after_rebuild() {
     );
     store.write_object(&relation).unwrap();
 
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     index.rebuild_from_store(&store).unwrap();
 
     assert_eq!(index.relation_count().unwrap(), 1);
@@ -545,7 +545,7 @@ fn test_rebuild_populates_object_standing() {
     );
     store.write_object(&verified).unwrap();
 
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     index.rebuild_from_store(&store).unwrap();
 
     let rows = index
@@ -586,7 +586,7 @@ fn test_upsert_head_populates_object_standing() {
     );
     let version_ref = store.write_object(&obj).unwrap();
 
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     index
         .upsert_head_object_from_store(&store, &version_ref.id)
         .unwrap();
@@ -631,7 +631,7 @@ fn test_query_by_custom_dimension() {
     store.write_object(&verified).unwrap();
     store.write_object(&draft).unwrap();
 
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     index.rebuild_from_store(&store).unwrap();
 
     let rows = index
@@ -688,7 +688,7 @@ fn test_query_multiple_dimensions_conjunctive() {
     store.write_object(&wrong_review).unwrap();
     store.write_object(&wrong_status).unwrap();
 
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     index.rebuild_from_store(&store).unwrap();
 
     let rows = index
@@ -755,7 +755,7 @@ fn test_query_multiple_tokens_within_dimension_disjunctive() {
     store.write_object(&demonstrated).unwrap();
     store.write_object(&draft).unwrap();
 
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     index.rebuild_from_store(&store).unwrap();
 
     // Query for verified OR demonstrated in research:status
@@ -815,7 +815,7 @@ fn test_query_legacy_kernel_review_via_object_standing() {
     store.write_object(&accepted).unwrap();
     store.write_object(&rejected).unwrap();
 
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     index.rebuild_from_store(&store).unwrap();
 
     let rows = index
@@ -855,7 +855,7 @@ fn test_query_non_standing_filter_still_works() {
     );
     store.write_object(&note).unwrap();
 
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     index.rebuild_from_store(&store).unwrap();
 
     // Query with no standing filter should still work
@@ -904,7 +904,7 @@ fn test_rebuild_clears_previous_object_standing() {
     );
     store.write_object(&obj).unwrap();
 
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     index.rebuild_from_store(&store).unwrap();
 
     // Verify standing is indexed

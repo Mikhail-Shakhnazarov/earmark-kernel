@@ -18,14 +18,14 @@ fn test_immediate_index_visibility_in_transition() {
     let store = GitCanonicalStore::new(root);
     store.init_layout().unwrap();
 
-    let index = DerivedIndex::open(root).unwrap();
+    let mut index = DerivedIndex::open(root).unwrap();
 
     // 1. Verify TransitionAssignment indexing
-    let assignment_id = earmark_core::TransitionAssignmentId::new();
+    let assignment_id = earmark_core::TransitionAssignmentId::generate();
     let assignment = earmark_core::TransitionAssignment {
         id: assignment_id.clone(),
-        run_id: ObjectId::new().to_string(),
-        transition_id: "t1".to_string(),
+        run_id: earmark_core::RunId::generate(),
+        transition_id: earmark_core::TransitionId::parse("t1").unwrap(),
         assigned_to: "test".to_string(),
         status: earmark_core::AssignmentStatus::Assigned,
         input_object_ids: vec![],
@@ -51,7 +51,7 @@ fn test_immediate_index_visibility_in_transition() {
         vec![],
     );
 
-    write_object_and_index(&store, &index, &stored_assignment).unwrap();
+    write_object_and_index(&store, &mut index, &stored_assignment).unwrap();
 
     let heads = index
         .query_objects(&QueryFilter {
@@ -74,7 +74,7 @@ fn test_immediate_index_visibility_in_transition() {
         vec![],
     );
 
-    write_object_and_index(&store, &index, &event).unwrap();
+    write_object_and_index(&store, &mut index, &event).unwrap();
     let heads = index
         .query_objects(&QueryFilter {
             class: Some("provider_record".to_string()),
@@ -96,7 +96,7 @@ fn test_immediate_index_visibility_in_transition() {
         vec![],
     );
 
-    write_object_and_index(&store, &index, &handoff).unwrap();
+    write_object_and_index(&store, &mut index, &handoff).unwrap();
     let heads = index
         .query_objects(&QueryFilter {
             class: Some("handoff_manifest".to_string()),
@@ -110,12 +110,12 @@ fn test_immediate_index_visibility_in_transition() {
     // 4. Verify store_work_packet indexing
     let work_packet = earmark_core::WorkPacket {
         work_packet_id: "wp1".to_string(),
-        run_id: ObjectId::new().to_string(),
+        run_id: earmark_core::RunId::generate(),
         work_packet_type: "test".to_string(),
         purpose: "verification".to_string(),
         system_definition: earmark_core::VersionRef::new(
-            ObjectId::new(),
-            earmark_core::VersionId::new(),
+            ObjectId::generate(),
+            earmark_core::VersionId::generate(),
         ),
         workflow: None,
         instruction: None,
@@ -134,7 +134,7 @@ fn test_immediate_index_visibility_in_transition() {
         created_at: chrono::Utc::now(),
     };
 
-    let wp_stored = store_work_packet(&store, &index, &work_packet).unwrap();
+    let wp_stored = store_work_packet(&store, &mut index, &work_packet).unwrap();
     let heads = index
         .query_objects(&QueryFilter {
             class: Some("work_packet".to_string()),
@@ -152,7 +152,7 @@ fn test_live_transition_indexing() {
     let root = tmp.path();
     let store = GitCanonicalStore::new(root);
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(root).unwrap();
+    let mut index = DerivedIndex::open(root).unwrap();
 
     struct MockProvider;
     impl ProviderService for MockProvider {
@@ -169,16 +169,16 @@ fn test_live_transition_indexing() {
             )
         }
     }
-    let engine = ExecutionEngine::new(&store, &index, &MockProvider);
+    let mut engine = ExecutionEngine::new(&store, &mut index, &MockProvider);
 
-    let run_id = ObjectId::new();
+    let run_id = ObjectId::generate();
     let mut record = RunRecord {
-        run_id: run_id.to_string(),
+        run_id: earmark_core::RunId::parse(run_id.clone()).unwrap(),
         system_definition: earmark_core::VersionRef::new(
-            ObjectId::new(),
-            earmark_core::VersionId::new(),
+            ObjectId::generate(),
+            earmark_core::VersionId::generate(),
         ),
-        workflow: earmark_core::VersionRef::new(ObjectId::new(), earmark_core::VersionId::new()),
+        workflow: earmark_core::VersionRef::new(ObjectId::generate(), earmark_core::VersionId::generate()),
         status: earmark_core::RunStatus::Running,
         started_at: chrono::Utc::now(),
         ended_at: None,
@@ -220,7 +220,7 @@ fn test_live_transition_indexing() {
 
     let ir = ExecutionIr {
         transitions: vec![ExecutionTransition {
-            id: "t1".to_string(),
+            id: earmark_core::TransitionId::parse("t1").unwrap(),
             operation: WorkflowOperationKind::Review,
             input_contracts: vec![],
             output_contracts: vec![],
@@ -234,12 +234,12 @@ fn test_live_transition_indexing() {
     };
 
     let request = WorkflowRunRequest {
-        run_id: run_id.to_string(),
+        run_id: earmark_core::RunId::parse(run_id.clone()).unwrap(),
         system_definition: earmark_core::VersionRef::new(
-            ObjectId::new(),
-            earmark_core::VersionId::new(),
+            ObjectId::generate(),
+            earmark_core::VersionId::generate(),
         ),
-        workflow: earmark_core::VersionRef::new(ObjectId::new(), earmark_core::VersionId::new()),
+        workflow: earmark_core::VersionRef::new(ObjectId::generate(), earmark_core::VersionId::generate()),
         inputs: vec![],
         handoff_manifest: None,
         transition_assignment: None,

@@ -11,7 +11,7 @@ fn setup_store_and_index() -> (tempfile::TempDir, GitCanonicalStore, DerivedInde
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     (dir, store, index)
 }
 
@@ -49,7 +49,7 @@ fn empty_class_definition(name: &str) -> ClassDefinition {
 
 fn register_class(
     store: &GitCanonicalStore,
-    index: &DerivedIndex,
+    index: &mut DerivedIndex,
     name: &str,
     relation_rules: Vec<earmark_core::RelationRule>,
 ) {
@@ -81,7 +81,7 @@ fn register_class(
 
 fn register_class_then_corrupt_payload(
     store: &GitCanonicalStore,
-    index: &DerivedIndex,
+    index: &mut DerivedIndex,
     name: &str,
     relation_rules: Vec<earmark_core::RelationRule>,
 ) {
@@ -108,7 +108,7 @@ fn register_class_then_corrupt_payload(
 
 #[test]
 fn test_endpoint_identity_verification() {
-    let (_dir, store, index) = setup_store_and_index();
+    let (_dir, store, mut index) = setup_store_and_index();
 
     let source_ref = create_object(&store, Kind::Object, Some("note"), "source");
     let target_ref = create_object(&store, Kind::Object, Some("finding"), "target");
@@ -131,7 +131,7 @@ fn test_endpoint_identity_verification() {
 
     let rel_ref = earmark_exec::persist_relation_canonical(
         &store,
-        &index,
+        &mut index,
         payload,
         Provenance::direct_input("runtime"), // use trusted provenance so it doesn't fail auth check
         earmark_core::RelationCreationMode::PrivilegedSystem, // derived_from is now privileged
@@ -163,14 +163,14 @@ fn test_endpoint_identity_verification() {
 
 #[test]
 fn test_source_authorized_relation() {
-    let (_dir, store, index) = setup_store_and_index();
+    let (_dir, store, mut index) = setup_store_and_index();
 
     let source_ref = create_object(&store, Kind::Object, Some("note"), "source");
     let target_ref = create_object(&store, Kind::Object, Some("finding"), "target");
 
     register_class(
         &store,
-        &index,
+        &mut index,
         "note",
         vec![earmark_core::RelationRule {
             relation_type: "mentions".to_string(),
@@ -179,7 +179,7 @@ fn test_source_authorized_relation() {
             authorizing_endpoint: Some("source".to_string()),
         }],
     );
-    register_class(&store, &index, "finding", vec![]);
+    register_class(&store, &mut index, "finding", vec![]);
 
     let payload = RelationPayload {
         source: source_ref.clone(),
@@ -191,7 +191,7 @@ fn test_source_authorized_relation() {
 
     let rel_ref = earmark_exec::persist_relation_canonical(
         &store,
-        &index,
+        &mut index,
         payload,
         Provenance::direct_input("test"),
         earmark_core::RelationCreationMode::Declared,
@@ -236,14 +236,14 @@ fn test_source_authorized_relation() {
 
 #[test]
 fn test_target_authorized_relation() {
-    let (_dir, store, index) = setup_store_and_index();
+    let (_dir, store, mut index) = setup_store_and_index();
 
     let source_ref = create_object(&store, Kind::Object, Some("note"), "source");
     let target_ref = create_object(&store, Kind::Object, Some("finding"), "target");
 
     register_class(
         &store,
-        &index,
+        &mut index,
         "finding",
         vec![earmark_core::RelationRule {
             relation_type: "references".to_string(),
@@ -252,7 +252,7 @@ fn test_target_authorized_relation() {
             authorizing_endpoint: Some("target".to_string()),
         }],
     );
-    register_class(&store, &index, "note", vec![]);
+    register_class(&store, &mut index, "note", vec![]);
 
     let payload = RelationPayload {
         source: source_ref.clone(),
@@ -264,7 +264,7 @@ fn test_target_authorized_relation() {
 
     let rel_ref = earmark_exec::persist_relation_canonical(
         &store,
-        &index,
+        &mut index,
         payload,
         Provenance::direct_input("test"),
         earmark_core::RelationCreationMode::Declared,
@@ -309,14 +309,14 @@ fn test_target_authorized_relation() {
 
 #[test]
 fn test_corrupt_class_definition_blocks_relation_authorization() {
-    let (_dir, store, index) = setup_store_and_index();
+    let (_dir, store, mut index) = setup_store_and_index();
 
     let source_ref = create_object(&store, Kind::Object, Some("note"), "source");
     let target_ref = create_object(&store, Kind::Object, Some("finding"), "target");
 
     register_class_then_corrupt_payload(
         &store,
-        &index,
+        &mut index,
         "note",
         vec![earmark_core::RelationRule {
             relation_type: "mentions".to_string(),
@@ -325,7 +325,7 @@ fn test_corrupt_class_definition_blocks_relation_authorization() {
             authorizing_endpoint: Some("source".to_string()),
         }],
     );
-    register_class(&store, &index, "finding", vec![]);
+    register_class(&store, &mut index, "finding", vec![]);
 
     let payload = RelationPayload {
         source: source_ref,
@@ -337,7 +337,7 @@ fn test_corrupt_class_definition_blocks_relation_authorization() {
 
     let result = earmark_exec::persist_relation_canonical(
         &store,
-        &index,
+        &mut index,
         payload,
         Provenance::direct_input("test"),
         earmark_core::RelationCreationMode::Declared,
@@ -355,14 +355,14 @@ fn test_corrupt_class_definition_blocks_relation_authorization() {
 
 #[test]
 fn test_either_endpoint_authorization() {
-    let (_dir, store, index) = setup_store_and_index();
+    let (_dir, store, mut index) = setup_store_and_index();
 
     let source_ref = create_object(&store, Kind::Object, Some("note"), "source");
     let target_ref = create_object(&store, Kind::Object, Some("finding"), "target");
 
     register_class(
         &store,
-        &index,
+        &mut index,
         "finding",
         vec![earmark_core::RelationRule {
             relation_type: "linked_to".to_string(),
@@ -371,7 +371,7 @@ fn test_either_endpoint_authorization() {
             authorizing_endpoint: Some("either_endpoint".to_string()),
         }],
     );
-    register_class(&store, &index, "note", vec![]);
+    register_class(&store, &mut index, "note", vec![]);
 
     let payload = RelationPayload {
         source: source_ref.clone(),
@@ -383,7 +383,7 @@ fn test_either_endpoint_authorization() {
 
     let rel_ref = earmark_exec::persist_relation_canonical(
         &store,
-        &index,
+        &mut index,
         payload,
         Provenance::direct_input("test"),
         earmark_core::RelationCreationMode::Declared,
@@ -428,7 +428,7 @@ fn test_either_endpoint_authorization() {
 
 #[test]
 fn test_privileged_protection() {
-    let (_dir, store, index) = setup_store_and_index();
+    let (_dir, store, mut index) = setup_store_and_index();
 
     let source_ref = create_object(&store, Kind::Object, Some("note"), "source");
     let target_ref = create_object(&store, Kind::Instruction, Some("instruction"), "target");
@@ -444,7 +444,7 @@ fn test_privileged_protection() {
     // Attempt to create privileged relation as 'Declared' should now fail at persistence time
     let res = earmark_exec::persist_relation_canonical(
         &store,
-        &index,
+        &mut index,
         payload,
         Provenance::direct_input("test"),
         earmark_core::RelationCreationMode::Declared,
@@ -460,14 +460,14 @@ fn test_privileged_protection() {
 
 #[test]
 fn test_malformed_rule_fail_fast() {
-    let (_dir, store, index) = setup_store_and_index();
+    let (_dir, store, mut index) = setup_store_and_index();
 
     let source_ref = create_object(&store, Kind::Object, Some("note"), "source");
     let target_ref = create_object(&store, Kind::Object, Some("finding"), "target");
 
     register_class(
         &store,
-        &index,
+        &mut index,
         "note",
         vec![earmark_core::RelationRule {
             relation_type: "mentions".to_string(),
@@ -476,7 +476,7 @@ fn test_malformed_rule_fail_fast() {
             authorizing_endpoint: Some("source".to_string()),
         }],
     );
-    register_class(&store, &index, "finding", vec![]);
+    register_class(&store, &mut index, "finding", vec![]);
 
     let payload = RelationPayload {
         source: source_ref.clone(),
@@ -488,7 +488,7 @@ fn test_malformed_rule_fail_fast() {
 
     let rel_ref = earmark_exec::persist_relation_canonical(
         &store,
-        &index,
+        &mut index,
         payload,
         Provenance::direct_input("test"),
         earmark_core::RelationCreationMode::Declared,
@@ -540,7 +540,7 @@ fn test_malformed_rule_fail_fast() {
 
 #[test]
 fn test_block_privileged_type_in_declared_mode() {
-    let (_dir, store, index) = setup_store_and_index();
+    let (_dir, store, mut index) = setup_store_and_index();
 
     let source_ref = create_object(&store, Kind::Object, Some("note"), "source");
     let target_ref = create_object(&store, Kind::Instruction, Some("instruction"), "target");
@@ -556,7 +556,7 @@ fn test_block_privileged_type_in_declared_mode() {
     // Attempting to persist with Declared mode for a privileged type should fail immediately
     let res = earmark_exec::persist_relation_canonical(
         &store,
-        &index,
+        &mut index,
         payload,
         Provenance::direct_input("test"),
         earmark_core::RelationCreationMode::Declared,
@@ -572,7 +572,7 @@ fn test_block_privileged_type_in_declared_mode() {
 
 #[test]
 fn test_reject_forged_privileged_provenance() {
-    let (_dir, store, index) = setup_store_and_index();
+    let (_dir, store, mut index) = setup_store_and_index();
 
     let source_ref = create_object(&store, Kind::Object, Some("note"), "source");
     let target_ref = create_object(&store, Kind::Instruction, Some("instruction"), "target");
@@ -633,14 +633,14 @@ fn test_reject_forged_privileged_provenance() {
 
 #[test]
 fn test_missing_endpoint_version_failure() {
-    let (_dir, store, index) = setup_store_and_index();
+    let (_dir, store, mut index) = setup_store_and_index();
 
     let source_ref = create_object(&store, Kind::Object, Some("note"), "source");
 
     // Target version does not exist in store
     let missing_target = ObjectRef::new(
-        ObjectId::new(),
-        VersionId::new(),
+        ObjectId::generate(),
+        VersionId::generate(),
         Kind::Object,
         Some("finding".to_string()),
     );
@@ -656,7 +656,7 @@ fn test_missing_endpoint_version_failure() {
     // We cannot persist it: authorization/endpoint checking fails fast at write time
     let res = earmark_exec::persist_relation_canonical(
         &store,
-        &index,
+        &mut index,
         payload,
         Provenance::direct_input("runtime"),
         earmark_core::RelationCreationMode::PrivilegedSystem,
@@ -674,7 +674,7 @@ fn test_privileged_relation_uses_store_configured_trust_actor_set() {
     let store =
         GitCanonicalStore::with_authorized_actors(dir.path(), vec!["configured-admin".to_string()]);
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
 
     let source_ref = create_object(&store, Kind::Object, Some("note"), "source");
     let target_ref = create_object(&store, Kind::Instruction, Some("instruction"), "target");
@@ -688,7 +688,7 @@ fn test_privileged_relation_uses_store_configured_trust_actor_set() {
 
     let rel_ref = earmark_exec::persist_relation_canonical(
         &store,
-        &index,
+        &mut index,
         payload,
         Provenance::direct_input("configured-admin"),
         earmark_core::RelationCreationMode::PrivilegedSystem,
@@ -704,7 +704,7 @@ fn test_privileged_relation_rejects_hardcoded_trusted_actor_when_not_configured(
     let store =
         GitCanonicalStore::with_authorized_actors(dir.path(), vec!["configured-admin".to_string()]);
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
 
     let source_ref = create_object(&store, Kind::Object, Some("note"), "source");
     let target_ref = create_object(&store, Kind::Instruction, Some("instruction"), "target");
@@ -718,7 +718,7 @@ fn test_privileged_relation_rejects_hardcoded_trusted_actor_when_not_configured(
 
     let err = earmark_exec::persist_relation_canonical(
         &store,
-        &index,
+        &mut index,
         payload,
         Provenance::direct_input("runtime"),
         earmark_core::RelationCreationMode::PrivilegedSystem,

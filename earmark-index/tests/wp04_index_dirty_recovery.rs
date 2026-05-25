@@ -16,7 +16,7 @@ fn test_index_dirty_marker_lifecycle() {
     let root = dir.path();
     let store = GitCanonicalStore::new(root);
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(root).unwrap();
+    let mut index = DerivedIndex::open(root).unwrap();
 
     // Initial state: not dirty
     assert!(index.dirty_status().unwrap().is_none());
@@ -49,7 +49,7 @@ fn test_index_repair_recovery() {
     let root = dir.path();
     let store = GitCanonicalStore::new(root);
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(root).unwrap();
+    let mut index = DerivedIndex::open(root).unwrap();
 
     // Write an object to store only (simulating index failure)
     let obj = StoredObject::new(
@@ -92,7 +92,7 @@ fn test_rebuild_successful_clears_dirty_marker() {
     let root = dir.path();
     let store = GitCanonicalStore::new(root);
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(root).unwrap();
+    let mut index = DerivedIndex::open(root).unwrap();
 
     let obj = StoredObject::new(
         Kind::Object,
@@ -117,7 +117,7 @@ fn test_rebuild_skips_and_reports_corrupted_envelope() {
     let root = dir.path();
     let store = GitCanonicalStore::new(root);
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(root).unwrap();
+    let mut index = DerivedIndex::open(root).unwrap();
 
     let obj = StoredObject::new(
         Kind::Object,
@@ -152,7 +152,7 @@ fn test_rebuild_skips_and_reports_missing_payload() {
     let root = dir.path();
     let store = GitCanonicalStore::new(root);
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(root).unwrap();
+    let mut index = DerivedIndex::open(root).unwrap();
 
     let obj = StoredObject::new(
         Kind::Object,
@@ -187,7 +187,7 @@ fn test_rebuild_skips_and_reports_payload_ref_mismatch() {
     let root = dir.path();
     let store = GitCanonicalStore::new(root);
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(root).unwrap();
+    let mut index = DerivedIndex::open(root).unwrap();
 
     let obj = StoredObject::new(
         Kind::Object,
@@ -289,7 +289,7 @@ fn test_rebuild_transactional_safety_on_injected_failure() {
     let root = dir.path();
     let inner_store = GitCanonicalStore::new(root);
     inner_store.init_layout().unwrap();
-    let index = DerivedIndex::open(root).unwrap();
+    let mut index = DerivedIndex::open(root).unwrap();
 
     // 1. Write an initial valid object
     let obj = StoredObject::new(
@@ -328,18 +328,18 @@ fn test_rebuild_relation_rows_projected_only_for_valid_relations() {
     let root = dir.path();
     let store = GitCanonicalStore::new(root);
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(root).unwrap();
+    let mut index = DerivedIndex::open(root).unwrap();
 
     // 1. Write a valid Relation
     let source_ref = earmark_core::ObjectRef::new(
-        ObjectId::new(),
-        earmark_core::VersionId::new(),
+        ObjectId::generate(),
+        earmark_core::VersionId::generate(),
         Kind::Object,
         None,
     );
     let target_ref = earmark_core::ObjectRef::new(
-        ObjectId::new(),
-        earmark_core::VersionId::new(),
+        ObjectId::generate(),
+        earmark_core::VersionId::generate(),
         Kind::Object,
         None,
     );

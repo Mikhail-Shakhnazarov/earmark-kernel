@@ -625,16 +625,16 @@ mod tests {
         let adapter = HttpGenerationAdapter;
         let request = ProviderRequest {
             request_id: "req1".to_string(),
-            run_id: "run1".to_string(),
+            run_id: earmark_core::RunId::parse("run1").unwrap(),
             work_packet: earmark_core::ObjectRef::new(
-                earmark_core::ObjectId::new(),
-                earmark_core::VersionId::new(),
+                earmark_core::ObjectId::generate(),
+                earmark_core::VersionId::generate(),
                 earmark_core::Kind::WorkPacket,
                 None,
             ),
             provider_profile: earmark_core::VersionRef::new(
-                earmark_core::ObjectId::new(),
-                earmark_core::VersionId::new(),
+                earmark_core::ObjectId::generate(),
+                earmark_core::VersionId::generate(),
             ),
             instruction_text: "hi".to_string(),
             context_text: None,
@@ -717,16 +717,16 @@ mod tests {
 
         let request = ProviderRequest {
             request_id: "req_test".to_string(),
-            run_id: "run_test".to_string(),
+            run_id: earmark_core::RunId::parse("run_test").unwrap(),
             work_packet: earmark_core::ObjectRef::new(
-                earmark_core::ObjectId::new(),
-                earmark_core::VersionId::new(),
+                earmark_core::ObjectId::generate(),
+                earmark_core::VersionId::generate(),
                 earmark_core::Kind::WorkPacket,
                 None,
             ),
             provider_profile: earmark_core::VersionRef::new(
-                earmark_core::ObjectId::new(),
-                earmark_core::VersionId::new(),
+                earmark_core::ObjectId::generate(),
+                earmark_core::VersionId::generate(),
             ),
             instruction_text: "hi".to_string(),
             context_text: None,
@@ -821,16 +821,16 @@ mod tests {
 
         let request = ProviderRequest {
             request_id: "req_timeout".to_string(),
-            run_id: "run_timeout".to_string(),
+            run_id: earmark_core::RunId::parse("run_timeout").unwrap(),
             work_packet: earmark_core::ObjectRef::new(
-                earmark_core::ObjectId::new(),
-                earmark_core::VersionId::new(),
+                earmark_core::ObjectId::generate(),
+                earmark_core::VersionId::generate(),
                 earmark_core::Kind::WorkPacket,
                 None,
             ),
             provider_profile: earmark_core::VersionRef::new(
-                earmark_core::ObjectId::new(),
-                earmark_core::VersionId::new(),
+                earmark_core::ObjectId::generate(),
+                earmark_core::VersionId::generate(),
             ),
             instruction_text: "hi".to_string(),
             context_text: None,
@@ -894,16 +894,16 @@ mod tests {
         let adapter = HttpGenerationAdapter;
         let request = ProviderRequest {
             request_id: "req_block".to_string(),
-            run_id: "run_block".to_string(),
+            run_id: earmark_core::RunId::parse("run_block").unwrap(),
             work_packet: earmark_core::ObjectRef::new(
-                earmark_core::ObjectId::new(),
-                earmark_core::VersionId::new(),
+                earmark_core::ObjectId::generate(),
+                earmark_core::VersionId::generate(),
                 earmark_core::Kind::WorkPacket,
                 None,
             ),
             provider_profile: earmark_core::VersionRef::new(
-                earmark_core::ObjectId::new(),
-                earmark_core::VersionId::new(),
+                earmark_core::ObjectId::generate(),
+                earmark_core::VersionId::generate(),
             ),
             instruction_text: "hi".to_string(),
             context_text: None,
@@ -966,16 +966,16 @@ mod tests {
         let adapter = HttpGenerationAdapter;
         let request = ProviderRequest {
             request_id: "req_allow".to_string(),
-            run_id: "run_allow".to_string(),
+            run_id: earmark_core::RunId::parse("run_allow").unwrap(),
             work_packet: earmark_core::ObjectRef::new(
-                earmark_core::ObjectId::new(),
-                earmark_core::VersionId::new(),
+                earmark_core::ObjectId::generate(),
+                earmark_core::VersionId::generate(),
                 earmark_core::Kind::WorkPacket,
                 None,
             ),
             provider_profile: earmark_core::VersionRef::new(
-                earmark_core::ObjectId::new(),
-                earmark_core::VersionId::new(),
+                earmark_core::ObjectId::generate(),
+                earmark_core::VersionId::generate(),
             ),
             instruction_text: "hi".to_string(),
             context_text: None,
@@ -1102,16 +1102,16 @@ mod tests {
         let adapter = HttpGenerationAdapter;
         let request = ProviderRequest {
             request_id: "req_sub".to_string(),
-            run_id: "run_sub".to_string(),
+            run_id: earmark_core::RunId::parse("run_sub").unwrap(),
             work_packet: earmark_core::ObjectRef::new(
-                earmark_core::ObjectId::new(),
-                earmark_core::VersionId::new(),
+                earmark_core::ObjectId::generate(),
+                earmark_core::VersionId::generate(),
                 earmark_core::Kind::WorkPacket,
                 None,
             ),
             provider_profile: earmark_core::VersionRef::new(
-                earmark_core::ObjectId::new(),
-                earmark_core::VersionId::new(),
+                earmark_core::ObjectId::generate(),
+                earmark_core::VersionId::generate(),
             ),
             instruction_text: "hi".to_string(),
             context_text: None,

@@ -1,0 +1,253 @@
+warning: function `validate_lower_digits_ext` is never used
+   --> earmark-core/src/ids.rs:128:4
+    |
+128 | fn validate_lower_digits_ext(body: &str, extra: &str, max: usize) -> R...
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `earmark-core` (lib) generated 1 warning
+    Checking earmark v0.1.0 (/home/mikhails/from_ubuntu/GITHUB/earmark-workspace/earmark)
+warning: unused doc comment
+  --> earmark-cli/src/app/commands/orchestration.rs:29:9
+   |
+29 |           /// Initializes an orchestration example in the current workspace.
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+30 | /         OrchestrationAction::InitExample(args) => {
+31 | |             require_initialized_workspace(store)?;
+32 | |
+33 | |             let relative_path = "examples/earmark-dev-orchestration/declarati...
+...  |
+93 | |             Ok(())
+94 | |         }
+   | |_________- rustdoc does not generate documentation for match arms
+   |
+   = help: use `//` for a plain comment
+   = note: `#[warn(unused_doc_comments)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused doc comment
+   --> earmark-cli/src/app/commands/orchestration.rs:95:9
+    |
+ 95 |           /// Captures the current Git state as a `git_snapshot` for a specific task.
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 96 | /         OrchestrationAction::CaptureGit(args) => {
+ 97 | |             require_initialized_workspace(store)?;
+ 98 | |             let index_ref = ctx
+ 99 | |                 .index
+...   |
+209 | |             Ok(())
+210 | |         }
+    | |_________- rustdoc does not generate documentation for match arms
+    |
+    = help: use `//` for a plain comment
+
+warning: unused doc comment
+   --> earmark-cli/src/app/commands/orchestration.rs:211:9
+    |
+211 |           /// Ingests a markdown worker manifest and registers it as an `executor_manifest`.
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+212 | /         OrchestrationAction::IngestManifest(args) => {
+213 | |             require_initialized_workspace(store)?;
+214 | |
+215 | |             let manifest_path = &args.path;
+...   |
+397 | |             Ok(())
+398 | |         }
+    | |_________- rustdoc does not generate documentation for match arms
+    |
+    = help: use `//` for a plain comment
+
+warning: unused doc comment
+   --> earmark-cli/src/app/commands/orchestration.rs:399:9
+    |
+399 |           /// Ingests a markdown worker report and registers it as an `executor_report`.
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+400 | /         OrchestrationAction::IngestReport(args) => {
+401 | |             require_initialized_workspace(store)?;
+402 | |
+403 | |             let report_path = &args.path;
+...   |
+560 | |             Ok(())
+561 | |         }
+    | |_________- rustdoc does not generate documentation for match arms
+    |
+    = help: use `//` for a plain comment
+
+warning: unused doc comment
+   --> earmark-cli/src/app/commands/orchestration.rs:562:9
+    |
+562 |           /// Ingests work items from various sources (JSON, etc.) and registers them as `work_item`s.
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+563 | /         OrchestrationAction::IngestTask(args) => {
+564 | |             require_initialized_workspace(store)?;
+565 | |
+566 | |             let index_ref = ctx
+...   |
+675 | |             Ok(())
+676 | |         }
+    | |_________- rustdoc does not generate documentation for match arms
+    |
+    = help: use `//` for a plain comment
+
+warning: unused doc comment
+   --> earmark-cli/src/app/commands/orchestration.rs:677:9
+    |
+677 |           /// Records a task-specific work surface context packet.
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+678 | /         OrchestrationAction::RecordContext(args) => {
+679 | |             require_initialized_workspace(store)?;
+680 | |             let index_ref = ctx
+681 | |                 .index
+...   |
+733 | |             Ok(())
+734 | |         }
+    | |_________- rustdoc does not generate documentation for match arms
+    |
+    = help: use `//` for a plain comment
+
+warning: unused doc comment
+   --> earmark-cli/src/app/commands/orchestration.rs:735:9
+    |
+735 |           /// Records the outcome of a local gate check for a task and attempt.
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+736 | /         OrchestrationAction::RecordGate(args) => {
+737 | |             require_initialized_workspace(store)?;
+738 | |             let index_ref = ctx
+739 | |                 .index
+...   |
+850 | |             Ok(())
+851 | |         }
+    | |_________- rustdoc does not generate documentation for match arms
+    |
+    = help: use `//` for a plain comment
+
+warning: unused doc comment
+    --> earmark-cli/src/app/commands/orchestration.rs:852:9
+     |
+ 852 |           /// Submits a human or automated review for a task and attempt.
+     |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 853 | /         OrchestrationAction::Review(args) => {
+ 854 | |             require_initialized_workspace(store)?;
+ 855 | |
+ 856 | |             let index_ref = ctx
+...    |
+1094 | |             Ok(())
+1095 | |         }
+     | |_________- rustdoc does not generate documentation for match arms
+     |
+     = help: use `//` for a plain comment
+
+warning: unused doc comment
+    --> earmark-cli/src/app/commands/orchestration.rs:1096:9
+     |
+1096 |           /// Shows the current status and latest artifacts for a specific orchestration task.
+     |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+1097 | /         OrchestrationAction::Show(args) => {
+1098 | |             require_initialized_workspace(store)?;
+1099 | |
+1100 | |             let index_ref = ctx
+...    |
+1383 | |             Ok(())
+1384 | |         }
+     | |_________- rustdoc does not generate documentation for match arms
+     |
+     = help: use `//` for a plain comment
+
+warning: unused doc comment
+    --> earmark-cli/src/app/commands/orchestration.rs:1385:9
+     |
+1385 |           /// Displays a visual timeline of orchestration events for a task.
+     |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+1386 | /         OrchestrationAction::Timeline(args) => {
+1387 | |             require_initialized_workspace(store)?;
+1388 | |
+1389 | |             let index_ref = ctx
+...    |
+1437 | |             Ok(())
+1438 | |         }
+     | |_________- rustdoc does not generate documentation for match arms
+     |
+     = help: use `//` for a plain comment
+
+warning: unused doc comment
+    --> earmark-cli/src/app/commands/orchestration.rs:1439:9
+     |
+1439 |           /// Lists all orchestration tasks registered in the workspace index.
+     |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+1440 | /         OrchestrationAction::List(args) => {
+1441 | |             require_initialized_workspace(store)?;
+1442 | |             let index_ref = ctx
+1443 | |                 .index
+...    |
+1613 | |             Ok(())
+1614 | |         }
+     | |_________- rustdoc does not generate documentation for match arms
+     |
+     = help: use `//` for a plain comment
+
+warning: unused doc comment
+    --> earmark-cli/src/app/commands/orchestration.rs:1615:9
+     |
+1615 |           /// Explains a specific dispatch record, resolving 'latest' if requested.
+     |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+1616 | /         OrchestrationAction::ExplainDispatch(args) => {
+1617 | |             require_initialized_workspace(store)?;
+1618 | |             let index_ref = ctx
+1619 | |                 .index
+...    |
+1689 | |             Ok(())
+1690 | |         }
+     | |_________- rustdoc does not generate documentation for match arms
+     |
+     = help: use `//` for a plain comment
+
+warning: unused variable: `namespace`
+   --> earmark-cli/src/app/commands/orchestration.rs:619:21
+    |
+619 |                 let namespace = resolve_orchestration_namespace(index_...
+    |                     ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_namespace`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable `found_task` is assigned to, but never used
+   --> earmark-cli/src/app/commands/orchestration.rs:869:17
+    |
+869 | ...   let mut found_task: Option<(ObjectSummary, serde_json::Value)> =...
+    |           ^^^^^^^^^^^^^^
+    |
+    = note: consider using `_found_task` instead
+
+warning: unused variable: `closure_object_ref`
+   --> earmark-cli/src/app/commands/orchestration.rs:953:37
+    |
+953 | ...review_object_ref, closure_object_ref, task_version_ref) = {
+    |                       ^^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_closure_object_ref`
+
+warning: value assigned to `found_task` is never read
+   --> earmark-cli/src/app/commands/orchestration.rs:914:17
+    |
+914 |                 found_task = Some(c);
+    |                 ^^^^^^^^^^
+    |
+    = help: maybe it is overwritten before being read?
+    = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: `earmark-cli` (bin "earmark-cli") generated 16 warnings (run `cargo fix --bin "earmark-cli" -p earmark-cli` to apply 2 suggestions)
+error[E0308]: mismatched types
+   --> earmark/src/lib.rs:259:60
+    |
+259 | ...vref = write_object_and_index(&self.store, &self.index, &object)?;
+    |           ----------------------              ^^^^^^^^^^^ types differ in mutability
+    |           |
+    |           arguments to this function are incorrect
+    |
+    = note: expected mutable reference `&mut DerivedIndex`
+                       found reference `&DerivedIndex`
+note: function defined here
+   --> earmark-exec/src/persistence_helpers.rs:7:8
+    |
+  7 | pub fn write_object_and_index<S: CanonicalStore>(
+    |        ^^^^^^^^^^^^^^^^^^^^^^
+
+For more information about this error, try `rustc --explain E0308`.
+error: could not compile `earmark` (lib) due to 1 previous error

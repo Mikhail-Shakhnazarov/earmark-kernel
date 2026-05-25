@@ -8,7 +8,23 @@ use crate::app::resolve::resolve_system_version_ref;
 use earmark_index::DerivedIndex;
 use earmark_store::CanonicalStore;
 
+fn escape_html(s: &str) -> String {
+    let mut escaped = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '<' => escaped.push_str("&lt;"),
+            '>' => escaped.push_str("&gt;"),
+            '&' => escaped.push_str("&amp;"),
+            '"' => escaped.push_str("&quot;"),
+            '\'' => escaped.push_str("&#39;"),
+            _ => escaped.push(c),
+        }
+    }
+    escaped
+}
+
 fn html_wrap(title: &str, content: &str) -> String {
+    let escaped_title = escape_html(title);
     format!(
         r#"<!DOCTYPE html>
 <html lang="en">
@@ -119,7 +135,7 @@ fn html_wrap(title: &str, content: &str) -> String {
     </div>
 </body>
 </html>"#,
-        title = title,
+        title = escaped_title,
         now = chrono::Utc::now().to_rfc3339(),
         content = content
     )
@@ -127,7 +143,7 @@ fn html_wrap(title: &str, content: &str) -> String {
 
 pub(crate) fn generate_run_report<S: CanonicalStore>(
     store: &S,
-    run_id: &str,
+    run_id: &earmark_core::RunId,
 ) -> Result<String, CliError> {
     let ledger = load_run_record_by_id(store, run_id)?;
     let related = run_related_artifacts(store, run_id)?;
@@ -157,7 +173,7 @@ pub(crate) fn generate_run_report<S: CanonicalStore>(
             <p><strong>Events:</strong> {events}</p>
         </div>"#,
         run_id = run_id,
-        status = format!("{:?}", ledger.status).to_lowercase(),
+        status = escape_html(&format!("{:?}", ledger.status).to_lowercase()),
         status_class = if matches!(ledger.status, earmark_core::RunStatus::Completed) {
             "success"
         } else if matches!(ledger.status, earmark_core::RunStatus::Partial) {
@@ -202,8 +218,8 @@ pub(crate) fn generate_run_report<S: CanonicalStore>(
         content.push_str(&format!(
             "<li><code>{ts}</code> - <strong>{kind}</strong>: {msg}</li>",
             ts = event.timestamp,
-            kind = event.event_type,
-            msg = event.message.as_deref().unwrap_or_default()
+            kind = escape_html(&event.event_type),
+            msg = escape_html(event.message.as_deref().unwrap_or_default())
         ));
     }
     content.push_str("</ul></div>");
@@ -221,12 +237,12 @@ pub(crate) fn generate_run_report<S: CanonicalStore>(
                 <p><strong>Warnings:</strong> {warning_count}</p>
                 <p><strong>Message:</strong> {message}</p>
             </div>"#,
-            provider = record.provider.as_str(),
-            model = record.model.as_str(),
-            status = format!("{:?}", record.status).to_lowercase(),
-            record_id = record.record_id.as_str(),
+            provider = escape_html(record.provider.as_str()),
+            model = escape_html(record.model.as_str()),
+            status = escape_html(&format!("{:?}", record.status).to_lowercase()),
+            record_id = escape_html(record.record_id.as_str()),
             warning_count = warning_count,
-            message = message
+            message = escape_html(message)
         ));
     }
     if provider_records.is_empty() {
@@ -257,7 +273,9 @@ pub(crate) fn generate_run_report<S: CanonicalStore>(
                     .unwrap_or("n/a");
                 content.push_str(&format!(
                     "<li><strong>{}</strong> ({}) - {}</li>",
-                    transition_id, error_type, message
+                    escape_html(transition_id),
+                    escape_html(error_type),
+                    escape_html(message)
                 ));
             }
         }
@@ -283,7 +301,7 @@ pub(crate) fn generate_run_report<S: CanonicalStore>(
         );
     } else {
         for warning in visibility_warnings {
-            content.push_str(&format!("<li>{}</li>", warning));
+            content.push_str(&format!("<li>{}</li>", escape_html(warning)));
         }
     }
     content.push_str("</ul></div>");
@@ -342,25 +360,36 @@ pub(crate) fn generate_handoff_report<S: CanonicalStore>(
             <p><strong>To Transition:</strong> {to}</p>
             <p><strong>Run ID:</strong> {run_id}</p>
         </div>"#,
-        handoff_id = handoff_id,
-        from = handoff.from_transition_id,
-        to = handoff
-            .to_transition_id
-            .unwrap_or_else(|| "N/A".to_string()),
-        run_id = handoff.run_id
+        handoff_id = escape_html(handoff_id),
+        from = escape_html(&handoff.from_transition_id),
+        to = escape_html(
+            handoff
+                .to_transition_id
+                .as_ref()
+                .map(|id| id.as_str())
+                .unwrap_or("N/A"),
+        ),
+        run_id = escape_html(handoff.run_id.as_str())
     ));
 
     content.push_str("<h2>Continuation Constraints</h2>");
     content.push_str("<div class=\"summary-card\">");
     content.push_str("<p><strong>Allowed Input Classes:</strong> ");
-    content.push_str(&handoff.allowed_input_classes.join(", "));
+    content.push_str(
+        &handoff
+            .allowed_input_classes
+            .iter()
+            .map(|c| escape_html(c))
+            .collect::<Vec<_>>()
+            .join(", "),
+    );
     content.push_str("</p>");
     content.push_str("<p><strong>Required Checks:</strong> ");
     content.push_str(
         &handoff
             .required_checks
             .iter()
-            .map(|c| c.check_type.as_str())
+            .map(|c| escape_html(c.check_type.as_str()))
             .collect::<Vec<_>>()
             .join(", "),
     );
@@ -404,10 +433,10 @@ pub(crate) fn generate_system_report<S: CanonicalStore>(
             <p><strong>Namespace:</strong> {namespace}</p>
             <p><strong>Description:</strong> {description}</p>
         </div>"#,
-        system_id = system.system_id,
-        title = system.title,
-        namespace = system.namespace,
-        description = system.description.unwrap_or_else(|| "N/A".to_string())
+        system_id = escape_html(system.system_id.as_str()),
+        title = escape_html(&system.title),
+        namespace = escape_html(system.namespace.as_str()),
+        description = escape_html(&system.description.unwrap_or_else(|| "N/A".to_string()))
     ));
 
     content.push_str("<h2>Declaration Inventory</h2>");

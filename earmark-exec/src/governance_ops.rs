@@ -16,7 +16,7 @@ use earmark_store::{CanonicalStore, StoredObject, StoredPayload};
 
 pub fn approve_standing_request<S: CanonicalStore>(
     store: &S,
-    index: &DerivedIndex,
+    index: &mut DerivedIndex,
     request_ref: &VersionRef,
     reason: Option<String>,
 ) -> Result<VersionRef, ExecError> {
@@ -55,7 +55,7 @@ pub fn approve_standing_request<S: CanonicalStore>(
 
 pub fn reject_standing_request<S: CanonicalStore>(
     store: &S,
-    index: &DerivedIndex,
+    index: &mut DerivedIndex,
     request_ref: &VersionRef,
     reason: Option<String>,
 ) -> Result<VersionRef, ExecError> {
@@ -96,7 +96,7 @@ pub fn reject_standing_request<S: CanonicalStore>(
 
 pub fn apply_standing_request<S: CanonicalStore>(
     store: &S,
-    index: &DerivedIndex,
+    index: &mut DerivedIndex,
     request_ref: &VersionRef,
     policy_id: Option<&str>,
     reason: Option<String>,
@@ -240,7 +240,7 @@ pub fn apply_standing_request<S: CanonicalStore>(
     let mut next_target = target_head.clone();
     next_target.envelope.standing = next_standing;
     next_target.envelope.parents = vec![target_head_ref];
-    next_target.envelope.version_id = earmark_core::VersionId::new();
+    next_target.envelope.version_id = earmark_core::VersionId::generate();
     next_target.envelope.updated_at = Utc::now();
 
     let next_target_ref = write_object_and_index(store, index, &next_target)?;
@@ -281,7 +281,7 @@ fn load_standing_request<S: CanonicalStore>(
 
 fn persist_request_update<S: CanonicalStore>(
     store: &S,
-    index: &DerivedIndex,
+    index: &mut DerivedIndex,
     parent_ref: &VersionRef,
     request: &StandingTransitionRequest,
 ) -> Result<VersionRef, ExecError> {

@@ -16,7 +16,7 @@ fn test_neutral_staged_fixture_source_note_to_summary() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     let registry = ProviderRegistry::default();
 
     // 1. Define Classes
@@ -318,16 +318,16 @@ guards: []
     store.write_object(&source_note).unwrap();
 
     index.rebuild_from_store(&store).unwrap();
-    let engine = ExecutionEngine {
+    let mut engine = ExecutionEngine {
         store: &store,
-        index: &index,
+        index: &mut index,
         provider_service: &registry,
     };
 
     // 7. Run Pattern A (Stage 1)
     let outcome_a = engine
         .run_workflow(WorkflowRunRequest {
-            run_id: "run1".to_string(),
+            run_id: earmark_core::RunId::parse("run1").unwrap(),
             system_definition: system_ref.clone(),
             workflow: workflow_a_ref,
             inputs: vec![source_note.object_ref()],
@@ -350,7 +350,7 @@ guards: []
         .find(|o| {
             let h: earmark_core::HandoffManifest =
                 serde_json::from_slice(&o.payload.bytes).unwrap();
-            h.from_transition_id == "op_ext"
+            h.from_transition_id == "tr_op_ext"
         })
         .expect("Handoff from op_ext missing");
 
@@ -361,7 +361,7 @@ guards: []
     // 8. Run Pattern B (Stage 2) using handoff from Stage 1
     let outcome_b = engine
         .run_workflow(WorkflowRunRequest {
-            run_id: "run2".to_string(),
+            run_id: earmark_core::RunId::parse("run2").unwrap(),
             system_definition: system_ref,
             workflow: workflow_b_ref,
             inputs: vec![], // No direct inputs, use handoff

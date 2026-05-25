@@ -76,7 +76,7 @@ impl CliError {
 
 pub struct CommandContext<'a> {
     pub store: &'a GitCanonicalStore,
-    pub index: &'a Option<DerivedIndex>,
+    pub index: &'a mut Option<DerivedIndex>,
     pub config: &'a CliConfig,
     pub provider_registry: &'a ProviderRegistry,
     pub as_json: bool,

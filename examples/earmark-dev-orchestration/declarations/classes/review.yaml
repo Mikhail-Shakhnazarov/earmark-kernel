@@ -18,6 +18,7 @@ relation_rules:
   - relation_type: reviews
     counterparty_classes:
       - work_item
+      - implementation_task
       - dispatch
       - evidence
       - closure

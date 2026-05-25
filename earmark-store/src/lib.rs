@@ -217,7 +217,7 @@ impl StoredObject {
         parents: Vec<VersionRef>,
     ) -> Self {
         Self::new_with_id(
-            ObjectId::new(),
+            ObjectId::generate(),
             kind,
             class,
             standing,
@@ -244,7 +244,7 @@ impl StoredObject {
         Self {
             envelope: Envelope {
                 id,
-                version_id: VersionId::new(),
+                version_id: VersionId::generate(),
                 kind,
                 class,
                 standing,
@@ -270,7 +270,7 @@ impl StoredObject {
         Self {
             envelope: Envelope {
                 id: previous.envelope.id.clone(),
-                version_id: VersionId::new(),
+                version_id: VersionId::generate(),
                 kind: previous.envelope.kind.clone(),
                 class: previous.envelope.class.clone(),
                 standing,
