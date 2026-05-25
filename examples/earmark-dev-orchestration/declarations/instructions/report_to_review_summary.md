@@ -3,7 +3,7 @@ name: report_to_review_summary
 version: 0.1.0
 purpose: Summarize executor reports for review decision.
 input_classes:
-  - executor_report
+  - evidence
 output_classes:
   - review_decision
 execution_policy: runtime_permitted

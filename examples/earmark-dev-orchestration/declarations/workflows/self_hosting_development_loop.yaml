@@ -4,37 +4,37 @@ description: "The self-hosting development loop: prepare manifest, execute, repo
 operations:
   - id: prepare_manifest
     kind: transform
-    input_contracts: [implementation_task]
-    output_contracts: [executor_manifest]
+    input_contracts: [work_item]
+    output_contracts: [dispatch]
     instruction: "../instructions/task_to_manifest.md"
 
   - id: capture_git_before
     kind: compile_context
-    input_contracts: [executor_manifest]
+    input_contracts: [dispatch]
     output_contracts: [task_execution_context]
     compiled_context: "../compiled_contexts/task_execution_context.yaml"
 
   - id: execute_task
     kind: transform
-    input_contracts: [implementation_task]
-    output_contracts: [executor_report]
+    input_contracts: [work_item]
+    output_contracts: [evidence]
     instruction: "../instructions/report_to_review_summary.md"
 
   - id: capture_git_after
     kind: compile_context
-    input_contracts: [executor_report]
+    input_contracts: [evidence]
     output_contracts: [review_context]
     compiled_context: "../compiled_contexts/review_context.yaml"
 
   - id: review_results
     kind: transform
-    input_contracts: [implementation_task]
+    input_contracts: [work_item]
     output_contracts: [review_decision]
     instruction: "../instructions/report_to_review_summary.md"
 
   - id: handle_followup
     kind: transform
-    input_contracts: [implementation_task]
+    input_contracts: [work_item]
     output_contracts: [followup_task]
     instruction: "../instructions/failure_to_followup.md"
 

@@ -4,9 +4,6 @@ namespace: examples.earmark-dev
 title: Earmark Development Orchestration
 description: "An example system for the self-hosting Earmark development orchestration loop: tasks, manifests, reports, git state, gates, review decisions, and follow-ups."
 classes:
-  - classes/implementation_task.yaml
-  - classes/executor_manifest.yaml
-  - classes/executor_report.yaml
   - classes/git_snapshot.yaml
   - classes/git_change_summary.yaml
   - classes/gate_result.yaml

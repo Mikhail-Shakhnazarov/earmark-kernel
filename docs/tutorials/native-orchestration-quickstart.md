@@ -56,7 +56,7 @@ Expected output shape:
 
 ```json
 {
-  "kind": "implementation_task_ingest",
+  "kind": "work_item_ingest",
   "source": "native-json",
   "tasks": [
     {
@@ -151,7 +151,7 @@ Expected output shape:
 
 ```json
 {
-  "kind": "executor_manifest_ingest",
+  "kind": "dispatch_ingest",
   "object_id": "obj_...",
   "version_id": "ver_...",
   "task_id": "pf-s1",
@@ -260,7 +260,7 @@ Replace `<dispatch_id>` with the `object_id` from the manifest ingest step. Expe
 
 ```json
 {
-  "kind": "executor_report_ingest",
+  "kind": "evidence_ingest",
   "object_id": "obj_...",
   "version_id": "ver_...",
   "task_id": "pf-s1",

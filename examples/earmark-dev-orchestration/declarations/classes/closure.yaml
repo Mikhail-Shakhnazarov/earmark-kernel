@@ -15,5 +15,5 @@ relation_rules:
   - relation_type: closes
     counterparty_classes:
       - work_item
-      - implementation_task
+      - work_item
 validators: []

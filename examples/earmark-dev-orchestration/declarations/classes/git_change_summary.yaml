@@ -15,5 +15,5 @@ standing_rules:
 relation_rules:
   - relation_type: evidences_report
     counterparty_classes:
-      - executor_report
+      - evidence
 validators: []

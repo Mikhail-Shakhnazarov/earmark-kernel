@@ -348,7 +348,7 @@ pub fn handle(ctx: &mut CommandContext, command: &OrchestrationCommand) -> Resul
                 earmark_core::HeaderValue::String(task_id.clone()),
             );
 
-            let namespace = resolve_orchestrationnamespace(index_ref, store);
+            let namespace = resolve_orchestration_namespace(index_ref, store);
             let mut runtime_surface = RuntimeToolSurface {
                 store,
                 index: index_ref,
@@ -382,7 +382,7 @@ pub fn handle(ctx: &mut CommandContext, command: &OrchestrationCommand) -> Resul
             emit(
                 as_json,
                 json!({
-                    "kind": "executor_manifest_ingest",
+                    "kind": "orchestration_dispatch_ingest",
                     "object_id": object_ref.id.as_str(),
                     "version_id": object_ref.version_id.as_str(),
                     "task_id": task_id,
@@ -395,7 +395,7 @@ pub fn handle(ctx: &mut CommandContext, command: &OrchestrationCommand) -> Resul
 
             Ok(())
         }
-        // Ingests a markdown worker report and registers it as an `executor_report`.
+        // Ingests a markdown worker report and registers it as an `evidence`.
         OrchestrationAction::IngestReport(args) => {
             require_initialized_workspace(store)?;
 
@@ -450,21 +450,18 @@ pub fn handle(ctx: &mut CommandContext, command: &OrchestrationCommand) -> Resul
 
             let files_changed = parse_files_changed(&sections);
 
-            let manifest_ref: Option<String> = if let Some(m) = &args.manifest {
-                Some(m.clone())
-            } else {
-                let index_ref = ctx
-                    .index
-                    .as_mut()
-                    .ok_or_else(|| CliError::argument("index required for ingest-report"))?;
-                resolve_manifest_for_report(store, index_ref, &task_id, attempt)?
-            };
-
             let index_ref = ctx
                 .index
                 .as_mut()
                 .ok_or_else(|| CliError::argument("index required for ingest-report"))?;
-            let namespace = resolve_orchestrationnamespace(index_ref, store);
+
+            let manifest_ref: Option<String> = if let Some(m) = &args.manifest {
+                Some(m.clone())
+            } else {
+                resolve_manifest_for_report(store, index_ref, &task_id, attempt)?
+            };
+
+            let namespace = resolve_orchestration_namespace(index_ref, store);
             let mut runtime_surface = RuntimeToolSurface {
                 store,
                 index: index_ref,
@@ -504,7 +501,7 @@ pub fn handle(ctx: &mut CommandContext, command: &OrchestrationCommand) -> Resul
                 payload,
                 prov,
                 DepositValidationContext {
-                    namespace: namespace.clone().clone(),
+                    namespace: namespace.clone(),
                     headers,
                 },
             )?;
@@ -546,7 +543,7 @@ pub fn handle(ctx: &mut CommandContext, command: &OrchestrationCommand) -> Resul
             emit(
                 as_json,
                 json!({
-                    "kind": "executor_report_ingest",
+                    "kind": "orchestration_evidence_ingest",
                     "object_id": object_ref.id.as_str(),
                     "version_id": object_ref.version_id.as_str(),
                     "task_id": task_id,
@@ -615,7 +612,7 @@ pub fn handle(ctx: &mut CommandContext, command: &OrchestrationCommand) -> Resul
                     "raw_text": task.raw_text,
                 });
 
-                let namespace = resolve_orchestrationnamespace(index_ref, store);
+                let namespace = resolve_orchestration_namespace(index_ref, store);
             let mut runtime_surface = RuntimeToolSurface {
                     store,
                     index: index_ref,
@@ -664,7 +661,7 @@ pub fn handle(ctx: &mut CommandContext, command: &OrchestrationCommand) -> Resul
             emit(
                 as_json,
                 json!({
-                    "kind": "implementation_task_ingest",
+                    "kind": "orchestration_work_item_ingest",
                     "source": source,
                     "tasks": ingested,
                 }),
@@ -880,7 +877,7 @@ pub fn handle(ctx: &mut CommandContext, command: &OrchestrationCommand) -> Resul
             });
 
             let (review_object_ref, _closure_object_ref, task_version_ref) = {
-                let namespace = resolve_orchestrationnamespace(index_ref, store);
+                let namespace = resolve_orchestration_namespace(index_ref, store);
                 let mut runtime_surface = RuntimeToolSurface {
                     store,
                     index: index_ref,
@@ -1130,7 +1127,7 @@ pub fn handle(ctx: &mut CommandContext, command: &OrchestrationCommand) -> Resul
                 .unwrap_or("");
 
             let manifest_filter = QueryFilter {
-                class: Some("executor_manifest".to_string()),
+                class: Some("dispatch".to_string()),
                 ..Default::default()
             };
             let manifest_results = index_ref.query_objects(&manifest_filter)?;
@@ -1169,7 +1166,7 @@ pub fn handle(ctx: &mut CommandContext, command: &OrchestrationCommand) -> Resul
             }
 
             let report_filter = QueryFilter {
-                class: Some("executor_report".to_string()),
+                class: Some("evidence".to_string()),
                 ..Default::default()
             };
             let report_results = index_ref.query_objects(&report_filter)?;
@@ -1404,8 +1401,8 @@ pub fn handle(ctx: &mut CommandContext, command: &OrchestrationCommand) -> Resul
                     "work_item",
                     "implementation_task",
                     "dispatch",
-                    "executor_manifest",
-                    "executor_report",
+                    "dispatch",
+                    "evidence",
                     "evidence",
                     "git_snapshot",
                     "gate_result",
@@ -1761,7 +1758,7 @@ fn resolve_manifest_for_report(
     attempt: usize,
 ) -> Result<Option<String>, CliError> {
     let filter = QueryFilter {
-        class: Some("executor_manifest".to_string()),
+        class: Some("dispatch".to_string()),
         ..Default::default()
     };
     let results = index.query_objects(&filter)?;
@@ -1978,15 +1975,15 @@ fn find_orchestration_task(
 
     for class in &[
         "work_item",
-        "implementation_task",
         "dispatch",
-        "executor_manifest",
-        "executor_report",
         "evidence",
         "git_snapshot",
         "gate_result",
         "review",
         "closure",
+        "context_packet",
+        "followup_task",
+        "trace_event",
     ] {
         let filter = QueryFilter {
             class: Some(class.to_string()),
@@ -2076,7 +2073,7 @@ fn deposit_orchestration_object(
     title: Option<String>,
     payload: serde_json::Value,
 ) -> Result<earmark_core::ObjectRef, CliError> {
-    let namespace = resolve_orchestrationnamespace(index, store);
+    let namespace = resolve_orchestration_namespace(index, store);
     let mut runtime_surface = RuntimeToolSurface {
         store,
         index,
@@ -2139,7 +2136,7 @@ fn deposit_orchestration_object(
     Ok(obj_ref)
 }
 
-fn resolve_orchestrationnamespace(
+fn resolve_orchestration_namespace(
     index: &DerivedIndex,
     _store: &GitCanonicalStore,
 ) -> Option<String> {
