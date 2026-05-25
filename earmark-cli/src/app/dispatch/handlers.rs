@@ -508,7 +508,10 @@ pub(crate) fn handle_failure(
     Ok(())
 }
 
-pub(crate) fn handle_audit(ctx: &mut CommandContext, command: AuditCommand) -> Result<(), CliError> {
+pub(crate) fn handle_audit(
+    ctx: &mut CommandContext,
+    command: AuditCommand,
+) -> Result<(), CliError> {
     let store = ctx.store;
     let as_json = ctx.as_json;
 
@@ -546,7 +549,10 @@ pub(crate) fn handle_audit(ctx: &mut CommandContext, command: AuditCommand) -> R
     Ok(())
 }
 
-pub(crate) fn handle_report(ctx: &mut CommandContext, command: ReportCommand) -> Result<(), CliError> {
+pub(crate) fn handle_report(
+    ctx: &mut CommandContext,
+    command: ReportCommand,
+) -> Result<(), CliError> {
     let store = ctx.store;
     let index = &mut ctx.index;
     let as_json = ctx.as_json;

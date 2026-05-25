@@ -1,10 +1,12 @@
+pub mod adapters;
 pub mod common;
-pub mod ingest;
-pub mod git;
+pub mod context;
 pub mod gates;
+pub mod git;
+pub mod graph;
+pub mod ingest;
 pub mod review;
 pub mod view;
-pub mod adapters;
 
 use crate::app::common::{CliError, CommandContext};
 use crate::cli::{OrchestrationAction, OrchestrationCommand};
@@ -23,20 +25,21 @@ pub fn handle(ctx: &mut CommandContext, command: &OrchestrationCommand) -> Resul
         OrchestrationAction::List(args) => view::handle_list(ctx, args),
         OrchestrationAction::Timeline(args) => view::handle_timeline(ctx, args),
         OrchestrationAction::ExplainDispatch(args) => view::handle_explain_dispatch(ctx, args),
-        OrchestrationAction::RecordContext(_args) => {
-            Err(CliError::argument("record-context not yet implemented in modularized version".to_string()))
-        }
+        OrchestrationAction::RecordContext(args) => context::handle_record_context(ctx, args),
     }
 }
 
 // Internal helper for init-example (could be moved to a separate file if it grows)
-fn handle_init_example(ctx: &mut CommandContext, args: &crate::cli::InitExampleArgs) -> Result<(), CliError> {
-    use std::path::PathBuf;
+fn handle_init_example(
+    ctx: &mut CommandContext,
+    args: &crate::cli::InitExampleArgs,
+) -> Result<(), CliError> {
     use crate::app::common::require_initialized_workspace;
-    use crate::app::{register_declaration_file, mirror_surface};
-    use earmark_declarations::activate_system_definition;
     use crate::app::emit;
+    use crate::app::{mirror_surface, register_declaration_file};
+    use earmark_declarations::activate_system_definition;
     use serde_json::json;
+    use std::path::PathBuf;
 
     let store = ctx.store;
     let as_json = ctx.as_json;
@@ -104,7 +107,7 @@ fn handle_init_example(ctx: &mut CommandContext, args: &crate::cli::InitExampleA
             "workflow_count": 1,
         }),
     );
-    
+
     // Mirror the newly registered system definition
     let stored_object = ObjectStore::read_version(store, &version_ref)?;
     mirror_surface(store, &stored_object)?;

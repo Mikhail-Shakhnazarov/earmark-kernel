@@ -69,14 +69,8 @@ pub fn resolve_orchestration_namespace(
     index: &DerivedIndex,
     _store: &GitCanonicalStore,
 ) -> Option<String> {
-    let filter = QueryFilter {
-        class: Some("system".to_string()),
-        ..Default::default()
-    };
-    if let Ok(results) = index.query_objects(&filter) {
-        if let Some(summary) = results.first() {
-            return summary.namespace.clone();
-        }
+    if let Ok(Some(active)) = index.get_active_system("examples.earmark-dev") {
+        return Some(active.namespace);
     }
     None
 }
@@ -190,7 +184,6 @@ pub fn deposit_orchestration_object(
         DepositValidationContext { namespace, headers },
     )?;
 
-    index.rebuild_from_store(store)?;
     let vr = VersionRef::new(object_ref.id.clone(), object_ref.version_id.clone());
     Ok(vr)
 }
@@ -213,7 +206,6 @@ pub fn create_orchestration_relation(
         source_type: "cli".to_string(),
     };
     runtime_surface.create_relation(source, target, relation_type.to_string(), json!({}), prov)?;
-    index.rebuild_from_store(store)?;
     Ok(())
 }
 
@@ -244,7 +236,10 @@ pub fn run_git_cmd(repo: &Path, args: &[&str]) -> Result<String, CliError> {
     }
 }
 
-pub fn resolve_git_repo(store_root: &Path, explicit_repo: Option<&std::path::PathBuf>) -> Result<std::path::PathBuf, CliError> {
+pub fn resolve_git_repo(
+    store_root: &Path,
+    explicit_repo: Option<&std::path::PathBuf>,
+) -> Result<std::path::PathBuf, CliError> {
     if let Some(repo) = explicit_repo {
         if repo.exists() {
             return Ok(repo.clone());

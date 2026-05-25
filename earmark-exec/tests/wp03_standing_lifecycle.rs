@@ -91,9 +91,13 @@ fn test_standing_request_lifecycle() {
     assert!(res.is_err(), "should fail to apply proposed request");
 
     // 5. Approve the request
-    let approved_ref =
-        approve_standing_request(&store, &mut index, &request_ref, Some("Approved".to_string()))
-            .unwrap();
+    let approved_ref = approve_standing_request(
+        &store,
+        &mut index,
+        &request_ref,
+        Some("Approved".to_string()),
+    )
+    .unwrap();
 
     // 6. Try to apply Approved request without review evidence (should fail because rule requires review)
     let res = apply_standing_request(

@@ -178,7 +178,10 @@ fn test_live_transition_indexing() {
             ObjectId::generate(),
             earmark_core::VersionId::generate(),
         ),
-        workflow: earmark_core::VersionRef::new(ObjectId::generate(), earmark_core::VersionId::generate()),
+        workflow: earmark_core::VersionRef::new(
+            ObjectId::generate(),
+            earmark_core::VersionId::generate(),
+        ),
         status: earmark_core::RunStatus::Running,
         started_at: chrono::Utc::now(),
         ended_at: None,
@@ -239,7 +242,10 @@ fn test_live_transition_indexing() {
             ObjectId::generate(),
             earmark_core::VersionId::generate(),
         ),
-        workflow: earmark_core::VersionRef::new(ObjectId::generate(), earmark_core::VersionId::generate()),
+        workflow: earmark_core::VersionRef::new(
+            ObjectId::generate(),
+            earmark_core::VersionId::generate(),
+        ),
         inputs: vec![],
         handoff_manifest: None,
         transition_assignment: None,

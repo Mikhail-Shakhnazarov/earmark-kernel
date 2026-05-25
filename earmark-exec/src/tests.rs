@@ -388,7 +388,9 @@ fn test_delegated_outcome_with_none_response_returns_error_instead_of_panicking(
     let mut engine = crate::engine::ExecutionEngine::new(&store, &mut index, &BrokenProvider);
 
     let prof = earmark_core::ProviderProfile {
-        name: earmark_core::TransitionId::parse("test").unwrap().to_string(),
+        name: earmark_core::TransitionId::parse("test")
+            .unwrap()
+            .to_string(),
         version: "1".to_string(),
         description: None,
         provider: "broken".to_string(),
@@ -426,9 +428,13 @@ fn test_delegated_outcome_with_none_response_returns_error_instead_of_panicking(
     let prof_ref = engine.store.write_object(&prof_obj).unwrap();
 
     let instruction = earmark_core::InstructionPayload {
-        name: earmark_core::TransitionId::parse("test").unwrap().to_string(),
+        name: earmark_core::TransitionId::parse("test")
+            .unwrap()
+            .to_string(),
         version: "1.0.0".to_string(),
-        purpose: earmark_core::TransitionId::parse("test").unwrap().to_string(),
+        purpose: earmark_core::TransitionId::parse("test")
+            .unwrap()
+            .to_string(),
         input_classes: vec!["note".to_string()],
         output_classes: vec!["summary".to_string()],
         execution_policy: "delegated".to_string(),
@@ -490,7 +496,10 @@ fn test_delegated_outcome_with_none_response_returns_error_instead_of_panicking(
     let mut governance_events = vec![];
     let mut compiled_context = Some(earmark_connected_context::WorkSurfaceManifest {
         surface_id: "surf_1".to_string(),
-        compiled_context: earmark_core::VersionRef::new(ObjectId::generate(), VersionId::generate()),
+        compiled_context: earmark_core::VersionRef::new(
+            ObjectId::generate(),
+            VersionId::generate(),
+        ),
         work_packet: Some(earmark_core::ObjectRef::new(
             ObjectId::generate(),
             VersionId::generate(),
@@ -531,9 +540,15 @@ fn test_delegated_outcome_with_none_response_returns_error_instead_of_panicking(
             inputs: vec![],
         },
         &earmark_core::SystemDefinition {
-            system_id: earmark_core::TransitionId::parse("test").unwrap().to_string(),
-            namespace: earmark_core::TransitionId::parse("test").unwrap().to_string(),
-            title: earmark_core::TransitionId::parse("test").unwrap().to_string(),
+            system_id: earmark_core::TransitionId::parse("test")
+                .unwrap()
+                .to_string(),
+            namespace: earmark_core::TransitionId::parse("test")
+                .unwrap()
+                .to_string(),
+            title: earmark_core::TransitionId::parse("test")
+                .unwrap()
+                .to_string(),
             description: None,
             runtime_profile: earmark_core::RuntimeProfile {
                 execution_surface: "local".to_string(),
@@ -629,9 +644,15 @@ fn test_privileged_relation_creation_and_validation() {
 
     // Validation should pass even if class rules don't exist for this relation type
     let system = earmark_core::SystemDefinition {
-        system_id: earmark_core::TransitionId::parse("test").unwrap().to_string(),
-        namespace: earmark_core::TransitionId::parse("test").unwrap().to_string(),
-        title: earmark_core::TransitionId::parse("test").unwrap().to_string(),
+        system_id: earmark_core::TransitionId::parse("test")
+            .unwrap()
+            .to_string(),
+        namespace: earmark_core::TransitionId::parse("test")
+            .unwrap()
+            .to_string(),
+        title: earmark_core::TransitionId::parse("test")
+            .unwrap()
+            .to_string(),
         description: None,
         runtime_profile: earmark_core::RuntimeProfile {
             execution_surface: "local".to_string(),
@@ -668,7 +689,9 @@ fn test_privileged_relation_creation_and_validation() {
             id: earmark_core::TransitionAssignmentId::generate(),
             run_id: earmark_core::RunId::parse("run").unwrap(),
             transition_id: earmark_core::TransitionId::parse("test").unwrap(),
-            assigned_to: earmark_core::TransitionId::parse("test").unwrap().to_string(),
+            assigned_to: earmark_core::TransitionId::parse("test")
+                .unwrap()
+                .to_string(),
             status: earmark_core::AssignmentStatus::Assigned,
             input_object_ids: vec![],
             handoff_manifest_id: None,
@@ -707,8 +730,18 @@ fn test_privileged_relation_enforcement_failure() {
     let mut index = DerivedIndex::open(dir.path()).unwrap();
 
     let payload = earmark_core::RelationPayload {
-        source: ObjectRef::new(ObjectId::generate(), VersionId::generate(), Kind::Object, None),
-        target: ObjectRef::new(ObjectId::generate(), VersionId::generate(), Kind::Object, None),
+        source: ObjectRef::new(
+            ObjectId::generate(),
+            VersionId::generate(),
+            Kind::Object,
+            None,
+        ),
+        target: ObjectRef::new(
+            ObjectId::generate(),
+            VersionId::generate(),
+            Kind::Object,
+            None,
+        ),
         relation_type: "some_ordinary_type".to_string(),
         qualifiers: BTreeMap::new(),
         scope: None,
@@ -751,8 +784,12 @@ fn test_resolution_error_propagation() {
         earmark_core::VersionId::parse("ver_00000000000000000000000000000000").unwrap(),
     ); // latest
 
-    let res =
-        crate::resolution::resolve_version_for_kind(&store, &mut index, &version_ref, Kind::Workflow);
+    let res = crate::resolution::resolve_version_for_kind(
+        &store,
+        &mut index,
+        &version_ref,
+        Kind::Workflow,
+    );
 
     assert!(res.is_err());
     // It should NOT be IncompleteExecution (which would mean it fell back and failed),
@@ -770,7 +807,12 @@ fn test_redaction_applied_to_provider_record_from_failure() {
     let request = ProviderRequest {
         request_id: "req_redact".to_string(),
         run_id: earmark_core::RunId::parse("run_redact").unwrap(),
-        work_packet: ObjectRef::new(ObjectId::generate(), VersionId::generate(), Kind::WorkPacket, None),
+        work_packet: ObjectRef::new(
+            ObjectId::generate(),
+            VersionId::generate(),
+            Kind::WorkPacket,
+            None,
+        ),
         provider_profile: VersionRef::new(ObjectId::generate(), VersionId::generate()),
         instruction_text: "do work".to_string(),
         context_text: None,
@@ -785,7 +827,9 @@ fn test_redaction_applied_to_provider_record_from_failure() {
         issued_at: chrono::Utc::now(),
     };
     let profile = ProviderProfile {
-        name: earmark_core::TransitionId::parse("test").unwrap().to_string(),
+        name: earmark_core::TransitionId::parse("test")
+            .unwrap()
+            .to_string(),
         version: "1".to_string(),
         description: None,
         provider: "test_provider".to_string(),
@@ -848,7 +892,12 @@ fn test_provider_record_from_failure_redacts_url_credentials() {
     let request = ProviderRequest {
         request_id: "req_redact_url".to_string(),
         run_id: earmark_core::RunId::parse("run_redact_url").unwrap(),
-        work_packet: ObjectRef::new(ObjectId::generate(), VersionId::generate(), Kind::WorkPacket, None),
+        work_packet: ObjectRef::new(
+            ObjectId::generate(),
+            VersionId::generate(),
+            Kind::WorkPacket,
+            None,
+        ),
         provider_profile: VersionRef::new(ObjectId::generate(), VersionId::generate()),
         instruction_text: "do work".to_string(),
         context_text: None,
@@ -863,7 +912,9 @@ fn test_provider_record_from_failure_redacts_url_credentials() {
         issued_at: chrono::Utc::now(),
     };
     let profile = ProviderProfile {
-        name: earmark_core::TransitionId::parse("test").unwrap().to_string(),
+        name: earmark_core::TransitionId::parse("test")
+            .unwrap()
+            .to_string(),
         version: "1".to_string(),
         description: None,
         provider: "test_provider".to_string(),
@@ -906,7 +957,9 @@ fn test_resolved_endpoint_identity_does_not_leak_raw_env_value() {
         version: "1".to_string(),
         description: None,
         provider: "http_generation".to_string(),
-        model: earmark_core::TransitionId::parse("test").unwrap().to_string(),
+        model: earmark_core::TransitionId::parse("test")
+            .unwrap()
+            .to_string(),
         endpoint_env: Some("EARMARK_TEST_ENDPOINT_SECRET".to_string()),
         auth_env: None,
         budget: earmark_core::ProviderBudget::default(),
@@ -1024,7 +1077,12 @@ fn test_provider_circuit_key_redacts_sensitive_env_name() {
     let request = ProviderRequest {
         request_id: "req_circuit_redact".to_string(),
         run_id: earmark_core::RunId::parse("run_circuit_redact").unwrap(),
-        work_packet: ObjectRef::new(ObjectId::generate(), VersionId::generate(), Kind::WorkPacket, None),
+        work_packet: ObjectRef::new(
+            ObjectId::generate(),
+            VersionId::generate(),
+            Kind::WorkPacket,
+            None,
+        ),
         provider_profile: VersionRef::new(ObjectId::generate(), VersionId::generate()),
         instruction_text: "do work".to_string(),
         context_text: None,
@@ -1083,7 +1141,9 @@ fn test_fail_closed_blocked_domain_rejects_before_http() {
         version: "1".to_string(),
         description: None,
         provider: "http_generation".to_string(),
-        model: earmark_core::TransitionId::parse("test").unwrap().to_string(),
+        model: earmark_core::TransitionId::parse("test")
+            .unwrap()
+            .to_string(),
         endpoint_env: None,
         auth_env: None,
         budget: earmark_core::ProviderBudget::default(),

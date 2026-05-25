@@ -1,14 +1,14 @@
 //! Workflow execution record types.
 
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 use crate::ids::{
     ChangeSetId, HandoffManifestId, ObjectId, ObjectRef, RunId, TransitionAssignmentId,
     TransitionId, UndoRecordId, VersionRef,
 };
 use crate::standing::{StandingConstraint, StandingTransitionRequest};
 use crate::values::{ScalarOrRef, Timestamp};
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RunRecord {
@@ -91,7 +91,6 @@ pub struct WorkSurfaceRef {
     pub render_mode: String,
 }
 
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AssignmentStatus {
@@ -123,7 +122,6 @@ pub struct TransitionAssignment {
     pub completed_at: Option<DateTime<Utc>>,
 }
 
-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ChangeSet {
     pub id: ChangeSetId,
@@ -153,7 +151,6 @@ pub struct ChangeSet {
     pub handoff_manifest_id: Option<HandoffManifestId>,
     pub created_at: DateTime<Utc>,
 }
-
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct UndoRecord {
@@ -212,7 +209,6 @@ pub struct RequiredCheck {
     pub check_type: String,
     pub description: String,
 }
-
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HandoffManifest {

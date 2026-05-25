@@ -350,7 +350,8 @@ guards: []
         .filter(|obj| obj.envelope.kind == Kind::ChangeSet)
         .map(|obj| serde_json::from_slice::<ChangeSet>(&obj.payload.bytes).unwrap())
         .filter(|change_set| {
-            change_set.run_id.as_str() == "run_invalid_class" && change_set.transition_id.as_str() == "tr_op_transform"
+            change_set.run_id.as_str() == "run_invalid_class"
+                && change_set.transition_id.as_str() == "tr_op_transform"
         })
         .collect::<Vec<_>>();
     assert_eq!(failed_deltas.len(), 1);
@@ -363,7 +364,8 @@ guards: []
         .filter(|obj| obj.envelope.kind == Kind::TransitionAssignment)
         .map(|obj| serde_json::from_slice::<TransitionAssignment>(&obj.payload.bytes).unwrap())
         .filter(|assignment| {
-            assignment.run_id.as_str() == "run_invalid_class" && assignment.transition_id.as_str() == "tr_op_transform"
+            assignment.run_id.as_str() == "run_invalid_class"
+                && assignment.transition_id.as_str() == "tr_op_transform"
         })
         .collect::<Vec<_>>();
     let blocked_claim = blocked_claims

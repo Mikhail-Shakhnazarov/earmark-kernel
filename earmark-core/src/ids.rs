@@ -71,7 +71,8 @@ impl IntoObjectId for ObjectId {
 
 impl IntoObjectId for TransitionAssignmentId {
     fn as_object_id(&self) -> ObjectId {
-        ObjectId::parse(self.0.clone()).expect("TransitionAssignmentId should follow ObjectId format")
+        ObjectId::parse(self.0.clone())
+            .expect("TransitionAssignmentId should follow ObjectId format")
     }
 }
 

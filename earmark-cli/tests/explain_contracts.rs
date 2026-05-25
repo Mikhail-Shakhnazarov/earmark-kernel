@@ -319,8 +319,18 @@ fn relation_explain_contracts() {
     let mut index = DerivedIndex::open(dir.path()).unwrap();
 
     let relation = earmark_core::RelationPayload {
-        source: ObjectRef::new(ObjectId::generate(), VersionId::generate(), Kind::Object, None),
-        target: ObjectRef::new(ObjectId::generate(), VersionId::generate(), Kind::Object, None),
+        source: ObjectRef::new(
+            ObjectId::generate(),
+            VersionId::generate(),
+            Kind::Object,
+            None,
+        ),
+        target: ObjectRef::new(
+            ObjectId::generate(),
+            VersionId::generate(),
+            Kind::Object,
+            None,
+        ),
         relation_type: "test_relation".to_string(),
         qualifiers: BTreeMap::new(),
         scope: None,

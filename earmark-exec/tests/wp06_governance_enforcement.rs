@@ -394,9 +394,15 @@ fn test_initial_accepted_standing_fails_without_review_or_trusted_provenance() {
         rejected_candidates: vec![],
     };
 
-    let (result, _requests) =
-        validate_transition_change_set(&store, &mut index, &system, &transition, &assignment, &draft)
-            .expect("validation should not fail at transport level");
+    let (result, _requests) = validate_transition_change_set(
+        &store,
+        &mut index,
+        &system,
+        &transition,
+        &assignment,
+        &draft,
+    )
+    .expect("validation should not fail at transport level");
 
     assert!(!result.is_valid);
     assert!(

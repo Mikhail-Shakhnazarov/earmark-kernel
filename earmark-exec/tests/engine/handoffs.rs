@@ -256,7 +256,8 @@ guards: []
         .filter(|obj| obj.envelope.kind == Kind::HandoffManifest)
         .map(|obj| serde_json::from_slice::<HandoffManifest>(&obj.payload.bytes).unwrap())
         .find(|manifest| {
-            manifest.run_id.as_str() == "run_stage_a" && manifest.from_transition_id.as_str() == "tr_op_transform"
+            manifest.run_id.as_str() == "run_stage_a"
+                && manifest.from_transition_id.as_str() == "tr_op_transform"
         })
         .unwrap()
         .id;

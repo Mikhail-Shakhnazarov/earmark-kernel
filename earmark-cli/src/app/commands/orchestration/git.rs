@@ -5,7 +5,7 @@ use earmark_core::VersionRef;
 use earmark_store::{ObjectStore, WorkspaceLayout};
 use serde_json::json;
 
-use super::common::*;
+use crate::app::commands::orchestration::common::*;
 
 pub fn handle_capture_git(ctx: &mut CommandContext, args: &CaptureGitArgs) -> Result<(), CliError> {
     let store = ctx.store;
@@ -18,9 +18,8 @@ pub fn handle_capture_git(ctx: &mut CommandContext, args: &CaptureGitArgs) -> Re
         .ok_or_else(|| CliError::argument("index required"))?;
 
     let (task_oid, _class, _task_summary, task_payload) =
-        find_orchestration_task(index_ref, store, &args.task_id)?.ok_or_else(|| {
-            CliError::not_found(format!("task {} not found", args.task_id))
-        })?;
+        find_orchestration_task(index_ref, store, &args.task_id)?
+            .ok_or_else(|| CliError::not_found(format!("task {} not found", args.task_id)))?;
 
     let task_id = task_payload
         .get("task_id")
@@ -43,7 +42,8 @@ pub fn handle_capture_git(ctx: &mut CommandContext, args: &CaptureGitArgs) -> Re
     };
 
     let repo_path = resolve_git_repo(ctx.store.root(), args.repo.as_ref())?;
-    let git_toplevel = run_git_cmd(&repo_path, &["rev-parse", "--show-toplevel"]).unwrap_or_else(|_| repo_path.display().to_string());
+    let git_toplevel = run_git_cmd(&repo_path, &["rev-parse", "--show-toplevel"])
+        .unwrap_or_else(|_| repo_path.display().to_string());
 
     let commit = match &args.commit {
         Some(c) => c.clone(),
@@ -62,8 +62,11 @@ pub fn handle_capture_git(ctx: &mut CommandContext, args: &CaptureGitArgs) -> Re
 
     let diff_stat = if args.include_diff_stat {
         if !base.is_empty() {
-            run_git_cmd(&repo_path, &["diff", "--stat", &format!("{}..{}", base, head)])
-                .unwrap_or_default()
+            run_git_cmd(
+                &repo_path,
+                &["diff", "--stat", &format!("{}..{}", base, head)],
+            )
+            .unwrap_or_default()
         } else {
             run_git_cmd(&repo_path, &["diff", "--stat"]).unwrap_or_default()
         }
@@ -104,18 +107,33 @@ pub fn handle_capture_git(ctx: &mut CommandContext, args: &CaptureGitArgs) -> Re
     );
     headers.insert(
         "commit".to_string(),
-        earmark_core::HeaderValue::String(args.commit.clone().unwrap_or_default()),
+        earmark_core::HeaderValue::String(commit.clone()),
     );
     headers.insert(
         "branch".to_string(),
-        earmark_core::HeaderValue::String(args.head.clone().unwrap_or_else(|| "unknown".to_string())),
+        earmark_core::HeaderValue::String(branch.clone()),
     );
 
     let title = format!("Git snapshot: {} for {}", args.phase, task_id);
-    let obj_ref = deposit_orchestration_object(ctx.store, index_ref, ctx.provider_registry, "git_snapshot", Some(title), payload, headers)?;
+    let obj_ref = deposit_orchestration_object(
+        ctx.store,
+        index_ref,
+        ctx.provider_registry,
+        "git_snapshot",
+        Some(title),
+        payload,
+        headers,
+    )?;
 
     if let Some(d_oid) = dispatch_oid {
-        create_orchestration_relation(ctx.store, index_ref, ctx.provider_registry, d_oid, obj_ref.id.clone(), "anchored_by")?;
+        create_orchestration_relation(
+            ctx.store,
+            index_ref,
+            ctx.provider_registry,
+            d_oid,
+            obj_ref.id.clone(),
+            "anchored_by",
+        )?;
     } else {
         create_orchestration_relation(
             ctx.store,

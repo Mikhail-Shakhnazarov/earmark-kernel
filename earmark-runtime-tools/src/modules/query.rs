@@ -9,7 +9,10 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
         Ok(self.index.query_objects(&filter)?)
     }
 
-    pub fn activate_system(&mut self, system_id: &str) -> Result<ActiveSystemRecord, RuntimeToolError> {
+    pub fn activate_system(
+        &mut self,
+        system_id: &str,
+    ) -> Result<ActiveSystemRecord, RuntimeToolError> {
         Ok(activate_system_definition(
             self.store, self.index, system_id,
         )?)
