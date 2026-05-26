@@ -153,12 +153,51 @@ pub fn handle_timeline(ctx: &mut CommandContext, args: &ShowTaskArgs) -> Result<
     let mut events = Vec::new();
     for node in nodes {
         let summary = match node.class.as_str() {
-            "work_item" => node.payload.get("title").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-            "dispatch" => format!("Attempt {}", node.payload.get("attempt").and_then(|v| v.as_i64()).unwrap_or(0)),
-            "gate_result" => format!("{} -> {}", node.payload.get("command").and_then(|v| v.as_str()).unwrap_or(""), node.payload.get("status").and_then(|v| v.as_str()).unwrap_or("")),
-            "review" => format!("Decision: {}", node.payload.get("decision").and_then(|v| v.as_str()).unwrap_or("")),
-            "closure" => format!("Disposition: {}", node.payload.get("disposition").and_then(|v| v.as_str()).unwrap_or("")),
-            "git_snapshot" => format!("Phase: {}", node.payload.get("phase").and_then(|v| v.as_str()).unwrap_or("")),
+            "work_item" => node
+                .payload
+                .get("title")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
+            "dispatch" => format!(
+                "Attempt {}",
+                node.payload
+                    .get("attempt")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0)
+            ),
+            "gate_result" => format!(
+                "{} -> {}",
+                node.payload
+                    .get("command")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or(""),
+                node.payload
+                    .get("status")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+            ),
+            "review" => format!(
+                "Decision: {}",
+                node.payload
+                    .get("decision")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+            ),
+            "closure" => format!(
+                "Disposition: {}",
+                node.payload
+                    .get("disposition")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+            ),
+            "git_snapshot" => format!(
+                "Phase: {}",
+                node.payload
+                    .get("phase")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+            ),
             _ => "".to_string(),
         };
 

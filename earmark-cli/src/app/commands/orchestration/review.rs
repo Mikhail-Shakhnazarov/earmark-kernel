@@ -164,9 +164,9 @@ pub fn handle_review(ctx: &mut CommandContext, args: &OrchReviewArgs) -> Result<
 
 fn next_task_status(decision: &str) -> (&'static str, Option<&'static str>, Option<&'static str>) {
     match decision {
-        "accepted" => ("implemented", Some("closed"), Some("accepted")),
-        "rejected" => ("closed", Some("closed"), Some("rejected")),
-        "needs_revision" => ("proposed", Some("proposed"), Some("needs_revision")),
+        "accepted" => ("accepted", Some("closed"), Some("accepted")),
+        "rejected" => ("rejected", Some("closed"), Some("rejected")),
+        "needs_revision" => ("proposed", Some("active"), Some("needs_revision")),
         _ => ("proposed", None, None),
     }
 }

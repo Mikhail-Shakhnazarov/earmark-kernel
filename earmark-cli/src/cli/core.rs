@@ -110,7 +110,9 @@ pub enum Commands {
     StandingRequest(StandingRequestCommand),
     #[command(about = "[BETA] Undo a run")]
     Undo(UndoCommand),
-    #[command(about = "[EXPERIMENTAL] Manage native orchestration tasks")]
+    #[command(
+        about = "[STABLE] Native Earmark orchestration commands for self-hosting development"
+    )]
     Orchestration(OrchestrationCommand),
 }
 
@@ -134,6 +136,7 @@ impl Commands {
             | Self::Context(_)
             | Self::Relation(_)
             | Self::StandingRequest(_)
+            | Self::Orchestration(_)
             | Self::Catalog => CommandStability::Stable,
 
             Self::Doctor(_)
@@ -142,8 +145,6 @@ impl Commands {
             | Self::Provider(_)
             | Self::Completions { .. }
             | Self::Undo(_) => CommandStability::Beta,
-
-            Self::Orchestration(_) => CommandStability::Experimental,
         }
     }
 }
@@ -274,8 +275,8 @@ pub fn command_catalog() -> Vec<CommandDescriptor> {
         },
         CommandDescriptor {
             name: "orchestration",
-            stability: CommandStability::Experimental,
-            summary: "Manage native orchestration tasks",
+            stability: CommandStability::Stable,
+            summary: "Native Earmark orchestration commands for self-hosting development",
         },
     ]
 }
