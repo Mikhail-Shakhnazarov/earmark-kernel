@@ -1,4 +1,4 @@
-use std::{env, fs, path::PathBuf};
+use std::{env, fs, path::Path, path::PathBuf};
 
 use serde::Deserialize;
 
@@ -123,7 +123,7 @@ pub fn resolve_log_level(cli: &Cli, config: &CliConfig) -> Option<String> {
     config.log_level.clone()
 }
 
-pub fn resolve_provider_plugin_dirs(root: &PathBuf, config: &CliConfig) -> Vec<PathBuf> {
+pub fn resolve_provider_plugin_dirs(root: &Path, config: &CliConfig) -> Vec<PathBuf> {
     let mut dirs = vec![root.join(".earmark").join("plugins").join("providers")];
 
     if let Ok(value) = env::var("EM_PROVIDER_PLUGIN_DIRS") {
