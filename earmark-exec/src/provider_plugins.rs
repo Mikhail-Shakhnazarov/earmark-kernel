@@ -1,7 +1,7 @@
+use crate::error::ProviderFailure;
 use crate::provider::{
     ProviderAdapter, ProviderCapability, ProviderCapabilityStatus, ProviderRegistry,
 };
-use crate::error::ProviderFailure;
 use earmark_core::{ProviderProfile, ProviderRequest, ProviderResponse, ScalarValue};
 use std::collections::BTreeMap;
 use std::env;
@@ -254,7 +254,10 @@ fn validate_manifest(
         if seen.insert(provider.provider.clone(), ()).is_some() {
             return Err(ProviderPluginLoadError::Invalid {
                 path: path.display().to_string(),
-                message: format!("provider alias `{}` is declared more than once", provider.provider),
+                message: format!(
+                    "provider alias `{}` is declared more than once",
+                    provider.provider
+                ),
             });
         }
     }
@@ -304,8 +307,9 @@ providers:
         .unwrap();
 
         let mut registry = default_provider_registry();
-        let loaded = register_provider_plugins_from_dirs(&mut registry, &[dir.path().to_path_buf()])
-            .unwrap();
+        let loaded =
+            register_provider_plugins_from_dirs(&mut registry, &[dir.path().to_path_buf()])
+                .unwrap();
 
         assert_eq!(loaded.len(), 1);
         let capability = registry
@@ -317,11 +321,9 @@ providers:
             capability.status,
             ProviderCapabilityStatus::MissingConfiguration
         );
-        assert!(
-            capability
-                .required_env
-                .contains(&"OPENAI_API_KEY".to_string())
-        );
+        assert!(capability
+            .required_env
+            .contains(&"OPENAI_API_KEY".to_string()));
     }
 
     #[test]
@@ -342,9 +344,8 @@ providers:
         .unwrap();
 
         let mut registry = default_provider_registry();
-        let error =
-            register_provider_plugins_from_dirs(&mut registry, &[dir.path().to_path_buf()])
-                .unwrap_err();
+        let error = register_provider_plugins_from_dirs(&mut registry, &[dir.path().to_path_buf()])
+            .unwrap_err();
 
         match error {
             ProviderPluginLoadError::Invalid { message, .. } => {

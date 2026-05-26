@@ -71,7 +71,11 @@ fn test_json_provider_capabilities() {
 #[test]
 fn test_json_provider_capabilities_include_plugin_aliases() {
     let dir = setup_workspace();
-    let plugin_dir = dir.path().join(".earmark").join("plugins").join("providers");
+    let plugin_dir = dir
+        .path()
+        .join(".earmark")
+        .join("plugins")
+        .join("providers");
     fs::create_dir_all(&plugin_dir).unwrap();
     fs::write(
         plugin_dir.join("openai_http.yaml"),
@@ -105,13 +109,11 @@ providers:
         .find(|provider| provider["provider"] == "openai_compatible_http")
         .expect("plugin alias should be listed");
     assert_eq!(alias["status"], "missing_configuration");
-    assert!(
-        val["data"]["loaded_provider_plugins"]
-            .as_array()
-            .expect("loaded_provider_plugins should be an array")
-            .iter()
-            .any(|plugin| plugin["name"] == "openai-http")
-    );
+    assert!(val["data"]["loaded_provider_plugins"]
+        .as_array()
+        .expect("loaded_provider_plugins should be an array")
+        .iter()
+        .any(|plugin| plugin["name"] == "openai-http"));
 }
 
 #[test]

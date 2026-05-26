@@ -127,7 +127,11 @@ pub fn resolve_provider_plugin_dirs(root: &PathBuf, config: &CliConfig) -> Vec<P
     let mut dirs = vec![root.join(".earmark").join("plugins").join("providers")];
 
     if let Ok(value) = env::var("EM_PROVIDER_PLUGIN_DIRS") {
-        for item in value.split(':').map(|item| item.trim()).filter(|item| !item.is_empty()) {
+        for item in value
+            .split(':')
+            .map(|item| item.trim())
+            .filter(|item| !item.is_empty())
+        {
             let candidate = PathBuf::from(item);
             if !dirs.iter().any(|existing| existing == &candidate) {
                 dirs.push(candidate);
