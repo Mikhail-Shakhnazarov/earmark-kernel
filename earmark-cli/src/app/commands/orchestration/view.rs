@@ -103,11 +103,12 @@ pub fn handle_list(ctx: &mut CommandContext, args: &ListOrchestrationArgs) -> Re
             if let Ok(text) = stored.payload.as_utf8().map(|s| s.to_string()) {
                 if let Ok(payload) = serde_json::from_str::<serde_json::Value>(&text) {
                     let status = payload.get("status").and_then(|v| v.as_str()).unwrap_or("");
-                    if !args.include_closed && (status == "closed" || status == "completed") {
+                    if !args.include_closed && is_terminal_work_item_status(status) {
                         continue;
                     }
                     if let Some(ref target_status) = args.status {
-                        if status != target_status {
+                        let normalized_target = normalize_work_item_status(target_status);
+                        if normalize_work_item_status(status) != normalized_target {
                             continue;
                         }
                     }
@@ -188,6 +189,7 @@ pub fn handle_timeline(ctx: &mut CommandContext, args: &ShowTaskArgs) -> Result<
                 "Disposition: {}",
                 node.payload
                     .get("disposition")
+                    .or_else(|| node.payload.get("decision"))
                     .and_then(|v| v.as_str())
                     .unwrap_or("")
             ),
