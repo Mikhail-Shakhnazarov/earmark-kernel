@@ -1,6 +1,6 @@
 use crate::cli::{Commands, DeclareAction, OrchestrationAction, StandingRequestAction};
 use crate::config::CliConfig;
-use earmark_exec::ProviderRegistry;
+use earmark_exec::{LoadedProviderPlugin, ProviderRegistry};
 use earmark_index::DerivedIndex;
 use earmark_store::{GitCanonicalStore, WorkspaceLayoutStatus};
 use std::path::PathBuf;
@@ -79,6 +79,7 @@ pub struct CommandContext<'a> {
     pub index: &'a mut Option<DerivedIndex>,
     pub config: &'a CliConfig,
     pub provider_registry: &'a ProviderRegistry,
+    pub loaded_provider_plugins: &'a [LoadedProviderPlugin],
     pub as_json: bool,
     pub actor: &'a str,
 }
@@ -88,6 +89,7 @@ pub struct BootstrappedServices {
     pub index: Option<DerivedIndex>,
     pub config: CliConfig,
     pub provider_registry: ProviderRegistry,
+    pub loaded_provider_plugins: Vec<LoadedProviderPlugin>,
     pub as_json: bool,
     pub root: PathBuf,
     pub actor: String,

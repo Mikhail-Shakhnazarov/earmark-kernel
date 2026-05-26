@@ -22,20 +22,27 @@ pub fn canonical_orchestration_class(class: &str) -> &str {
 pub fn normalize_work_item_status(status: &str) -> String {
     let s = status.to_lowercase();
     match s.as_str() {
-        "todo" | "proposed" | "pending" => "proposed".to_string(),
+        "todo" | "pending" | "proposed" => "proposed".to_string(),
         "doing" | "in_progress" | "active" | "dispatched" | "running" | "started" => {
             "active".to_string()
         }
-        "done" | "completed" | "succeeded" | "success" => "completed".to_string(),
-        "accepted" | "implemented" | "finalized" => "accepted".to_string(),
-        "rejected" | "closed" | "denied" => "rejected".to_string(),
-        "under_review" | "review" | "qa" => "under_review".to_string(),
-        "followup_required" | "followup" | "partial" | "needs_revision" => {
+        "review" | "qa" | "under_review" => "under_review".to_string(),
+        "followup" | "partial" | "needs_revision" | "followup_required" => {
             "followup_required".to_string()
         }
         "blocked" | "stuck" | "hold" => "blocked".to_string(),
+        "done" | "completed" | "succeeded" | "success" | "closed" => "completed".to_string(),
+        "accepted" | "approved" | "implemented" | "finalized" => "accepted".to_string(),
+        "rejected" | "denied" => "rejected".to_string(),
         _ => s,
     }
+}
+
+pub fn is_terminal_work_item_status(status: &str) -> bool {
+    matches!(
+        normalize_work_item_status(status).as_str(),
+        "completed" | "accepted" | "rejected"
+    )
 }
 
 pub fn normalize_dispatch_status(status: &str) -> String {

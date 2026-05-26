@@ -4,9 +4,10 @@ use crate::app::common::{
 };
 use crate::cli::Cli;
 use crate::config::{
-    load_config, resolve_actor, resolve_json, resolve_root, resolve_trusted_actors,
+    load_config, resolve_actor, resolve_json, resolve_provider_plugin_dirs, resolve_root,
+    resolve_trusted_actors,
 };
-use earmark_exec::default_provider_registry;
+use earmark_exec::{default_provider_registry, register_provider_plugins_from_dirs};
 use earmark_index::DerivedIndex;
 use earmark_store::{GitCanonicalStore, WorkspaceLayout};
 
@@ -45,7 +46,11 @@ pub(crate) fn bootstrap(cli: &Cli) -> Result<BootstrappedServices, CliError> {
         WorkspaceAccessMode::Write => Some(DerivedIndex::open(&root)?),
     };
 
-    let provider_registry = default_provider_registry();
+    let mut provider_registry = default_provider_registry();
+    let plugin_dirs = resolve_provider_plugin_dirs(&root, &config);
+    let loaded_provider_plugins =
+        register_provider_plugins_from_dirs(&mut provider_registry, &plugin_dirs)
+            .map_err(|error| CliError::argument(error.to_string()))?;
     // 3. Resolve JSON using shared utility
     let as_json = resolve_json(cli, &config);
 
@@ -54,6 +59,7 @@ pub(crate) fn bootstrap(cli: &Cli) -> Result<BootstrappedServices, CliError> {
         index,
         config,
         provider_registry,
+        loaded_provider_plugins,
         as_json,
         root,
         actor,

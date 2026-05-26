@@ -105,6 +105,7 @@ pub fn handle_review(ctx: &mut CommandContext, args: &OrchReviewArgs) -> Result<
         let closure_payload = json!({
             "task_id": task_id,
             "decision": normalized_status,
+            "disposition": normalized_status,
             "captured_by": "orchestration review closure"
         });
         let mut closure_headers = std::collections::BTreeMap::new();
@@ -166,7 +167,7 @@ fn next_task_status(decision: &str) -> (&'static str, Option<&'static str>, Opti
     match decision {
         "accepted" => ("accepted", Some("closed"), Some("accepted")),
         "rejected" => ("rejected", Some("closed"), Some("rejected")),
-        "needs_revision" => ("proposed", Some("active"), Some("needs_revision")),
+        "needs_revision" => ("followup_required", Some("active"), Some("needs_revision")),
         _ => ("proposed", None, None),
     }
 }

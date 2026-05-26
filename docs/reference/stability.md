@@ -25,16 +25,32 @@ This document provides an overview of the current implementation status and stab
 
 ## CLI Command Stability
 
-| Command | Stability | Purpose |
-|---|---|---|
-| `init`, `status` | Stable | Workspace management. |
-| `deposit`, `query` | Stable | Data lifecycle. |
-| `declare`, `system` | Stable | Domain definition. |
-| `workflow`, `relation` | Stable | Managed relationship graph between objects. |
-| `orchestration` | Stable | Native workspace management and self-hosting. |
-| `report`, `failure` | Stable | Observability and audit. |
-| `undo` | Beta | Compensating visibility. |
-| `provider` | Beta | External model integration. |
+| Command family             | Stability | Purpose                                      |
+| -------------------------- | --------- | -------------------------------------------- |
+| `init`                     | Stable    | Workspace management.                        |
+| `status`                   | Stable    | Workspace status.                            |
+| `deposit`                  | Stable    | Object creation.                             |
+| `query`                    | Stable    | Object/relation lookup.                      |
+| `review`                   | Stable    | Governance review.                           |
+| `system`                   | Stable    | System definition lifecycle.                 |
+| `workflow`                 | Stable    | Staged execution.                            |
+| `run`                      | Stable    | Run inspection.                              |
+| `assignment`               | Stable    | Task assignment.                             |
+| `changeset`                | Stable    | Change set management.                       |
+| `handoff`                  | Stable    | Handoff inspection.                          |
+| `failure`                  | Stable    | Failure inspection.                          |
+| `context`                  | Stable    | Context compilation.                         |
+| `relation`                 | Stable    | Relation management.                         |
+| `standing-request`         | Stable    | Standing lifecycle.                          |
+| `report`                   | Stable    | Report generation.                           |
+| `commands`                 | Stable    | Command catalog.                             |
+| `orchestration`            | Stable    | Native workspace self-hosting.               |
+| `doctor`                   | Beta      | Workspace diagnostics.                       |
+| `declare`                  | Beta      | Declaration registration.                    |
+| `audit`                    | Beta      | Aggregated diagnostic views.                 |
+| `provider`                 | Beta      | Provider integration.                        |
+| `completions`              | Beta      | Shell integration.                           |
+| `undo`                     | Beta      | Compensating visibility.                     |
 
 ## Documentation Flow
 
