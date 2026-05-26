@@ -114,6 +114,8 @@ pub fn handle_list(ctx: &mut CommandContext, args: &ListOrchestrationArgs) -> Re
                     let mut payload_obj = payload;
                     if let Some(obj) = payload_obj.as_object_mut() {
                         obj.insert("object_id".to_string(), json!(summary.object_id));
+                        obj.insert("version_id".to_string(), json!(summary.version_id));
+                        obj.insert("standing".to_string(), json!(summary.standing));
                     }
                     tasks.push(payload_obj);
                 }
@@ -150,9 +152,20 @@ pub fn handle_timeline(ctx: &mut CommandContext, args: &ShowTaskArgs) -> Result<
 
     let mut events = Vec::new();
     for node in nodes {
+        let summary = match node.class.as_str() {
+            "work_item" => node.payload.get("title").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            "dispatch" => format!("Attempt {}", node.payload.get("attempt").and_then(|v| v.as_i64()).unwrap_or(0)),
+            "gate_result" => format!("{} -> {}", node.payload.get("command").and_then(|v| v.as_str()).unwrap_or(""), node.payload.get("status").and_then(|v| v.as_str()).unwrap_or("")),
+            "review" => format!("Decision: {}", node.payload.get("decision").and_then(|v| v.as_str()).unwrap_or("")),
+            "closure" => format!("Disposition: {}", node.payload.get("disposition").and_then(|v| v.as_str()).unwrap_or("")),
+            "git_snapshot" => format!("Phase: {}", node.payload.get("phase").and_then(|v| v.as_str()).unwrap_or("")),
+            _ => "".to_string(),
+        };
+
         events.push(json!({
             "class": node.class,
             "object_id": node.object_id.as_str(),
+            "summary": summary,
             "payload": node.payload,
             "timestamp": node.timestamp
         }));
@@ -192,7 +205,8 @@ pub fn handle_explain_dispatch(
             class: Some("dispatch".to_string()),
             ..Default::default()
         };
-        let results = index_ref.query_objects(&filter)?;
+        let mut results = index_ref.query_objects(&filter)?;
+        results.sort_by(|a, b| b.created_at.cmp(&a.created_at)); // Descending order
         results
             .first()
             .map(|s| s.object_id.clone())
