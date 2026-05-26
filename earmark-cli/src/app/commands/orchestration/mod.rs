@@ -5,6 +5,7 @@ pub mod gates;
 pub mod git;
 pub mod graph;
 pub mod ingest;
+pub mod parsers;
 pub mod review;
 pub mod view;
 

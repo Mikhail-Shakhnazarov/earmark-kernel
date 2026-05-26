@@ -948,7 +948,7 @@ fn review_updates_existing_task_head_without_creating_duplicate_work_item() {
 
     let parsed_review: Value = serde_json::from_slice(&review_output).unwrap();
     assert_eq!(parsed_review["data"]["task_object_id"], task_oid);
-    assert_eq!(parsed_review["data"]["next_status"], "implemented");
+    assert_eq!(parsed_review["data"]["next_status"], "accepted");
 
     let task_vid_after = parsed_review["data"]["task_version_id"]
         .as_str()
@@ -971,7 +971,7 @@ fn review_updates_existing_task_head_without_creating_duplicate_work_item() {
         .clone();
 
     let parsed_show: Value = serde_json::from_slice(&show_output).unwrap();
-    assert_eq!(parsed_show["data"]["payload"]["status"], "implemented");
+    assert_eq!(parsed_show["data"]["payload"]["status"], "accepted");
 
     // 4. Assert exactly one work item with this task_id in list
     let list_output = workspace_command()
@@ -1063,5 +1063,5 @@ fn review_rejected_updates_existing_task_to_closed() {
         .clone();
 
     let parsed_show: Value = serde_json::from_slice(&show_output).unwrap();
-    assert_eq!(parsed_show["data"]["payload"]["status"], "closed");
+    assert_eq!(parsed_show["data"]["payload"]["status"], "rejected");
 }

@@ -30,11 +30,11 @@ This document provides an overview of the current implementation status and stab
 | `init`, `status` | Stable | Workspace management. |
 | `deposit`, `query` | Stable | Data lifecycle. |
 | `declare`, `system` | Stable | Domain definition. |
-| `workflow`, `run` | Stable | Execution and inspection. |
+| `workflow`, `relation` | Stable | Managed relationship graph between objects. |
+| `orchestration` | Stable | Native workspace management and self-hosting. |
 | `report`, `failure` | Stable | Observability and audit. |
 | `undo` | Beta | Compensating visibility. |
 | `provider` | Beta | External model integration. |
-| `orchestration` | Experimental | Multi-stage task management. |
 
 ## Documentation Flow
 
@@ -57,4 +57,4 @@ Earmark is **pre-release software**. It has completed its initial hardening phas
 - **Durable Orchestration Ledger**: Provides self-hosting task management with full causality tracking.
 - **Git-Backed Durability**: Leverages proven version control for the work spine.
 
-The kernel and native orchestration are usable for coordinated AI work. Note that **native orchestration is currently experimental** and intended for local dogfooding and development coordination; command names and JSON fields may still change before public stabilization.
+The kernel and native orchestration are usable for coordinated AI work. The native orchestration surface is now **Stable**, providing a reliable ledger for self-hosting development coordination and task management.
