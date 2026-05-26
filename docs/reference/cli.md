@@ -183,13 +183,19 @@ Show detailed failure analysis.
 
 ### `em provider capabilities`
 
-List capabilities of compiled-in providers.
+List provider capabilities visible to the current CLI bootstrap, including:
+
+- compiled bundled adapters
+- provider aliases loaded from plugin manifests under `<root>/.earmark/plugins/providers`
+- provider aliases loaded from configured plugin directories
 
 ## Native Orchestration
 
-> Status: Stable. Native Earmark orchestration commands for self-hosting development.
+> Status: Stable. Native Earmark orchestration commands provide the supported ledger for self-hosting development coordination.
 
 Self-hosting tools for tracking complex, multi-stage AI work programs.
+
+Work-item statuses are normalized to `proposed`, `active`, `under_review`, `followup_required`, `blocked`, `completed`, `accepted`, or `rejected`. By default, `em orchestration list` shows active work and hides terminal tasks (`completed`, `accepted`, `rejected`). Use `--include-closed` to include terminal tasks.
 
 ### `em orchestration init-example [--example-root <path>]`
 

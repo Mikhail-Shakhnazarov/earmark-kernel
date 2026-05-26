@@ -13,6 +13,7 @@ pub struct CliConfig {
     pub log_level: Option<String>,
     pub actor: Option<String>,
     pub trusted_actors: Option<Vec<String>>,
+    pub provider_plugin_dirs: Option<Vec<PathBuf>>,
 }
 
 pub fn load_config(cli: &Cli) -> Result<CliConfig, CliError> {
@@ -120,4 +121,27 @@ pub fn resolve_log_level(cli: &Cli, config: &CliConfig) -> Option<String> {
         return Some(level);
     }
     config.log_level.clone()
+}
+
+pub fn resolve_provider_plugin_dirs(root: &PathBuf, config: &CliConfig) -> Vec<PathBuf> {
+    let mut dirs = vec![root.join(".earmark").join("plugins").join("providers")];
+
+    if let Ok(value) = env::var("EM_PROVIDER_PLUGIN_DIRS") {
+        for item in value.split(':').map(|item| item.trim()).filter(|item| !item.is_empty()) {
+            let candidate = PathBuf::from(item);
+            if !dirs.iter().any(|existing| existing == &candidate) {
+                dirs.push(candidate);
+            }
+        }
+    }
+
+    if let Some(extra_dirs) = &config.provider_plugin_dirs {
+        for candidate in extra_dirs {
+            if !dirs.iter().any(|existing| existing == candidate) {
+                dirs.push(candidate.clone());
+            }
+        }
+    }
+
+    dirs
 }

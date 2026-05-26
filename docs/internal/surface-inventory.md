@@ -50,7 +50,7 @@ Current as of May 2026, after the native self-hosting migration (Engram removal,
 | `context` | core | stable | Bounded context compilation. |
 | `relation` | core | stable | Relation management and authorization. |
 | `standing-request` | core | stable | Standing lifecycle management. |
-| `orchestration` | core | experimental | Native orchestration ledger for task, git snapshot, gate, and lifecycle management. |
+| `orchestration` | core | stable | Native orchestration ledger for task, git snapshot, gate, and lifecycle management. |
 | `commands` | core | stable | Command catalog with stability metadata. |
 | `status` | core | stable | Workspace status. |
 | `provider` | supporting | beta | Provider capabilities and integration. |
@@ -111,7 +111,7 @@ The following hardening stages from the original streamlining plan have been ful
 7. ✅ Edge-case and property test expansion
 8. ✅ In-process facade replacement (`EarmarkWorkspace`)
 9. ✅ CLI stability catalog (`em commands --json`)
-10. ✅ Native orchestration ledger implemented for dogfooding; native orchestration promoted to stable
+10. ✅ Native orchestration ledger implemented for dogfooding; native orchestration stabilized
 11. ✅ Engram dependency removal (adapter, scripts, environment, documentation)
 
 Historical records for these stages are preserved in `docs/internal/archive/`.
