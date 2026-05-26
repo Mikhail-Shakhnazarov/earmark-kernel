@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # scripts/run-self-hosting-cycle.sh
-# Demonstrates a complete end-to-end self-hosting development cycle in Earmark
-# using native orchestration paths only.
+# Status: demonstration smoke script.
+# This script illustrates the native orchestration lifecycle and may depend on
+# repository-local fixtures. It is not a packaging or CI stability gate.
 
 set -euo pipefail
 

@@ -1973,7 +1973,22 @@ fn commands_catalog_includes_stability_metadata() {
         .any(|c| c["name"] == "deposit" && c["stability"] == "stable"));
     assert!(commands
         .iter()
-        .any(|c| c["name"] == "orchestration" && c["stability"] == "stable"));
+        .any(|c| c["name"] == "orchestration" && c["stability"] == "experimental"));
+    assert!(commands
+        .iter()
+        .any(|c| c["name"] == "undo" && c["stability"] == "beta"));
+    assert!(commands
+        .iter()
+        .any(|c| c["name"] == "provider" && c["stability"] == "beta"));
+    assert!(commands
+        .iter()
+        .any(|c| c["name"] == "doctor" && c["stability"] == "beta"));
+    assert!(commands
+        .iter()
+        .any(|c| c["name"] == "declare" && c["stability"] == "beta"));
+    assert!(commands
+        .iter()
+        .any(|c| c["name"] == "audit" && c["stability"] == "beta"));
 }
 
 #[test]
