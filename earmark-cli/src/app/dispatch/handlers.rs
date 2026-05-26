@@ -629,7 +629,8 @@ pub(crate) fn handle_provider(
                 as_json,
                 json!({
                     "kind": "provider_capabilities",
-                    "providers": earmark_exec::compiled_provider_capabilities(),
+                    "providers": ctx.provider_registry.capabilities(),
+                    "loaded_provider_plugins": ctx.loaded_provider_plugins,
                 }),
             );
         }
@@ -672,7 +673,8 @@ pub(crate) fn handle_status(ctx: &mut CommandContext) -> Result<(), CliError> {
             "failure_count": failures.len(),
             "run_count": runs.len(),
             "metrics": crate::metrics::snapshot(),
-            "provider_capabilities": earmark_exec::compiled_provider_capabilities(),
+            "provider_capabilities": ctx.provider_registry.capabilities(),
+            "loaded_provider_plugins": ctx.loaded_provider_plugins,
             "root": store.root().display().to_string(),
             "paths": {
                 "declarations_dir": store.declarations_dir().display().to_string(),

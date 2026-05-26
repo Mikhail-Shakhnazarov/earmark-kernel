@@ -56,7 +56,7 @@ pub fn resolve_provider_profile(
 }
 
 pub trait ProviderAdapter: Send + Sync {
-    fn provider_key(&self) -> &'static str;
+    fn provider_key(&self) -> &str;
     fn provide(
         &self,
         request: ProviderRequest,

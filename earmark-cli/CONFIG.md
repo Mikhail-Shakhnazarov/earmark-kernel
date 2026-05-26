@@ -17,6 +17,7 @@ root = "/path/to/workspace"
 default_system_id = "sys_research_synthesis"
 json = true
 log_level = "info"
+provider_plugin_dirs = ["/path/to/shared/provider-plugins"]
 ```
 
 Precedence:
@@ -30,3 +31,10 @@ Environment overrides:
 - `EM_SYSTEM_ID`
 - `EM_JSON`
 - `EM_LOG_LEVEL`
+- `EM_PROVIDER_PLUGIN_DIRS` (colon-separated)
+
+Provider plugin discovery always includes the workspace-local default directory:
+
+- `<root>/.earmark/plugins/providers`
+
+Additional plugin directories can be supplied through `provider_plugin_dirs` or `EM_PROVIDER_PLUGIN_DIRS`.
