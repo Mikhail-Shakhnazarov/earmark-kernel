@@ -17,7 +17,7 @@ pub struct DepositValidationContext {
 
 impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
     pub fn deposit_prose(
-        &self,
+        &mut self,
         class: String,
         title: Option<String>,
         body: String,
@@ -38,7 +38,7 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
     }
 
     pub fn deposit_object(
-        &self,
+        &mut self,
         class: String,
         kind: Option<String>,
         title: Option<String>,

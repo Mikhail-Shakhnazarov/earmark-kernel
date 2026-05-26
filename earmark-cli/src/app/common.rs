@@ -1,6 +1,6 @@
-use crate::cli::{Commands, DeclareAction, StandingRequestAction};
+use crate::cli::{Commands, DeclareAction, OrchestrationAction, StandingRequestAction};
 use crate::config::CliConfig;
-use earmark_exec::ProviderRegistry;
+use earmark_exec::{LoadedProviderPlugin, ProviderRegistry};
 use earmark_index::DerivedIndex;
 use earmark_store::{GitCanonicalStore, WorkspaceLayoutStatus};
 use std::path::PathBuf;
@@ -50,14 +50,38 @@ impl CliError {
     pub fn workspace_not_initialized(status: WorkspaceLayoutStatus) -> Self {
         Self::WorkspaceNotInitialized { status }
     }
+
+    pub fn kind_str(&self) -> &'static str {
+        match self {
+            Self::Store(earmark_store::StoreError::WorkspaceNotInitialized) => {
+                "workspace_not_initialized"
+            }
+            Self::Store(_) => "store",
+            Self::Index(_) => "index",
+            Self::Derive(_) => "derive",
+            Self::Exec(_) => "exec",
+            Self::Governance(_) => "governance",
+            Self::Core(_) => "core",
+            Self::Json(_) => "json",
+            Self::Yaml(_) => "yaml",
+            Self::Toml(_) => "toml",
+            Self::Io(_) => "io",
+            Self::NotFound(_) => "not_found",
+            Self::Argument(_) => "argument",
+            Self::WorkspaceNotInitialized { .. } => "workspace_not_initialized",
+            Self::Runtime(_) => "runtime",
+        }
+    }
 }
 
 pub struct CommandContext<'a> {
     pub store: &'a GitCanonicalStore,
-    pub index: &'a Option<DerivedIndex>,
+    pub index: &'a mut Option<DerivedIndex>,
     pub config: &'a CliConfig,
     pub provider_registry: &'a ProviderRegistry,
+    pub loaded_provider_plugins: &'a [LoadedProviderPlugin],
     pub as_json: bool,
+    pub actor: &'a str,
 }
 
 pub struct BootstrappedServices {
@@ -65,8 +89,10 @@ pub struct BootstrappedServices {
     pub index: Option<DerivedIndex>,
     pub config: CliConfig,
     pub provider_registry: ProviderRegistry,
+    pub loaded_provider_plugins: Vec<LoadedProviderPlugin>,
     pub as_json: bool,
     pub root: PathBuf,
+    pub actor: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -81,6 +107,7 @@ pub enum WorkspaceAccessMode {
 pub fn workspace_access_mode(command: &Commands) -> WorkspaceAccessMode {
     match command {
         Commands::Completions { .. } => WorkspaceAccessMode::None,
+        Commands::Catalog => WorkspaceAccessMode::None,
         Commands::Init => WorkspaceAccessMode::Init,
         Commands::Doctor(args) => {
             if args.repair_index {
@@ -120,6 +147,12 @@ pub fn workspace_access_mode(command: &Commands) -> WorkspaceAccessMode {
             | StandingRequestAction::Apply { .. } => WorkspaceAccessMode::Write,
         },
         Commands::Undo(_) => WorkspaceAccessMode::Write,
+        Commands::Orchestration(cmd) => match cmd.action {
+            OrchestrationAction::Show(_) | OrchestrationAction::List(_) => {
+                WorkspaceAccessMode::ReadOnly
+            }
+            _ => WorkspaceAccessMode::Write,
+        },
     }
 }
 
@@ -151,9 +184,11 @@ pub fn command_family_name(command: &Commands) -> &'static str {
         Commands::Report(_) => "report",
         Commands::Provider(_) => "provider",
         Commands::Completions { .. } => "completions",
+        Commands::Catalog => "commands",
         Commands::Status => "status",
         Commands::Relation(_) => "relation",
         Commands::StandingRequest(_) => "standing-request",
         Commands::Undo(_) => "undo",
+        Commands::Orchestration(_) => "orchestration",
     }
 }

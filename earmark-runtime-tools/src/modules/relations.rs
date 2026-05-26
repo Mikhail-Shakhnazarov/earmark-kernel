@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 
 impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
     pub fn create_relation(
-        &self,
+        &mut self,
         source_id: ObjectId,
         target_id: ObjectId,
         relation_type: String,

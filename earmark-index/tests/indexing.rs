@@ -14,6 +14,7 @@ use tempfile::tempdir;
 fn rebuild_index_from_canonical_state() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
+    store.init_layout().unwrap();
     let obj = StoredObject::new(
         Kind::Object,
         Some("note".to_string()),
@@ -28,7 +29,7 @@ fn rebuild_index_from_canonical_state() {
     );
     store.write_object(&obj).unwrap();
 
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     index.rebuild_from_store(&store).unwrap();
     let rows = index
         .query_objects(&QueryFilter {
@@ -44,6 +45,7 @@ fn rebuild_index_from_canonical_state() {
 fn relation_adjacency_query() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
+    store.init_layout().unwrap();
 
     let a = StoredObject::new(
         Kind::Object,
@@ -86,7 +88,7 @@ fn relation_adjacency_query() {
     );
     store.write_object(&relation).unwrap();
 
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     index.rebuild_from_store(&store).unwrap();
     let adjacency = index.relation_adjacency(&a.envelope.id, false).unwrap();
     assert_eq!(adjacency.len(), 1);
@@ -97,6 +99,7 @@ fn relation_adjacency_query() {
 fn active_system_definition_activation() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
+    store.init_layout().unwrap();
 
     let system = SystemDefinition {
         system_id: "pkm-core".to_string(),
@@ -134,7 +137,7 @@ fn active_system_definition_activation() {
     );
     let version = store.write_object(&stored).unwrap();
 
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     index.rebuild_from_store(&store).unwrap();
     let active = index
         .activate_system(&system.namespace, &system.system_id, &version)
@@ -150,6 +153,7 @@ fn active_system_definition_activation() {
 fn symbolic_resolution_uses_explicit_declaration_identity_not_title_or_class() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
+    store.init_layout().unwrap();
 
     let target = WorkflowDefinition {
         name: "research_synthesis".to_string(),
@@ -197,7 +201,7 @@ fn symbolic_resolution_uses_explicit_declaration_identity_not_title_or_class() {
     );
     let collision_ref = store.write_object(&collision_obj).unwrap();
 
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     index.rebuild_from_store(&store).unwrap();
 
     let resolved = index
@@ -230,7 +234,7 @@ fn test_upsert_head_object_coherence() {
 
     let version_ref = store.write_object(&obj).unwrap();
 
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     index
         .upsert_head_object_from_store(&store, &version_ref.id)
         .unwrap();
@@ -252,6 +256,7 @@ fn test_upsert_head_object_coherence() {
 fn test_index_count_after_rebuild() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
+    store.init_layout().unwrap();
 
     for i in 0..5 {
         let obj = StoredObject::new(
@@ -269,7 +274,7 @@ fn test_index_count_after_rebuild() {
         store.write_object(&obj).unwrap();
     }
 
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     index.rebuild_from_store(&store).unwrap();
 
     let canonical_count = store.scan_objects().unwrap().scanned_objects.len() as u64;
@@ -287,6 +292,7 @@ fn test_index_count_after_rebuild() {
 fn test_rebuild_preserves_active_systems() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
+    store.init_layout().unwrap();
 
     let system = SystemDefinition {
         system_id: "test-system".to_string(),
@@ -324,7 +330,7 @@ fn test_rebuild_preserves_active_systems() {
     );
     let version = store.write_object(&stored).unwrap();
 
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     index.rebuild_from_store(&store).unwrap();
     index
         .activate_system("test/ns", "test-system", &version)
@@ -344,6 +350,7 @@ fn test_rebuild_preserves_active_systems() {
 fn test_rebuild_objects_by_kind_and_class() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
+    store.init_layout().unwrap();
 
     let note = StoredObject::new(
         Kind::Object,
@@ -378,7 +385,7 @@ fn test_rebuild_objects_by_kind_and_class() {
     );
     store.write_object(&instruction).unwrap();
 
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     index.rebuild_from_store(&store).unwrap();
 
     let objects = index.get_objects_by_kind(Kind::Object).unwrap();
@@ -426,6 +433,7 @@ fn test_missing_index_error() {
 fn test_open_existing_reads_correct_counts() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
+    store.init_layout().unwrap();
 
     let obj = StoredObject::new(
         Kind::Object,
@@ -438,7 +446,7 @@ fn test_open_existing_reads_correct_counts() {
     );
     store.write_object(&obj).unwrap();
 
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     index.rebuild_from_store(&store).unwrap();
     drop(index);
 
@@ -451,6 +459,7 @@ fn test_open_existing_reads_correct_counts() {
 fn test_relation_count_after_rebuild() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
+    store.init_layout().unwrap();
 
     let a = StoredObject::new(
         Kind::Object,
@@ -493,7 +502,7 @@ fn test_relation_count_after_rebuild() {
     );
     store.write_object(&relation).unwrap();
 
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     index.rebuild_from_store(&store).unwrap();
 
     assert_eq!(index.relation_count().unwrap(), 1);
@@ -523,6 +532,7 @@ fn custom_standing(research_status: &str, review: &str, process: &str) -> Standi
 fn test_rebuild_populates_object_standing() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
+    store.init_layout().unwrap();
 
     let verified = StoredObject::new(
         Kind::Object,
@@ -535,7 +545,7 @@ fn test_rebuild_populates_object_standing() {
     );
     store.write_object(&verified).unwrap();
 
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     index.rebuild_from_store(&store).unwrap();
 
     let rows = index
@@ -576,7 +586,7 @@ fn test_upsert_head_populates_object_standing() {
     );
     let version_ref = store.write_object(&obj).unwrap();
 
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     index
         .upsert_head_object_from_store(&store, &version_ref.id)
         .unwrap();
@@ -598,6 +608,7 @@ fn test_upsert_head_populates_object_standing() {
 fn test_query_by_custom_dimension() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
+    store.init_layout().unwrap();
 
     let verified = StoredObject::new(
         Kind::Object,
@@ -620,7 +631,7 @@ fn test_query_by_custom_dimension() {
     store.write_object(&verified).unwrap();
     store.write_object(&draft).unwrap();
 
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     index.rebuild_from_store(&store).unwrap();
 
     let rows = index
@@ -644,6 +655,7 @@ fn test_query_by_custom_dimension() {
 fn test_query_multiple_dimensions_conjunctive() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
+    store.init_layout().unwrap();
 
     let matching = StoredObject::new(
         Kind::Object,
@@ -676,7 +688,7 @@ fn test_query_multiple_dimensions_conjunctive() {
     store.write_object(&wrong_review).unwrap();
     store.write_object(&wrong_status).unwrap();
 
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     index.rebuild_from_store(&store).unwrap();
 
     let rows = index
@@ -710,6 +722,7 @@ fn test_query_multiple_dimensions_conjunctive() {
 fn test_query_multiple_tokens_within_dimension_disjunctive() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
+    store.init_layout().unwrap();
 
     let verified = StoredObject::new(
         Kind::Object,
@@ -742,7 +755,7 @@ fn test_query_multiple_tokens_within_dimension_disjunctive() {
     store.write_object(&demonstrated).unwrap();
     store.write_object(&draft).unwrap();
 
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     index.rebuild_from_store(&store).unwrap();
 
     // Query for verified OR demonstrated in research:status
@@ -779,6 +792,7 @@ fn test_query_multiple_tokens_within_dimension_disjunctive() {
 fn test_query_legacy_kernel_review_via_object_standing() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
+    store.init_layout().unwrap();
 
     let accepted = StoredObject::new(
         Kind::Object,
@@ -801,7 +815,7 @@ fn test_query_legacy_kernel_review_via_object_standing() {
     store.write_object(&accepted).unwrap();
     store.write_object(&rejected).unwrap();
 
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     index.rebuild_from_store(&store).unwrap();
 
     let rows = index
@@ -825,6 +839,7 @@ fn test_query_legacy_kernel_review_via_object_standing() {
 fn test_query_non_standing_filter_still_works() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
+    store.init_layout().unwrap();
 
     let note = StoredObject::new(
         Kind::Object,
@@ -840,7 +855,7 @@ fn test_query_non_standing_filter_still_works() {
     );
     store.write_object(&note).unwrap();
 
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     index.rebuild_from_store(&store).unwrap();
 
     // Query with no standing filter should still work
@@ -876,6 +891,7 @@ fn test_query_non_standing_filter_still_works() {
 fn test_rebuild_clears_previous_object_standing() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
+    store.init_layout().unwrap();
 
     let obj = StoredObject::new(
         Kind::Object,
@@ -888,7 +904,7 @@ fn test_rebuild_clears_previous_object_standing() {
     );
     store.write_object(&obj).unwrap();
 
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     index.rebuild_from_store(&store).unwrap();
 
     // Verify standing is indexed

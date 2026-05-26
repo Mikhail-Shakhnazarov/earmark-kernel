@@ -1,9 +1,9 @@
 use crate::modules::error::RuntimeToolError;
 use crate::modules::surface::RuntimeToolSurface;
 use earmark_core::{
-    AssignmentStatus, ChangeSet, ChangeSetDraft, HeaderValue, Kind, ObjectId, Provenance,
-    RelationCreationMode, Standing, TransitionAssignment, TransitionAssignmentId,
-    REL_TYPE_REQUESTS_STANDING,
+    AssignmentStatus, ChangeSet, ChangeSetDraft, HeaderValue, IntoObjectId, Kind, ObjectId,
+    Provenance, RelationCreationMode, RunId, Standing, TransitionAssignment,
+    TransitionAssignmentId, TransitionId, REL_TYPE_REQUESTS_STANDING,
 };
 use earmark_exec::persistence_helpers::write_object_and_index;
 use earmark_exec::{ExecutionEngine, WorkflowRunOutcome, WorkflowRunRequest};
@@ -13,10 +13,10 @@ use std::time::Duration;
 
 impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
     pub fn run_workflow(
-        &self,
+        &mut self,
         request: WorkflowRunRequest,
     ) -> Result<WorkflowRunOutcome, RuntimeToolError> {
-        let engine = ExecutionEngine {
+        let mut engine = ExecutionEngine {
             store: self.store,
             index: self.index,
             provider_service: self.provider_service,
@@ -25,16 +25,16 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
     }
 
     pub fn assign_transition(
-        &self,
-        run_id: String,
-        transition_id: String,
+        &mut self,
+        run_id: RunId,
+        transition_id: TransitionId,
         agent_id: String,
         input_object_ids: Vec<ObjectId>,
         lease: Option<Duration>,
     ) -> Result<TransitionAssignment, RuntimeToolError> {
-        let assignment_id = TransitionAssignmentId::new();
+        let assignment_id = TransitionAssignmentId::generate();
         self.index
-            .claim_active_assignment(&run_id, &transition_id, assignment_id.as_str())
+            .claim_active_assignment(&run_id, &transition_id, &assignment_id)
             .map_err(|e| RuntimeToolError::Conflict(e.to_string()))?;
         let now = chrono::Utc::now();
         let expires_at = match lease {
@@ -78,14 +78,14 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
             let _ = self.index.release_active_assignment(
                 &assignment.run_id,
                 &assignment.transition_id,
-                assignment_id.as_str(),
+                &assignment_id,
             );
         })?;
         Ok(assignment)
     }
 
     pub fn complete_transition_assignment(
-        &self,
+        &mut self,
         assignment_id: TransitionAssignmentId,
         draft: ChangeSetDraft,
         agent_id: String,
@@ -100,7 +100,7 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
             )));
         }
 
-        let change_set_id = earmark_core::ChangeSetId::new();
+        let change_set_id = earmark_core::ChangeSetId::generate();
         let now = chrono::Utc::now();
         let standing_requests = draft.standing_requests.clone();
         let change_set = ChangeSet {
@@ -161,7 +161,7 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
 
             let rel_payload = earmark_core::RelationPayload {
                 source: earmark_core::ObjectRef::new(
-                    earmark_core::ObjectId::parse(change_set_id.as_str().to_string())?,
+                    change_set_id.as_object_id(),
                     stored_change_set.envelope.version_id.clone(),
                     earmark_core::Kind::ChangeSet,
                     None,
@@ -200,14 +200,14 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
         self.index.release_active_assignment(
             &assignment.run_id,
             &assignment.transition_id,
-            assignment.id.as_str(),
+            &assignment.id,
         )?;
 
         Ok(change_set)
     }
 
     pub fn release_assignment(
-        &self,
+        &mut self,
         assignment_id: TransitionAssignmentId,
     ) -> Result<(), RuntimeToolError> {
         let (old_obj, mut assignment) = self.find_head_assignment(&assignment_id)?;
@@ -231,13 +231,13 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
         self.index.release_active_assignment(
             &assignment.run_id,
             &assignment.transition_id,
-            assignment.id.as_str(),
+            &assignment.id,
         )?;
         Ok(())
     }
 
     pub fn expire_assignment(
-        &self,
+        &mut self,
         assignment_id: TransitionAssignmentId,
     ) -> Result<(), RuntimeToolError> {
         let (old_obj, mut assignment) = self.find_head_assignment(&assignment_id)?;
@@ -261,13 +261,13 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
         self.index.release_active_assignment(
             &assignment.run_id,
             &assignment.transition_id,
-            assignment.id.as_str(),
+            &assignment.id,
         )?;
         Ok(())
     }
 
     pub fn supersede_assignment(
-        &self,
+        &mut self,
         assignment_id: TransitionAssignmentId,
         _successor_assignment_id: TransitionAssignmentId,
     ) -> Result<(), RuntimeToolError> {
@@ -294,13 +294,13 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
         self.index.release_active_assignment(
             &assignment.run_id,
             &assignment.transition_id,
-            assignment.id.as_str(),
+            &assignment.id,
         )?;
         Ok(())
     }
 
     pub fn resume_assignment(
-        &self,
+        &mut self,
         assignment_id: TransitionAssignmentId,
         agent_id: String,
         lease: Option<Duration>,
@@ -329,17 +329,17 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
             }
         }
 
-        let new_assignment_id = TransitionAssignmentId::new();
+        let new_assignment_id = TransitionAssignmentId::generate();
         let _ = self.index.release_active_assignment(
             &old_assignment.run_id,
             &old_assignment.transition_id,
-            old_assignment.id.as_str(),
+            &old_assignment.id,
         );
         self.index
             .claim_active_assignment(
                 &old_assignment.run_id,
                 &old_assignment.transition_id,
-                new_assignment_id.as_str(),
+                &new_assignment_id,
             )
             .map_err(|e| RuntimeToolError::Conflict(e.to_string()))?;
         let now = chrono::Utc::now();
@@ -388,7 +388,7 @@ impl<'a, S: CanonicalStore> RuntimeToolSurface<'a, S> {
             let _ = self.index.release_active_assignment(
                 &new_assignment.run_id,
                 &new_assignment.transition_id,
-                new_assignment_id.as_str(),
+                &new_assignment_id,
             );
         })?;
         Ok(new_assignment)

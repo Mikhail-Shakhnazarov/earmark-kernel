@@ -1,18 +1,18 @@
 //! Workflow execution record types.
 
+use crate::ids::{
+    ChangeSetId, HandoffManifestId, ObjectId, ObjectRef, RunId, TransitionAssignmentId,
+    TransitionId, UndoRecordId, VersionRef,
+};
+use crate::standing::{StandingConstraint, StandingTransitionRequest};
+use crate::values::{ScalarOrRef, Timestamp};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use uuid::Uuid;
-
-use crate::errors::CoreError;
-use crate::ids::{ObjectId, ObjectRef, VersionRef};
-use crate::standing::{StandingConstraint, StandingTransitionRequest};
-use crate::values::{ScalarOrRef, Timestamp};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RunRecord {
-    pub run_id: String,
+    pub run_id: RunId,
     pub system_definition: VersionRef,
     pub workflow: VersionRef,
     pub status: RunStatus,
@@ -36,6 +36,7 @@ pub enum RunStatus {
     Completed,
     Failed,
     Cancelled,
+    Partial,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -48,7 +49,7 @@ pub struct TokenRecord {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RunEvent {
     pub event_id: String,
-    pub transition: String,
+    pub transition: TransitionId,
     pub event_type: String,
     pub timestamp: Timestamp,
     pub inputs: Vec<ObjectRef>,
@@ -59,7 +60,7 @@ pub struct RunEvent {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WorkPacket {
     pub work_packet_id: String,
-    pub run_id: String,
+    pub run_id: RunId,
     pub work_packet_type: String,
     pub purpose: String,
     pub system_definition: VersionRef,
@@ -90,54 +91,6 @@ pub struct WorkSurfaceRef {
     pub render_mode: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub struct TransitionAssignmentId(String);
-
-impl TransitionAssignmentId {
-    pub fn new() -> Self {
-        Self(format!("obj_{}", Uuid::new_v4().simple()))
-    }
-
-    pub fn parse(s: impl Into<String>) -> Result<Self, CoreError> {
-        let s = s.into();
-        if s.len() > 128 {
-            return Err(CoreError::InvalidIdentifier(
-                "length exceeds 128 characters".to_string(),
-            ));
-        }
-        if !s.starts_with("obj_") {
-            return Err(CoreError::InvalidIdentifier(
-                "must start with obj_".to_string(),
-            ));
-        }
-        let hex_part = &s[4..];
-        if hex_part.len() != 32
-            || !hex_part
-                .chars()
-                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
-        {
-            return Err(CoreError::InvalidIdentifier(
-                "invalid format: expected obj_ followed by 32 lowercase hex characters".to_string(),
-            ));
-        }
-        Ok(Self(s))
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-
-    pub fn as_object_id(&self) -> ObjectId {
-        ObjectId::parse(self.0.clone()).unwrap()
-    }
-}
-
-impl Default for TransitionAssignmentId {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AssignmentStatus {
@@ -152,8 +105,8 @@ pub enum AssignmentStatus {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TransitionAssignment {
     pub id: TransitionAssignmentId,
-    pub run_id: String,
-    pub transition_id: String,
+    pub run_id: RunId,
+    pub transition_id: TransitionId,
     pub assigned_to: String,
     pub status: AssignmentStatus,
     #[serde(default)]
@@ -169,59 +122,11 @@ pub struct TransitionAssignment {
     pub completed_at: Option<DateTime<Utc>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub struct ChangeSetId(String);
-
-impl ChangeSetId {
-    pub fn new() -> Self {
-        Self(format!("obj_{}", Uuid::new_v4().simple()))
-    }
-
-    pub fn parse(s: impl Into<String>) -> Result<Self, CoreError> {
-        let s = s.into();
-        if s.len() > 128 {
-            return Err(CoreError::InvalidIdentifier(
-                "length exceeds 128 characters".to_string(),
-            ));
-        }
-        if !s.starts_with("obj_") {
-            return Err(CoreError::InvalidIdentifier(
-                "must start with obj_".to_string(),
-            ));
-        }
-        let hex_part = &s[4..];
-        if hex_part.len() != 32
-            || !hex_part
-                .chars()
-                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
-        {
-            return Err(CoreError::InvalidIdentifier(
-                "invalid format: expected obj_ followed by 32 lowercase hex characters".to_string(),
-            ));
-        }
-        Ok(Self(s))
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-
-    pub fn as_object_id(&self) -> ObjectId {
-        ObjectId::parse(self.0.clone()).unwrap()
-    }
-}
-
-impl Default for ChangeSetId {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ChangeSet {
     pub id: ChangeSetId,
-    pub run_id: String,
-    pub transition_id: String,
+    pub run_id: RunId,
+    pub transition_id: TransitionId,
     pub assignment_id: Option<TransitionAssignmentId>,
     pub agent_id: Option<String>,
     #[serde(default)]
@@ -247,58 +152,10 @@ pub struct ChangeSet {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub struct UndoRecordId(String);
-
-impl UndoRecordId {
-    pub fn new() -> Self {
-        Self(format!("obj_{}", Uuid::new_v4().simple()))
-    }
-
-    pub fn parse(s: impl Into<String>) -> Result<Self, CoreError> {
-        let s = s.into();
-        if s.len() > 128 {
-            return Err(CoreError::InvalidIdentifier(
-                "length exceeds 128 characters".to_string(),
-            ));
-        }
-        if !s.starts_with("obj_") {
-            return Err(CoreError::InvalidIdentifier(
-                "must start with obj_".to_string(),
-            ));
-        }
-        let hex_part = &s[4..];
-        if hex_part.len() != 32
-            || !hex_part
-                .chars()
-                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
-        {
-            return Err(CoreError::InvalidIdentifier(
-                "invalid format: expected obj_ followed by 32 lowercase hex characters".to_string(),
-            ));
-        }
-        Ok(Self(s))
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-
-    pub fn as_object_id(&self) -> ObjectId {
-        ObjectId::parse(self.0.clone()).unwrap()
-    }
-}
-
-impl Default for UndoRecordId {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct UndoRecord {
     pub id: UndoRecordId,
-    pub target_run_id: String,
+    pub target_run_id: RunId,
     pub reverted_change_set_ids: Vec<ChangeSetId>,
     pub created_object_ids: Vec<ObjectId>,
     pub created_relation_ids: Vec<ObjectId>,
@@ -309,8 +166,8 @@ pub struct UndoRecord {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TransformationFailure {
-    pub run_id: String,
-    pub transition_id: String,
+    pub run_id: RunId,
+    pub transition_id: TransitionId,
     pub assignment_id: TransitionAssignmentId,
     pub failed_change_set_id: Option<ChangeSetId>,
     pub error_type: String,
@@ -353,60 +210,12 @@ pub struct RequiredCheck {
     pub description: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub struct HandoffManifestId(String);
-
-impl HandoffManifestId {
-    pub fn new() -> Self {
-        Self(format!("obj_{}", Uuid::new_v4().simple()))
-    }
-
-    pub fn parse(s: impl Into<String>) -> Result<Self, CoreError> {
-        let s = s.into();
-        if s.len() > 128 {
-            return Err(CoreError::InvalidIdentifier(
-                "length exceeds 128 characters".to_string(),
-            ));
-        }
-        if !s.starts_with("obj_") {
-            return Err(CoreError::InvalidIdentifier(
-                "must start with obj_".to_string(),
-            ));
-        }
-        let hex_part = &s[4..];
-        if hex_part.len() != 32
-            || !hex_part
-                .chars()
-                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
-        {
-            return Err(CoreError::InvalidIdentifier(
-                "invalid format: expected obj_ followed by 32 lowercase hex characters".to_string(),
-            ));
-        }
-        Ok(Self(s))
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-
-    pub fn as_object_id(&self) -> ObjectId {
-        ObjectId::parse(self.0.clone()).unwrap()
-    }
-}
-
-impl Default for HandoffManifestId {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HandoffManifest {
     pub id: HandoffManifestId,
-    pub run_id: String,
-    pub from_transition_id: String,
-    pub to_transition_id: Option<String>,
+    pub run_id: RunId,
+    pub from_transition_id: TransitionId,
+    pub to_transition_id: Option<TransitionId>,
     pub source_change_set_id: ChangeSetId,
     pub source_assignment_id: Option<TransitionAssignmentId>,
     #[serde(default)]

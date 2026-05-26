@@ -1,0 +1,14 @@
+name: context_packet
+version: 0.1.0
+kind: object
+required_headers:
+  - title
+payload_schema: inline:any
+standing_rules:
+  allowed_standing:
+    kernel:process:
+      - proposed
+      - active
+      - superseded
+relation_rules: []
+validators: []

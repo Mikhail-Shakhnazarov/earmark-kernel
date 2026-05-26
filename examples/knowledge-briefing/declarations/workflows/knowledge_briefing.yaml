@@ -1,28 +1,22 @@
 name: knowledge_briefing
-version: 0.2.0
+version: 0.2.1
 description: "Two-stage knowledge briefing pipeline: extract findings, then synthesize briefing card."
 operations:
   - id: compile_source_notes
     kind: compile_context
-    input_contracts: [source_note]
-    output_contracts: [source_notes_for_extraction]
     compiled_context: "../compiled_contexts/source_notes_for_extraction.yaml"
 
   - id: extract_findings
     kind: transform
-    input_contracts: [source_notes_for_extraction]
     output_contracts: [finding]
     instruction: "../instructions/source_to_finding.md"
 
   - id: compile_findings
     kind: compile_context
-    input_contracts: [finding]
-    output_contracts: [findings_for_briefing]
     compiled_context: "../compiled_contexts/findings_for_briefing.yaml"
 
   - id: synthesize_briefing
     kind: transform
-    input_contracts: [findings_for_briefing]
     output_contracts: [briefing_card]
     instruction: "../instructions/finding_to_briefing.md"
 

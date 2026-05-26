@@ -4,6 +4,7 @@ use earmark_core::{
     StandingRegistry, TokenId, VersionId, VersionRef,
 };
 use earmark_exec::helpers::render_provider_input;
+use earmark_exec::ProviderFailureKind;
 use earmark_index::DerivedIndex;
 use earmark_store::{GitCanonicalStore, ObjectStore, StoredObject, StoredPayload, WorkspaceLayout};
 use std::collections::BTreeMap;
@@ -163,7 +164,7 @@ fn standing_with(token: &str) -> Standing {
 fn manifest_with(objects: Vec<ObjectRef>) -> WorkSurfaceManifest {
     WorkSurfaceManifest {
         surface_id: "test".to_string(),
-        compiled_context: VersionRef::new(ObjectId::new(), VersionId::new()),
+        compiled_context: VersionRef::new(ObjectId::generate(), VersionId::generate()),
         work_packet: None,
         generated_at: chrono::Utc::now(),
         objects: objects
@@ -184,7 +185,7 @@ fn manifest_with(objects: Vec<ObjectRef>) -> WorkSurfaceManifest {
 
 #[test]
 fn test_default_standing_excludes_from_provider() {
-    let (store, index) = setup_env();
+    let (store, mut index) = setup_env();
     let payload = "VISIBLE_PAYLOAD";
     let obj_ref = obj_with_payload(
         &store,
@@ -223,7 +224,7 @@ fn test_default_standing_excludes_from_provider() {
 
 #[test]
 fn test_standing_expose_to_provider_allows_payload() {
-    let (store, index) = setup_env();
+    let (store, mut index) = setup_env();
     let payload = "EXPOSABLE_PAYLOAD";
     let obj_ref = obj_with_payload(
         &store,
@@ -253,7 +254,7 @@ fn test_standing_expose_to_provider_allows_payload() {
 
 #[test]
 fn test_standing_hides_from_provider_when_expose_false() {
-    let (store, index) = setup_env();
+    let (store, mut index) = setup_env();
     let payload = "HIDDEN_PROVIDER_PAYLOAD";
     let obj_ref = obj_with_payload(
         &store,
@@ -291,7 +292,7 @@ fn test_standing_hides_from_provider_when_expose_false() {
 
 #[test]
 fn test_two_gate_standing_permits_but_profile_denies() {
-    let (store, index) = setup_env();
+    let (store, mut index) = setup_env();
     let payload = "EXPOSABLE_BUT_PROFILE_DENIES";
     let obj_ref = obj_with_payload(
         &store,
@@ -306,7 +307,7 @@ fn test_two_gate_standing_permits_but_profile_denies() {
     profile.exposure.allow_prose_objects = false;
 
     let registry = custom_visibility_registry();
-    let rendered = render_provider_input(
+    let err = render_provider_input(
         &store,
         &instruction(),
         Some(&manifest_with(vec![obj_ref])),
@@ -314,22 +315,21 @@ fn test_two_gate_standing_permits_but_profile_denies() {
         &profile,
         &registry,
     )
-    .unwrap();
+    .unwrap_err();
 
-    // Both gates must pass; profile denies, so payload hidden
-    assert!(
-        !rendered.contains(payload),
-        "profile denial should block payload even when standing permits"
-    );
-    assert!(
-        rendered.contains("Payload content hidden by exposure policy"),
-        "should show profile-based advisory"
-    );
+    let provider_err = match &err {
+        earmark_exec::ExecError::Provider(pf) => pf,
+        _ => panic!("expected ExecError::Provider, got {:?}", err),
+    };
+    assert_eq!(provider_err.kind, ProviderFailureKind::PolicyViolation);
+    assert!(provider_err
+        .message
+        .contains("allow_prose_objects is false"));
 }
 
 #[test]
 fn test_two_gate_both_permit_payload_included() {
-    let (store, index) = setup_env();
+    let (store, mut index) = setup_env();
     let payload = "BOTH_GATES_PERMIT";
     let obj_ref = obj_with_payload(
         &store,
@@ -362,7 +362,7 @@ fn test_two_gate_both_permit_payload_included() {
 
 #[test]
 fn test_advisory_warning_does_not_leak_payload() {
-    let (store, index) = setup_env();
+    let (store, mut index) = setup_env();
     let secret_payload = "SECRET_PAYLOAD_SHOULD_NOT_LEAK";
     let obj_ref = obj_with_payload(
         &store,
@@ -401,7 +401,7 @@ fn test_advisory_warning_does_not_leak_payload() {
 
 #[test]
 fn test_expose_to_provider_true_still_blocked_by_structured_declaration_denial() {
-    let (store, index) = setup_env();
+    let (store, mut index) = setup_env();
     let body = "THIS_SHOULD_BE_HIDDEN_BY_STRUCTURED_DECLARATION_POLICY";
     let obj_payload = format!(
         "---\nname: test\nversion: \"1\"\npurpose: test\ninput_classes: []\noutput_classes: []\nexecution_policy: delegated\ntrace_policy: full\nregister: machined\n---\n{}",
@@ -420,7 +420,7 @@ fn test_expose_to_provider_true_still_blocked_by_structured_declaration_denial()
     profile.exposure.allow_structured_declarations = false;
 
     let registry = custom_visibility_registry();
-    let rendered = render_provider_input(
+    let err = render_provider_input(
         &store,
         &instruction(),
         Some(&manifest_with(vec![obj_ref])),
@@ -428,15 +428,14 @@ fn test_expose_to_provider_true_still_blocked_by_structured_declaration_denial()
         &profile,
         &registry,
     )
-    .unwrap();
+    .unwrap_err();
 
-    // Standing permits, but profile denies structured declarations
-    assert!(
-        !rendered.contains(body),
-        "profile structured-declaration denial should block"
-    );
-    assert!(
-        rendered.contains("Structured declarations hidden by exposure policy"),
-        "should show structured declaration advisory"
-    );
+    let provider_err = match &err {
+        earmark_exec::ExecError::Provider(pf) => pf,
+        _ => panic!("expected ExecError::Provider, got {:?}", err),
+    };
+    assert_eq!(provider_err.kind, ProviderFailureKind::PolicyViolation);
+    assert!(provider_err
+        .message
+        .contains("allow_structured_declarations is false"));
 }

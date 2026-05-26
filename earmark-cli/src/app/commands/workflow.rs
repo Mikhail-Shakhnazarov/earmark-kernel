@@ -9,9 +9,13 @@ use crate::config::resolve_system_id;
 use earmark_exec::{ExecutionEngine, WorkflowRunRequest};
 use serde_json::json;
 
-pub fn handle(ctx: &CommandContext, command: &WorkflowCommand) -> Result<(), CliError> {
+pub fn handle(ctx: &mut CommandContext, command: &WorkflowCommand) -> Result<(), CliError> {
     let store = ctx.store;
-    let index = ctx.index.as_ref().expect("index required for workflow");
+    let index = ctx.index.as_mut().ok_or_else(|| {
+        CliError::argument(
+            "index required for workflow execution — ensure workspace is initialized",
+        )
+    })?;
     let provider_registry = ctx.provider_registry;
     let config = ctx.config;
     let as_json = ctx.as_json;
@@ -41,16 +45,16 @@ pub fn handle(ctx: &CommandContext, command: &WorkflowCommand) -> Result<(), Cli
                 .iter()
                 .map(|object_id| resolve_object_ref(store, object_id))
                 .collect::<Result<Vec<_>, _>>()?;
-            let engine = ExecutionEngine {
+            let mut engine = ExecutionEngine {
                 store,
                 index,
                 provider_service: provider_registry,
             };
             let outcome = engine.run_workflow(WorkflowRunRequest {
-                run_id: format!(
+                run_id: earmark_core::RunId::parse(format!(
                     "run_{}",
                     chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()
-                ),
+                ))?,
                 system_definition: system,
                 workflow,
                 inputs,

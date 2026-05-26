@@ -6,6 +6,7 @@ use std::{
 
 use fs4::fs_std::FileExt;
 
+pub mod authorization;
 mod backend;
 
 use crate::backend::{GitBackend, GixBackend};
@@ -216,7 +217,7 @@ impl StoredObject {
         parents: Vec<VersionRef>,
     ) -> Self {
         Self::new_with_id(
-            ObjectId::new(),
+            ObjectId::generate(),
             kind,
             class,
             standing,
@@ -243,7 +244,7 @@ impl StoredObject {
         Self {
             envelope: Envelope {
                 id,
-                version_id: VersionId::new(),
+                version_id: VersionId::generate(),
                 kind,
                 class,
                 standing,
@@ -269,7 +270,7 @@ impl StoredObject {
         Self {
             envelope: Envelope {
                 id: previous.envelope.id.clone(),
-                version_id: VersionId::new(),
+                version_id: VersionId::generate(),
                 kind: previous.envelope.kind.clone(),
                 class: previous.envelope.class.clone(),
                 standing,
@@ -360,20 +361,36 @@ pub trait StoreWriteLocking {
     }
 }
 
-pub trait CanonicalStore: WorkspaceLayout + ObjectStore + StoreScanner + StoreWriteLocking {}
+pub trait CanonicalStore: WorkspaceLayout + ObjectStore + StoreScanner + StoreWriteLocking {
+    /// Returns whether an actor is trusted for privileged operations in the current runtime/store.
+    fn is_trusted_actor(&self, actor: &str) -> bool {
+        default_trusted_actor(actor)
+    }
+}
+
+fn default_trusted_actor(actor: &str) -> bool {
+    matches!(actor, "runtime" | "execution_engine" | "system")
+}
 
 #[derive(Debug, Clone)]
 pub struct GitCanonicalStore {
     root: PathBuf,
     backend: GixBackend,
+    authorized_actors: Vec<String>,
 }
 
 impl GitCanonicalStore {
     pub fn new(root: impl AsRef<Path>) -> Self {
         let root = root.as_ref();
+        Self::with_authorized_actors(root, vec![])
+    }
+
+    pub fn with_authorized_actors(root: impl AsRef<Path>, authorized_actors: Vec<String>) -> Self {
+        let root = root.as_ref();
         Self {
             root: root.canonicalize().unwrap_or_else(|_| root.to_path_buf()),
             backend: GixBackend,
+            authorized_actors,
         }
     }
 
@@ -537,7 +554,12 @@ impl StoreWriteLocking for GitCanonicalStore {
         _guard: &WorkspaceWriteGuard,
         batch: &BatchWrite,
     ) -> Result<Vec<VersionRef>, StoreError> {
-        self.init_layout_unlocked()?;
+        for object in &batch.objects {
+            authorization::check_write_authorized(object, &self.authorized_actors)?;
+        }
+        if !self.layout_status().is_initialized() {
+            return Err(StoreError::WorkspaceNotInitialized);
+        }
         let mut written = Vec::with_capacity(batch.objects.len());
         let mut total_size = 0;
         let mut created_files: Vec<PathBuf> = Vec::new();
@@ -666,11 +688,15 @@ impl StoreWriteLocking for GitCanonicalStore {
 
 impl ObjectStore for GitCanonicalStore {
     fn write_object(&self, object: &StoredObject) -> Result<VersionRef, StoreError> {
+        authorization::check_write_authorized(object, &self.authorized_actors)?;
         let guard = self.acquire_write_lock()?;
         self.write_object_locked(&guard, object)
     }
 
     fn write_batch(&self, batch: &BatchWrite) -> Result<Vec<VersionRef>, StoreError> {
+        for object in &batch.objects {
+            authorization::check_write_authorized(object, &self.authorized_actors)?;
+        }
         let guard = self.acquire_write_lock()?;
         self.write_batch_locked(&guard, batch)
     }
@@ -821,7 +847,16 @@ impl StoreScanner for GitCanonicalStore {
     }
 }
 
-impl CanonicalStore for GitCanonicalStore {}
+impl CanonicalStore for GitCanonicalStore {
+    fn is_trusted_actor(&self, actor: &str) -> bool {
+        if self.authorized_actors.is_empty() {
+            return default_trusted_actor(actor);
+        }
+        self.authorized_actors
+            .iter()
+            .any(|trusted| trusted == actor)
+    }
+}
 
 #[derive(Debug, Error)]
 pub enum StoreError {
@@ -861,4 +896,8 @@ pub enum StoreError {
         write_error: String,
         rollback_error: String,
     },
+    #[error("unauthorized: {0}")]
+    Unauthorized(String),
+    #[error("workspace not initialized")]
+    WorkspaceNotInitialized,
 }

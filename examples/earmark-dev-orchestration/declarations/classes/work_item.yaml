@@ -1,0 +1,46 @@
+name: work_item
+version: 0.1.0
+kind: object
+required_headers:
+  - task_id
+  - title
+payload_schema: inline:any
+standing_rules:
+  allowed_standing:
+    kernel:process:
+      - proposed
+      - ready
+      - dispatched
+      - under_review
+      - closed
+      - followup_required
+      - blocked
+relation_rules:
+  - relation_type: has_context
+    counterparty_classes:
+      - context_packet
+  - relation_type: dispatched_as
+    counterparty_classes:
+      - dispatch
+  - relation_type: has_dispatch
+    counterparty_classes:
+      - dispatch
+  - relation_type: has_evidence
+    counterparty_classes:
+      - evidence
+  - relation_type: has_review
+    counterparty_classes:
+      - review
+  - relation_type: has_closure
+    counterparty_classes:
+      - closure
+  - relation_type: supersedes
+    counterparty_classes:
+      - work_item
+  - relation_type: has_git_snapshot
+    counterparty_classes:
+      - git_snapshot
+  - relation_type: has_gate_result
+    counterparty_classes:
+      - gate_result
+validators: []

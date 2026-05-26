@@ -90,12 +90,12 @@ fn mock_profile(budget: ProviderBudget) -> ProviderProfile {
 
 #[test]
 fn test_input_budget_enforcement() {
-    let (store, index) = setup_env();
+    let (store, mut index) = setup_env();
     let provider = BudgetTestProvider {
         output_text: "ok".to_string(),
         cost_usd: None,
     };
-    let engine = ExecutionEngine::new(&store, &index, &provider);
+    let mut engine = ExecutionEngine::new(&store, &mut index, &provider);
 
     let budget = ProviderBudget {
         max_input_tokens: Some(2),
@@ -163,7 +163,7 @@ Over budget input text"#;
         .unwrap();
 
     let transition = ExecutionTransition {
-        id: "t1".to_string(),
+        id: earmark_core::TransitionId::parse("t1").unwrap(),
         operation: WorkflowOperationKind::Transform,
         input_contracts: vec![],
         output_contracts: vec!["out".to_string()],
@@ -174,9 +174,9 @@ Over budget input text"#;
     };
 
     let mut record = RunRecord {
-        run_id: "run_1".to_string(),
-        system_definition: VersionRef::new(ObjectId::new(), VersionId::new()),
-        workflow: VersionRef::new(ObjectId::new(), VersionId::new()),
+        run_id: earmark_core::RunId::parse("run_1").unwrap(),
+        system_definition: VersionRef::new(ObjectId::generate(), VersionId::generate()),
+        workflow: VersionRef::new(ObjectId::generate(), VersionId::generate()),
         status: earmark_core::RunStatus::Running,
         started_at: Utc::now(),
         ended_at: None,
@@ -196,7 +196,7 @@ Over budget input text"#;
     let mut governance_events = vec![];
     let mut compiled_context = Some(earmark_connected_context::WorkSurfaceManifest {
         surface_id: "test".to_string(),
-        compiled_context: VersionRef::new(ObjectId::new(), VersionId::new()),
+        compiled_context: VersionRef::new(ObjectId::generate(), VersionId::generate()),
         work_packet: None,
         generated_at: Utc::now(),
         objects: vec![],
@@ -214,9 +214,9 @@ Over budget input text"#;
     };
 
     let request = WorkflowRunRequest {
-        run_id: "run_1".to_string(),
-        system_definition: VersionRef::new(ObjectId::new(), VersionId::new()),
-        workflow: VersionRef::new(ObjectId::new(), VersionId::new()),
+        run_id: earmark_core::RunId::parse("run_1").unwrap(),
+        system_definition: VersionRef::new(ObjectId::generate(), VersionId::generate()),
+        workflow: VersionRef::new(ObjectId::generate(), VersionId::generate()),
         inputs: vec![],
         handoff_manifest: None,
         transition_assignment: None,
@@ -250,12 +250,12 @@ Over budget input text"#;
 
 #[test]
 fn test_output_budget_enforcement() {
-    let (store, index) = setup_env();
+    let (store, mut index) = setup_env();
     let provider = BudgetTestProvider {
         output_text: "This is a very long output that should exceed the budget".to_string(),
         cost_usd: None,
     };
-    let engine = ExecutionEngine::new(&store, &index, &provider);
+    let mut engine = ExecutionEngine::new(&store, &mut index, &provider);
 
     let budget = ProviderBudget {
         max_input_tokens: None,
@@ -323,7 +323,7 @@ Short instruction"#;
         .unwrap();
 
     let transition = ExecutionTransition {
-        id: "t1".to_string(),
+        id: earmark_core::TransitionId::parse("t1").unwrap(),
         operation: WorkflowOperationKind::Transform,
         input_contracts: vec![],
         output_contracts: vec!["out".to_string()],
@@ -334,9 +334,9 @@ Short instruction"#;
     };
 
     let mut record = RunRecord {
-        run_id: "run_1".to_string(),
-        system_definition: VersionRef::new(ObjectId::new(), VersionId::new()),
-        workflow: VersionRef::new(ObjectId::new(), VersionId::new()),
+        run_id: earmark_core::RunId::parse("run_1").unwrap(),
+        system_definition: VersionRef::new(ObjectId::generate(), VersionId::generate()),
+        workflow: VersionRef::new(ObjectId::generate(), VersionId::generate()),
         status: earmark_core::RunStatus::Running,
         started_at: Utc::now(),
         ended_at: None,
@@ -356,7 +356,7 @@ Short instruction"#;
     let mut governance_events = vec![];
     let mut compiled_context = Some(earmark_connected_context::WorkSurfaceManifest {
         surface_id: "test".to_string(),
-        compiled_context: VersionRef::new(ObjectId::new(), VersionId::new()),
+        compiled_context: VersionRef::new(ObjectId::generate(), VersionId::generate()),
         work_packet: None,
         generated_at: Utc::now(),
         objects: vec![],
@@ -374,9 +374,9 @@ Short instruction"#;
     };
 
     let request = WorkflowRunRequest {
-        run_id: "run_1".to_string(),
-        system_definition: VersionRef::new(ObjectId::new(), VersionId::new()),
-        workflow: VersionRef::new(ObjectId::new(), VersionId::new()),
+        run_id: earmark_core::RunId::parse("run_1").unwrap(),
+        system_definition: VersionRef::new(ObjectId::generate(), VersionId::generate()),
+        workflow: VersionRef::new(ObjectId::generate(), VersionId::generate()),
         inputs: vec![],
         handoff_manifest: None,
         transition_assignment: None,
@@ -410,12 +410,12 @@ Short instruction"#;
 
 #[test]
 fn test_cost_budget_enforcement() {
-    let (store, index) = setup_env();
+    let (store, mut index) = setup_env();
     let provider = BudgetTestProvider {
         output_text: "ok".to_string(),
         cost_usd: Some(1.0f32),
     };
-    let engine = ExecutionEngine::new(&store, &index, &provider);
+    let mut engine = ExecutionEngine::new(&store, &mut index, &provider);
 
     let budget = ProviderBudget {
         max_input_tokens: None,
@@ -483,7 +483,7 @@ Short instruction"#;
         .unwrap();
 
     let transition = ExecutionTransition {
-        id: "t1".to_string(),
+        id: earmark_core::TransitionId::parse("t1").unwrap(),
         operation: WorkflowOperationKind::Transform,
         input_contracts: vec![],
         output_contracts: vec!["out".to_string()],
@@ -494,9 +494,9 @@ Short instruction"#;
     };
 
     let mut record = RunRecord {
-        run_id: "run_1".to_string(),
-        system_definition: VersionRef::new(ObjectId::new(), VersionId::new()),
-        workflow: VersionRef::new(ObjectId::new(), VersionId::new()),
+        run_id: earmark_core::RunId::parse("run_1").unwrap(),
+        system_definition: VersionRef::new(ObjectId::generate(), VersionId::generate()),
+        workflow: VersionRef::new(ObjectId::generate(), VersionId::generate()),
         status: earmark_core::RunStatus::Running,
         started_at: Utc::now(),
         ended_at: None,
@@ -516,7 +516,7 @@ Short instruction"#;
     let mut governance_events = vec![];
     let mut compiled_context = Some(earmark_connected_context::WorkSurfaceManifest {
         surface_id: "test".to_string(),
-        compiled_context: VersionRef::new(ObjectId::new(), VersionId::new()),
+        compiled_context: VersionRef::new(ObjectId::generate(), VersionId::generate()),
         work_packet: None,
         generated_at: Utc::now(),
         objects: vec![],
@@ -534,9 +534,9 @@ Short instruction"#;
     };
 
     let request = WorkflowRunRequest {
-        run_id: "run_1".to_string(),
-        system_definition: VersionRef::new(ObjectId::new(), VersionId::new()),
-        workflow: VersionRef::new(ObjectId::new(), VersionId::new()),
+        run_id: earmark_core::RunId::parse("run_1").unwrap(),
+        system_definition: VersionRef::new(ObjectId::generate(), VersionId::generate()),
+        workflow: VersionRef::new(ObjectId::generate(), VersionId::generate()),
         inputs: vec![],
         handoff_manifest: None,
         transition_assignment: None,
@@ -570,12 +570,12 @@ Short instruction"#;
 
 #[test]
 fn test_budget_within_limits() {
-    let (store, index) = setup_env();
+    let (store, mut index) = setup_env();
     let provider = BudgetTestProvider {
         output_text: "ok".to_string(),
         cost_usd: Some(0.1f32),
     };
-    let engine = ExecutionEngine::new(&store, &index, &provider);
+    let mut engine = ExecutionEngine::new(&store, &mut index, &provider);
 
     let budget = ProviderBudget {
         max_input_tokens: Some(100),
@@ -643,7 +643,7 @@ Short instruction"#;
         .unwrap();
 
     let transition = ExecutionTransition {
-        id: "t1".to_string(),
+        id: earmark_core::TransitionId::parse("t1").unwrap(),
         operation: WorkflowOperationKind::Transform,
         input_contracts: vec![],
         output_contracts: vec!["out".to_string()],
@@ -654,9 +654,9 @@ Short instruction"#;
     };
 
     let mut record = RunRecord {
-        run_id: "run_1".to_string(),
-        system_definition: VersionRef::new(ObjectId::new(), VersionId::new()),
-        workflow: VersionRef::new(ObjectId::new(), VersionId::new()),
+        run_id: earmark_core::RunId::parse("run_1").unwrap(),
+        system_definition: VersionRef::new(ObjectId::generate(), VersionId::generate()),
+        workflow: VersionRef::new(ObjectId::generate(), VersionId::generate()),
         status: earmark_core::RunStatus::Running,
         started_at: Utc::now(),
         ended_at: None,
@@ -676,7 +676,7 @@ Short instruction"#;
     let mut governance_events = vec![];
     let mut compiled_context = Some(earmark_connected_context::WorkSurfaceManifest {
         surface_id: "test".to_string(),
-        compiled_context: VersionRef::new(ObjectId::new(), VersionId::new()),
+        compiled_context: VersionRef::new(ObjectId::generate(), VersionId::generate()),
         work_packet: None,
         generated_at: Utc::now(),
         objects: vec![],
@@ -694,9 +694,9 @@ Short instruction"#;
     };
 
     let request = WorkflowRunRequest {
-        run_id: "run_1".to_string(),
-        system_definition: VersionRef::new(ObjectId::new(), VersionId::new()),
-        workflow: VersionRef::new(ObjectId::new(), VersionId::new()),
+        run_id: earmark_core::RunId::parse("run_1").unwrap(),
+        system_definition: VersionRef::new(ObjectId::generate(), VersionId::generate()),
+        workflow: VersionRef::new(ObjectId::generate(), VersionId::generate()),
         inputs: vec![],
         handoff_manifest: None,
         transition_assignment: None,
@@ -722,12 +722,12 @@ Short instruction"#;
 
 #[test]
 fn test_missing_cost_metadata_warning() {
-    let (store, index) = setup_env();
+    let (store, mut index) = setup_env();
     let provider = BudgetTestProvider {
         output_text: "ok".to_string(),
         cost_usd: None,
     };
-    let engine = ExecutionEngine::new(&store, &index, &provider);
+    let mut engine = ExecutionEngine::new(&store, &mut index, &provider);
 
     let budget = ProviderBudget {
         max_input_tokens: None,
@@ -783,7 +783,7 @@ fn test_missing_cost_metadata_warning() {
         .unwrap();
 
     let transition = ExecutionTransition {
-        id: "t1".to_string(),
+        id: earmark_core::TransitionId::parse("t1").unwrap(),
         operation: WorkflowOperationKind::Transform,
         input_contracts: vec![],
         output_contracts: vec!["out".to_string()],
@@ -794,9 +794,9 @@ fn test_missing_cost_metadata_warning() {
     };
 
     let mut record = RunRecord {
-        run_id: "run_1".to_string(),
-        system_definition: VersionRef::new(ObjectId::new(), VersionId::new()),
-        workflow: VersionRef::new(ObjectId::new(), VersionId::new()),
+        run_id: earmark_core::RunId::parse("run_1").unwrap(),
+        system_definition: VersionRef::new(ObjectId::generate(), VersionId::generate()),
+        workflow: VersionRef::new(ObjectId::generate(), VersionId::generate()),
         status: earmark_core::RunStatus::Running,
         started_at: Utc::now(),
         ended_at: None,
@@ -816,7 +816,7 @@ fn test_missing_cost_metadata_warning() {
     let mut governance_events = vec![];
     let mut compiled_context = Some(earmark_connected_context::WorkSurfaceManifest {
         surface_id: "test".to_string(),
-        compiled_context: VersionRef::new(ObjectId::new(), VersionId::new()),
+        compiled_context: VersionRef::new(ObjectId::generate(), VersionId::generate()),
         work_packet: None,
         generated_at: Utc::now(),
         objects: vec![],
@@ -834,9 +834,9 @@ fn test_missing_cost_metadata_warning() {
     };
 
     let request = WorkflowRunRequest {
-        run_id: "run_1".to_string(),
-        system_definition: VersionRef::new(ObjectId::new(), VersionId::new()),
-        workflow: VersionRef::new(ObjectId::new(), VersionId::new()),
+        run_id: earmark_core::RunId::parse("run_1").unwrap(),
+        system_definition: VersionRef::new(ObjectId::generate(), VersionId::generate()),
+        workflow: VersionRef::new(ObjectId::generate(), VersionId::generate()),
         inputs: vec![],
         handoff_manifest: None,
         transition_assignment: None,

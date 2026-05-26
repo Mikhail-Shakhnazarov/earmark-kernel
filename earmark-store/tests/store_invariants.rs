@@ -54,8 +54,8 @@ proptest! {
         let store = GitCanonicalStore::new(dir.path());
         store.init_layout().expect("failed to init layout");
 
-        let source = ObjectRef::new(ObjectId::parse(source_id).unwrap(), VersionId::new(), Kind::Object, None);
-        let target = ObjectRef::new(ObjectId::parse(target_id).unwrap(), VersionId::new(), Kind::Object, None);
+        let source = ObjectRef::new(ObjectId::parse(source_id).unwrap(), VersionId::generate(), Kind::Object, None);
+        let target = ObjectRef::new(ObjectId::parse(target_id).unwrap(), VersionId::generate(), Kind::Object, None);
 
         let rel_payload = RelationPayload {
             source: source.clone(),

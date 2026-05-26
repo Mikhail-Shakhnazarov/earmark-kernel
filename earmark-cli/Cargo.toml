@@ -6,6 +6,7 @@ license.workspace = true
 
 [dependencies]
 earmark-core = { path = "../earmark-core" }
+uuid = { workspace = true }
 earmark-store = { path = "../earmark-store" }
 earmark-index = { path = "../earmark-index" }
 earmark-declarations = { path = "../earmark-declarations" }

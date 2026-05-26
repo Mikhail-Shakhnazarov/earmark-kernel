@@ -1,17 +1,16 @@
-# Handoffs
+# Carrying Work Forward
 
-A handoff is the artifact that bridges two stages of work. It defines exactly what the next stage is allowed to see — nothing more.
+In Earmark, work moves forward through **coordinated transitions**. When one stage of work finishes, it passes a specific set of validated data to the next stage — and nothing else.
 
 ## The Problem It Solves
 
-In a typical AI pipeline, Stage 2 "continues" by reading the chat history or by receiving whatever the orchestrator decides to forward. There's no explicit contract about what's included and what's excluded.
+In most AI pipelines, Stage 2 "continues" by reading the entire chat history. This often includes messy internal reasoning, irrelevant context, or errors from Stage 1. There is no explicit contract about what is actually being handed off.
 
-A handoff makes that contract explicit. It says:
+Earmark makes this contract explicit:
 
-- These are the objects the next stage may use.
-- These are the relation types it may traverse.
-- These are the constraints that apply.
-- Everything else is out of scope.
+- **Strict Visibility**: The next stage see *only* what you allow it to see.
+- **Validated Input**: You can verify the data before the next stage even starts.
+- **Task Isolation**: Stage 2 shouldn't have to "ignore" Stage 1's mistakes.
 
 ```mermaid
 flowchart LR
@@ -28,77 +27,48 @@ flowchart LR
     style H fill:#e8a838,stroke:#333,stroke-width:3px
 ```
 
-## What's in a Handoff
+## What's in a Handoff?
 
-A `HandoffManifest` contains:
+A handoff defines the **task-specific context** for the next stage. It contains:
 
-- **Root objects** — the specific objects targeted for successor work
-- **Inherited inputs** — objects from the previous stage that should remain in scope
-- **Created objects** — new objects produced by the previous stage (e.g., extracted findings)
-- **Allowed classes** — which object types the successor may see
-- **Allowed relations** — which relation types may be traversed
-- **Required checks** — validations the successor must perform
+- **Root Objects**: The specific targets for the next step.
+- **Derived Evidence**: Data produced by the previous stage (e.g., extracted findings).
+- **Admitted Classes**: The specific types of objects the AI is allowed to work with.
 
 ## How Context Narrows
 
-This is the key idea. Consider a two-stage workflow:
+The key to high-quality AI results is **narrowing the focus**. Consider this flow:
 
-```
-source_note → finding → summary
-```
+`source_note` → `finding` → `summary`
 
-Stage 1 sees the raw source notes and produces findings. The handoff carries the findings forward but **does not include the source notes**. Stage 2 — the summarizer — works only from findings.
+1. **Stage 1** reads the raw source notes and produces findings.
+2. The **Handoff** carries the findings forward, but **excludes the source notes**.
+3. **Stage 2** (the summarizer) works *only* from the findings.
 
-Why? Because the summarizer's job is to synthesize verified claims, not to re-read raw material. If the findings are wrong, the right fix is to re-run Stage 1, not to give Stage 2 more context.
-
-This narrowing is not a limitation. It's the design.
+Why? Because the summarizer's job is to synthesize verified evidence, not to re-interpret raw, potentially misleading material. This ensures that the final summary is based strictly on what has been validated.
 
 ## Using Handoffs
 
-Inspect what a handoff carries:
-
+Inspect a handoff's payload:
 ```bash
 em handoff explain <handoff_id>
 ```
 
-Continue work from a handoff:
-
+Continue work from a specific handoff:
 ```bash
 em workflow run <workflow_id> --system-id <system_id> --handoff <handoff_id>
 ```
 
-### Handoff Continuation
-
-A handoff supports two styles of continuation:
-
-**Cross-workflow continuation.** When the handoff was produced by a terminal transition (no outgoing edges), its `to_transition_id` is `None`. Running with `--handoff` in this case feeds the handoff's bounded objects into the target workflow's entry transitions. This is useful for chaining independent workflows.
-
-**Within-workflow continuation.** When the handoff names a successor transition via `to_transition_id`, the engine starts execution directly from that transition instead of restarting at the workflow's entry transitions. Predecessor transitions are not re-executed. The run produces a `continuation` timeline event recording the handoff origin.
-
-```bash
-# Continue from a handoff within the same workflow
-em workflow run <workflow_id> --system-id <system_id> --handoff <handoff_id>
-```
-
-The continuation run:
-- Validates that the handoff's target transition exists in the selected workflow
-- Seeds the ready queue at the target transition (not at entry transitions)
-- Pre-populates predecessor transitions as already executed
-- Rebuilds the compiled work surface from the handoff's template reference
-- Uses the bounded input objects reconstructed from the handoff manifest
-
-You can re-run from the same handoff multiple times — a later run can consume the same handoff under a different system configuration or after fixing the instruction.
+---
 
 ## Why It Matters
 
-**Isolation.** Stages are independent. Stage 2 doesn't inherit Stage 1's prompt, internal reasoning, or error state. It inherits only the declared handoff surface.
-
-**Resumption.** If Stage 2 fails, the Stage 1 handoff is still there. Fix the problem and retry without re-running everything.
-
-**Collaboration.** Different stages can be handled by different runtimes, different models, or different people. The handoff is the contract between them.
+- **Isolation**: Each stage is an independent, verifiable unit.
+- **Restartability**: If Stage 2 fails, Stage 1's work is safe. You can retry Stage 2 immediately from the handoff.
+- **Human Collaboration**: A human can review a handoff before it's passed to the next AI stage.
 
 ## See Also
 
-- [Staged Execution](staged-execution.md) — the lifecycle that produces handoffs
-- [Failures](failures.md) — what happens when a stage doesn't produce a handoff
-- [Artifact Types](../reference/artifact-types.md) — HandoffManifest fields
+- [The Durable Work Spine](staged-execution.md) — the lifecycle that produces handoffs
+- [Learning from Failure](failures.md) — what happens when a stage doesn't move forward
+- [Quickstart](../tutorials/quickstart.md) — see a handoff in action

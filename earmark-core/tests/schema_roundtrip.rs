@@ -9,8 +9,8 @@ fn envelope_roundtrip() {
     headers.insert("title".to_string(), HeaderValue::String("Test".to_string()));
 
     let envelope = Envelope {
-        id: ObjectId::new(),
-        version_id: VersionId::new(),
+        id: ObjectId::generate(),
+        version_id: VersionId::generate(),
         kind: Kind::Object,
         class: Some("note".to_string()),
         standing: Standing::default(),
@@ -49,8 +49,8 @@ fn standing_and_provenance_roundtrip() {
 #[test]
 fn relation_payload_roundtrip() {
     let obj = ObjectRef::new(
-        ObjectId::new(),
-        VersionId::new(),
+        ObjectId::generate(),
+        VersionId::generate(),
         Kind::Object,
         Some("note".to_string()),
     );
