@@ -41,7 +41,7 @@ pub fn traverse_orchestration_graph(
     visited.insert(start_id_str.clone());
 
     while let Some(current_id_str) = queue.pop_front() {
-        let (oid, class, _summary, payload) =
+        let (oid, class, summary, payload) =
             match find_orchestration_task(index, store, &current_id_str) {
                 Ok(Some(data)) => data,
                 _ => continue,
@@ -51,7 +51,9 @@ pub fn traverse_orchestration_graph(
             continue;
         }
 
-        let timestamp = 0;
+        let timestamp = chrono::DateTime::parse_from_rfc3339(&summary.created_at)
+            .map(|dt| dt.timestamp_millis())
+            .unwrap_or(0);
 
         nodes.push(OrchestrationGraphNode {
             object_id: oid.clone(),

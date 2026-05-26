@@ -17,7 +17,7 @@ use tempfile::TempDir;
 fn setup_store(root: &Path) -> (GitCanonicalStore, DerivedIndex) {
     let store = GitCanonicalStore::new(root);
     store.init_layout().unwrap();
-    let mut index = DerivedIndex::open(root).unwrap();
+    let index = DerivedIndex::open(root).unwrap();
     (store, index)
 }
 

@@ -20,7 +20,7 @@ fn setup_env() -> (GitCanonicalStore, DerivedIndex) {
     let root = dir.keep();
     let store = GitCanonicalStore::new(root.clone());
     store.init_layout().unwrap();
-    let mut index = DerivedIndex::open(&root).unwrap();
+    let index = DerivedIndex::open(&root).unwrap();
     (store, index)
 }
 
@@ -525,7 +525,7 @@ fn test_transition_enforces_honest_work_packet_defaults() {
 
 #[test]
 fn test_transition_preserves_provider_record_warnings() {
-    let (store, index) = setup_env();
+    let (_store, _index) = setup_env();
 
     struct WarningProvider;
     impl ProviderService for WarningProvider {

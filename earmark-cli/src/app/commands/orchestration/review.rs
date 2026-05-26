@@ -91,14 +91,13 @@ pub fn handle_review(ctx: &mut CommandContext, args: &OrchReviewArgs) -> Result<
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
 
-    let _updated_task_ref = deposit_orchestration_object(
+    let updated_task_ref = update_orchestration_object_head(
         ctx.store,
         index_ref,
-        ctx.provider_registry,
-        "work_item",
-        task_title,
+        task_oid.clone(),
         updated_task_payload,
         task_headers,
+        task_title,
     )?;
 
     // Handle terminal decisions with a closure
@@ -152,6 +151,7 @@ pub fn handle_review(ctx: &mut CommandContext, args: &OrchReviewArgs) -> Result<
             "kind": "orchestration_review_decision",
             "task_id": task_id,
             "task_object_id": task_oid.as_str(),
+            "task_version_id": updated_task_ref.version_id.as_str(),
             "review_object_id": review_ref.id.as_str(),
             "review_version_id": review_ref.version_id.as_str(),
             "decision": normalized_status,

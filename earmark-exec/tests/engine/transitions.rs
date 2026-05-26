@@ -4,7 +4,7 @@ use super::*;
 fn test_transform_emits_standing_request() {
     let dir = tempdir().unwrap();
     let store_path = dir.path().join("store");
-    let mut index_path = dir.path().join("index");
+    let index_path = dir.path().join("index");
     std::fs::create_dir_all(&store_path).unwrap();
     std::fs::create_dir_all(&index_path).unwrap();
 

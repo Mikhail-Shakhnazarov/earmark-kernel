@@ -164,7 +164,7 @@ pub(crate) fn handle_doctor(ctx: &mut CommandContext, args: &DoctorArgs) -> Resu
                                 if entry.file_name() == "envelope.json" {
                                     if let Ok(meta) = entry.metadata() {
                                         if let Ok(mtime) = meta.modified() {
-                                            if max_mtime.map_or(true, |max| mtime > max) {
+                                            if max_mtime.is_none_or(|max| mtime > max) {
                                                 max_mtime = Some(mtime);
                                             }
                                         }

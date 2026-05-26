@@ -363,10 +363,11 @@ impl IdSpec for RunIdSpec {
     }
     fn extra_parse(full: &str) -> Result<Option<String>, CoreError> {
         // Allow parsing from plain symbolic names by adding prefix if missing
-        if !full.starts_with(Self::PREFIX) && !full.is_empty() {
-            if validate_relaxed_lower_digits(full, "", 64).is_ok() {
-                return Ok(Some(format!("{}{}", Self::PREFIX, full)));
-            }
+        if !full.starts_with(Self::PREFIX)
+            && !full.is_empty()
+            && validate_relaxed_lower_digits(full, "", 64).is_ok()
+        {
+            return Ok(Some(format!("{}{}", Self::PREFIX, full)));
         }
         Ok(None)
     }

@@ -888,3 +888,180 @@ fn test_ingest_manifest_with_context_linking() {
         .assert()
         .success();
 }
+
+#[test]
+fn review_updates_existing_task_head_without_creating_duplicate_work_item() {
+    let (_dir, root) = setup_and_init_example();
+
+    // 1. Ingest a work item
+    let task_json_path = root.join("task.json");
+    let payload = serde_json::json!({
+        "task_id": "review-head-update-task",
+        "title": "Review Head Update Test",
+        "goal": "Verify same-object update",
+        "status": "proposed"
+    });
+    fs::write(&task_json_path, serde_json::to_string(&payload).unwrap()).unwrap();
+
+    let ingest_output = workspace_command()
+        .arg("--root")
+        .arg(&root)
+        .arg("--json")
+        .arg("orchestration")
+        .arg("ingest-task")
+        .arg("--source")
+        .arg("native-json")
+        .arg(&task_json_path)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed_ingest: Value = serde_json::from_slice(&ingest_output).unwrap();
+    let task_oid = parsed_ingest["data"]["tasks"][0]["object_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let task_vid_before = parsed_ingest["data"]["tasks"][0]["version_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    // 2. Perform review
+    let review_output = workspace_command()
+        .arg("--root")
+        .arg(&root)
+        .arg("--json")
+        .arg("orchestration")
+        .arg("review")
+        .arg(&task_oid)
+        .arg("--decision")
+        .arg("accepted")
+        .arg("--comment")
+        .arg("LGTM")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed_review: Value = serde_json::from_slice(&review_output).unwrap();
+    assert_eq!(parsed_review["data"]["task_object_id"], task_oid);
+    assert_eq!(parsed_review["data"]["next_status"], "implemented");
+
+    let task_vid_after = parsed_review["data"]["task_version_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert_ne!(task_vid_before, task_vid_after);
+
+    // 3. Verify status in show
+    let show_output = workspace_command()
+        .arg("--root")
+        .arg(&root)
+        .arg("--json")
+        .arg("orchestration")
+        .arg("show")
+        .arg(&task_oid)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed_show: Value = serde_json::from_slice(&show_output).unwrap();
+    assert_eq!(parsed_show["data"]["payload"]["status"], "implemented");
+
+    // 4. Assert exactly one work item with this task_id in list
+    let list_output = workspace_command()
+        .arg("--root")
+        .arg(&root)
+        .arg("--json")
+        .arg("orchestration")
+        .arg("list")
+        .arg("--include-closed")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed_list: Value = serde_json::from_slice(&list_output).unwrap();
+    let tasks = parsed_list["data"]["tasks"].as_array().unwrap();
+    let matching_tasks: Vec<_> = tasks
+        .iter()
+        .filter(|t| t["task_id"] == "review-head-update-task")
+        .collect();
+
+    assert_eq!(
+        matching_tasks.len(),
+        1,
+        "Should only be one task object for the given task_id"
+    );
+}
+
+#[test]
+fn review_rejected_updates_existing_task_to_closed() {
+    let (_dir, root) = setup_and_init_example();
+
+    // 1. Ingest a work item
+    let task_json_path = root.join("task.json");
+    let payload = serde_json::json!({
+        "task_id": "reject-task",
+        "title": "Reject Test",
+        "status": "proposed"
+    });
+    fs::write(&task_json_path, serde_json::to_string(&payload).unwrap()).unwrap();
+
+    let ingest_output = workspace_command()
+        .arg("--root")
+        .arg(&root)
+        .arg("--json")
+        .arg("orchestration")
+        .arg("ingest-task")
+        .arg("--source")
+        .arg("native-json")
+        .arg(&task_json_path)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed_ingest: Value = serde_json::from_slice(&ingest_output).unwrap();
+    let task_oid = parsed_ingest["data"]["tasks"][0]["object_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    // 2. Perform rejected review
+    workspace_command()
+        .arg("--root")
+        .arg(&root)
+        .arg("--json")
+        .arg("orchestration")
+        .arg("review")
+        .arg(&task_oid)
+        .arg("--decision")
+        .arg("rejected")
+        .assert()
+        .success();
+
+    // 3. Verify status
+    let show_output = workspace_command()
+        .arg("--root")
+        .arg(&root)
+        .arg("--json")
+        .arg("orchestration")
+        .arg("show")
+        .arg(&task_oid)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed_show: Value = serde_json::from_slice(&show_output).unwrap();
+    assert_eq!(parsed_show["data"]["payload"]["status"], "closed");
+}
