@@ -9,4 +9,5 @@ pub struct ProviderCommand {
 #[derive(Subcommand)]
 pub enum ProviderAction {
     Capabilities,
+    List,
 }
