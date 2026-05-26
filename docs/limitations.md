@@ -18,4 +18,10 @@ While the system supports automated gates (e.g., "all tests must pass"), many hi
 The Git-backed store is extremely robust, but the SQLite index may take several seconds to rebuild if the workspace grows to tens of thousands of objects. Optimization for massive corpora (100k+ objects) is ongoing.
 
 ## 6. Provider Extensibility
-Integrating new AI models or execution environments currently requires minor code additions to the Rust project. A more flexible external plugin system is planned for future releases.
+Earmark now supports a bounded external plugin seam for provider aliases through YAML manifests discovered from plugin directories. That means named provider surfaces can be installed without recompiling, as long as they wrap adapters already compiled into the binary.
+
+What still requires code additions or future work:
+
+- brand-new executable adapters
+- custom transition/operation plugins
+- WASM or dynamic-library plugin loading

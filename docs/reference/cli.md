@@ -183,7 +183,11 @@ Show detailed failure analysis.
 
 ### `em provider capabilities`
 
-List capabilities of compiled-in providers.
+List provider capabilities visible to the current CLI bootstrap, including:
+
+- compiled bundled adapters
+- provider aliases loaded from plugin manifests under `<root>/.earmark/plugins/providers`
+- provider aliases loaded from configured plugin directories
 
 ## Native Orchestration
 
