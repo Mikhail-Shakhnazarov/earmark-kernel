@@ -1,11 +1,11 @@
 use earmark_core::{
-    ObjectId, ObjectRef, RequiredCheck, RunRecord, StandingConstraint, VersionRef,
-    WorkflowOperationKind,
+    ObjectId, ObjectRef, RequiredCheck, RunId, RunRecord, StandingConstraint, TransitionId,
+    VersionRef, WorkflowOperationKind,
 };
 
 #[derive(Debug, Clone)]
 pub struct ExecutionTransition {
-    pub id: String,
+    pub id: TransitionId,
     pub operation: WorkflowOperationKind,
     pub input_contracts: Vec<String>,
     pub output_contracts: Vec<String>,
@@ -17,8 +17,8 @@ pub struct ExecutionTransition {
 
 #[derive(Debug, Clone)]
 pub struct ExecutionEdge {
-    pub from: String,
-    pub to: String,
+    pub from: TransitionId,
+    pub to: TransitionId,
     pub condition: Option<String>,
 }
 
@@ -31,7 +31,7 @@ pub struct ExecutionIr {
 
 #[derive(Debug, Clone)]
 pub struct WorkflowRunRequest {
-    pub run_id: String,
+    pub run_id: RunId,
     pub system_definition: VersionRef,
     pub workflow: VersionRef,
     pub inputs: Vec<ObjectRef>,
@@ -50,7 +50,7 @@ pub struct WorkflowRunOutcome {
 
 #[derive(Debug, Clone, Default)]
 pub struct SuccessorHandoffSpec {
-    pub to_transition_id: Option<String>,
+    pub to_transition_id: Option<TransitionId>,
     pub allowed_input_classes: Vec<String>,
     pub allowed_output_classes: Vec<String>,
     pub allowed_relation_types: Vec<String>,

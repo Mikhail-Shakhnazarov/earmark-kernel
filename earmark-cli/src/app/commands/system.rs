@@ -5,20 +5,26 @@ use crate::config::resolve_system_id;
 use earmark_declarations::activate_system_definition;
 use serde_json::json;
 
-pub fn handle(ctx: &CommandContext, command: &SystemCommand) -> Result<(), CliError> {
+pub fn handle(ctx: &mut CommandContext, command: &SystemCommand) -> Result<(), CliError> {
     let store = ctx.store;
-    let index = ctx
-        .index
-        .as_ref()
-        .expect("index required for system commands");
+    let index = ctx.index.as_mut().ok_or_else(|| {
+        CliError::argument("index required for system commands — ensure workspace is initialized")
+    })?;
     let config = ctx.config;
     let as_json = ctx.as_json;
+    let actor = ctx.actor;
 
     match &command.action {
         SystemAction::Register { manifest } => {
             tracing::info!(manifest = %manifest.display(), "registering system declaration");
-            let version_ref =
-                register_declaration_file(store, None, DeclarationKind::System, manifest, None)?;
+            let version_ref = register_declaration_file(
+                store,
+                None,
+                DeclarationKind::System,
+                manifest,
+                None,
+                actor,
+            )?;
             index.rebuild_from_store(store)?;
             emit(
                 as_json,

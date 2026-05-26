@@ -416,7 +416,7 @@ pub fn validate_workflow_definition(value: &WorkflowDeclaration) -> Result<(), D
                 }
                 if op.output_contracts.len() > 1 {
                     return Err(DeriveError::Validation(format!(
-                        "workflow operation '{}' has {} output contracts: multi-output transform operations are not yet implemented",
+                        "workflow operation '{}' has {} output contracts: multi-output transform operations are not supported by this runtime; split the operation or use a supported operation kind",
                         op.id,
                         op.output_contracts.len()
                     )));
@@ -657,6 +657,21 @@ pub fn validate_provider_profile(value: &ProviderProfile) -> Result<(), DeriveEr
                     "unsupported http method '{}'; only POST is supported",
                     method
                 )));
+            }
+        }
+
+        for domain in &http.allowed_domains {
+            if domain.trim().is_empty() {
+                return Err(DeriveError::Validation(
+                    "http allowed_domains cannot contain empty values".to_string(),
+                ));
+            }
+        }
+        for domain in &http.blocked_domains {
+            if domain.trim().is_empty() {
+                return Err(DeriveError::Validation(
+                    "http blocked_domains cannot contain empty values".to_string(),
+                ));
             }
         }
 
@@ -1056,7 +1071,7 @@ fn validate_namespace(namespace: &str) -> Result<(), String> {
 
 pub fn activate_system_definition<S: CanonicalStore>(
     store: &S,
-    index: &DerivedIndex,
+    index: &mut DerivedIndex,
     system_id: &str,
 ) -> Result<ActiveSystemRecord, DeriveError> {
     let found = index.find_system_definition(system_id)?.ok_or_else(|| {

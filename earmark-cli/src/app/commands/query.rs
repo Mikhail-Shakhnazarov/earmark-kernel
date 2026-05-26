@@ -4,8 +4,10 @@ use crate::cli::QueryArgs;
 use earmark_index::QueryFilter;
 use serde_json::json;
 
-pub fn handle(ctx: &CommandContext, args: &QueryArgs) -> Result<(), CliError> {
-    let index = ctx.index.as_ref().expect("index required for query");
+pub fn handle(ctx: &mut CommandContext, args: &QueryArgs) -> Result<(), CliError> {
+    let index = ctx.index.as_mut().ok_or_else(|| {
+        CliError::argument("index required for query — ensure workspace is initialized")
+    })?;
     let as_json = ctx.as_json;
 
     let rows = index.query_objects(&QueryFilter {

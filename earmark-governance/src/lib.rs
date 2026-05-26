@@ -6,9 +6,10 @@ use earmark_core::projection::{
 };
 use earmark_core::{
     DimensionId, HeaderValue, Kind, ObjectRef, Provenance, ScalarValue, Standing, StandingPolicy,
-    StandingRegistry, Timestamp, TokenId,
+    StandingRegistry, Timestamp, TokenId, VersionRef,
 };
-use earmark_store::{StoredObject, StoredPayload};
+use earmark_index::DerivedIndex;
+use earmark_store::{CanonicalStore, StoredObject, StoredPayload};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -233,6 +234,29 @@ pub fn is_trusted_actor(actor: &str) -> bool {
     matches!(actor, "runtime" | "execution_engine" | "system")
 }
 
+/// Scans all indexed Review objects for an accepted review targeting the exact
+/// object version.  This is a *global* scan (not restricted to a change set)
+/// and implements *existing version-matched review evidence*, not same-change-set
+/// authorization.
+pub fn has_accepted_review<S: CanonicalStore>(
+    store: &S,
+    index: &DerivedIndex,
+    target_ref: &VersionRef,
+) -> Result<bool, GovernanceError> {
+    let reviews = index.get_objects_by_kind(Kind::Review)?;
+    for review_ref in reviews {
+        let obj = store.read_version(&review_ref)?;
+        let payload: ReviewPayload = serde_json::from_slice(&obj.payload.bytes)?;
+        if payload.target.id == target_ref.id
+            && payload.target.version_id == target_ref.version_id
+            && payload.status == "accepted"
+        {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 pub fn export_allowed(
     policy: &StandingPolicy,
     registry: &StandingRegistry,
@@ -390,8 +414,14 @@ pub enum GovernanceError {
     ReviewRequired(String),
     #[error("ambiguous status: {0}")]
     AmbiguousStatus(String),
+    #[error("invalid governance request: {0}")]
+    InvalidRequest(String),
+    #[error("governance object not found: {0}")]
+    ObjectNotFound(String),
     #[error("store error: {0}")]
     Store(#[from] earmark_store::StoreError),
+    #[error("index error: {0}")]
+    Index(#[from] earmark_index::IndexError),
     #[error("serde json error: {0}")]
     Json(#[from] serde_json::Error),
 }
@@ -872,8 +902,8 @@ mod tests {
 
         let review = GovernanceService::create_review_object(
             earmark_core::ObjectRef {
-                id: ObjectId::new(),
-                version_id: earmark_core::VersionId::new(),
+                id: ObjectId::generate(),
+                version_id: earmark_core::VersionId::generate(),
                 kind: Kind::Object,
                 class: Some("artifact".to_string()),
             },

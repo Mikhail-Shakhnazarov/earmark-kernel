@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 /// This is the shared canonical path for all relation creation in the workspace.
 pub fn persist_relation_canonical<S: CanonicalStore>(
     store: &S,
-    index: &DerivedIndex,
+    index: &mut DerivedIndex,
     payload: RelationPayload,
     provenance: Provenance,
     mode: RelationCreationMode,
@@ -34,6 +34,17 @@ pub fn persist_relation_canonical<S: CanonicalStore>(
         )));
     }
 
+    // Call the authorization service
+    let auth_reason = crate::relation_authorization::authorize_relation_creation(
+        store,
+        index,
+        &payload.relation_type,
+        &payload.source,
+        &payload.target,
+        mode,
+        &provenance,
+    )?;
+
     let mut headers = additional_headers.unwrap_or_default();
 
     // Attach creation mode header
@@ -43,6 +54,14 @@ pub fn persist_relation_canonical<S: CanonicalStore>(
             RelationCreationMode::Declared => "declared".to_string(),
             RelationCreationMode::PrivilegedSystem => "privileged_system".to_string(),
         }),
+    );
+    headers.insert(
+        "relation_authorization_reason".to_string(),
+        HeaderValue::String(auth_reason.to_string()),
+    );
+    headers.insert(
+        "relation_authorized_at".to_string(),
+        HeaderValue::String(chrono::Utc::now().to_rfc3339()),
     );
 
     let stored = StoredObject::builder(

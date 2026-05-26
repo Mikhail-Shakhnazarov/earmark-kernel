@@ -1,0 +1,22 @@
+[package]
+name = "earmark"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tempfile.workspace = true
+serde_yaml.workspace = true
+earmark-core = { path = "../earmark-core" }
+earmark-store = { path = "../earmark-store" }
+earmark-index = { path = "../earmark-index" }
+earmark-declarations = { path = "../earmark-declarations" }
+earmark-exec = { path = "../earmark-exec" }
+earmark-runtime-tools = { path = "../earmark-runtime-tools" }
+chrono.workspace = true
+
+[dev-dependencies]
+assert_cmd.workspace = true

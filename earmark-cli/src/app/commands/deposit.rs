@@ -8,14 +8,16 @@ use earmark_store::ObjectStore;
 use serde_json::json;
 use std::fs;
 
-pub fn handle(ctx: &CommandContext, args: &DepositArgs) -> Result<(), CliError> {
+pub fn handle(ctx: &mut CommandContext, args: &DepositArgs) -> Result<(), CliError> {
     let store = ctx.store;
-    let index = ctx.index.as_ref().expect("index required for deposit");
+    let index = ctx.index.as_mut().ok_or_else(|| {
+        CliError::argument("index required for deposit — ensure workspace is initialized")
+    })?;
     let provider_registry = ctx.provider_registry;
     let config = ctx.config;
     let as_json = ctx.as_json;
 
-    let runtime_surface = RuntimeToolSurface {
+    let mut runtime_surface = RuntimeToolSurface {
         store,
         index,
         provider_service: provider_registry,

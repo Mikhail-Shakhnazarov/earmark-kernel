@@ -15,7 +15,7 @@ fn test_standing_request_lifecycle() {
     let root = dir.path();
     let store = GitCanonicalStore::new(root);
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(root).unwrap();
+    let mut index = DerivedIndex::open(root).unwrap();
 
     // 1. Create a target object
     let target = StoredObject::new(
@@ -27,7 +27,7 @@ fn test_standing_request_lifecycle() {
         StoredPayload::from_json_bytes(b"{}".to_vec()),
         vec![],
     );
-    let target_ref = write_object_and_index(&store, &index, &target).unwrap();
+    let target_ref = write_object_and_index(&store, &mut index, &target).unwrap();
 
     // 2. Create a policy
     let policy = StandingPolicy {
@@ -56,7 +56,7 @@ fn test_standing_request_lifecycle() {
         StoredPayload::from_json_bytes(serde_json::to_vec_pretty(&policy).unwrap()),
         vec![],
     );
-    let policy_ref = write_object_and_index(&store, &index, &stored_policy).unwrap();
+    let policy_ref = write_object_and_index(&store, &mut index, &stored_policy).unwrap();
 
     // 3. Create a standing request (Proposed)
     let request = earmark_core::StandingTransitionRequest {
@@ -76,13 +76,13 @@ fn test_standing_request_lifecycle() {
         StoredPayload::from_json_bytes(serde_json::to_vec_pretty(&request).unwrap()),
         vec![],
     );
-    let request_ref = write_object_and_index(&store, &index, &stored_request).unwrap();
+    let request_ref = write_object_and_index(&store, &mut index, &stored_request).unwrap();
 
     // 4. Try to apply Proposed request (should fail)
     let registry = StandingRegistry::kernel_defaults();
     let res = apply_standing_request(
         &store,
-        &index,
+        &mut index,
         &request_ref,
         Some(policy_ref.id.as_str()),
         None,
@@ -91,14 +91,18 @@ fn test_standing_request_lifecycle() {
     assert!(res.is_err(), "should fail to apply proposed request");
 
     // 5. Approve the request
-    let approved_ref =
-        approve_standing_request(&store, &index, &request_ref, Some("Approved".to_string()))
-            .unwrap();
+    let approved_ref = approve_standing_request(
+        &store,
+        &mut index,
+        &request_ref,
+        Some("Approved".to_string()),
+    )
+    .unwrap();
 
     // 6. Try to apply Approved request without review evidence (should fail because rule requires review)
     let res = apply_standing_request(
         &store,
-        &index,
+        &mut index,
         &approved_ref,
         Some(policy_ref.id.as_str()),
         None,
@@ -127,13 +131,13 @@ fn test_standing_request_lifecycle() {
         StoredPayload::from_json_bytes(serde_json::to_vec_pretty(&review_payload).unwrap()),
         vec![],
     );
-    write_object_and_index(&store, &index, &stored_review).unwrap();
+    write_object_and_index(&store, &mut index, &stored_review).unwrap();
 
     // 8. Apply Approved request with review evidence and a reason
     let apply_reason = "Final approval reason".to_string();
     let (new_target_ref, final_request_ref) = apply_standing_request(
         &store,
-        &index,
+        &mut index,
         &approved_ref,
         Some(policy_ref.id.as_str()),
         Some(apply_reason.clone()),
@@ -166,7 +170,7 @@ fn test_standing_request_drift_failure() {
     let root = dir.path();
     let store = GitCanonicalStore::new(root);
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(root).unwrap();
+    let mut index = DerivedIndex::open(root).unwrap();
 
     // 1. Create a target object
     let target = StoredObject::new(
@@ -178,7 +182,7 @@ fn test_standing_request_drift_failure() {
         StoredPayload::from_json_bytes(b"{}".to_vec()),
         vec![],
     );
-    let target_ref = write_object_and_index(&store, &index, &target).unwrap();
+    let target_ref = write_object_and_index(&store, &mut index, &target).unwrap();
 
     // 2. Create a standing request (Proposed) expected from "unreviewed"
     let request = earmark_core::StandingTransitionRequest {
@@ -198,8 +202,8 @@ fn test_standing_request_drift_failure() {
         StoredPayload::from_json_bytes(serde_json::to_vec_pretty(&request).unwrap()),
         vec![],
     );
-    let request_ref = write_object_and_index(&store, &index, &stored_request).unwrap();
-    let approved_ref = approve_standing_request(&store, &index, &request_ref, None).unwrap();
+    let request_ref = write_object_and_index(&store, &mut index, &stored_request).unwrap();
+    let approved_ref = approve_standing_request(&store, &mut index, &request_ref, None).unwrap();
 
     // 3. Drift: Update target object standing externally (e.g. to "flagged")
     let mut target_head = store.read_version(&target_ref).unwrap();
@@ -208,8 +212,8 @@ fn test_standing_request_drift_failure() {
         .standing
         .values
         .insert(DimensionId::new("kernel:review"), TokenId::new("rejected"));
-    target_head.envelope.version_id = VersionId::new();
-    write_object_and_index(&store, &index, &target_head).unwrap();
+    target_head.envelope.version_id = VersionId::generate();
+    write_object_and_index(&store, &mut index, &target_head).unwrap();
 
     // 4. Try to apply request (should fail due to drift: current is "rejected", request expected "unreviewed")
     let policy = StandingPolicy {
@@ -235,11 +239,11 @@ fn test_standing_request_drift_failure() {
         StoredPayload::from_json_bytes(serde_json::to_vec_pretty(&policy).unwrap()),
         vec![],
     );
-    let policy_ref = write_object_and_index(&store, &index, &stored_policy).unwrap();
+    let policy_ref = write_object_and_index(&store, &mut index, &stored_policy).unwrap();
     let registry = StandingRegistry::kernel_defaults();
     let res = apply_standing_request(
         &store,
-        &index,
+        &mut index,
         &approved_ref,
         Some(policy_ref.id.as_str()),
         None,
@@ -260,7 +264,7 @@ fn test_standing_request_noop_apply() {
     let root = dir.path();
     let store = GitCanonicalStore::new(root);
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(root).unwrap();
+    let mut index = DerivedIndex::open(root).unwrap();
 
     // 1. Create a target object already in "accepted" review state
     let mut standing = Standing::default();
@@ -276,7 +280,7 @@ fn test_standing_request_noop_apply() {
         StoredPayload::from_json_bytes(b"{}".to_vec()),
         vec![],
     );
-    let target_ref = write_object_and_index(&store, &index, &target).unwrap();
+    let target_ref = write_object_and_index(&store, &mut index, &target).unwrap();
 
     // 2. Create a standing request to move to "accepted" (already there)
     let request = earmark_core::StandingTransitionRequest {
@@ -296,8 +300,8 @@ fn test_standing_request_noop_apply() {
         StoredPayload::from_json_bytes(serde_json::to_vec_pretty(&request).unwrap()),
         vec![],
     );
-    let request_ref = write_object_and_index(&store, &index, &stored_request).unwrap();
-    let approved_ref = approve_standing_request(&store, &index, &request_ref, None).unwrap();
+    let request_ref = write_object_and_index(&store, &mut index, &stored_request).unwrap();
+    let approved_ref = approve_standing_request(&store, &mut index, &request_ref, None).unwrap();
 
     // 2b. Create a policy
     let policy = StandingPolicy {
@@ -323,13 +327,13 @@ fn test_standing_request_noop_apply() {
         StoredPayload::from_json_bytes(serde_json::to_vec_pretty(&policy).unwrap()),
         vec![],
     );
-    let policy_ref = write_object_and_index(&store, &index, &stored_policy).unwrap();
+    let policy_ref = write_object_and_index(&store, &mut index, &stored_policy).unwrap();
 
     // 3. Apply request (should be no-op for target but Applied for request)
     let registry = StandingRegistry::kernel_defaults();
     let (final_target_ref, final_request_ref) = apply_standing_request(
         &store,
-        &index,
+        &mut index,
         &approved_ref,
         Some(policy_ref.id.as_str()),
         Some("No-op reason".to_string()),
@@ -355,7 +359,7 @@ fn test_standing_request_version_specific_review() {
     let root = dir.path();
     let store = GitCanonicalStore::new(root);
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(root).unwrap();
+    let mut index = DerivedIndex::open(root).unwrap();
 
     // 1. Create a target object (V1)
     let target_v1 = StoredObject::new(
@@ -367,14 +371,14 @@ fn test_standing_request_version_specific_review() {
         StoredPayload::from_json_bytes(b"v1".to_vec()),
         vec![],
     );
-    let target_v1_ref = write_object_and_index(&store, &index, &target_v1).unwrap();
+    let target_v1_ref = write_object_and_index(&store, &mut index, &target_v1).unwrap();
 
     // 2. Create a newer version (V2)
     let mut target_v2 = target_v1.clone();
-    target_v2.envelope.version_id = VersionId::new();
+    target_v2.envelope.version_id = VersionId::generate();
     target_v2.payload = StoredPayload::from_json_bytes(b"v2".to_vec());
     target_v2.envelope.payload_ref = earmark_core::PayloadRef::from_bytes(&target_v2.payload.bytes);
-    let _target_v2_ref = write_object_and_index(&store, &index, &target_v2).unwrap();
+    let _target_v2_ref = write_object_and_index(&store, &mut index, &target_v2).unwrap();
 
     // 3. Create a policy requiring review
     let policy = StandingPolicy {
@@ -400,7 +404,7 @@ fn test_standing_request_version_specific_review() {
         StoredPayload::from_json_bytes(serde_json::to_vec_pretty(&policy).unwrap()),
         vec![],
     );
-    let policy_ref = write_object_and_index(&store, &index, &stored_policy).unwrap();
+    let policy_ref = write_object_and_index(&store, &mut index, &stored_policy).unwrap();
 
     // 4. Create request for V2
     let request = earmark_core::StandingTransitionRequest {
@@ -420,8 +424,8 @@ fn test_standing_request_version_specific_review() {
         StoredPayload::from_json_bytes(serde_json::to_vec_pretty(&request).unwrap()),
         vec![],
     );
-    let request_ref = write_object_and_index(&store, &index, &stored_request).unwrap();
-    let approved_ref = approve_standing_request(&store, &index, &request_ref, None).unwrap();
+    let request_ref = write_object_and_index(&store, &mut index, &stored_request).unwrap();
+    let approved_ref = approve_standing_request(&store, &mut index, &request_ref, None).unwrap();
 
     // 5. Create review targeting V1 (wrong version for the current head V2)
     let review_payload = earmark_governance::ReviewPayload {
@@ -444,13 +448,13 @@ fn test_standing_request_version_specific_review() {
         StoredPayload::from_json_bytes(serde_json::to_vec_pretty(&review_payload).unwrap()),
         vec![],
     );
-    write_object_and_index(&store, &index, &stored_review).unwrap();
+    write_object_and_index(&store, &mut index, &stored_review).unwrap();
 
     // 6. Try to apply request to V2 (should fail because review is for V1)
     let registry = StandingRegistry::kernel_defaults();
     let res = apply_standing_request(
         &store,
-        &index,
+        &mut index,
         &approved_ref,
         Some(policy_ref.id.as_str()),
         None,

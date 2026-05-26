@@ -5,9 +5,13 @@ use earmark_core::{ClassFilter, DimensionId, RelationFilter, StandingFilter, Tok
 use earmark_runtime_tools::RuntimeToolSurface;
 use std::collections::BTreeMap;
 
-pub fn handle(ctx: &CommandContext, command: &ContextCommand) -> Result<(), CliError> {
+pub fn handle(ctx: &mut CommandContext, command: &ContextCommand) -> Result<(), CliError> {
     let store = ctx.store;
-    let index = ctx.index.as_ref().expect("index required for context");
+    let index = ctx.index.as_mut().ok_or_else(|| {
+        CliError::argument(
+            "index required for context operations — ensure workspace is initialized",
+        )
+    })?;
     let provider_registry = ctx.provider_registry;
     let as_json = ctx.as_json;
 

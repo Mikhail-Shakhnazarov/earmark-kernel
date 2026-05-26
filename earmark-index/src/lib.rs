@@ -3,11 +3,12 @@ use std::path::{Path, PathBuf};
 
 use chrono::Utc;
 use earmark_core::{
-    parse_json, parse_yaml, ClassDefinition, CompiledContextTemplate, DimensionId,
-    InstructionPayload, Kind, ObjectId, ProviderProfile, RelationPayload, StandingPolicy,
-    SystemDefinition, TokenId, UndoRecord, VersionRef, WorkflowDefinition,
+    parse_json, parse_yaml, ClassDefinition, CompiledContextTemplate, DimensionId, Envelope,
+    InstructionPayload, Kind, ObjectId, ProviderProfile, RelationPayload, RunId, StandingPolicy,
+    SystemDefinition, TokenId, TransitionAssignmentId, TransitionId, UndoRecord, VersionRef,
+    WorkflowDefinition,
 };
-use earmark_store::{CanonicalStore, SkippedEntry};
+use earmark_store::{CanonicalStore, SkippedEntry, StoredPayload};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -26,6 +27,8 @@ pub struct ObjectSummary {
     pub standing: BTreeMap<String, String>,
     #[serde(default)]
     pub headers: BTreeMap<String, String>,
+    pub created_at: String,
+    pub updated_at: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -115,14 +118,14 @@ impl DerivedIndex {
         self.path.with_file_name("index_dirty.json")
     }
 
-    pub fn mark_dirty(&self, marker: IndexDirtyMarker) -> Result<(), IndexError> {
+    pub fn mark_dirty(&mut self, marker: IndexDirtyMarker) -> Result<(), IndexError> {
         let path = self.dirty_marker_path();
         let json = serde_json::to_string_pretty(&marker)?;
         std::fs::write(path, json)?;
         Ok(())
     }
 
-    pub fn clear_dirty(&self) -> Result<(), IndexError> {
+    pub fn clear_dirty(&mut self) -> Result<(), IndexError> {
         let path = self.dirty_marker_path();
         if path.exists() {
             std::fs::remove_file(path)?;
@@ -262,235 +265,205 @@ impl DerivedIndex {
     }
 
     pub fn claim_active_assignment(
-        &self,
-        run_id: &str,
-        transition_id: &str,
-        assignment_id: &str,
+        &mut self,
+        run_id: &RunId,
+        transition_id: &TransitionId,
+        assignment_id: &TransitionAssignmentId,
     ) -> Result<(), IndexError> {
         let claimed_at = Utc::now().to_rfc3339();
         let updated = self.conn.execute(
             "INSERT INTO active_assignment_claims (run_id, transition_id, assignment_id, claimed_at)
              VALUES (?1, ?2, ?3, ?4)
              ON CONFLICT(run_id, transition_id) DO NOTHING",
-            params![run_id, transition_id, assignment_id, claimed_at],
+            params![
+                run_id.as_str(),
+                transition_id.as_str(),
+                assignment_id.as_str(),
+                claimed_at
+            ],
         )?;
         if updated == 0 {
             return Err(IndexError::Conflict(format!(
                 "active assignment already claimed for run {} transition {}",
-                run_id, transition_id
+                run_id.as_str(),
+                transition_id.as_str()
             )));
         }
         Ok(())
     }
 
     pub fn release_active_assignment(
-        &self,
-        run_id: &str,
-        transition_id: &str,
-        assignment_id: &str,
+        &mut self,
+        run_id: &RunId,
+        transition_id: &TransitionId,
+        assignment_id: &TransitionAssignmentId,
     ) -> Result<(), IndexError> {
         self.conn.execute(
             "DELETE FROM active_assignment_claims WHERE run_id = ?1 AND transition_id = ?2 AND assignment_id = ?3",
-            params![run_id, transition_id, assignment_id],
+            params![
+                run_id.as_str(),
+                transition_id.as_str(),
+                assignment_id.as_str()
+            ],
         )?;
         Ok(())
     }
 
-    pub fn rebuild_from_store<S: CanonicalStore>(
-        &self,
-        store: &S,
+    pub fn rebuild_from_store(
+        &mut self,
+        store: &dyn CanonicalStore,
     ) -> Result<IndexRebuildReport, IndexError> {
         store.init_layout()?;
-        self.conn.execute("DELETE FROM objects", [])?;
-        self.conn.execute("DELETE FROM heads", [])?;
-        self.conn.execute("DELETE FROM relations", [])?;
-        self.conn.execute("DELETE FROM object_standing", [])?;
-        self.conn.execute("DELETE FROM undo_records", [])?;
-        self.conn.execute("DELETE FROM undone_objects", [])?;
-        self.conn.execute("DELETE FROM undone_relations", [])?;
 
-        let diagnostics = store.scan_objects()?;
-        let indexed_objects = diagnostics.scanned_objects.len();
-        let skipped_entries = diagnostics.skipped_entries.clone();
-        let mut seen = std::collections::BTreeSet::new();
-        for stored in diagnostics.scanned_objects {
-            let envelope = stored.envelope;
-            let payload = stored.payload;
-            seen.insert(envelope.id.as_str().to_string());
+        let marker = IndexDirtyMarker {
+            schema_version: "1.0".to_string(),
+            reason: "rebuild in progress".to_string(),
+            timestamp: chrono::Utc::now(),
+            operation: "rebuild".to_string(),
+            object_ids: vec![],
+            version_ids: vec![],
+        };
+        self.mark_dirty(marker)?;
 
-            let title = envelope.title();
-            let (summary, system_id, namespace, declaration_identity, searchable_text) =
-                match &envelope.kind {
-                    Kind::Instruction => {
-                        let text = payload.as_utf8()?;
-                        let parsed = InstructionPayload::parse_markdown(&text)?;
-                        let declaration_name = parsed.name.clone();
-                        (
-                            Some(snippet(parsed.body.as_str())),
-                            None,
-                            None,
-                            Some(declaration_name),
-                            Some(format!(
-                                "{} {} {}",
-                                parsed.name,
-                                parsed.purpose,
-                                parsed.body.as_str()
-                            )),
-                        )
-                    }
-                    Kind::SystemDefinition => {
-                        let text = payload.as_utf8()?;
-                        let parsed: SystemDefinition = parse_yaml(&text)?;
-                        (
-                            parsed
-                                .description
-                                .clone()
-                                .or_else(|| Some(parsed.title.clone())),
-                            Some(parsed.system_id.clone()),
-                            Some(parsed.namespace),
-                            Some(parsed.system_id),
-                            Some(text),
-                        )
-                    }
-                    Kind::Relation => {
-                        let text = payload.as_utf8()?;
-                        let parsed: RelationPayload = parse_json(&text)?;
-                        self.conn.execute(
-                        "INSERT OR REPLACE INTO relations (version_id, relation_object_id, source_object_id, target_object_id, relation_type, scope) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        let tx = self.conn.transaction()?;
+
+        let report = {
+            tx.execute("DELETE FROM objects", [])?;
+            tx.execute("DELETE FROM heads", [])?;
+            tx.execute("DELETE FROM relations", [])?;
+            tx.execute("DELETE FROM object_standing", [])?;
+            tx.execute("DELETE FROM undo_records", [])?;
+            tx.execute("DELETE FROM undone_objects", [])?;
+            tx.execute("DELETE FROM undone_relations", [])?;
+
+            let diagnostics = store.scan_objects()?;
+            let indexed_objects = diagnostics.scanned_objects.len();
+            let skipped_entries = diagnostics.skipped_entries.clone();
+            let mut seen = std::collections::BTreeSet::new();
+            for stored in diagnostics.scanned_objects {
+                let envelope = stored.envelope;
+                let payload = stored.payload;
+                seen.insert(envelope.id.as_str().to_string());
+
+                let title = envelope.title();
+                let metadata = extract_object_metadata(&envelope, &payload)?;
+                project_auxiliary_tables_tx(&tx, &envelope, &payload)?;
+
+                let summary = metadata.summary;
+                let system_id = metadata.system_id;
+                let namespace = metadata.namespace;
+                let declaration_identity = metadata.declaration_identity;
+                let searchable_text = metadata.searchable_text;
+
+                let version_id = envelope.version_id.as_str().to_string();
+                let object_id = envelope.id.as_str().to_string();
+                let kind = envelope.kind.as_str().to_string();
+                let class = envelope.class.clone();
+                let payload_ref = envelope.payload_ref.0.clone();
+                let created_at = envelope.created_at.to_rfc3339();
+                let updated_at = envelope.updated_at.to_rfc3339();
+
+                tx.execute(
+                    "INSERT OR REPLACE INTO objects (
+                        version_id, object_id, kind, class, title, summary,
+                        payload_ref, created_at, updated_at, system_id, namespace, declaration_identity, searchable_text, headers
+                    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+                    params![
+                        version_id,
+                        object_id,
+                        kind,
+                        class,
+                        title,
+                        summary,
+                        payload_ref,
+                        created_at,
+                        updated_at,
+                        system_id,
+                        namespace,
+                        declaration_identity,
+                        searchable_text,
+                        serde_json::to_string(&envelope.headers).unwrap_or_default(),
+                    ],
+                )?;
+
+                for (dim, token) in envelope.standing.iter() {
+                    tx.execute(
+                        "INSERT OR REPLACE INTO object_standing (version_id, object_id, dimension, token) VALUES (?1, ?2, ?3, ?4)",
                         params![
-                            envelope.version_id.as_str().to_string(),
-                            envelope.id.as_str().to_string(),
-                            parsed.source.id.as_str().to_string(),
-                            parsed.target.id.as_str().to_string(),
-                            parsed.relation_type,
-                            parsed.scope,
+                            envelope.version_id.as_ref(),
+                            envelope.id.as_ref(),
+                            dim.as_ref(),
+                            token.as_ref(),
                         ],
                     )?;
-                        (Some("relation".to_string()), None, None, None, Some(text))
-                    }
-                    Kind::CompiledContextTemplate => {
-                        let text = payload.as_utf8()?;
-                        let parsed: CompiledContextTemplate = parse_yaml(&text)?;
-                        (
-                            parsed.description.clone(),
-                            None,
-                            None,
-                            Some(parsed.name),
-                            Some(text),
-                        )
-                    }
-                    Kind::Workflow => {
-                        let text = payload.as_utf8()?;
-                        let parsed: WorkflowDefinition = parse_yaml(&text)?;
-                        (
-                            parsed.description.clone(),
-                            None,
-                            None,
-                            Some(parsed.name),
-                            Some(text),
-                        )
-                    }
-                    Kind::Policy => {
-                        let text = payload.as_utf8()?;
-                        let parsed: StandingPolicy = parse_yaml(&text)?;
-                        (
-                            parsed.description.clone(),
-                            None,
-                            None,
-                            Some(parsed.name),
-                            Some(text),
-                        )
-                    }
-                    Kind::ProviderProfile => {
-                        let text = payload.as_utf8()?;
-                        let parsed: ProviderProfile = parse_yaml(&text)?;
-                        (
-                            parsed.description.clone(),
-                            None,
-                            None,
-                            Some(parsed.name),
-                            Some(text),
-                        )
-                    }
-                    Kind::Object if envelope.class.as_deref() == Some("class_definition") => {
-                        let text = payload.as_utf8()?;
-                        let parsed: ClassDefinition = parse_yaml(&text)?;
-                        (
-                            Some(snippet(&text)),
-                            None,
-                            None,
-                            Some(parsed.name),
-                            Some(text),
-                        )
-                    }
-                    Kind::UndoRecord => {
-                        let text = payload.as_utf8()?;
-                        let parsed: UndoRecord = parse_json(&text)?;
-                        self.conn.execute(
-                            "INSERT OR REPLACE INTO undo_records (undo_record_id, target_run_id, created_at) VALUES (?1, ?2, ?3)",
-                            params![
-                                envelope.id.as_str().to_string(),
-                                parsed.target_run_id.clone(),
-                                envelope.created_at.to_rfc3339(),
-                            ],
-                        )?;
-                        for oid in &parsed.created_object_ids {
-                            self.conn.execute(
-                                "INSERT OR REPLACE INTO undone_objects (object_id, undo_record_id, target_run_id) VALUES (?1, ?2, ?3)",
-                                params![
-                                    oid.as_str().to_string(),
-                                    envelope.id.as_str().to_string(),
-                                    parsed.target_run_id.clone(),
-                                ],
-                            )?;
-                        }
-                        for rid in &parsed.created_relation_ids {
-                            self.conn.execute(
-                                "INSERT OR REPLACE INTO undone_relations (relation_object_id, undo_record_id, target_run_id) VALUES (?1, ?2, ?3)",
-                                params![
-                                    rid.as_str().to_string(),
-                                    envelope.id.as_str().to_string(),
-                                    parsed.target_run_id.clone(),
-                                ],
-                            )?;
-                        }
-                        (
-                            Some("undo record".to_string()),
-                            None,
-                            None,
-                            None,
-                            Some(text),
-                        )
-                    }
-                    _ => {
-                        let text = payload.as_utf8().unwrap_or_default();
-                        (Some(snippet(&text)), None, None, None, Some(text))
-                    }
-                };
+                }
+            }
 
-            let version_id = envelope.version_id.as_str().to_string();
-            let object_id = envelope.id.as_str().to_string();
-            let kind = envelope.kind.as_str().to_string();
-            let class = envelope.class.clone();
-            let payload_ref = envelope.payload_ref.0.clone();
-            let created_at = envelope.created_at.to_rfc3339();
-            let updated_at = envelope.updated_at.to_rfc3339();
+            for object_id_str in seen {
+                let object_id = ObjectId::parse(object_id_str)?;
+                if let Some(head) = store.read_head_ref(&object_id)? {
+                    tx.execute(
+                        "INSERT OR REPLACE INTO heads (object_id, version_id) VALUES (?1, ?2)",
+                        params![head.id.as_ref(), head.version_id.as_ref()],
+                    )?;
+                }
+            }
+            IndexRebuildReport {
+                indexed_objects,
+                skipped_entries,
+            }
+        };
 
+        tx.commit()?;
+        if report.skipped_entries.is_empty() {
+            self.clear_dirty()?;
+        }
+        Ok(report)
+    }
+
+    pub fn upsert_head_object_from_store(
+        &mut self,
+        store: &dyn CanonicalStore,
+        object_id: &ObjectId,
+    ) -> Result<(), IndexError> {
+        let Some(head) = store.read_head(object_id)? else {
             self.conn.execute(
+                "DELETE FROM heads WHERE object_id = ?1",
+                params![object_id.as_ref()],
+            )?;
+            return Ok(());
+        };
+
+        let tx = self.conn.transaction()?;
+
+        {
+            let envelope = head.envelope.clone();
+            let payload = head.payload.clone();
+            let title = envelope.title();
+            let metadata = extract_object_metadata(&envelope, &payload)?;
+            project_auxiliary_tables_tx(&tx, &envelope, &payload)?;
+
+            let summary = metadata.summary;
+            let system_id = metadata.system_id;
+            let namespace = metadata.namespace;
+            let declaration_identity = metadata.declaration_identity;
+            let searchable_text = metadata.searchable_text;
+
+            tx.execute(
                 "INSERT OR REPLACE INTO objects (
                     version_id, object_id, kind, class, title, summary,
                     payload_ref, created_at, updated_at, system_id, namespace, declaration_identity, searchable_text, headers
                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
                 params![
-                    version_id,
-                    object_id,
-                    kind,
-                    class,
+                    envelope.version_id.as_ref(),
+                    envelope.id.as_ref(),
+                    envelope.kind.as_str(),
+                    envelope.class.clone(),
                     title,
                     summary,
-                    payload_ref,
-                    created_at,
-                    updated_at,
+                    envelope.payload_ref.0.clone(),
+                    envelope.created_at.to_rfc3339(),
+                    envelope.updated_at.to_rfc3339(),
                     system_id,
                     namespace,
                     declaration_identity,
@@ -498,250 +471,35 @@ impl DerivedIndex {
                     serde_json::to_string(&envelope.headers).unwrap_or_default(),
                 ],
             )?;
+            tx.execute(
+                "INSERT OR REPLACE INTO heads (object_id, version_id) VALUES (?1, ?2)",
+                params![envelope.id.as_ref(), envelope.version_id.as_ref()],
+            )?;
 
+            let version_id_str = envelope.version_id.as_ref();
+            tx.execute(
+                "DELETE FROM object_standing WHERE version_id = ?1",
+                params![version_id_str],
+            )?;
             for (dim, token) in envelope.standing.iter() {
-                self.conn.execute(
-                    "INSERT OR REPLACE INTO object_standing (version_id, object_id, dimension, token) VALUES (?1, ?2, ?3, ?4)",
+                tx.execute(
+                    "INSERT INTO object_standing (version_id, object_id, dimension, token) VALUES (?1, ?2, ?3, ?4)",
                     params![
-                        envelope.version_id.as_str(),
-                        envelope.id.as_str(),
-                        dim.as_str(),
-                        token.as_str(),
+                        version_id_str,
+                        envelope.id.as_ref(),
+                        dim.as_ref(),
+                        token.as_ref(),
                     ],
                 )?;
             }
         }
-
-        for object_id in seen {
-            let object_id = ObjectId::parse(object_id)?;
-            if let Some(head) = store.read_head_ref(&object_id)? {
-                self.conn.execute(
-                    "INSERT OR REPLACE INTO heads (object_id, version_id) VALUES (?1, ?2)",
-                    params![head.id.as_str(), head.version_id.as_str()],
-                )?;
-            }
-        }
-        Ok(IndexRebuildReport {
-            indexed_objects,
-            skipped_entries,
-        })
-    }
-
-    pub fn upsert_head_object_from_store<S: CanonicalStore>(
-        &self,
-        store: &S,
-        object_id: &ObjectId,
-    ) -> Result<(), IndexError> {
-        let Some(head) = store.read_head(object_id)? else {
-            self.conn.execute(
-                "DELETE FROM heads WHERE object_id = ?1",
-                params![object_id.as_str()],
-            )?;
-            return Ok(());
-        };
-
-        let envelope = head.envelope.clone();
-        let payload = head.payload.clone();
-        let title = envelope.title();
-        let (summary, system_id, namespace, declaration_identity, searchable_text) = match &envelope
-            .kind
-        {
-            Kind::Instruction => {
-                let text = payload.as_utf8()?;
-                let parsed = InstructionPayload::parse_markdown(&text)?;
-                let declaration_name = parsed.name.clone();
-                (
-                    Some(snippet(parsed.body.as_str())),
-                    None,
-                    None,
-                    Some(declaration_name),
-                    Some(format!(
-                        "{} {} {}",
-                        parsed.name,
-                        parsed.purpose,
-                        parsed.body.as_str()
-                    )),
-                )
-            }
-            Kind::SystemDefinition => {
-                let text = payload.as_utf8()?;
-                let parsed: SystemDefinition = parse_yaml(&text)?;
-                (
-                    parsed
-                        .description
-                        .clone()
-                        .or_else(|| Some(parsed.title.clone())),
-                    Some(parsed.system_id.clone()),
-                    Some(parsed.namespace),
-                    Some(parsed.system_id),
-                    Some(text),
-                )
-            }
-            Kind::Relation => {
-                let text = payload.as_utf8()?;
-                let parsed: RelationPayload = parse_json(&text)?;
-                self.conn.execute(
-                        "INSERT OR REPLACE INTO relations (version_id, relation_object_id, source_object_id, target_object_id, relation_type, scope) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-                        params![
-                            envelope.version_id.as_str().to_string(),
-                            envelope.id.as_str().to_string(),
-                            parsed.source.id.as_str().to_string(),
-                            parsed.target.id.as_str().to_string(),
-                            parsed.relation_type,
-                            parsed.scope,
-                        ],
-                    )?;
-                (Some("relation".to_string()), None, None, None, Some(text))
-            }
-            Kind::CompiledContextTemplate => {
-                let text = payload.as_utf8()?;
-                let parsed: CompiledContextTemplate = parse_yaml(&text)?;
-                (
-                    parsed.description.clone(),
-                    None,
-                    None,
-                    Some(parsed.name),
-                    Some(text),
-                )
-            }
-            Kind::Workflow => {
-                let text = payload.as_utf8()?;
-                let parsed: WorkflowDefinition = parse_yaml(&text)?;
-                (
-                    parsed.description.clone(),
-                    None,
-                    None,
-                    Some(parsed.name),
-                    Some(text),
-                )
-            }
-            Kind::Policy => {
-                let text = payload.as_utf8()?;
-                let parsed: StandingPolicy = parse_yaml(&text)?;
-                (
-                    parsed.description.clone(),
-                    None,
-                    None,
-                    Some(parsed.name),
-                    Some(text),
-                )
-            }
-            Kind::ProviderProfile => {
-                let text = payload.as_utf8()?;
-                let parsed: ProviderProfile = parse_yaml(&text)?;
-                (
-                    parsed.description.clone(),
-                    None,
-                    None,
-                    Some(parsed.name),
-                    Some(text),
-                )
-            }
-            Kind::Object if envelope.class.as_deref() == Some("class_definition") => {
-                let text = payload.as_utf8()?;
-                let parsed: ClassDefinition = parse_yaml(&text)?;
-                (
-                    Some(snippet(&text)),
-                    None,
-                    None,
-                    Some(parsed.name),
-                    Some(text),
-                )
-            }
-            Kind::UndoRecord => {
-                let text = payload.as_utf8()?;
-                let parsed: UndoRecord = parse_json(&text)?;
-                self.conn.execute(
-                    "INSERT OR REPLACE INTO undo_records (undo_record_id, target_run_id, created_at) VALUES (?1, ?2, ?3)",
-                    params![
-                        envelope.id.as_str().to_string(),
-                        parsed.target_run_id.clone(),
-                        envelope.created_at.to_rfc3339(),
-                    ],
-                )?;
-                for oid in &parsed.created_object_ids {
-                    self.conn.execute(
-                        "INSERT OR REPLACE INTO undone_objects (object_id, undo_record_id, target_run_id) VALUES (?1, ?2, ?3)",
-                        params![
-                            oid.as_str().to_string(),
-                            envelope.id.as_str().to_string(),
-                            parsed.target_run_id.clone(),
-                        ],
-                    )?;
-                }
-                for rid in &parsed.created_relation_ids {
-                    self.conn.execute(
-                        "INSERT OR REPLACE INTO undone_relations (relation_object_id, undo_record_id, target_run_id) VALUES (?1, ?2, ?3)",
-                        params![
-                            rid.as_str().to_string(),
-                            envelope.id.as_str().to_string(),
-                            parsed.target_run_id.clone(),
-                        ],
-                    )?;
-                }
-                (
-                    Some("undo record".to_string()),
-                    None,
-                    None,
-                    None,
-                    Some(text),
-                )
-            }
-            _ => {
-                let text = payload.as_utf8().unwrap_or_default();
-                (Some(snippet(&text)), None, None, None, Some(text))
-            }
-        };
-
-        self.conn.execute(
-            "INSERT OR REPLACE INTO objects (
-                version_id, object_id, kind, class, title, summary,
-                payload_ref, created_at, updated_at, system_id, namespace, declaration_identity, searchable_text, headers
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
-            params![
-                envelope.version_id.as_str().to_string(),
-                envelope.id.as_str().to_string(),
-                envelope.kind.as_str().to_string(),
-                envelope.class.clone(),
-                title,
-                summary,
-                envelope.payload_ref.0.clone(),
-                envelope.created_at.to_rfc3339(),
-                envelope.updated_at.to_rfc3339(),
-                system_id,
-                namespace,
-                declaration_identity,
-                searchable_text,
-                serde_json::to_string(&envelope.headers).unwrap_or_default(),
-            ],
-        )?;
-        self.conn.execute(
-            "INSERT OR REPLACE INTO heads (object_id, version_id) VALUES (?1, ?2)",
-            params![envelope.id.as_str(), envelope.version_id.as_str()],
-        )?;
-
-        let version_id_str = envelope.version_id.as_str();
-        self.conn.execute(
-            "DELETE FROM object_standing WHERE version_id = ?1",
-            params![version_id_str],
-        )?;
-        for (dim, token) in envelope.standing.iter() {
-            self.conn.execute(
-                "INSERT INTO object_standing (version_id, object_id, dimension, token) VALUES (?1, ?2, ?3, ?4)",
-                params![
-                    version_id_str,
-                    envelope.id.as_str(),
-                    dim.as_str(),
-                    token.as_str(),
-                ],
-            )?;
-        }
+        tx.commit()?;
         Ok(())
     }
 
     pub fn query_objects(&self, filter: &QueryFilter) -> Result<Vec<ObjectSummary>, IndexError> {
         let mut sql = String::from(
-            "SELECT o.object_id, o.version_id, o.kind, o.class, o.title, o.summary, o.system_id, o.namespace, o.headers FROM objects o JOIN heads h ON o.object_id = h.object_id AND o.version_id = h.version_id WHERE 1=1",
+            "SELECT o.object_id, o.version_id, o.kind, o.class, o.title, o.summary, o.system_id, o.namespace, o.headers, o.created_at, o.updated_at FROM objects o JOIN heads h ON o.object_id = h.object_id AND o.version_id = h.version_id WHERE 1=1",
         );
         let mut values: Vec<String> = Vec::new();
 
@@ -799,6 +557,8 @@ impl DerivedIndex {
                     namespace: row.get(7)?,
                     standing: BTreeMap::new(),
                     headers: serde_json::from_str(&row.get::<_, String>(8)?).unwrap_or_default(),
+                    created_at: row.get(9)?,
+                    updated_at: row.get(10)?,
                 })
             })?;
             rows.collect::<Result<Vec<_>, _>>()?
@@ -863,7 +623,7 @@ impl DerivedIndex {
     }
 
     pub fn activate_system(
-        &self,
+        &mut self,
         namespace: &str,
         system_id: &str,
         version_ref: &VersionRef,
@@ -1113,6 +873,197 @@ impl DerivedIndex {
             .optional()
             .map_err(IndexError::from)
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct ObjectMetadata {
+    pub summary: Option<String>,
+    pub system_id: Option<String>,
+    pub namespace: Option<String>,
+    pub declaration_identity: Option<String>,
+    pub searchable_text: Option<String>,
+}
+
+fn extract_object_metadata(
+    envelope: &Envelope,
+    payload: &StoredPayload,
+) -> Result<ObjectMetadata, IndexError> {
+    match &envelope.kind {
+        Kind::Instruction => {
+            let text = payload.as_utf8()?;
+            let parsed = InstructionPayload::parse_markdown(&text)?;
+            let declaration_name = parsed.name.clone();
+            Ok(ObjectMetadata {
+                summary: Some(snippet(parsed.body.as_str())),
+                system_id: None,
+                namespace: None,
+                declaration_identity: Some(declaration_name),
+                searchable_text: Some(format!(
+                    "{} {} {}",
+                    parsed.name,
+                    parsed.purpose,
+                    parsed.body.as_str()
+                )),
+            })
+        }
+        Kind::SystemDefinition => {
+            let text = payload.as_utf8()?;
+            let parsed: SystemDefinition = parse_yaml(&text)?;
+            Ok(ObjectMetadata {
+                summary: parsed
+                    .description
+                    .clone()
+                    .or_else(|| Some(parsed.title.clone())),
+                system_id: Some(parsed.system_id.clone()),
+                namespace: Some(parsed.namespace),
+                declaration_identity: Some(parsed.system_id),
+                searchable_text: Some(text),
+            })
+        }
+        Kind::Relation => {
+            let text = payload.as_utf8()?;
+            Ok(ObjectMetadata {
+                summary: Some("relation".to_string()),
+                system_id: None,
+                namespace: None,
+                declaration_identity: None,
+                searchable_text: Some(text),
+            })
+        }
+        Kind::CompiledContextTemplate => {
+            let text = payload.as_utf8()?;
+            let parsed: CompiledContextTemplate = parse_yaml(&text)?;
+            Ok(ObjectMetadata {
+                summary: parsed.description.clone(),
+                system_id: None,
+                namespace: None,
+                declaration_identity: Some(parsed.name),
+                searchable_text: Some(text),
+            })
+        }
+        Kind::Workflow => {
+            let text = payload.as_utf8()?;
+            let parsed: WorkflowDefinition = parse_yaml(&text)?;
+            Ok(ObjectMetadata {
+                summary: parsed.description.clone(),
+                system_id: None,
+                namespace: None,
+                declaration_identity: Some(parsed.name),
+                searchable_text: Some(text),
+            })
+        }
+        Kind::Policy => {
+            let text = payload.as_utf8()?;
+            let parsed: StandingPolicy = parse_yaml(&text)?;
+            Ok(ObjectMetadata {
+                summary: parsed.description.clone(),
+                system_id: None,
+                namespace: None,
+                declaration_identity: Some(parsed.name),
+                searchable_text: Some(text),
+            })
+        }
+        Kind::ProviderProfile => {
+            let text = payload.as_utf8()?;
+            let parsed: ProviderProfile = parse_yaml(&text)?;
+            Ok(ObjectMetadata {
+                summary: parsed.description.clone(),
+                system_id: None,
+                namespace: None,
+                declaration_identity: Some(parsed.name),
+                searchable_text: Some(text),
+            })
+        }
+        Kind::Object if envelope.class.as_deref() == Some("class_definition") => {
+            let text = payload.as_utf8()?;
+            let parsed: ClassDefinition = parse_yaml(&text)?;
+            Ok(ObjectMetadata {
+                summary: Some(snippet(&text)),
+                system_id: None,
+                namespace: None,
+                declaration_identity: Some(parsed.name),
+                searchable_text: Some(text),
+            })
+        }
+        Kind::UndoRecord => {
+            let text = payload.as_utf8()?;
+            Ok(ObjectMetadata {
+                summary: Some("undo record".to_string()),
+                system_id: None,
+                namespace: None,
+                declaration_identity: None,
+                searchable_text: Some(text),
+            })
+        }
+        _ => {
+            let text = payload.as_utf8().unwrap_or_default();
+            Ok(ObjectMetadata {
+                summary: Some(snippet(&text)),
+                system_id: None,
+                namespace: None,
+                declaration_identity: None,
+                searchable_text: Some(text),
+            })
+        }
+    }
+}
+
+fn project_auxiliary_tables_tx(
+    conn: &Connection,
+    envelope: &Envelope,
+    payload: &StoredPayload,
+) -> Result<(), IndexError> {
+    match &envelope.kind {
+        Kind::Relation => {
+            let text = payload.as_utf8()?;
+            let parsed: RelationPayload = parse_json(&text)?;
+            conn.execute(
+                "INSERT OR REPLACE INTO relations (version_id, relation_object_id, source_object_id, target_object_id, relation_type, scope) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                params![
+                    envelope.version_id.as_ref(),
+                    envelope.id.as_ref(),
+                    parsed.source.id.as_ref(),
+                    parsed.target.id.as_ref(),
+                    parsed.relation_type,
+                    parsed.scope,
+                ],
+            )?;
+        }
+        Kind::UndoRecord => {
+            let text = payload.as_utf8()?;
+            let parsed: UndoRecord = parse_json(&text)?;
+            conn.execute(
+                "INSERT OR REPLACE INTO undo_records (undo_record_id, target_run_id, created_at) VALUES (?1, ?2, ?3)",
+                params![
+                    envelope.id.as_ref(),
+                    parsed.target_run_id.as_ref(),
+                    envelope.created_at.to_rfc3339(),
+                ],
+            )?;
+            for oid in &parsed.created_object_ids {
+                conn.execute(
+                    "INSERT OR REPLACE INTO undone_objects (object_id, undo_record_id, target_run_id) VALUES (?1, ?2, ?3)",
+                    params![
+                        oid.as_ref(),
+                        envelope.id.as_ref(),
+                        parsed.target_run_id.as_ref(),
+                    ],
+                )?;
+            }
+            for rid in &parsed.created_relation_ids {
+                conn.execute(
+                    "INSERT OR REPLACE INTO undone_relations (relation_object_id, undo_record_id, target_run_id) VALUES (?1, ?2, ?3)",
+                    params![
+                        rid.as_ref(),
+                        envelope.id.as_ref(),
+                        parsed.target_run_id.as_ref(),
+                    ],
+                )?;
+            }
+        }
+        _ => {}
+    }
+    Ok(())
 }
 
 fn snippet(input: &str) -> String {

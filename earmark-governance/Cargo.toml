@@ -7,6 +7,7 @@ license.workspace = true
 [dependencies]
 earmark-core = { path = "../earmark-core" }
 earmark-store = { path = "../earmark-store" }
+earmark-index = { path = "../earmark-index" }
 thiserror.workspace = true
 chrono.workspace = true
 serde.workspace = true

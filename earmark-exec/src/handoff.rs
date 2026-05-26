@@ -44,7 +44,7 @@ pub(crate) fn load_handoff<S: CanonicalStore>(
 
 pub(crate) fn derive_successor_handoff<S: CanonicalStore>(
     store: &S,
-    index: &DerivedIndex,
+    index: &mut DerivedIndex,
     system: &earmark_core::SystemDefinition,
     ir: &ExecutionIr,
     transition: &ExecutionTransition,
@@ -131,7 +131,7 @@ pub(crate) fn derive_successor_handoff<S: CanonicalStore>(
 
 pub fn reconstruct_successor_inputs_from_handoff<S: CanonicalStore>(
     store: &S,
-    index: &DerivedIndex,
+    index: &mut DerivedIndex,
     handoff: &HandoffManifest,
 ) -> Result<Vec<ObjectRef>, ExecError> {
     let mut inputs = Vec::new();
@@ -246,7 +246,7 @@ fn handoff_object_admissible(
 
 pub(crate) fn create_lineage_relations<S: CanonicalStore>(
     store: &S,
-    index: &DerivedIndex,
+    index: &mut DerivedIndex,
     output: &ObjectRef,
     inputs: &[ObjectRef],
     instruction_ref: &earmark_core::VersionRef,

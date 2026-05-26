@@ -7,9 +7,9 @@ use crate::relation::persist_relation_canonical;
 use chrono::Utc;
 use earmark_core::{
     ChangeSetDraft, ChangeSetId, ChangeSetValidationResult, HandoffManifestId, InstructionPayload,
-    Kind, ObjectId, ObjectRef, Provenance, ProviderResponse, RelationCreationMode, RelationPayload,
-    RunRecord, Standing, TransformationFailure, TransitionAssignment, REL_TYPE_REQUESTS_STANDING,
-    REL_TYPE_RESULTED_IN_FAILURE,
+    IntoObjectId, Kind, ObjectRef, Provenance, ProviderResponse, RelationCreationMode,
+    RelationPayload, RunRecord, Standing, TransformationFailure, TransitionAssignment,
+    TransitionId, REL_TYPE_REQUESTS_STANDING, REL_TYPE_RESULTED_IN_FAILURE,
 };
 use earmark_index::DerivedIndex;
 use earmark_store::{CanonicalStore, StoredObject, StoredPayload};
@@ -19,11 +19,11 @@ pub(crate) struct ChangeSetPersistence<'a> {
     pub(crate) record: &'a mut RunRecord,
     pub(crate) change_set_id: ChangeSetId,
     pub(crate) assignment: &'a TransitionAssignment,
-    pub(crate) transition_id: &'a str,
+    pub(crate) transition_id: &'a TransitionId,
     pub(crate) draft: &'a ChangeSetDraft,
     pub(crate) validation_results: Vec<ChangeSetValidationResult>,
     pub(crate) handoff_manifest_id: Option<HandoffManifestId>,
-    pub(crate) index: &'a DerivedIndex,
+    pub(crate) index: &'a mut DerivedIndex,
 }
 
 pub(crate) fn persist_change_set<S: CanonicalStore>(
@@ -44,7 +44,7 @@ pub(crate) fn persist_change_set<S: CanonicalStore>(
     let change_set = earmark_core::ChangeSet {
         id: change_set_id.clone(),
         run_id: record.run_id.clone(),
-        transition_id: transition_id.to_string(),
+        transition_id: transition_id.clone(),
         assignment_id: Some(assignment.id.clone()),
         agent_id: Some("execution_engine".to_string()),
         input_object_ids: assignment.input_object_ids.clone(),
@@ -97,7 +97,7 @@ pub(crate) fn persist_change_set<S: CanonicalStore>(
 
         let rel_payload = RelationPayload {
             source: ObjectRef::new(
-                ObjectId::parse(change_set_id.as_str()).unwrap(),
+                change_set_id.as_object_id(),
                 stored_change_set.envelope.version_id.clone(),
                 Kind::ChangeSet,
                 None,
@@ -127,7 +127,7 @@ pub(crate) fn persist_change_set<S: CanonicalStore>(
 
 pub(crate) fn persist_assignment_update<S: CanonicalStore>(
     store: &S,
-    index: &DerivedIndex,
+    index: &mut DerivedIndex,
     previous: &StoredObject,
     assignment: &TransitionAssignment,
 ) -> Result<(), ExecError> {
@@ -143,7 +143,7 @@ pub(crate) fn persist_assignment_update<S: CanonicalStore>(
 
 pub(crate) fn persist_transformation_failure<S: CanonicalStore>(
     store: &S,
-    index: &DerivedIndex,
+    index: &mut DerivedIndex,
     assignment_head: &StoredObject,
     assignment: &TransitionAssignment,
     failed_change_set_id: Option<ChangeSetId>,
@@ -168,7 +168,10 @@ pub(crate) fn persist_transformation_failure<S: CanonicalStore>(
     )
     .class("transformation_failure")
     .provenance(Provenance::direct_input("execution_engine"))
-    .header("title", format!("Failure {}", assignment.transition_id))
+    .header(
+        "title",
+        format!("Failure {}", assignment.transition_id.as_str()),
+    )
     .build()
     .map_err(ExecError::IncompleteExecution)?;
     let version_ref = write_object_and_index(store, index, &stored)?;
@@ -201,7 +204,7 @@ pub(crate) fn persist_transformation_failure<S: CanonicalStore>(
 
 pub(crate) fn create_local_transform_output<S: CanonicalStore>(
     store: &S,
-    index: &DerivedIndex,
+    index: &mut DerivedIndex,
     instruction: &InstructionPayload,
     output_classes: &[String],
     inputs: &[ObjectRef],
@@ -271,7 +274,7 @@ pub(crate) fn create_local_transform_output<S: CanonicalStore>(
 
 pub(crate) fn create_delegated_transform_output<S: CanonicalStore>(
     store: &S,
-    index: &DerivedIndex,
+    index: &mut DerivedIndex,
     instruction: &InstructionPayload,
     output_classes: &[String],
     inputs: &[ObjectRef],
@@ -376,7 +379,7 @@ pub(crate) fn create_delegated_transform_output<S: CanonicalStore>(
 
 pub(crate) fn persist_run_record<S: CanonicalStore>(
     store: &S,
-    index: &DerivedIndex,
+    index: &mut DerivedIndex,
     record: &RunRecord,
 ) -> Result<(), ExecError> {
     let stored = StoredObject::builder(
@@ -385,7 +388,7 @@ pub(crate) fn persist_run_record<S: CanonicalStore>(
     )
     .class("run_record")
     .provenance(Provenance::direct_input("runtime"))
-    .header("title", format!("Run {}", record.run_id))
+    .header("title", format!("Run {}", record.run_id.as_str()))
     .build()
     .map_err(ExecError::IncompleteExecution)?;
     // Run records are indexed so run list/show/latest inspection can discover them.

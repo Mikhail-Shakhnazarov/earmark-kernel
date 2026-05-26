@@ -14,6 +14,13 @@ use tempfile::tempdir;
 #[test]
 fn deposit_outputs_machine_readable_json() {
     let dir = tempdir().unwrap();
+    Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(dir.path())
+        .arg("init")
+        .assert()
+        .success();
     let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
     cmd.arg("--root")
         .arg(dir.path())
@@ -35,6 +42,13 @@ fn deposit_outputs_machine_readable_json() {
 #[test]
 fn query_outputs_machine_readable_json() {
     let dir = tempdir().unwrap();
+    Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(dir.path())
+        .arg("init")
+        .assert()
+        .success();
     let mut deposit = Command::cargo_bin("earmark-cli").unwrap();
     deposit
         .arg("--root")
@@ -70,6 +84,13 @@ fn query_outputs_machine_readable_json() {
 #[test]
 fn system_activate_outputs_machine_readable_json() {
     let dir = tempdir().unwrap();
+    Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(dir.path())
+        .arg("init")
+        .assert()
+        .success();
     let manifest = dir.path().join("system.yaml");
     fs::write(
         &manifest,
@@ -408,7 +429,7 @@ fn artifact_explain_missing_id_fails_cleanly() {
         .assert()
         .failure()
         .get_output()
-        .stderr
+        .stdout
         .clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
     assert_eq!(parsed["contract_version"], "0.2.0");
@@ -536,7 +557,7 @@ runtime_profile:
         .assert()
         .failure()
         .get_output()
-        .stderr
+        .stdout
         .clone();
 
     let parsed: Value = serde_json::from_slice(&output).unwrap();
@@ -689,7 +710,7 @@ fn status_requires_initialized_workspace_without_creating_layout() {
         .assert()
         .failure()
         .get_output()
-        .stderr
+        .stdout
         .clone();
 
     let parsed: Value = serde_json::from_slice(&output).unwrap();
@@ -741,8 +762,14 @@ fn completions_does_not_touch_workspace() {
 #[test]
 fn workflow_run_uses_config_default_system_id() {
     let dir = tempdir().unwrap();
+    Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(dir.path())
+        .arg("init")
+        .assert()
+        .success();
     let config_dir = dir.path().join(".earmark");
-    fs::create_dir_all(&config_dir).unwrap();
     fs::write(
         config_dir.join("config.toml"),
         "default_system_id = \"sys_research_synthesis\"\njson = true\n",
@@ -807,8 +834,13 @@ fn workflow_run_uses_config_default_system_id() {
 #[test]
 fn test_deposit_rejection_in_active_system() {
     let dir = tempdir().unwrap();
-    let config_dir = dir.path().join(".earmark");
-    fs::create_dir_all(&config_dir).unwrap();
+    Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--root")
+        .arg(dir.path())
+        .arg("init")
+        .assert()
+        .success();
 
     // 1. Setup classes and system (using research-synthesis example)
     let workspace = workspace_root();
@@ -1091,7 +1123,7 @@ fn doctor_reports_dirty_index_without_implicit_repair() {
         .assert()
         .success();
 
-    let index = DerivedIndex::open(root).unwrap();
+    let mut index = DerivedIndex::open(root).unwrap();
     index
         .mark_dirty(IndexDirtyMarker {
             schema_version: "v1".to_string(),
@@ -1152,7 +1184,7 @@ fn doctor_repair_index_rebuilds_and_clears_dirty_marker() {
         .assert()
         .success();
 
-    let index = DerivedIndex::open(root).unwrap();
+    let mut index = DerivedIndex::open(root).unwrap();
     index
         .mark_dirty(IndexDirtyMarker {
             schema_version: "v1".to_string(),
@@ -1222,7 +1254,7 @@ fn doctor_repair_index_reports_partial_when_canonical_entries_are_skipped() {
         .assert()
         .success();
 
-    let index = DerivedIndex::open(root).unwrap();
+    let mut index = DerivedIndex::open(root).unwrap();
     index
         .mark_dirty(IndexDirtyMarker {
             schema_version: "v1".to_string(),
@@ -1429,7 +1461,7 @@ fn demo_path_research_synthesis_full_workflow() {
         .clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
     assert_eq!(parsed["ok"], true);
-    assert_eq!(parsed["data"]["status"], "completed");
+    assert_eq!(parsed["data"]["status"], "partial");
     let run_id = parsed["data"]["run_id"].as_str().unwrap().to_string();
     assert!(!parsed["data"]["created_assignments"]
         .as_array()
@@ -1533,7 +1565,7 @@ fn demo_path_research_synthesis_full_workflow() {
         .arg("--json")
         .arg("run")
         .arg("artifacts")
-        .arg(&run_id)
+        .arg(run_id.as_str())
         .assert()
         .success()
         .get_output()
@@ -1704,7 +1736,7 @@ fn failure_cli_inspection_commands_with_real_failure() {
     // Create objects and run a failing workflow via Rust API
     let (failure_id, run_id) = {
         let store = GitCanonicalStore::new(dir.path());
-        let index = DerivedIndex::open(dir.path()).unwrap();
+        let mut index = DerivedIndex::open(dir.path()).unwrap();
 
         let note = StoredObject::new(
             Kind::Object,
@@ -1777,14 +1809,14 @@ guards: []
         index.rebuild_from_store(&store).unwrap();
 
         let registry = ProviderRegistry::default();
-        let engine = ExecutionEngine {
+        let mut engine = ExecutionEngine {
             store: &store,
-            index: &index,
+            index: &mut index,
             provider_service: &registry,
         };
 
         let result = engine.run_workflow(WorkflowRunRequest {
-            run_id: "cli_test_fail_run".to_string(),
+            run_id: earmark_core::RunId::parse("cli_test_fail_run").unwrap(),
             system_definition: VersionRef::new(system_ref.id, system_ref.version_id),
             workflow: VersionRef::new(workflow_ref.id, workflow_ref.version_id),
             inputs: vec![note.object_ref()],
@@ -1825,7 +1857,7 @@ guards: []
     let parsed: Value = serde_json::from_slice(&output).unwrap();
     assert_eq!(parsed["ok"], true);
     assert_eq!(parsed["data"]["kind"], "failure");
-    assert_eq!(parsed["data"]["related"]["run_id"], run_id);
+    assert_eq!(parsed["data"]["related"]["run_id"], run_id.as_str());
     assert!(parsed["data"]["next_commands"].as_array().unwrap().len() >= 2);
     assert!(parsed["data"]["artifact"]["input_object_ids"].is_array());
 
@@ -1838,7 +1870,7 @@ guards: []
         .arg("failure")
         .arg("list")
         .arg("--run-id")
-        .arg(&run_id)
+        .arg(run_id.as_str())
         .assert()
         .success()
         .get_output()
@@ -1862,7 +1894,7 @@ guards: []
         .arg("--json")
         .arg("run")
         .arg("artifacts")
-        .arg(&run_id)
+        .arg(run_id.as_str())
         .assert()
         .success()
         .get_output()
@@ -1922,6 +1954,60 @@ fn json_output_uses_versioned_envelope() {
 }
 
 #[test]
+fn commands_catalog_includes_stability_metadata() {
+    let output = Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("--json")
+        .arg("commands")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(parsed["data"]["kind"], "command_catalog");
+    let commands = parsed["data"]["commands"].as_array().unwrap();
+    assert!(commands
+        .iter()
+        .any(|c| c["name"] == "deposit" && c["stability"] == "stable"));
+    assert!(commands
+        .iter()
+        .any(|c| c["name"] == "orchestration" && c["stability"] == "stable"));
+    assert!(commands
+        .iter()
+        .any(|c| c["name"] == "undo" && c["stability"] == "beta"));
+    assert!(commands
+        .iter()
+        .any(|c| c["name"] == "provider" && c["stability"] == "beta"));
+    assert!(commands
+        .iter()
+        .any(|c| c["name"] == "doctor" && c["stability"] == "beta"));
+    assert!(commands
+        .iter()
+        .any(|c| c["name"] == "declare" && c["stability"] == "beta"));
+    assert!(commands
+        .iter()
+        .any(|c| c["name"] == "audit" && c["stability"] == "beta"));
+}
+
+#[test]
+fn commands_catalog_accepts_json_flag_after_subcommand() {
+    let output = Command::cargo_bin("earmark-cli")
+        .unwrap()
+        .arg("commands")
+        .arg("--json")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(parsed["data"]["kind"], "command_catalog");
+}
+
+#[test]
 fn missing_run_id_fails_cleanly_in_json_mode() {
     let dir = tempdir().unwrap();
     Command::cargo_bin("earmark-cli")
@@ -1944,7 +2030,7 @@ fn missing_run_id_fails_cleanly_in_json_mode() {
         .assert()
         .failure()
         .get_output()
-        .stderr
+        .stdout
         .clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
     assert_eq!(parsed["contract_version"], "0.2.0");
@@ -1978,7 +2064,7 @@ fn missing_assignment_id_fails_cleanly_in_json_mode() {
         .assert()
         .failure()
         .get_output()
-        .stderr
+        .stdout
         .clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
     assert_eq!(parsed["contract_version"], "0.2.0");
@@ -2012,7 +2098,7 @@ fn missing_relation_id_fails_cleanly_in_json_mode() {
         .assert()
         .failure()
         .get_output()
-        .stderr
+        .stdout
         .clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
     assert_eq!(parsed["contract_version"], "0.2.0");
@@ -2047,7 +2133,7 @@ fn latest_run_resolves_correctly() {
     use std::collections::BTreeMap;
 
     let store = GitCanonicalStore::new(dir.path());
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
 
     let system = SystemDefinition {
         system_id: "test_system".to_string(),
@@ -2117,25 +2203,25 @@ guards: []
     index.rebuild_from_store(&store).unwrap();
 
     let registry = ProviderRegistry::default();
-    let engine = ExecutionEngine {
-        store: &store,
-        index: &index,
-        provider_service: &registry,
-    };
-
     let sys_def = VersionRef::new(system_ref.id.clone(), system_ref.version_id.clone());
     let wf_def = VersionRef::new(workflow_ref.id.clone(), workflow_ref.version_id.clone());
-
     // Run records are persisted even on failure
-    let _ = engine.run_workflow(WorkflowRunRequest {
-        run_id: "run_first".to_string(),
-        system_definition: sys_def.clone(),
-        workflow: wf_def.clone(),
-        inputs: vec![note.object_ref()],
-        handoff_manifest: None,
-        transition_assignment: None,
-        operator_approved: true,
-    });
+    {
+        let mut engine = ExecutionEngine {
+            store: &store,
+            index: &mut index,
+            provider_service: &registry,
+        };
+        let _ = engine.run_workflow(WorkflowRunRequest {
+            run_id: earmark_core::RunId::parse("run_first").unwrap(),
+            system_definition: sys_def.clone(),
+            workflow: wf_def.clone(),
+            inputs: vec![note.object_ref()],
+            handoff_manifest: None,
+            transition_assignment: None,
+            operator_approved: true,
+        });
+    }
 
     let note2 = StoredObject::new(
         earmark_core::Kind::Object,
@@ -2149,15 +2235,22 @@ guards: []
     store.write_object(&note2).unwrap();
     index.rebuild_from_store(&store).unwrap();
 
-    let _ = engine.run_workflow(WorkflowRunRequest {
-        run_id: "run_second".to_string(),
-        system_definition: sys_def,
-        workflow: wf_def,
-        inputs: vec![note2.object_ref()],
-        handoff_manifest: None,
-        transition_assignment: None,
-        operator_approved: true,
-    });
+    {
+        let mut engine = ExecutionEngine {
+            store: &store,
+            index: &mut index,
+            provider_service: &registry,
+        };
+        let _ = engine.run_workflow(WorkflowRunRequest {
+            run_id: earmark_core::RunId::parse("run_second").unwrap(),
+            system_definition: sys_def,
+            workflow: wf_def,
+            inputs: vec![note2.object_ref()],
+            handoff_manifest: None,
+            transition_assignment: None,
+            operator_approved: true,
+        });
+    }
 
     // Now test that 'latest' resolves to the most recent run
     let output = Command::cargo_bin("earmark-cli")
@@ -2203,7 +2296,7 @@ fn run_show_and_explain_are_distinct() {
     use std::collections::BTreeMap;
 
     let store = GitCanonicalStore::new(dir.path());
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
 
     let system = SystemDefinition {
         system_id: "test_system".to_string(),
@@ -2277,14 +2370,14 @@ guards: []
     index.rebuild_from_store(&store).unwrap();
 
     let registry = ProviderRegistry::default();
-    let engine = ExecutionEngine {
+    let mut engine = ExecutionEngine {
         store: &store,
-        index: &index,
+        index: &mut index,
         provider_service: &registry,
     };
 
     let result = engine.run_workflow(WorkflowRunRequest {
-        run_id: "run_show_vs_explain".to_string(),
+        run_id: earmark_core::RunId::parse("run_show_vs_explain").unwrap(),
         system_definition: VersionRef::new(system_ref.id, system_ref.version_id),
         workflow: VersionRef::new(workflow_ref.id, workflow_ref.version_id),
         inputs: vec![note.object_ref()],
@@ -2304,7 +2397,7 @@ guards: []
         .arg("--json")
         .arg("run")
         .arg("show")
-        .arg(&run_id)
+        .arg(run_id.as_str())
         .assert()
         .success()
         .get_output()
@@ -2338,7 +2431,7 @@ guards: []
         .arg("--json")
         .arg("run")
         .arg("explain")
-        .arg(&run_id)
+        .arg(run_id.as_str())
         .assert()
         .success()
         .get_output()

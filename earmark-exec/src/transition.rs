@@ -3,8 +3,8 @@ use std::collections::BTreeMap;
 use chrono::Utc;
 use earmark_connected_context::CompiledContextCompiler;
 use earmark_core::{
-    AssignmentStatus, ChangeSetDraft, ChangeSetId, ChangeSetValidationResult, Kind, ObjectRef,
-    ProviderRequest, RunRecord, TransitionAssignment, TransitionAssignmentId,
+    AssignmentStatus, ChangeSetDraft, ChangeSetId, ChangeSetValidationResult, IntoObjectId, Kind,
+    ObjectRef, ProviderRequest, RunRecord, TransitionAssignment, TransitionAssignmentId,
     WorkPacketConstraints, WorkflowOperationKind,
 };
 use earmark_governance::{escalation_for_trigger, export_allowed, GovernanceService};
@@ -36,7 +36,7 @@ use crate::validation::validate_transition_change_set;
 impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
     #[allow(clippy::too_many_arguments)]
     pub fn execute_transition<C: CompiledContextCompiler<S>>(
-        &self,
+        &mut self,
         request: &WorkflowRunRequest,
         system: &earmark_core::SystemDefinition,
         ir: &ExecutionIr,
@@ -134,13 +134,13 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
     }
 
     fn initialize_assignment(
-        &self,
+        &mut self,
         record: &mut RunRecord,
         transition: &ExecutionTransition,
     ) -> Result<(TransitionAssignmentId, StoredObject), ExecError> {
         reject_duplicate_active_assignment(self.store, &record.run_id, &transition.id)?;
 
-        let assignment_id = TransitionAssignmentId::new();
+        let assignment_id = TransitionAssignmentId::generate();
         let now = Utc::now();
         let assignment = TransitionAssignment {
             id: assignment_id.clone(),
@@ -179,7 +179,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
     }
 
     fn get_filtered_inputs(
-        &self,
+        &mut self,
         state: &ExecutionState,
         transition: &ExecutionTransition,
     ) -> Vec<ObjectRef> {
@@ -202,7 +202,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
 
     #[allow(clippy::too_many_arguments)]
     fn handle_compile_context<C: CompiledContextCompiler<S>>(
-        &self,
+        &mut self,
         request: &WorkflowRunRequest,
         system: &earmark_core::SystemDefinition,
         transition: &ExecutionTransition,
@@ -215,7 +215,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
         let template_ref = transition.compiled_context.as_ref().ok_or_else(|| {
             ExecError::InvalidWorkflow(format!(
                 "transition {} requires a compiled context reference",
-                transition.id
+                transition.id.as_str()
             ))
         })?;
         let resolved_template = resolve_version_for_kind(
@@ -266,7 +266,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
 
     #[allow(clippy::too_many_arguments)]
     fn handle_transform(
-        &self,
+        &mut self,
         request: &WorkflowRunRequest,
         system: &earmark_core::SystemDefinition,
         transition: &ExecutionTransition,
@@ -280,13 +280,13 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
         let res = (|| {
             if transition.output_contracts.len() > 1 {
                 return Err(ExecError::UnsupportedOperation(
-                    "multi-output transform operations are not yet implemented".to_string(),
+                    "multi-output transform operations are not supported by this runtime; split the operation or use a supported operation kind".to_string(),
                 ));
             }
             let instruction_ref = transition.instruction.as_ref().ok_or_else(|| {
                 ExecError::InvalidWorkflow(format!(
                     "transition {} requires an instruction reference",
-                    transition.id
+                    transition.id.as_str()
                 ))
             })?;
             let resolved_instruction_ref = resolve_version_for_kind(
@@ -532,7 +532,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
     }
 
     fn handle_review(
-        &self,
+        &mut self,
         request: &WorkflowRunRequest,
         transition: &ExecutionTransition,
         state: &mut ExecutionState,
@@ -600,7 +600,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
     }
 
     fn handle_export(
-        &self,
+        &mut self,
         system: &earmark_core::SystemDefinition,
         transition: &ExecutionTransition,
         state: &mut ExecutionState,
@@ -611,7 +611,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
         let policy_ref = transition.policy.as_ref().ok_or_else(|| {
             ExecError::InvalidWorkflow(format!(
                 "transition {} requires a standing policy for export",
-                transition.id
+                transition.id.as_str()
             ))
         })?;
         let policy = load_standing_policy(self.store, self.index, policy_ref)?;
@@ -653,7 +653,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
     }
 
     fn record_provider_event(
-        &self,
+        &mut self,
         record: &mut RunRecord,
         state: &mut ExecutionState,
         change_set_draft: &mut ChangeSetDraft,
@@ -688,7 +688,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
 
     #[allow(clippy::too_many_arguments)]
     fn finalize_execution_failure(
-        &self,
+        &mut self,
         record: &mut RunRecord,
         transition: &ExecutionTransition,
         assignment: &mut TransitionAssignment,
@@ -698,7 +698,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
         error: ExecError,
     ) -> Result<(), ExecError> {
         assignment.input_object_ids = filtered_inputs.iter().map(|obj| obj.id.clone()).collect();
-        let change_set_id = ChangeSetId::new();
+        let change_set_id = ChangeSetId::generate();
         let blocked_change_set_id = persist_change_set(
             self.store,
             ChangeSetPersistence {
@@ -769,7 +769,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
 
     #[allow(clippy::too_many_arguments)]
     fn finalize_transition_success(
-        &self,
+        &mut self,
         _request: &WorkflowRunRequest,
         system: &earmark_core::SystemDefinition,
         ir: &ExecutionIr,
@@ -782,7 +782,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
         change_set_draft: &mut ChangeSetDraft,
         synthetic_output_warning: Option<String>,
     ) -> Result<(), ExecError> {
-        let change_set_id = ChangeSetId::new();
+        let change_set_id = ChangeSetId::generate();
         let now_end = Utc::now();
         assignment.input_object_ids = filtered_inputs.iter().map(|obj| obj.id.clone()).collect();
         let (validation_result, standing_requests) = validate_transition_change_set(
@@ -805,7 +805,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
                 .blocked_operations
                 .push(earmark_core::BlockedOperation {
                     reason: "validation_failed".to_string(),
-                    operation: transition.id.clone(),
+                    operation: transition.id.to_string(),
                 });
             let blocked_change_set_id = persist_change_set(
                 self.store,
@@ -823,7 +823,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
 
             let error = ExecError::IncompleteExecution(format!(
                 "transition {} failed validation: {}",
-                transition.id,
+                transition.id.as_str(),
                 validation_result.failures.join("; ")
             ));
             let failure_ref = persist_transformation_failure(
@@ -869,7 +869,7 @@ impl<'a, S: CanonicalStore> ExecutionEngine<'a, S> {
 
         let mut handoff_manifest_ids = Vec::new();
         for spec in handoff_specs {
-            let handoff_manifest_id = earmark_core::HandoffManifestId::new();
+            let handoff_manifest_id = earmark_core::HandoffManifestId::generate();
             let mut ambiguities = change_set_draft.unresolved_ambiguities.clone();
             for request in &change_set_draft.standing_requests {
                 if request.status == earmark_core::StandingRequestStatus::Proposed {

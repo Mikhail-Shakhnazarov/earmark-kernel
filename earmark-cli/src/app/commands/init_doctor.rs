@@ -6,7 +6,7 @@ use earmark_index::DerivedIndex;
 use earmark_store::{StoreScanner, WorkspaceLayout};
 use serde_json::json;
 
-pub(crate) fn handle_init(ctx: &CommandContext) -> Result<(), CliError> {
+pub(crate) fn handle_init(ctx: &mut CommandContext) -> Result<(), CliError> {
     let store = ctx.store;
     let root = store.root();
     let canonical_dir = root.join(".earmark").join("canonical");
@@ -34,13 +34,13 @@ pub(crate) fn handle_init(ctx: &CommandContext) -> Result<(), CliError> {
     Ok(())
 }
 
-pub(crate) fn handle_doctor(ctx: &CommandContext, args: &DoctorArgs) -> Result<(), CliError> {
+pub(crate) fn handle_doctor(ctx: &mut CommandContext, args: &DoctorArgs) -> Result<(), CliError> {
     let store = ctx.store;
 
     if args.repair_index {
         let index = ctx
             .index
-            .as_ref()
+            .as_mut()
             .ok_or_else(|| CliError::not_found("index available for workspace command"))?;
         let report = index.rebuild_from_store(store)?;
         let partial = !report.skipped_entries.is_empty();
@@ -164,7 +164,7 @@ pub(crate) fn handle_doctor(ctx: &CommandContext, args: &DoctorArgs) -> Result<(
                                 if entry.file_name() == "envelope.json" {
                                     if let Ok(meta) = entry.metadata() {
                                         if let Ok(mtime) = meta.modified() {
-                                            if max_mtime.is_none() || mtime > max_mtime.unwrap() {
+                                            if max_mtime.is_none_or(|max| mtime > max) {
                                                 max_mtime = Some(mtime);
                                             }
                                         }

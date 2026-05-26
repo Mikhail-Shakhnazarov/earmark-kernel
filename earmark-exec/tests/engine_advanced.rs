@@ -16,7 +16,7 @@ fn guarded_edge_blocking() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     let registry = ProviderRegistry::default();
 
     let system = SystemDefinition {
@@ -112,13 +112,13 @@ fn guarded_edge_blocking() {
     store.write_object(&start_obj).unwrap();
 
     index.rebuild_from_store(&store).unwrap();
-    let engine = ExecutionEngine {
+    let mut engine = ExecutionEngine {
         store: &store,
-        index: &index,
+        index: &mut index,
         provider_service: &registry,
     };
     let request = WorkflowRunRequest {
-        run_id: "test-run".to_string(),
+        run_id: earmark_core::RunId::parse("test-run").unwrap(),
         system_definition: system_ref,
         workflow: workflow_ref,
         inputs: vec![start_obj.object_ref()],
@@ -136,8 +136,8 @@ fn guarded_edge_blocking() {
         .iter()
         .map(|e| e.transition.as_str())
         .collect();
-    assert!(transition_ids.contains(&"start_op"));
-    assert!(!transition_ids.contains(&"guarded_op"));
+    assert!(transition_ids.contains(&"tr_start_op"));
+    assert!(!transition_ids.contains(&"tr_guarded_op"));
 
     let objects = store.scan_objects().unwrap().scanned_objects;
     let ledger_obj = objects
@@ -159,7 +159,7 @@ fn branching_execution() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     let registry = ProviderRegistry::default();
 
     let system = SystemDefinition {
@@ -270,13 +270,13 @@ fn branching_execution() {
     store.write_object(&start_obj).unwrap();
 
     index.rebuild_from_store(&store).unwrap();
-    let engine = ExecutionEngine {
+    let mut engine = ExecutionEngine {
         store: &store,
-        index: &index,
+        index: &mut index,
         provider_service: &registry,
     };
     let request = WorkflowRunRequest {
-        run_id: "branch-run".to_string(),
+        run_id: earmark_core::RunId::parse("branch-run").unwrap(),
         system_definition: system_ref,
         workflow: workflow_ref,
         inputs: vec![start_obj.object_ref()],
@@ -292,9 +292,9 @@ fn branching_execution() {
         .iter()
         .map(|e| e.transition.as_str())
         .collect();
-    assert!(ids.contains(&"root"));
-    assert!(ids.contains(&"branch1"));
-    assert!(ids.contains(&"branch2"));
+    assert!(ids.contains(&"tr_root"));
+    assert!(ids.contains(&"tr_branch1"));
+    assert!(ids.contains(&"tr_branch2"));
 }
 
 #[test]
@@ -302,7 +302,7 @@ fn parallel_transform_leak_bug() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     let registry = ProviderRegistry::default();
 
     // Setup compiled_context
@@ -543,13 +543,13 @@ fn parallel_transform_leak_bug() {
     store.write_object(&start_obj).unwrap();
 
     index.rebuild_from_store(&store).unwrap();
-    let engine = ExecutionEngine {
+    let mut engine = ExecutionEngine {
         store: &store,
-        index: &index,
+        index: &mut index,
         provider_service: &registry,
     };
     let request = WorkflowRunRequest {
-        run_id: "leak-run".to_string(),
+        run_id: earmark_core::RunId::parse("leak-run").unwrap(),
         system_definition: system_ref,
         workflow: workflow_ref,
         inputs: vec![start_obj.object_ref()],
@@ -563,13 +563,13 @@ fn parallel_transform_leak_bug() {
         .record
         .events
         .iter()
-        .find(|e| e.transition == "branch1")
+        .find(|e| e.transition == "tr_branch1")
         .unwrap();
     let b2 = outcome
         .record
         .events
         .iter()
-        .find(|e| e.transition == "branch2")
+        .find(|e| e.transition == "tr_branch2")
         .unwrap();
     let handoffs = store
         .scan_objects()
@@ -581,7 +581,7 @@ fn parallel_transform_leak_bug() {
             serde_json::from_slice::<earmark_core::HandoffManifest>(&obj.payload.bytes).unwrap()
         })
         .filter(|manifest| {
-            manifest.run_id == "leak-run" && manifest.from_transition_id == "project"
+            manifest.run_id == "run_leak-run" && manifest.from_transition_id == "tr_project"
         })
         .collect::<Vec<_>>();
 
@@ -592,10 +592,10 @@ fn parallel_transform_leak_bug() {
     assert_eq!(handoffs.len(), 2);
     assert!(handoffs
         .iter()
-        .any(|manifest| manifest.to_transition_id.as_deref() == Some("branch1")));
+        .any(|manifest| manifest.to_transition_id.as_deref() == Some("tr_branch1")));
     assert!(handoffs
         .iter()
-        .any(|manifest| manifest.to_transition_id.as_deref() == Some("branch2")));
+        .any(|manifest| manifest.to_transition_id.as_deref() == Some("tr_branch2")));
 }
 
 #[test]
@@ -603,10 +603,10 @@ fn execution_error_persists_failed_delta() {
     let dir = tempdir().unwrap();
     let store = GitCanonicalStore::new(dir.path());
     store.init_layout().unwrap();
-    let index = DerivedIndex::open(dir.path()).unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
     let registry = ProviderRegistry::default();
 
-    let instruction = create_simple_instruction(&store, &index, "fail", "fail", "always fail");
+    let instruction = create_simple_instruction(&store, &mut index, "fail", "fail", "always fail");
     let instruction_ref = instruction;
 
     let workflow = earmark_core::WorkflowDefinition {
@@ -687,13 +687,13 @@ fn execution_error_persists_failed_delta() {
     store.write_object(&start_obj).unwrap();
 
     index.rebuild_from_store(&store).unwrap();
-    let engine = ExecutionEngine {
+    let mut engine = ExecutionEngine {
         store: &store,
-        index: &index,
+        index: &mut index,
         provider_service: &registry,
     };
     let request = WorkflowRunRequest {
-        run_id: "run-fail".to_string(),
+        run_id: earmark_core::RunId::parse("run-fail").unwrap(),
         system_definition: system_ref,
         workflow: workflow_ref,
         inputs: vec![start_obj.object_ref()],
@@ -704,44 +704,22 @@ fn execution_error_persists_failed_delta() {
 
     let result = engine.run_workflow(request);
     assert!(result.is_err());
+    let err_msg = result.unwrap_err().to_string();
+    assert!(err_msg.contains("multi-output transform operations are not supported by this runtime; split the operation or use a supported operation kind"));
 
+    // Verify no execution state (like ChangeSet or TransitionAssignment) was created/written
     let objects = store.scan_objects().unwrap().scanned_objects;
-    let change_set = objects
+    assert!(!objects
         .iter()
-        .find(|obj| obj.envelope.kind == Kind::ChangeSet)
-        .expect("ChangeSet should be persisted on execution error");
-
-    let payload: earmark_core::ChangeSet =
-        serde_json::from_slice(&change_set.payload.bytes).unwrap();
-    println!("Validation Result: {:?}", payload.validation_results[0]);
-    assert!(!payload.validation_results.is_empty());
-    assert!(!payload.validation_results[0].is_valid);
-    assert!(payload.validation_results[0]
-        .failures
-        .join(" ")
-        .contains("multi-output transform operations are not yet implemented"));
-
-    let claim_obj = objects
+        .any(|obj| obj.envelope.kind == Kind::ChangeSet));
+    assert!(!objects
         .iter()
-        .filter(|obj| obj.envelope.kind == Kind::TransitionAssignment)
-        .find(|obj| {
-            let c: earmark_core::TransitionAssignment =
-                serde_json::from_slice(&obj.payload.bytes).unwrap();
-            c.status == earmark_core::AssignmentStatus::Blocked
-        })
-        .expect("Blocked TransitionAssignment should be persisted");
-    let assignment: earmark_core::TransitionAssignment =
-        serde_json::from_slice(&claim_obj.payload.bytes).unwrap();
-    assert!(assignment
-        .blocked_reason
-        .as_ref()
-        .unwrap()
-        .contains(change_set.envelope.id.as_str()));
+        .any(|obj| obj.envelope.kind == Kind::TransitionAssignment));
 }
 
 fn create_simple_instruction(
     store: &GitCanonicalStore,
-    index: &DerivedIndex,
+    index: &mut DerivedIndex,
     name: &str,
     purpose: &str,
     body: &str,
@@ -772,4 +750,197 @@ fn create_simple_instruction(
     index.rebuild_from_store(store).unwrap();
 
     earmark_core::ObjectRef::new(vref.id, vref.version_id, Kind::Instruction, None)
+}
+
+#[test]
+fn test_workflow_completion_semantics() {
+    let dir = tempdir().unwrap();
+    let store = GitCanonicalStore::new(dir.path());
+    store.init_layout().unwrap();
+    let mut index = DerivedIndex::open(dir.path()).unwrap();
+    let registry = ProviderRegistry::default();
+
+    let system = SystemDefinition {
+        system_id: "test-system".to_string(),
+        namespace: "test".to_string(),
+        title: "Test System".to_string(),
+        description: None,
+        classes: vec![],
+        instructions: vec![],
+        policies: vec![],
+        workflows: vec![],
+        compiled_contexts: vec![],
+        provider_profiles: vec![],
+        default_compiled_context: None,
+        default_provider_profile: None,
+        standing_dimensions: vec![],
+        runtime_profile: RuntimeProfile {
+            execution_surface: "runtime_over_folder".to_string(),
+            machine_output_default: "json".to_string(),
+            work_surface_mode: "materialized_manifest".to_string(),
+        },
+        activated_at: None,
+    };
+    let system_ref = store
+        .write_object(&StoredObject::new(
+            Kind::SystemDefinition,
+            None,
+            Standing::default(),
+            Provenance::direct_input("test"),
+            BTreeMap::new(),
+            StoredPayload::from_yaml(to_yaml(&system).unwrap()),
+            vec![],
+        ))
+        .unwrap();
+
+    let linear_wf = earmark_core::WorkflowDefinition {
+        name: "linear-wf".to_string(),
+        version: "0.1.0".to_string(),
+        description: None,
+        operations: vec![
+            earmark_core::WorkflowOperation {
+                id: "start_op".to_string(),
+                kind: WorkflowOperationKind::Review,
+                input_contracts: vec!["start".to_string()],
+                output_contracts: vec!["middle".to_string()],
+                instruction: None,
+                compiled_context: None,
+                policy: None,
+                provider_profile: None,
+            },
+            earmark_core::WorkflowOperation {
+                id: "next_op".to_string(),
+                kind: WorkflowOperationKind::Review,
+                input_contracts: vec!["middle".to_string()],
+                output_contracts: vec!["end".to_string()],
+                instruction: None,
+                compiled_context: None,
+                policy: None,
+                provider_profile: None,
+            },
+        ],
+        edges: vec![earmark_core::WorkflowEdge {
+            from: "start_op".to_string(),
+            to: "next_op".to_string(),
+            condition: None,
+        }],
+        guards: vec![],
+        output_contracts: vec![],
+    };
+    let linear_wf_ref = store
+        .write_object(&StoredObject::new(
+            Kind::Workflow,
+            None,
+            Standing::default(),
+            Provenance::direct_input("test"),
+            BTreeMap::new(),
+            StoredPayload::from_yaml(to_yaml(&linear_wf).unwrap()),
+            vec![],
+        ))
+        .unwrap();
+
+    let start_obj = StoredObject::new(
+        Kind::Object,
+        Some("start".to_string()),
+        Standing::default(),
+        Provenance::direct_input("test"),
+        BTreeMap::new(),
+        StoredPayload::from_markdown("start"),
+        vec![],
+    );
+    store.write_object(&start_obj).unwrap();
+    index.rebuild_from_store(&store).unwrap();
+
+    let mut engine = ExecutionEngine {
+        store: &store,
+        index: &mut index,
+        provider_service: &registry,
+    };
+
+    let outcome = engine
+        .run_workflow(WorkflowRunRequest {
+            run_id: earmark_core::RunId::parse("linear-run").unwrap(),
+            system_definition: system_ref.clone(),
+            workflow: linear_wf_ref,
+            inputs: vec![start_obj.object_ref()],
+            handoff_manifest: None,
+            transition_assignment: None,
+            operator_approved: true,
+        })
+        .unwrap();
+
+    assert_eq!(outcome.record.status, earmark_core::RunStatus::Completed);
+
+    let partial_wf = earmark_core::WorkflowDefinition {
+        name: "partial-wf".to_string(),
+        version: "0.1.0".to_string(),
+        description: None,
+        operations: vec![
+            earmark_core::WorkflowOperation {
+                id: "start_op".to_string(),
+                kind: WorkflowOperationKind::Review,
+                input_contracts: vec!["start".to_string()],
+                output_contracts: vec!["middle".to_string()],
+                instruction: None,
+                compiled_context: None,
+                policy: None,
+                provider_profile: None,
+            },
+            earmark_core::WorkflowOperation {
+                id: "unreachable_op".to_string(),
+                kind: WorkflowOperationKind::Review,
+                input_contracts: vec!["middle".to_string()],
+                output_contracts: vec!["end".to_string()],
+                instruction: None,
+                compiled_context: None,
+                policy: None,
+                provider_profile: None,
+            },
+        ],
+        edges: vec![earmark_core::WorkflowEdge {
+            from: "start_op".to_string(),
+            to: "unreachable_op".to_string(),
+            condition: Some("operator_approved".to_string()),
+        }],
+        guards: vec![],
+        output_contracts: vec![],
+    };
+    let partial_wf_ref = store
+        .write_object(&StoredObject::new(
+            Kind::Workflow,
+            None,
+            Standing::default(),
+            Provenance::direct_input("test"),
+            BTreeMap::new(),
+            StoredPayload::from_yaml(to_yaml(&partial_wf).unwrap()),
+            vec![],
+        ))
+        .unwrap();
+
+    let outcome_partial = engine
+        .run_workflow(WorkflowRunRequest {
+            run_id: earmark_core::RunId::parse("partial-run").unwrap(),
+            system_definition: system_ref,
+            workflow: partial_wf_ref,
+            inputs: vec![start_obj.object_ref()],
+            handoff_manifest: None,
+            transition_assignment: None,
+            operator_approved: false,
+        })
+        .unwrap();
+
+    assert_eq!(
+        outcome_partial.record.status,
+        earmark_core::RunStatus::Partial
+    );
+
+    let analysis_event = outcome_partial
+        .record
+        .events
+        .iter()
+        .find(|e| e.transition == "tr_analysis" && e.event_type == "partial_execution")
+        .expect("analysis transition not found");
+
+    let msg = analysis_event.message.as_ref().expect("message expected");
+    assert!(msg.contains("unreachable_op"), "message: {}", msg);
 }

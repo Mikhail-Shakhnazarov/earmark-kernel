@@ -2,7 +2,7 @@ use crate::error::{ProviderFailure, ProviderFailureKind};
 use crate::helpers::{estimate_tokens_approx, uuid_like};
 use chrono::Utc;
 use earmark_core::{
-    InstructionPayload, ProviderProfile, ProviderRecord, ProviderRequest, ProviderResponse,
+    InstructionPayload, Kind, ProviderProfile, ProviderRecord, ProviderRequest, ProviderResponse,
     ProviderResponseContract, ProviderResponseFormat, ProviderResponseStatus, ScalarValue,
     VersionRef,
 };
@@ -56,7 +56,7 @@ pub fn resolve_provider_profile(
 }
 
 pub trait ProviderAdapter: Send + Sync {
-    fn provider_key(&self) -> &'static str;
+    fn provider_key(&self) -> &str;
     fn provide(
         &self,
         request: ProviderRequest,
@@ -73,6 +73,14 @@ pub trait ProviderAdapter: Send + Sync {
             missing_env: vec![],
             message: None,
         }
+    }
+
+    fn can_satisfy_must_include_lineage(&self) -> bool {
+        false
+    }
+
+    fn can_satisfy_full_message_capture(&self) -> bool {
+        false
     }
 }
 
@@ -305,11 +313,36 @@ pub(crate) fn validate_provider_invocation(
         ));
     }
 
-    if !profile.exposure.allow_prose_objects {
-        warnings.push("Advisory: allow_prose_objects is false, but prose payload filtering is not yet enforced in this path.".to_string());
-    }
-    if !profile.exposure.allow_structured_declarations {
-        warnings.push("Advisory: allow_structured_declarations is false, but declaration filtering is not yet enforced in this path.".to_string());
+    for input in &request.inputs {
+        let is_structured = matches!(
+            input.kind,
+            Kind::Instruction
+                | Kind::Policy
+                | Kind::Workflow
+                | Kind::CompiledContextTemplate
+                | Kind::ProviderProfile
+                | Kind::SystemDefinition
+        ) || (input.kind == Kind::Object
+            && input.class.as_deref() == Some("class_definition"));
+
+        if is_structured && !profile.exposure.allow_structured_declarations {
+            return Err(ProviderFailure::new(
+                ProviderFailureKind::PolicyViolation,
+                format!(
+                    "Provider profile '{}' has allow_structured_declarations=false, input {} is a structured declaration (kind: {}, class: {})",
+                    profile.name, input.id, input.kind.as_str(), input.class.as_deref().unwrap_or("none")
+                ),
+            ));
+        }
+        if !is_structured && !profile.exposure.allow_prose_objects {
+            return Err(ProviderFailure::new(
+                ProviderFailureKind::PolicyViolation,
+                format!(
+                    "Provider profile '{}' has allow_prose_objects=false, input {} is a prose object (kind: {}, class: {})",
+                    profile.name, input.id, input.kind.as_str(), input.class.as_deref().unwrap_or("none")
+                ),
+            ));
+        }
     }
     if !profile.exposure.allow_export_requests && transition_operation == "export" {
         return Err(ProviderFailure::new(
@@ -327,14 +360,6 @@ pub(crate) fn validate_provider_invocation(
             "Advisory: max_latency_ms is configured to {} ms; timeout is adapter-level only and does not provide runtime cancellation guarantees.",
             max_latency_ms
         ));
-    }
-
-    // 4. Response Contract (Advisory)
-    if profile.response_contract.must_include_lineage {
-        warnings.push("Advisory: must_include_lineage is true, but lineage capture is not yet enforced by all adapters.".to_string());
-    }
-    if !profile.response_contract.must_return_candidate_only {
-        warnings.push("Advisory: must_return_candidate_only is false, but full message capture is not yet supported in this path.".to_string());
     }
 
     Ok(ProviderPolicyDecision {
@@ -369,12 +394,29 @@ pub(crate) fn reset_provider_circuit_registry_for_tests() {
 pub(crate) fn resolved_endpoint_identity(profile: &ProviderProfile) -> String {
     match profile.endpoint_env.as_deref() {
         Some(env_name) => match env::var(env_name) {
-            Ok(value) if !value.trim().is_empty() => value,
-            Ok(_) => format!("<empty:{}>", env_name),
-            Err(_) => format!("<unset:{}>", env_name),
+            Ok(value) if !value.trim().is_empty() => {
+                let trimmed = value.trim();
+                let prefix = if trimmed.contains("://") {
+                    "endpoint_url"
+                } else {
+                    "endpoint"
+                };
+                // Use a hash so the actual value never appears in logs/circuit keys
+                let hash = sha2_hex(trimmed);
+                format!("<{}:{}>", prefix, hash)
+            }
+            Ok(_) => crate::redact_sensitive(&format!("<empty:{}>", env_name)),
+            Err(_) => crate::redact_sensitive(&format!("<unset:{}>", env_name)),
         },
         None => "<default>".to_string(),
     }
+}
+
+fn sha2_hex(input: &str) -> String {
+    use sha2::Digest;
+    let mut hasher = sha2::Sha256::new();
+    hasher.update(input.as_bytes());
+    hex::encode(hasher.finalize())[..16].to_string()
 }
 
 pub(crate) fn provider_circuit_key(request: &ProviderRequest, profile: &ProviderProfile) -> String {
@@ -466,6 +508,31 @@ pub fn provide_with_registry_and_sleeper(
             format!("no adapter registered for provider {}", profile.provider),
         )
     })?;
+
+    // 3a. Contract capability enforcement
+    if profile.response_contract.must_include_lineage && !adapter.can_satisfy_must_include_lineage()
+    {
+        return Err(ProviderFailure::new(
+            ProviderFailureKind::PolicyViolation,
+            format!(
+                "Provider profile '{}' requires must_include_lineage, but adapter '{}' does not support lineage capture.",
+                profile.name,
+                adapter.provider_key()
+            ),
+        ));
+    }
+    if !profile.response_contract.must_return_candidate_only
+        && !adapter.can_satisfy_full_message_capture()
+    {
+        return Err(ProviderFailure::new(
+            ProviderFailureKind::PolicyViolation,
+            format!(
+                "Provider profile '{}' requires full message capture (must_return_candidate_only=false), but adapter '{}' does not support it.",
+                profile.name,
+                adapter.provider_key()
+            ),
+        ));
+    }
 
     // Policy Gate
     let policy_decision = validate_provider_invocation(profile, transition_operation, &request)?;
@@ -685,7 +752,9 @@ pub fn provider_record_from_failure(
         metadata,
         advisory_warnings: vec![],
         usage: None,
-        message: Some(failure.message.clone()),
+        message: Some(crate::redaction::Redactor::redact_failure_message(
+            &failure.message,
+        )),
         recorded_at: Utc::now(),
     }
 }
