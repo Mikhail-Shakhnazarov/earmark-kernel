@@ -82,6 +82,7 @@ pub struct CommandContext<'a> {
     pub loaded_provider_plugins: &'a [LoadedProviderPlugin],
     pub as_json: bool,
     pub actor: &'a str,
+    pub root: &'a std::path::Path,
 }
 
 pub struct BootstrappedServices {

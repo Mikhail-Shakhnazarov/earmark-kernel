@@ -634,6 +634,17 @@ pub(crate) fn handle_provider(
                 }),
             );
         }
+        ProviderAction::List => {
+            let search_paths = crate::config::resolve_provider_plugin_dirs(ctx.root, ctx.config);
+            emit(
+                as_json,
+                json!({
+                    "kind": "provider_list",
+                    "search_paths": search_paths,
+                    "loaded_plugins": ctx.loaded_provider_plugins,
+                }),
+            );
+        }
     }
     Ok(())
 }

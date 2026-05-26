@@ -48,6 +48,7 @@ pub fn run(cli: Cli) -> Result<(), common::CliError> {
         provider_registry: &bootstrapped.provider_registry,
         loaded_provider_plugins: &bootstrapped.loaded_provider_plugins,
         actor: &bootstrapped.actor,
+        root: &bootstrapped.root,
     };
 
     let command_name = common::command_family_name(&cli.command);
