@@ -110,7 +110,7 @@ pub enum Commands {
     StandingRequest(StandingRequestCommand),
     #[command(about = "[BETA] Undo a run")]
     Undo(UndoCommand),
-    #[command(about = "[STABLE] Manage native orchestration tasks")]
+    #[command(about = "[EXPERIMENTAL] Manage native orchestration tasks")]
     Orchestration(OrchestrationCommand),
 }
 
@@ -141,8 +141,9 @@ impl Commands {
             | Self::Audit(_)
             | Self::Provider(_)
             | Self::Completions { .. }
-            | Self::Undo(_)
-            | Self::Orchestration(_) => CommandStability::Experimental,
+            | Self::Undo(_) => CommandStability::Beta,
+
+            Self::Orchestration(_) => CommandStability::Experimental,
         }
     }
 }
@@ -273,7 +274,7 @@ pub fn command_catalog() -> Vec<CommandDescriptor> {
         },
         CommandDescriptor {
             name: "orchestration",
-            stability: CommandStability::Stable,
+            stability: CommandStability::Experimental,
             summary: "Manage native orchestration tasks",
         },
     ]

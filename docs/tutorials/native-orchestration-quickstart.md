@@ -1,6 +1,6 @@
-# Native Orchestration Quickstart
-
 Run a complete orchestration lifecycle — from task to review — in one walkthrough.
+
+> Status: Experimental. Native orchestration is available for local dogfooding and development coordination. Command names and JSON fields may change before public stabilization.
 
 ## Problem
 
@@ -32,13 +32,13 @@ Expected output (IDs will differ):
   "kind": "orchestration_example_init",
   "system_id": "sys_earmark_dev_orchestration",
   "namespace": "examples.earmark-dev",
-  "class_count": 15,
+  "class_count": 12,
   "workflow_count": 1,
   "activation_status": "active"
 }
 ```
 
-This registers 15 classes (`work_item`, `dispatch`, `context_packet`, `gate_result`, `git_snapshot`, `evidence`, `review`, `closure`, etc.) and one workflow.
+This registers 12 classes (`work_item`, `dispatch`, `context_packet`, `gate_result`, `git_snapshot`, `evidence`, `review`, `closure`, etc.) and one workflow.
 
 ## 2. Create a Work Item
 
@@ -56,7 +56,7 @@ Expected output shape:
 
 ```json
 {
-  "kind": "work_item_ingest",
+  "kind": "orchestration_work_item_ingest",
   "source": "native-json",
   "tasks": [
     {
@@ -151,7 +151,7 @@ Expected output shape:
 
 ```json
 {
-  "kind": "dispatch_ingest",
+  "kind": "orchestration_dispatch_ingest",
   "object_id": "obj_...",
   "version_id": "ver_...",
   "task_id": "pf-s1",
@@ -260,7 +260,7 @@ Replace `<dispatch_id>` with the `object_id` from the manifest ingest step. Expe
 
 ```json
 {
-  "kind": "evidence_ingest",
+  "kind": "orchestration_evidence_ingest",
   "object_id": "obj_...",
   "version_id": "ver_...",
   "task_id": "pf-s1",

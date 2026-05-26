@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Status: internal experimental dogfooding helper.
+# This script is not a stable public interface. Prefer the `em orchestration ...`
+# CLI commands and `scripts/dispatch-opencode.sh` for the current supported local path.
+
 ROOT_DEFAULT="/home/m/GITHUB/earmark-workspace"
 ROOT="${EARMARK_WORKSPACE:-$ROOT_DEFAULT}"
 

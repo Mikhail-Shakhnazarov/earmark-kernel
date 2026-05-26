@@ -187,6 +187,8 @@ List capabilities of compiled-in providers.
 
 ## Native Orchestration
 
+> Status: Experimental. Native orchestration is available for local dogfooding and development coordination. Command names and JSON fields may change before public stabilization.
+
 Self-hosting tools for tracking complex, multi-stage AI work programs.
 
 ### `em orchestration init-example [--example-root <path>]`
