@@ -1065,3 +1065,267 @@ fn review_rejected_updates_existing_task_to_closed() {
     let parsed_show: Value = serde_json::from_slice(&show_output).unwrap();
     assert_eq!(parsed_show["data"]["payload"]["status"], "rejected");
 }
+
+#[test]
+fn test_terminal_tasks_hidden_from_default_list() {
+    let (_dir, root) = setup_and_init_example();
+
+    // 1. Ingest task
+    let task_json_path = root.join("task.json");
+    let payload = serde_json::json!({
+        "task_id": "terminal-hide-task",
+        "title": "Terminal Hide Test",
+        "status": "proposed"
+    });
+    fs::write(&task_json_path, serde_json::to_string(&payload).unwrap()).unwrap();
+
+    let ingest_output = workspace_command()
+        .arg("--root")
+        .arg(&root)
+        .arg("--json")
+        .arg("orchestration")
+        .arg("ingest-task")
+        .arg("--source")
+        .arg("native-json")
+        .arg(&task_json_path)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed_ingest: Value = serde_json::from_slice(&ingest_output).unwrap();
+    let task_oid = parsed_ingest["data"]["tasks"][0]["object_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    // 2. Accept task
+    workspace_command()
+        .arg("--root")
+        .arg(&root)
+        .arg("--json")
+        .arg("orchestration")
+        .arg("review")
+        .arg(&task_oid)
+        .arg("--decision")
+        .arg("accepted")
+        .assert()
+        .success();
+
+    // 3. Verify hidden from default list
+    let list_output = workspace_command()
+        .arg("--root")
+        .arg(&root)
+        .arg("--json")
+        .arg("orchestration")
+        .arg("list")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed_list: Value = serde_json::from_slice(&list_output).unwrap();
+    let tasks = parsed_list["data"]["tasks"].as_array().unwrap();
+    assert!(tasks.iter().all(|t| t["task_id"] != "terminal-hide-task"));
+
+    // 4. Verify visible with --include-closed
+    let list_incl_output = workspace_command()
+        .arg("--root")
+        .arg(&root)
+        .arg("--json")
+        .arg("orchestration")
+        .arg("list")
+        .arg("--include-closed")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed_incl: Value = serde_json::from_slice(&list_incl_output).unwrap();
+    let tasks_incl = parsed_incl["data"]["tasks"].as_array().unwrap();
+    assert!(tasks_incl
+        .iter()
+        .any(|t| t["task_id"] == "terminal-hide-task"));
+}
+
+#[test]
+fn test_legacy_closed_normalizes_to_completed() {
+    let (_dir, root) = setup_and_init_example();
+
+    let task_json_path = root.join("task.json");
+    let payload = serde_json::json!({
+        "task_id": "legacy-closed-task",
+        "title": "Legacy Closed Test",
+        "status": "closed"
+    });
+    fs::write(&task_json_path, serde_json::to_string(&payload).unwrap()).unwrap();
+
+    workspace_command()
+        .arg("--root")
+        .arg(&root)
+        .arg("--json")
+        .arg("orchestration")
+        .arg("ingest-task")
+        .arg("--source")
+        .arg("native-json")
+        .arg(&task_json_path)
+        .assert()
+        .success();
+
+    // Verify list --status closed works (mapped to completed)
+    let list_output = workspace_command()
+        .arg("--root")
+        .arg(&root)
+        .arg("--json")
+        .arg("orchestration")
+        .arg("list")
+        .arg("--status")
+        .arg("closed")
+        .arg("--include-closed")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed_list: Value = serde_json::from_slice(&list_output).unwrap();
+    let tasks = parsed_list["data"]["tasks"].as_array().unwrap();
+    assert!(tasks.iter().any(|t| t["task_id"] == "legacy-closed-task"));
+    assert_eq!(tasks[0]["status"], "completed");
+}
+
+#[test]
+fn test_needs_revision_produces_followup_required() {
+    let (_dir, root) = setup_and_init_example();
+
+    let task_json_path = root.join("task.json");
+    let payload = serde_json::json!({
+        "task_id": "revision-task",
+        "title": "Revision Test",
+        "status": "proposed"
+    });
+    fs::write(&task_json_path, serde_json::to_string(&payload).unwrap()).unwrap();
+
+    let ingest_output = workspace_command()
+        .arg("--root")
+        .arg(&root)
+        .arg("--json")
+        .arg("orchestration")
+        .arg("ingest-task")
+        .arg("--source")
+        .arg("native-json")
+        .arg(&task_json_path)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed_ingest: Value = serde_json::from_slice(&ingest_output).unwrap();
+    let task_oid = parsed_ingest["data"]["tasks"][0]["object_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    workspace_command()
+        .arg("--root")
+        .arg(&root)
+        .arg("--json")
+        .arg("orchestration")
+        .arg("review")
+        .arg(&task_oid)
+        .arg("--decision")
+        .arg("needs_revision")
+        .assert()
+        .success();
+
+    let show_output = workspace_command()
+        .arg("--root")
+        .arg(&root)
+        .arg("--json")
+        .arg("orchestration")
+        .arg("show")
+        .arg(&task_oid)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed_show: Value = serde_json::from_slice(&show_output).unwrap();
+    let payload = &parsed_show["data"]["payload"];
+    assert_eq!(payload["status"], "followup_required");
+    assert_eq!(payload["kernel:process"], "active");
+    assert_eq!(payload["kernel:review"], "needs_revision");
+}
+
+#[test]
+fn test_closure_timeline_summary_is_populated() {
+    let (_dir, root) = setup_and_init_example();
+
+    let task_json_path = root.join("task.json");
+    let payload = serde_json::json!({
+        "task_id": "closure-summary-task",
+        "title": "Closure Summary Test",
+        "status": "proposed"
+    });
+    fs::write(&task_json_path, serde_json::to_string(&payload).unwrap()).unwrap();
+
+    let ingest_output = workspace_command()
+        .arg("--root")
+        .arg(&root)
+        .arg("--json")
+        .arg("orchestration")
+        .arg("ingest-task")
+        .arg("--source")
+        .arg("native-json")
+        .arg(&task_json_path)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed_ingest: Value = serde_json::from_slice(&ingest_output).unwrap();
+    let task_oid = parsed_ingest["data"]["tasks"][0]["object_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    workspace_command()
+        .arg("--root")
+        .arg(&root)
+        .arg("--json")
+        .arg("orchestration")
+        .arg("review")
+        .arg(&task_oid)
+        .arg("--decision")
+        .arg("accepted")
+        .assert()
+        .success();
+
+    let timeline_output = workspace_command()
+        .arg("--root")
+        .arg(&root)
+        .arg("--json")
+        .arg("orchestration")
+        .arg("timeline")
+        .arg(&task_oid)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed_timeline: Value = serde_json::from_slice(&timeline_output).unwrap();
+    let events = parsed_timeline["data"]["events"].as_array().unwrap();
+    let closure_event = events.iter().find(|e| e["class"] == "closure").unwrap();
+    assert!(closure_event["summary"]
+        .as_str()
+        .unwrap()
+        .to_lowercase()
+        .contains("accepted"));
+}

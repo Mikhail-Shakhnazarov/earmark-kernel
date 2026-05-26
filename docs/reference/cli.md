@@ -187,9 +187,11 @@ List capabilities of compiled-in providers.
 
 ## Native Orchestration
 
-> Status: Stable. Native Earmark orchestration commands for self-hosting development.
+> Status: Stable. Native Earmark orchestration commands provide the supported ledger for self-hosting development coordination.
 
 Self-hosting tools for tracking complex, multi-stage AI work programs.
+
+Work-item statuses are normalized to `proposed`, `active`, `under_review`, `followup_required`, `blocked`, `completed`, `accepted`, or `rejected`. By default, `em orchestration list` shows active work and hides terminal tasks (`completed`, `accepted`, `rejected`). Use `--include-closed` to include terminal tasks.
 
 ### `em orchestration init-example [--example-root <path>]`
 

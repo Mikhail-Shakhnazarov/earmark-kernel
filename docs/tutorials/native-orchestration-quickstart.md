@@ -1,6 +1,8 @@
+# Native Orchestration Quickstart
+
 Run a complete orchestration lifecycle — from task to review — in one walkthrough.
 
-> Status: Experimental. Native orchestration is available for local dogfooding and development coordination. Command names and JSON fields may change before public stabilization.
+> Status: Stable. Native Earmark orchestration commands provide the supported ledger for self-hosting development coordination.
 
 ## Problem
 
