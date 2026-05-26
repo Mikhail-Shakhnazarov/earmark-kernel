@@ -27,6 +27,8 @@ pub struct ObjectSummary {
     pub standing: BTreeMap<String, String>,
     #[serde(default)]
     pub headers: BTreeMap<String, String>,
+    pub created_at: String,
+    pub updated_at: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -497,7 +499,7 @@ impl DerivedIndex {
 
     pub fn query_objects(&self, filter: &QueryFilter) -> Result<Vec<ObjectSummary>, IndexError> {
         let mut sql = String::from(
-            "SELECT o.object_id, o.version_id, o.kind, o.class, o.title, o.summary, o.system_id, o.namespace, o.headers FROM objects o JOIN heads h ON o.object_id = h.object_id AND o.version_id = h.version_id WHERE 1=1",
+            "SELECT o.object_id, o.version_id, o.kind, o.class, o.title, o.summary, o.system_id, o.namespace, o.headers, o.created_at, o.updated_at FROM objects o JOIN heads h ON o.object_id = h.object_id AND o.version_id = h.version_id WHERE 1=1",
         );
         let mut values: Vec<String> = Vec::new();
 
@@ -555,6 +557,8 @@ impl DerivedIndex {
                     namespace: row.get(7)?,
                     standing: BTreeMap::new(),
                     headers: serde_json::from_str(&row.get::<_, String>(8)?).unwrap_or_default(),
+                    created_at: row.get(9)?,
+                    updated_at: row.get(10)?,
                 })
             })?;
             rows.collect::<Result<Vec<_>, _>>()?

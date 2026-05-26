@@ -15,7 +15,7 @@ fn setup_env() -> (GitCanonicalStore, DerivedIndex) {
     let root = dir.keep();
     let store = GitCanonicalStore::new(root.clone());
     store.init_layout().unwrap();
-    let mut index = DerivedIndex::open(&root).unwrap();
+    let index = DerivedIndex::open(&root).unwrap();
     (store, index)
 }
 

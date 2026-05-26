@@ -188,6 +188,50 @@ pub fn deposit_orchestration_object(
     Ok(vr)
 }
 
+pub fn update_orchestration_object_head(
+    store: &GitCanonicalStore,
+    index: &mut DerivedIndex,
+    object_id: ObjectId,
+    updated_payload: serde_json::Value,
+    headers: BTreeMap<String, earmark_core::HeaderValue>,
+    title: Option<String>,
+) -> Result<VersionRef, CliError> {
+    use earmark_core::{HeaderValue, Kind, Provenance};
+    use earmark_store::{StoredObject, StoredPayload};
+
+    let current_head = store.read_head(&object_id)?.ok_or_else(|| {
+        CliError::not_found(format!("object head not found: {}", object_id.as_str()))
+    })?;
+
+    let mut merged_headers = current_head.envelope.headers.clone();
+    for (key, value) in headers {
+        merged_headers.insert(key, value);
+    }
+
+    if let Some(title_val) = title {
+        merged_headers.insert("title".to_string(), HeaderValue::String(title_val));
+    }
+
+    let payload_bytes = serde_json::to_vec_pretty(&updated_payload)
+        .map_err(|e| CliError::argument(format!("failed to serialize payload: {}", e)))?;
+
+    let object = StoredObject::new_with_id(
+        object_id,
+        Kind::Object,
+        current_head.envelope.class.clone(),
+        current_head.envelope.standing.clone(),
+        Provenance::direct_input("operator"),
+        merged_headers,
+        StoredPayload::from_json_bytes(payload_bytes),
+        vec![current_head.envelope.version_ref()],
+    );
+
+    let vr = earmark_exec::persistence_helpers::write_object_and_index(store, index, &object)
+        .map_err(|e| CliError::argument(format!("failed to write object update: {}", e)))?;
+
+    Ok(vr)
+}
+
 pub fn create_orchestration_relation(
     store: &GitCanonicalStore,
     index: &mut DerivedIndex,
@@ -259,7 +303,7 @@ pub fn resolve_git_repo(
     // Try to find if we are in a worktree
     let output = std::process::Command::new("git")
         .current_dir(store_root)
-        .args(&["rev-parse", "--show-toplevel"])
+        .args(["rev-parse", "--show-toplevel"])
         .output();
 
     if let Ok(out) = output {

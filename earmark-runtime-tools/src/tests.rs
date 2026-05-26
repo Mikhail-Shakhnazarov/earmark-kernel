@@ -18,7 +18,7 @@ use tempfile::tempdir;
 fn setup_surface(dir: &std::path::Path) -> (GitCanonicalStore, DerivedIndex, ProviderRegistry) {
     let store = GitCanonicalStore::new(dir);
     store.init_layout().unwrap();
-    let mut index = DerivedIndex::open(dir).unwrap();
+    let index = DerivedIndex::open(dir).unwrap();
     let registry = ProviderRegistry::default();
     (store, index, registry)
 }
@@ -114,7 +114,7 @@ impl<S: CanonicalStore> CompiledContextCompiler<S> for FakeContextCompiler {
 fn test_compile_work_surface_supports_context_compiler_substitution() {
     let dir = tempdir().unwrap();
     let (store, mut index, registry) = setup_surface(dir.path());
-    let mut surface = RuntimeToolSurface {
+    let surface = RuntimeToolSurface {
         store: &store,
         index: &mut index,
         provider_service: &registry,
@@ -205,7 +205,7 @@ fn test_assignment_completion_creating_a_change_set() {
 fn test_loading_missing_handoff_manifest() {
     let dir = tempdir().unwrap();
     let (store, mut index, registry) = setup_surface(dir.path());
-    let mut surface = RuntimeToolSurface {
+    let surface = RuntimeToolSurface {
         store: &store,
         index: &mut index,
         provider_service: &registry,

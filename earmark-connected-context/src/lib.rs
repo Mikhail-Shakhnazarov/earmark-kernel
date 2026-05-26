@@ -596,6 +596,8 @@ mod tests {
             namespace: None,
             standing,
             headers: BTreeMap::new(),
+            created_at: "".to_string(),
+            updated_at: "".to_string(),
         };
 
         let mut filters = BTreeMap::new();
@@ -622,6 +624,8 @@ mod tests {
             namespace: None,
             standing: BTreeMap::new(),
             headers: BTreeMap::new(),
+            created_at: "".to_string(),
+            updated_at: "".to_string(),
         };
         let mut filters = BTreeMap::new();
         filters.insert("research:status".to_string(), vec!["verified".to_string()]);
@@ -644,6 +648,8 @@ mod tests {
             namespace: None,
             standing: BTreeMap::from([("research:status".to_string(), "verified".to_string())]),
             headers: BTreeMap::new(),
+            created_at: "".to_string(),
+            updated_at: "".to_string(),
         };
         let mut filters = BTreeMap::new();
         filters.insert("research:status".to_string(), vec![]);
@@ -666,6 +672,8 @@ mod tests {
             namespace: None,
             standing: BTreeMap::from([("research:status".to_string(), "demonstrated".to_string())]),
             headers: BTreeMap::new(),
+            created_at: "".to_string(),
+            updated_at: "".to_string(),
         };
         // Match via row.standing
         let filters = BTreeMap::from([(
@@ -826,7 +834,7 @@ mod tests {
         index.rebuild_from_store(&store).unwrap();
 
         let selected =
-            collect_selected_objects(&store, &mut index, &template_with_standing(BTreeMap::new()))
+            collect_selected_objects(&store, &index, &template_with_standing(BTreeMap::new()))
                 .unwrap();
         let ids = selected
             .iter()
@@ -856,7 +864,7 @@ mod tests {
         index.rebuild_from_store(&store).unwrap();
 
         let selected =
-            collect_selected_objects(&store, &mut index, &template_with_standing(BTreeMap::new()))
+            collect_selected_objects(&store, &index, &template_with_standing(BTreeMap::new()))
                 .unwrap();
         let ids = selected
             .iter()
@@ -887,7 +895,7 @@ mod tests {
         index.rebuild_from_store(&store).unwrap();
 
         let selected =
-            collect_selected_objects(&store, &mut index, &template_with_standing(BTreeMap::new()))
+            collect_selected_objects(&store, &index, &template_with_standing(BTreeMap::new()))
                 .unwrap();
         let d_count = selected
             .iter()
@@ -915,8 +923,7 @@ mod tests {
         let standing =
             BTreeMap::from([("kernel:review".to_string(), vec!["accepted".to_string()])]);
         let selected =
-            collect_selected_objects(&store, &mut index, &template_with_standing(standing))
-                .unwrap();
+            collect_selected_objects(&store, &index, &template_with_standing(standing)).unwrap();
         let ids = selected
             .iter()
             .map(|r| r.object_id.clone())
@@ -959,7 +966,7 @@ mod tests {
 
         let selection = collect_selection(
             &store,
-            &mut index,
+            &index,
             &template_with_select(
                 vec!["finding".to_string()],
                 BTreeMap::new(),
@@ -997,7 +1004,7 @@ mod tests {
             BTreeMap::from([("kernel:review".to_string(), vec!["accepted".to_string()])]);
         let selection = collect_selection(
             &store,
-            &mut index,
+            &index,
             &template_with_select(
                 vec!["note".to_string()],
                 standing,
@@ -1036,7 +1043,7 @@ mod tests {
             BTreeMap::from([("kernel:review".to_string(), vec!["accepted".to_string()])]);
         let selection = collect_selection(
             &store,
-            &mut index,
+            &index,
             &template_with_select(
                 vec!["note".to_string()],
                 standing,
@@ -1090,8 +1097,7 @@ mod tests {
         let standing =
             BTreeMap::from([("kernel:review".to_string(), vec!["accepted".to_string()])]);
         let selected =
-            collect_selected_objects(&store, &mut index, &template_with_standing(standing))
-                .unwrap();
+            collect_selected_objects(&store, &index, &template_with_standing(standing)).unwrap();
         let ids = selected
             .iter()
             .map(|r| r.object_id.clone())
@@ -1135,7 +1141,7 @@ mod tests {
 
         let selection = collect_selection(
             &store,
-            &mut index,
+            &index,
             &template_with_select(
                 vec!["finding".to_string()],
                 BTreeMap::new(),
@@ -1203,7 +1209,7 @@ mod tests {
 
         let reg = kernel_registry();
         let manifest =
-            CompiledContextService::compile(&store, &mut index, &template_ref, None, &reg).unwrap();
+            CompiledContextService::compile(&store, &index, &template_ref, None, &reg).unwrap();
 
         assert_eq!(manifest.objects.len(), 1);
         assert_eq!(manifest.boundary_relations.len(), 1);
@@ -1250,7 +1256,7 @@ mod tests {
         let mut template = template_with_standing(BTreeMap::new());
         template.select.expansion.include_boundary_relations = true;
 
-        let selection = collect_selection(&store, &mut index, &template).unwrap();
+        let selection = collect_selection(&store, &index, &template).unwrap();
 
         assert_eq!(selection.objects.len(), 2);
         assert_eq!(selection.boundary_relations.len(), 0);
@@ -1297,7 +1303,7 @@ mod tests {
         );
         template.select.expansion.include_boundary_relations = true;
 
-        let selection = collect_selection(&store, &mut index, &template).unwrap();
+        let selection = collect_selection(&store, &index, &template).unwrap();
 
         assert_eq!(selection.objects.len(), 1);
         assert_eq!(selection.boundary_relations.len(), 0);
@@ -1331,7 +1337,7 @@ mod tests {
         let mut template = template_with_standing(standing);
         template.select.expansion.include_boundary_relations = true;
 
-        let selection = collect_selection(&store, &mut index, &template).unwrap();
+        let selection = collect_selection(&store, &index, &template).unwrap();
 
         assert_eq!(selection.objects.len(), 1);
         assert_eq!(selection.boundary_relations.len(), 1);
@@ -1397,7 +1403,7 @@ mod tests {
 
         let reg = kernel_registry();
         let manifest =
-            CompiledContextService::compile(&store, &mut index, &template_ref, None, &reg).unwrap();
+            CompiledContextService::compile(&store, &index, &template_ref, None, &reg).unwrap();
         let evidence = render_evidence_pack(&manifest);
 
         assert!(evidence.contains("# Boundary Relations"));
@@ -1523,7 +1529,7 @@ mod tests {
 
         let reg = visibility_registry();
         let manifest =
-            CompiledContextService::compile(&store, &mut index, &template_ref, None, &reg).unwrap();
+            CompiledContextService::compile(&store, &index, &template_ref, None, &reg).unwrap();
 
         let ids: BTreeSet<_> = manifest
             .objects
@@ -1561,7 +1567,7 @@ mod tests {
 
         let reg = visibility_registry();
         let manifest =
-            CompiledContextService::compile(&store, &mut index, &template_ref, None, &reg).unwrap();
+            CompiledContextService::compile(&store, &index, &template_ref, None, &reg).unwrap();
 
         let ids: BTreeSet<_> = manifest
             .objects
@@ -1597,7 +1603,7 @@ mod tests {
 
         let reg = visibility_registry();
         let manifest =
-            CompiledContextService::compile(&store, &mut index, &template_ref, None, &reg).unwrap();
+            CompiledContextService::compile(&store, &index, &template_ref, None, &reg).unwrap();
 
         let ids: BTreeSet<_> = manifest
             .objects
@@ -1635,7 +1641,7 @@ mod tests {
 
         let reg = visibility_registry();
         let manifest =
-            CompiledContextService::compile(&store, &mut index, &template_ref, None, &reg).unwrap();
+            CompiledContextService::compile(&store, &index, &template_ref, None, &reg).unwrap();
 
         let ids: BTreeSet<_> = manifest
             .objects
@@ -1673,7 +1679,7 @@ mod tests {
 
         let reg = visibility_registry();
         let manifest =
-            CompiledContextService::compile(&store, &mut index, &template_ref, None, &reg).unwrap();
+            CompiledContextService::compile(&store, &index, &template_ref, None, &reg).unwrap();
 
         assert!(
             manifest
@@ -1739,7 +1745,7 @@ mod tests {
 
         let reg = visibility_registry();
         let manifest =
-            CompiledContextService::compile(&store, &mut index, &template_ref, None, &reg).unwrap();
+            CompiledContextService::compile(&store, &index, &template_ref, None, &reg).unwrap();
 
         // Excluded endpoint's payload must not leak
         let evidence = render_evidence_pack(&manifest);
@@ -1829,7 +1835,7 @@ mod tests {
 
         let reg = visibility_registry();
         let manifest =
-            CompiledContextService::compile(&store, &mut index, &template_ref, None, &reg).unwrap();
+            CompiledContextService::compile(&store, &index, &template_ref, None, &reg).unwrap();
 
         let object_ids: BTreeSet<String> = manifest
             .objects

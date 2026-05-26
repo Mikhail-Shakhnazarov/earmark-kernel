@@ -148,24 +148,24 @@ pub fn handle_timeline(ctx: &mut CommandContext, args: &ShowTaskArgs) -> Result<
 
     let nodes = super::graph::traverse_orchestration_graph(index_ref, store, &task_oid)?;
 
-    // Sort by timestamp (currently 0) or we could try to use index summary info
-    // For now, BFS order is a decent approximation of causality, but let's try to sort
-    // if we had real timestamps. BFS usually discovers dispatches before evidence.
-
     let mut events = Vec::new();
     for node in nodes {
         events.push(json!({
-            "type": node.class,
+            "class": node.class,
             "object_id": node.object_id.as_str(),
             "payload": node.payload,
             "timestamp": node.timestamp
         }));
     }
 
+    // Sort by timestamp
+    events.sort_by_key(|e| e.get("timestamp").and_then(|v| v.as_i64()).unwrap_or(0));
+
     emit(
         as_json,
         json!({
             "kind": "orchestration_timeline",
+            "work_item_id": task_oid.as_str(),
             "task_id": args.task_id,
             "events": events,
         }),
