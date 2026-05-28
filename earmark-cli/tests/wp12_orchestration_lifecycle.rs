@@ -10,7 +10,7 @@ fn workspace_command() -> Command {
         .parent()
         .unwrap()
         .to_path_buf();
-    let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
+    let mut cmd = Command::cargo_bin("em").unwrap();
     cmd.current_dir(ws_root);
     cmd
 }

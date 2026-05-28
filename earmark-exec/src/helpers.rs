@@ -148,11 +148,16 @@ pub fn store_work_packet<S: CanonicalStore>(
     index: &mut DerivedIndex,
     work_packet: &WorkPacket,
 ) -> Result<StoredObject, ExecError> {
+    let class_name = if !work_packet.expected_outputs.is_empty() {
+        work_packet.expected_outputs[0].clone()
+    } else {
+        "work_packet".to_string()
+    };
     let stored = StoredObject::builder(
         Kind::WorkPacket,
         StoredPayload::from_json_bytes(serde_json::to_vec_pretty(work_packet)?),
     )
-    .class("work_packet")
+    .class(class_name)
     .provenance(earmark_core::Provenance::direct_input("execution_engine"))
     .header("title", format!("WorkPacket for {}", work_packet.purpose))
     .build()

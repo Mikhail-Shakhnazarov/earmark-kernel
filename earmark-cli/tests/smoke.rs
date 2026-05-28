@@ -10,7 +10,7 @@ fn test_quickstart_smoke_path() {
     let workspace = workspace_root();
 
     // 1. em init
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)
@@ -21,7 +21,7 @@ fn test_quickstart_smoke_path() {
 
     // 2. em system register
     let manifest = workspace.join("examples/research-synthesis/declarations/systems/system.yaml");
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)
@@ -33,7 +33,7 @@ fn test_quickstart_smoke_path() {
         .success();
 
     // 3. em system activate
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)
@@ -45,7 +45,7 @@ fn test_quickstart_smoke_path() {
         .success();
 
     // 4. em deposit
-    let deposit_output = Command::cargo_bin("earmark-cli")
+    let deposit_output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)
@@ -69,7 +69,7 @@ fn test_quickstart_smoke_path() {
         .expect("object_id missing");
 
     // 5. em query
-    let query_output = Command::cargo_bin("earmark-cli")
+    let query_output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)
@@ -91,7 +91,7 @@ fn test_quickstart_smoke_path() {
     assert_eq!(items[0]["object_id"], object_id);
 
     // 6. em workflow run
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)
@@ -107,7 +107,7 @@ fn test_quickstart_smoke_path() {
         .success();
 
     // 7. em run explain latest
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)

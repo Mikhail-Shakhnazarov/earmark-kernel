@@ -1,7 +1,7 @@
 use serde_json::json;
 use std::cell::RefCell;
 
-pub const CONTRACT_VERSION: &str = "0.2.0";
+pub const CLI_CONTRACT_VERSION: &str = "0.3.0";
 
 thread_local! {
     static CLI_CTX: RefCell<Option<CliContext>> = const { RefCell::new(None) };
@@ -39,7 +39,7 @@ pub fn command_name() -> Option<&'static str> {
 
 pub fn emit_json_envelope(value: serde_json::Value) {
     let envelope = json!({
-        "contract_version": CONTRACT_VERSION,
+        "contract_version": CLI_CONTRACT_VERSION,
         "ok": true,
         "data": value
     });
@@ -51,7 +51,7 @@ pub fn emit_json_envelope(value: serde_json::Value) {
 
 pub fn emit_error_envelope(message: &str) {
     let value = json!({
-        "contract_version": CONTRACT_VERSION,
+        "contract_version": CLI_CONTRACT_VERSION,
         "ok": false,
         "error": {
             "message": message,
@@ -68,7 +68,7 @@ pub fn emit_error_envelope(message: &str) {
 
 pub fn emit_error_envelope_with_kind(message: &str, kind: &str) {
     let value = json!({
-        "contract_version": CONTRACT_VERSION,
+        "contract_version": CLI_CONTRACT_VERSION,
         "ok": false,
         "error": {
             "message": message,

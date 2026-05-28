@@ -10,7 +10,7 @@ fn write_test_declaration(dir: &std::path::Path, name: &str, content: &str) -> P
 }
 
 fn init_workspace(dir: &std::path::Path) {
-    let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
+    let mut cmd = Command::cargo_bin("em").unwrap();
     cmd.arg("--root").arg(dir).arg("init");
     cmd.assert().success();
 }
@@ -25,7 +25,7 @@ fn register_non_sensitive_declaration_no_auth() {
         "instruction.md",
         r#"---
 name: test_instruction
-version: 0.2.0
+version: 0.3.0
 description: Test instruction
 purpose: test
 input_classes:
@@ -39,7 +39,7 @@ register: default
 Hello world"#,
     );
 
-    let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
+    let mut cmd = Command::cargo_bin("em").unwrap();
     cmd.arg("--root")
         .arg(dir.path())
         .arg("declare")
@@ -59,14 +59,14 @@ fn register_sensitive_declaration_fails_when_unauthorized() {
         dir.path(),
         "standing_policy.yaml",
         r#"name: test_policy
-version: 0.2.0
+version: 0.3.0
 description: Test
 transition_rules: []
 operation_requirements: []
 escalations: []"#,
     );
 
-    let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
+    let mut cmd = Command::cargo_bin("em").unwrap();
     cmd.arg("--root")
         .arg(dir.path())
         .arg("declare")
@@ -88,14 +88,14 @@ fn register_sensitive_declaration_succeeds_when_authorized() {
         dir.path(),
         "standing_policy.yaml",
         r#"name: test_policy
-version: 0.2.0
+version: 0.3.0
 description: Test
 transition_rules: []
 operation_requirements: []
 escalations: []"#,
     );
 
-    let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
+    let mut cmd = Command::cargo_bin("em").unwrap();
     cmd.arg("--root")
         .arg(dir.path())
         .arg("declare")
@@ -117,7 +117,7 @@ fn register_provider_profile_fails_when_unauthorized() {
         dir.path(),
         "provider.yaml",
         r#"name: test_provider
-version: 0.2.0
+version: 0.3.0
 description: Test
 provider: mock
 model: echo
@@ -135,7 +135,7 @@ response_contract:
   format: text"#,
     );
 
-    let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
+    let mut cmd = Command::cargo_bin("em").unwrap();
     cmd.arg("--root")
         .arg(dir.path())
         .arg("declare")

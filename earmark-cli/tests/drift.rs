@@ -50,7 +50,7 @@ fn test_documentation_drift() {
 
     for (base_cmd, flags) in documented_commands {
         let parts: Vec<&str> = base_cmd.split_whitespace().collect();
-        let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
+        let mut cmd = Command::cargo_bin("em").unwrap();
 
         for part in &parts {
             cmd.arg(part);

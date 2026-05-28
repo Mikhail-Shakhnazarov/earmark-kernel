@@ -14,14 +14,14 @@ use tempfile::tempdir;
 #[test]
 fn deposit_outputs_machine_readable_json() {
     let dir = tempdir().unwrap();
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
         .arg("init")
         .assert()
         .success();
-    let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
+    let mut cmd = Command::cargo_bin("em").unwrap();
     cmd.arg("--root")
         .arg(dir.path())
         .arg("--json")
@@ -34,7 +34,7 @@ fn deposit_outputs_machine_readable_json() {
         .arg("world");
     let output = cmd.assert().success().get_output().stdout.clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    assert_eq!(parsed["contract_version"], "0.2.0");
+    assert_eq!(parsed["contract_version"], "0.3.0");
     assert_eq!(parsed["ok"], true);
     assert_eq!(parsed["data"]["class"], "note");
 }
@@ -42,14 +42,14 @@ fn deposit_outputs_machine_readable_json() {
 #[test]
 fn query_outputs_machine_readable_json() {
     let dir = tempdir().unwrap();
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
         .arg("init")
         .assert()
         .success();
-    let mut deposit = Command::cargo_bin("earmark-cli").unwrap();
+    let mut deposit = Command::cargo_bin("em").unwrap();
     deposit
         .arg("--root")
         .arg(dir.path())
@@ -64,7 +64,7 @@ fn query_outputs_machine_readable_json() {
         .assert()
         .success();
 
-    let mut query = Command::cargo_bin("earmark-cli").unwrap();
+    let mut query = Command::cargo_bin("em").unwrap();
     query
         .arg("--root")
         .arg(dir.path())
@@ -84,7 +84,7 @@ fn query_outputs_machine_readable_json() {
 #[test]
 fn system_activate_outputs_machine_readable_json() {
     let dir = tempdir().unwrap();
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -115,7 +115,7 @@ activated_at: null
     )
     .unwrap();
 
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -126,7 +126,7 @@ activated_at: null
         .assert()
         .success();
 
-    let output = Command::cargo_bin("earmark-cli")
+    let output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -148,7 +148,7 @@ activated_at: null
 #[test]
 fn declare_validate_class_outputs_summary() {
     let dir = tempdir().unwrap();
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -159,7 +159,7 @@ fn declare_validate_class_outputs_summary() {
     let workspace = workspace_root();
     let class_path = workspace.join("docs/declarations/examples/classes/finding.yaml");
 
-    let output = Command::cargo_bin("earmark-cli")
+    let output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -184,7 +184,7 @@ fn declare_validate_class_outputs_summary() {
 #[test]
 fn declare_explain_workflow_outputs_operations() {
     let dir = tempdir().unwrap();
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -196,7 +196,7 @@ fn declare_explain_workflow_outputs_operations() {
     let pattern_path =
         workspace.join("docs/declarations/examples/workflows/source_to_finding.yaml");
 
-    let output = Command::cargo_bin("earmark-cli")
+    let output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -238,7 +238,7 @@ fn declare_list_examples_outputs_examples() {
         "name: finding\nversion: 1\n",
     )
     .unwrap();
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -246,7 +246,7 @@ fn declare_list_examples_outputs_examples() {
         .arg("init")
         .assert()
         .success();
-    let output = Command::cargo_bin("earmark-cli")
+    let output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -270,7 +270,7 @@ fn declare_list_examples_outputs_examples() {
 #[test]
 fn declare_list_examples_empty_in_fresh_workspace() {
     let dir = tempdir().unwrap();
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -278,7 +278,7 @@ fn declare_list_examples_empty_in_fresh_workspace() {
         .arg("init")
         .assert()
         .success();
-    let output = Command::cargo_bin("earmark-cli")
+    let output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -303,7 +303,7 @@ fn declare_list_examples_empty_in_fresh_workspace() {
 #[test]
 fn init_outputs_workspace_paths() {
     let dir = tempdir().unwrap();
-    let output = Command::cargo_bin("earmark-cli")
+    let output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -331,7 +331,7 @@ fn init_outputs_workspace_paths() {
 #[test]
 fn doctor_reports_uninitialized_workspace_without_side_effects() {
     let dir = tempdir().unwrap();
-    let output = Command::cargo_bin("earmark-cli")
+    let output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -353,7 +353,7 @@ fn doctor_reports_uninitialized_workspace_without_side_effects() {
 #[test]
 fn run_list_outputs_json() {
     let dir = tempdir().unwrap();
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -361,7 +361,7 @@ fn run_list_outputs_json() {
         .arg("init")
         .assert()
         .success();
-    let output = Command::cargo_bin("earmark-cli")
+    let output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -381,7 +381,7 @@ fn run_list_outputs_json() {
 #[test]
 fn status_outputs_artifact_counts() {
     let dir = tempdir().unwrap();
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -389,7 +389,7 @@ fn status_outputs_artifact_counts() {
         .arg("init")
         .assert()
         .success();
-    let output = Command::cargo_bin("earmark-cli")
+    let output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -410,7 +410,7 @@ fn status_outputs_artifact_counts() {
 #[test]
 fn artifact_explain_missing_id_fails_cleanly() {
     let dir = tempdir().unwrap();
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -418,7 +418,7 @@ fn artifact_explain_missing_id_fails_cleanly() {
         .arg("init")
         .assert()
         .success();
-    let output = Command::cargo_bin("earmark-cli")
+    let output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -432,7 +432,7 @@ fn artifact_explain_missing_id_fails_cleanly() {
         .stdout
         .clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    assert_eq!(parsed["contract_version"], "0.2.0");
+    assert_eq!(parsed["contract_version"], "0.3.0");
     assert_eq!(parsed["ok"], false);
     assert!(parsed["error"]["message"]
         .as_str()
@@ -443,7 +443,7 @@ fn artifact_explain_missing_id_fails_cleanly() {
 #[test]
 fn declare_new_scaffolds_file() {
     let dir = tempdir().unwrap();
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -453,7 +453,7 @@ fn declare_new_scaffolds_file() {
         .success();
 
     let output_path = dir.path().join("declarations/workflows/sample_flow.yaml");
-    let output = Command::cargo_bin("earmark-cli")
+    let output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -478,7 +478,7 @@ fn declare_new_scaffolds_file() {
 #[test]
 fn system_path_manifest_validates() {
     let dir = tempdir().unwrap();
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -488,7 +488,7 @@ fn system_path_manifest_validates() {
         .success();
     let manifest =
         workspace_root().join("examples/research-synthesis/declarations/systems/system.yaml");
-    let output = Command::cargo_bin("earmark-cli")
+    let output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -511,7 +511,7 @@ fn system_path_manifest_validates() {
 #[test]
 fn path_manifest_without_schema_is_not_classified_as_path_manifest() {
     let dir = tempdir().unwrap();
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -544,7 +544,7 @@ runtime_profile:
     )
     .unwrap();
 
-    let output = Command::cargo_bin("earmark-cli")
+    let output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -568,7 +568,7 @@ runtime_profile:
 #[test]
 fn path_manifest_with_schema_accepts_empty_classes() {
     let dir = tempdir().unwrap();
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -601,7 +601,7 @@ runtime_profile:
     )
     .unwrap();
 
-    let output = Command::cargo_bin("earmark-cli")
+    let output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -625,7 +625,7 @@ runtime_profile:
 #[test]
 fn canonical_system_definition_not_misclassified_as_path_manifest() {
     let dir = tempdir().unwrap();
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -658,7 +658,7 @@ activated_at: null
     )
     .unwrap();
 
-    let output = Command::cargo_bin("earmark-cli")
+    let output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -684,7 +684,7 @@ activated_at: null
 
 #[test]
 fn completions_command_generates_bash_script() {
-    let output = Command::cargo_bin("earmark-cli")
+    let output = Command::cargo_bin("em")
         .unwrap()
         .arg("completions")
         .arg("bash")
@@ -701,7 +701,7 @@ fn completions_command_generates_bash_script() {
 fn status_requires_initialized_workspace_without_creating_layout() {
     let dir = tempdir().unwrap();
 
-    let output = Command::cargo_bin("earmark-cli")
+    let output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -727,7 +727,7 @@ fn status_requires_initialized_workspace_without_creating_layout() {
 fn query_requires_initialized_workspace_without_creating_layout() {
     let dir = tempdir().unwrap();
 
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -746,7 +746,7 @@ fn query_requires_initialized_workspace_without_creating_layout() {
 fn completions_does_not_touch_workspace() {
     let dir = tempdir().unwrap();
 
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -762,7 +762,7 @@ fn completions_does_not_touch_workspace() {
 #[test]
 fn workflow_run_uses_config_default_system_id() {
     let dir = tempdir().unwrap();
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -778,7 +778,7 @@ fn workflow_run_uses_config_default_system_id() {
 
     let workspace = workspace_root();
     let manifest = workspace.join("examples/research-synthesis/declarations/systems/system.yaml");
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -787,7 +787,7 @@ fn workflow_run_uses_config_default_system_id() {
         .arg(&manifest)
         .assert()
         .success();
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -797,7 +797,7 @@ fn workflow_run_uses_config_default_system_id() {
         .assert()
         .success();
 
-    let deposit_output = Command::cargo_bin("earmark-cli")
+    let deposit_output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -817,7 +817,7 @@ fn workflow_run_uses_config_default_system_id() {
     let parsed: Value = serde_json::from_slice(&deposit_output).unwrap();
     let object_id = parsed["data"]["object_id"].as_str().unwrap();
 
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -834,7 +834,7 @@ fn workflow_run_uses_config_default_system_id() {
 #[test]
 fn test_deposit_rejection_in_active_system() {
     let dir = tempdir().unwrap();
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -848,7 +848,7 @@ fn test_deposit_rejection_in_active_system() {
         workspace.join("examples/research-synthesis/declarations/systems/system.yaml");
 
     // Register and activate system
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -857,7 +857,7 @@ fn test_deposit_rejection_in_active_system() {
         .arg(&system_manifest)
         .assert()
         .success();
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -875,7 +875,7 @@ fn test_deposit_rejection_in_active_system() {
 
     // 3. Deposit non-admitted class should fail
     // research-synthesis admits 'source_note', 'finding', etc. but NOT 'unauthorized_class'
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -899,7 +899,7 @@ fn test_deposit_rejection_in_active_system() {
 #[test]
 fn test_deposit_fails_on_bad_system_context() {
     let dir = tempdir().unwrap();
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -913,7 +913,7 @@ fn test_deposit_fails_on_bad_system_context() {
     let canonical_path = dir.path().join(".earmark").join("canonical");
     let count_before = fs::read_dir(&canonical_path).unwrap().count();
 
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -952,7 +952,7 @@ fn env_root_overrides_config_root() {
     .unwrap();
 
     unsafe { std::env::set_var("EM_ROOT", env_root.as_os_str()) };
-    let output = Command::cargo_bin("earmark-cli")
+    let output = Command::cargo_bin("em")
         .unwrap()
         .arg("--config")
         .arg(&cfg_path)
@@ -979,7 +979,7 @@ fn cli_root_overrides_env_root() {
     fs::create_dir_all(&cli_root).unwrap();
 
     unsafe { std::env::set_var("EM_ROOT", env_root.as_os_str()) };
-    let output = Command::cargo_bin("earmark-cli")
+    let output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(&cli_root)
@@ -1000,7 +1000,7 @@ fn cli_root_overrides_env_root() {
 #[test]
 fn doctor_reports_healthy_workspace_after_deposit() {
     let dir = tempdir().unwrap();
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -1009,7 +1009,7 @@ fn doctor_reports_healthy_workspace_after_deposit() {
         .assert()
         .success();
 
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -1024,7 +1024,7 @@ fn doctor_reports_healthy_workspace_after_deposit() {
         .assert()
         .success();
 
-    let output = Command::cargo_bin("earmark-cli")
+    let output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -1053,7 +1053,7 @@ fn doctor_reports_healthy_workspace_after_deposit() {
 #[test]
 fn doctor_reports_index_missing_after_deletion() {
     let dir = tempdir().unwrap();
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -1069,7 +1069,7 @@ fn doctor_reports_index_missing_after_deletion() {
         .join("index.sqlite");
     let _ = std::fs::remove_file(&index_path);
 
-    let output = Command::cargo_bin("earmark-cli")
+    let output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -1099,7 +1099,7 @@ fn doctor_reports_dirty_index_without_implicit_repair() {
     let dir = tempdir().unwrap();
     let root = dir.path();
 
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)
@@ -1108,7 +1108,7 @@ fn doctor_reports_dirty_index_without_implicit_repair() {
         .assert()
         .success();
 
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)
@@ -1135,7 +1135,7 @@ fn doctor_reports_dirty_index_without_implicit_repair() {
         })
         .unwrap();
 
-    let output = Command::cargo_bin("earmark-cli")
+    let output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)
@@ -1160,7 +1160,7 @@ fn doctor_repair_index_rebuilds_and_clears_dirty_marker() {
     let dir = tempdir().unwrap();
     let root = dir.path();
 
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)
@@ -1169,7 +1169,7 @@ fn doctor_repair_index_rebuilds_and_clears_dirty_marker() {
         .assert()
         .success();
 
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)
@@ -1197,7 +1197,7 @@ fn doctor_repair_index_rebuilds_and_clears_dirty_marker() {
         .unwrap();
     assert!(index.dirty_status().unwrap().is_some());
 
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)
@@ -1207,7 +1207,7 @@ fn doctor_repair_index_rebuilds_and_clears_dirty_marker() {
         .assert()
         .success();
 
-    let doctor_output = Command::cargo_bin("earmark-cli")
+    let doctor_output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)
@@ -1230,7 +1230,7 @@ fn doctor_repair_index_reports_partial_when_canonical_entries_are_skipped() {
     let dir = tempdir().unwrap();
     let root = dir.path();
 
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)
@@ -1239,7 +1239,7 @@ fn doctor_repair_index_reports_partial_when_canonical_entries_are_skipped() {
         .assert()
         .success();
 
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)
@@ -1275,7 +1275,7 @@ fn doctor_repair_index_reports_partial_when_canonical_entries_are_skipped() {
         .unwrap();
     fs::write(envelope, "{not-json").unwrap();
 
-    let repair_output = Command::cargo_bin("earmark-cli")
+    let repair_output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)
@@ -1299,7 +1299,7 @@ fn doctor_repair_index_reports_partial_when_canonical_entries_are_skipped() {
         .unwrap()
         .is_empty());
 
-    let doctor_output = Command::cargo_bin("earmark-cli")
+    let doctor_output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)
@@ -1328,7 +1328,7 @@ fn demo_path_research_synthesis_full_workflow() {
         repo_root.join("examples/research-synthesis/data/seed_notes/note_2_challenges.md");
 
     // 1. init
-    let output = Command::cargo_bin("earmark-cli")
+    let output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)
@@ -1343,7 +1343,7 @@ fn demo_path_research_synthesis_full_workflow() {
     assert_eq!(parsed["ok"], true);
 
     // 2. system register
-    let output = Command::cargo_bin("earmark-cli")
+    let output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)
@@ -1361,7 +1361,7 @@ fn demo_path_research_synthesis_full_workflow() {
     assert_eq!(parsed["data"]["kind"], "system_registration");
 
     // 3. system activate
-    let output = Command::cargo_bin("earmark-cli")
+    let output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)
@@ -1379,7 +1379,7 @@ fn demo_path_research_synthesis_full_workflow() {
     assert_eq!(parsed["data"]["system_id"], "sys_research_synthesis");
 
     // 4. deposit seed note 1
-    let output = Command::cargo_bin("earmark-cli")
+    let output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)
@@ -1402,7 +1402,7 @@ fn demo_path_research_synthesis_full_workflow() {
     let note1_id = parsed["data"]["object_id"].as_str().unwrap().to_string();
 
     // 5. deposit seed note 2
-    let output = Command::cargo_bin("earmark-cli")
+    let output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)
@@ -1424,7 +1424,7 @@ fn demo_path_research_synthesis_full_workflow() {
     assert_eq!(parsed["data"]["class"], "source_note");
 
     // 6. query source notes
-    let output = Command::cargo_bin("earmark-cli")
+    let output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)
@@ -1442,7 +1442,7 @@ fn demo_path_research_synthesis_full_workflow() {
     assert_eq!(results.len(), 2);
 
     // 7. workflow run
-    let output = Command::cargo_bin("earmark-cli")
+    let output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)
@@ -1478,7 +1478,7 @@ fn demo_path_research_synthesis_full_workflow() {
     assert!(parsed["data"]["output_count"].as_u64().is_some());
 
     // 8. run explain
-    let output = Command::cargo_bin("earmark-cli")
+    let output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)
@@ -1496,7 +1496,7 @@ fn demo_path_research_synthesis_full_workflow() {
     assert_eq!(parsed["data"]["kind"], "run");
 
     // 9. run timeline
-    let output = Command::cargo_bin("earmark-cli")
+    let output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)
@@ -1513,7 +1513,7 @@ fn demo_path_research_synthesis_full_workflow() {
     assert_eq!(parsed["ok"], true);
 
     // 10. query findings
-    let output = Command::cargo_bin("earmark-cli")
+    let output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)
@@ -1534,7 +1534,7 @@ fn demo_path_research_synthesis_full_workflow() {
         .map(str::to_string);
 
     // 11. query summaries
-    let output = Command::cargo_bin("earmark-cli")
+    let output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)
@@ -1558,7 +1558,7 @@ fn demo_path_research_synthesis_full_workflow() {
     }
 
     // 12. handoff explain (use first handoff from the run)
-    let output = Command::cargo_bin("earmark-cli")
+    let output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)
@@ -1583,7 +1583,7 @@ fn demo_path_research_synthesis_full_workflow() {
     let first_handoff = handoffs[0]
         .as_str()
         .expect("handoff entries should be handoff IDs");
-    let output = Command::cargo_bin("earmark-cli")
+    let output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)
@@ -1613,7 +1613,7 @@ fn demo_path_research_synthesis_full_workflow() {
     );
 
     // 13. run graph
-    let output = Command::cargo_bin("earmark-cli")
+    let output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)
@@ -1631,7 +1631,7 @@ fn demo_path_research_synthesis_full_workflow() {
 
     // 14. report generation
     let report_path = root.join("research_report.html");
-    let output = Command::cargo_bin("earmark-cli")
+    let output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)
@@ -1654,7 +1654,7 @@ fn demo_path_research_synthesis_full_workflow() {
     assert!(!report_bytes.is_empty());
 
     // 15. doctor reports healthy
-    let output = Command::cargo_bin("earmark-cli")
+    let output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)
@@ -1700,7 +1700,7 @@ fn assert_paths_eq<P1: AsRef<std::path::Path>, P2: AsRef<std::path::Path>>(
 #[test]
 fn provider_capabilities_outputs_json() {
     let dir = tempdir().unwrap();
-    let output = Command::cargo_bin("earmark-cli")
+    let output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -1724,7 +1724,7 @@ fn failure_cli_inspection_commands_with_real_failure() {
     let dir = tempdir().unwrap();
 
     // Init workspace via CLI
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -1841,7 +1841,7 @@ guards: []
     };
 
     // Test failure explain exposes related context and next commands
-    let output = Command::cargo_bin("earmark-cli")
+    let output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -1862,7 +1862,7 @@ guards: []
     assert!(parsed["data"]["artifact"]["input_object_ids"].is_array());
 
     // Test failure list --run-id returns the failure
-    let output = Command::cargo_bin("earmark-cli")
+    let output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -1887,7 +1887,7 @@ guards: []
         .any(|f| f["assignment_id"].as_str().is_some()));
 
     // Test run artifacts includes the failure
-    let output = Command::cargo_bin("earmark-cli")
+    let output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -1911,7 +1911,7 @@ guards: []
 #[test]
 fn json_output_uses_versioned_envelope() {
     let dir = tempdir().unwrap();
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -1927,7 +1927,7 @@ fn json_output_uses_versioned_envelope() {
         vec!["doctor"],
         vec!["provider", "capabilities"],
     ] {
-        let output = Command::cargo_bin("earmark-cli")
+        let output = Command::cargo_bin("em")
             .unwrap()
             .arg("--root")
             .arg(dir.path())
@@ -1941,7 +1941,7 @@ fn json_output_uses_versioned_envelope() {
         let parsed: Value = serde_json::from_slice(&output).unwrap();
         assert_eq!(
             parsed["contract_version"],
-            "0.2.0",
+            "0.3.0",
             "command '{}' missing contract_version",
             cmd_and_args.join(" ")
         );
@@ -1955,7 +1955,7 @@ fn json_output_uses_versioned_envelope() {
 
 #[test]
 fn commands_catalog_includes_stability_metadata() {
-    let output = Command::cargo_bin("earmark-cli")
+    let output = Command::cargo_bin("em")
         .unwrap()
         .arg("--json")
         .arg("commands")
@@ -1993,7 +1993,7 @@ fn commands_catalog_includes_stability_metadata() {
 
 #[test]
 fn commands_catalog_accepts_json_flag_after_subcommand() {
-    let output = Command::cargo_bin("earmark-cli")
+    let output = Command::cargo_bin("em")
         .unwrap()
         .arg("commands")
         .arg("--json")
@@ -2010,7 +2010,7 @@ fn commands_catalog_accepts_json_flag_after_subcommand() {
 #[test]
 fn missing_run_id_fails_cleanly_in_json_mode() {
     let dir = tempdir().unwrap();
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -2019,7 +2019,7 @@ fn missing_run_id_fails_cleanly_in_json_mode() {
         .assert()
         .success();
 
-    let output = Command::cargo_bin("earmark-cli")
+    let output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -2033,7 +2033,7 @@ fn missing_run_id_fails_cleanly_in_json_mode() {
         .stdout
         .clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    assert_eq!(parsed["contract_version"], "0.2.0");
+    assert_eq!(parsed["contract_version"], "0.3.0");
     assert_eq!(parsed["ok"], false);
     assert!(parsed["error"]["message"]
         .as_str()
@@ -2044,7 +2044,7 @@ fn missing_run_id_fails_cleanly_in_json_mode() {
 #[test]
 fn missing_assignment_id_fails_cleanly_in_json_mode() {
     let dir = tempdir().unwrap();
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -2053,7 +2053,7 @@ fn missing_assignment_id_fails_cleanly_in_json_mode() {
         .assert()
         .success();
 
-    let output = Command::cargo_bin("earmark-cli")
+    let output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -2067,7 +2067,7 @@ fn missing_assignment_id_fails_cleanly_in_json_mode() {
         .stdout
         .clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    assert_eq!(parsed["contract_version"], "0.2.0");
+    assert_eq!(parsed["contract_version"], "0.3.0");
     assert_eq!(parsed["ok"], false);
     assert!(parsed["error"]["message"]
         .as_str()
@@ -2078,7 +2078,7 @@ fn missing_assignment_id_fails_cleanly_in_json_mode() {
 #[test]
 fn missing_relation_id_fails_cleanly_in_json_mode() {
     let dir = tempdir().unwrap();
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -2087,7 +2087,7 @@ fn missing_relation_id_fails_cleanly_in_json_mode() {
         .assert()
         .success();
 
-    let output = Command::cargo_bin("earmark-cli")
+    let output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -2101,7 +2101,7 @@ fn missing_relation_id_fails_cleanly_in_json_mode() {
         .stdout
         .clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
-    assert_eq!(parsed["contract_version"], "0.2.0");
+    assert_eq!(parsed["contract_version"], "0.3.0");
     assert_eq!(parsed["ok"], false);
     let msg = parsed["error"]["message"].as_str().unwrap();
     assert!(
@@ -2114,7 +2114,7 @@ fn missing_relation_id_fails_cleanly_in_json_mode() {
 #[test]
 fn latest_run_resolves_correctly() {
     let dir = tempdir().unwrap();
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -2253,7 +2253,7 @@ guards: []
     }
 
     // Now test that 'latest' resolves to the most recent run
-    let output = Command::cargo_bin("earmark-cli")
+    let output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -2277,7 +2277,7 @@ guards: []
 #[test]
 fn run_show_and_explain_are_distinct() {
     let dir = tempdir().unwrap();
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -2390,7 +2390,7 @@ guards: []
     let run_id = "run_show_vs_explain".to_string();
 
     // run show should be raw (no ok/kind/id/summary structure)
-    let show_output = Command::cargo_bin("earmark-cli")
+    let show_output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -2424,7 +2424,7 @@ guards: []
     );
 
     // run explain should have interpreted structure
-    let explain_output = Command::cargo_bin("earmark-cli")
+    let explain_output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -2448,7 +2448,7 @@ guards: []
 #[test]
 fn next_commands_contain_valid_syntax() {
     let dir = tempdir().unwrap();
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -2465,7 +2465,7 @@ fn next_commands_contain_valid_syntax() {
         vec!["failure", "list"],
         vec!["doctor"],
     ] {
-        let output = Command::cargo_bin("earmark-cli")
+        let output = Command::cargo_bin("em")
             .unwrap()
             .arg("--root")
             .arg(dir.path())

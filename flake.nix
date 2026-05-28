@@ -18,7 +18,33 @@
         rustToolchain = pkgs.rust-bin.stable.latest.default.override {
           extensions = [ "rustfmt" "clippy" "rust-analyzer" ];
         };
+
+        earmark = pkgs.rustPlatform.buildRustPackage {
+          pname = "em";
+          version = "0.1.0";
+          src = ./.;
+          cargoLock = {
+            lockFile = ./Cargo.lock;
+          };
+          nativeBuildInputs = with pkgs; [ pkg-config ];
+          buildInputs = with pkgs; [ openssl ];
+
+          # Tests require specific environment setup, handled by devShell or smoke scripts
+          doCheck = false;
+
+          meta = with pkgs.lib; {
+            description = "Earmark operator shell";
+            homepage = "https://github.com/Mikhail-Shakhnazarov/earmark-workspace";
+            license = licenses.agpl3Plus;
+            mainProgram = "em";
+          };
+        };
       in {
+        packages.default = earmark;
+        apps.default = flake-utils.lib.mkApp {
+          drv = earmark;
+        };
+
         devShells.default = pkgs.mkShell {
           packages = with pkgs; [
             rustToolchain

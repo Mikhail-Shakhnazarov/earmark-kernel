@@ -5,7 +5,7 @@ use tempfile::tempdir;
 
 fn setup_workspace() -> tempfile::TempDir {
     let dir = tempdir().unwrap();
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -17,7 +17,7 @@ fn setup_workspace() -> tempfile::TempDir {
 
 fn verify_envelope(stdout: &[u8]) -> Value {
     let val: Value = serde_json::from_slice(stdout).expect("valid JSON output");
-    assert_eq!(val["contract_version"], "0.2.0");
+    assert_eq!(val["contract_version"], "0.3.0");
     assert!(val.get("data").is_some() || !val["ok"].as_bool().unwrap_or(true));
     val
 }
@@ -25,7 +25,7 @@ fn verify_envelope(stdout: &[u8]) -> Value {
 #[test]
 fn test_json_status() {
     let dir = setup_workspace();
-    let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
+    let mut cmd = Command::cargo_bin("em").unwrap();
     cmd.arg("--root")
         .arg(dir.path())
         .arg("--json")
@@ -41,7 +41,7 @@ fn test_json_status() {
 #[test]
 fn test_json_run_list() {
     let dir = setup_workspace();
-    let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
+    let mut cmd = Command::cargo_bin("em").unwrap();
     cmd.arg("--root")
         .arg(dir.path())
         .arg("--json")
@@ -56,7 +56,7 @@ fn test_json_run_list() {
 #[test]
 fn test_json_provider_capabilities() {
     let dir = setup_workspace();
-    let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
+    let mut cmd = Command::cargo_bin("em").unwrap();
     cmd.arg("--root")
         .arg(dir.path())
         .arg("--json")
@@ -92,7 +92,7 @@ providers:
     )
     .unwrap();
 
-    let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
+    let mut cmd = Command::cargo_bin("em").unwrap();
     cmd.arg("--root")
         .arg(dir.path())
         .arg("--json")
@@ -119,7 +119,7 @@ providers:
 #[test]
 fn test_json_standing_request_list() {
     let dir = setup_workspace();
-    let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
+    let mut cmd = Command::cargo_bin("em").unwrap();
     cmd.arg("--root")
         .arg(dir.path())
         .arg("--json")

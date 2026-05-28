@@ -9,7 +9,7 @@ fn run_inspection_and_reports() {
     let workspace = workspace_root();
 
     // 1. Init
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -19,7 +19,7 @@ fn run_inspection_and_reports() {
 
     // 2. Register system from research synthesis example
     let manifest = workspace.join("examples/research-synthesis/declarations/systems/system.yaml");
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -30,7 +30,7 @@ fn run_inspection_and_reports() {
         .success();
 
     // 3. Activate system
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -41,7 +41,7 @@ fn run_inspection_and_reports() {
         .success();
 
     // 4. Deposit a source note
-    let deposit_output = Command::cargo_bin("earmark-cli")
+    let deposit_output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -63,7 +63,7 @@ fn run_inspection_and_reports() {
     let object_id = deposit_json["data"]["object_id"].as_str().unwrap();
 
     // 5. Run workflow
-    let run_output = Command::cargo_bin("earmark-cli")
+    let run_output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -85,7 +85,7 @@ fn run_inspection_and_reports() {
     let run_id = run_json["data"]["run_id"].as_str().unwrap();
 
     // 6. Test run explain
-    let explain_output = Command::cargo_bin("earmark-cli")
+    let explain_output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -107,7 +107,7 @@ fn run_inspection_and_reports() {
         .is_empty());
 
     // 7. Test run timeline
-    let timeline_output = Command::cargo_bin("earmark-cli")
+    let timeline_output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -128,7 +128,7 @@ fn run_inspection_and_reports() {
         .is_empty());
 
     // 8. Test run graph
-    let graph_output = Command::cargo_bin("earmark-cli")
+    let graph_output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -150,7 +150,7 @@ fn run_inspection_and_reports() {
 
     // 9. Test report generation
     let report_path = dir.path().join("reports/run_report.html");
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())

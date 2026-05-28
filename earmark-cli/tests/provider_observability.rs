@@ -3,7 +3,7 @@ use std::fs;
 use tempfile::tempdir;
 
 fn workspace_command() -> Command {
-    Command::cargo_bin("earmark-cli").unwrap()
+    Command::cargo_bin("em").unwrap()
 }
 
 #[test]

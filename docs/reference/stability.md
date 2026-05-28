@@ -56,12 +56,11 @@ This document provides an overview of the current implementation status and stab
 
 | Ordered Step | Document | Purpose |
 |---|---|---|
-| 1 | `README.md` | Entry point. |
-| 2 | `docs/tutorials/quickstart.md` | 5-minute first run. |
-| 3 | `docs/tutorials/practical-guide.md`| Concepts through examples. |
-| 4 | `docs/concepts/coordinated-ai-work.md` | Design philosophy. |
-| 5 | `docs/reference/cli.md` | Command engineering. |
-| 6 | `docs/limitations.md` | Known constraints. |
+| 1 | `README.md` | Core vision and installation. |
+| 2 | `docs/tutorials/quickstart.md` | 5-minute first run (deterministic). |
+| 3 | `docs/reference/stability.md` | Implementation status (you are here). |
+| 4 | `docs/reference/cli.md` | Command engineering. |
+| 5 | `docs/limitations.md` | Known constraints. |
 
 ---
 

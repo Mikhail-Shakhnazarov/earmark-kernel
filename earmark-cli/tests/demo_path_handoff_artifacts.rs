@@ -15,7 +15,7 @@ fn run_artifacts_exposes_handoffs_for_demo_path() {
     let seed_note =
         repo_root.join("examples/research-synthesis/data/seed_notes/note_1_benefits.md");
 
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)
@@ -24,7 +24,7 @@ fn run_artifacts_exposes_handoffs_for_demo_path() {
         .assert()
         .success();
 
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)
@@ -35,7 +35,7 @@ fn run_artifacts_exposes_handoffs_for_demo_path() {
         .assert()
         .success();
 
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)
@@ -46,7 +46,7 @@ fn run_artifacts_exposes_handoffs_for_demo_path() {
         .assert()
         .success();
 
-    let deposit_output = Command::cargo_bin("earmark-cli")
+    let deposit_output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)
@@ -66,7 +66,7 @@ fn run_artifacts_exposes_handoffs_for_demo_path() {
     let parsed: Value = serde_json::from_slice(&deposit_output).unwrap();
     let note_id = parsed["data"]["object_id"].as_str().unwrap().to_string();
 
-    let run_output = Command::cargo_bin("earmark-cli")
+    let run_output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)
@@ -85,10 +85,10 @@ fn run_artifacts_exposes_handoffs_for_demo_path() {
         .clone();
     let parsed: Value = serde_json::from_slice(&run_output).unwrap();
     assert_eq!(parsed["ok"], true);
-    assert_eq!(parsed["data"]["status"], "partial");
+    assert_eq!(parsed["data"]["status"], "completed");
     let run_id = parsed["data"]["run_id"].as_str().unwrap().to_string();
 
-    let artifacts_output = Command::cargo_bin("earmark-cli")
+    let artifacts_output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)
@@ -120,7 +120,7 @@ fn run_artifacts_exposes_handoffs_for_demo_path() {
     let first_handoff = handoffs[0]
         .as_str()
         .expect("handoff entries should be handoff IDs");
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)

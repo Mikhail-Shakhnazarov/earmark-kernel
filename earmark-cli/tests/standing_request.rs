@@ -11,7 +11,7 @@ use tempfile::tempdir;
 
 fn setup_workspace() -> tempfile::TempDir {
     let dir = tempdir().unwrap();
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -101,7 +101,7 @@ fn standing_request_list_outputs_machine_readable_json() {
     let dir = setup_workspace();
     let (id, _) = inject_standing_request(dir.path(), StandingRequestStatus::Proposed);
 
-    let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
+    let mut cmd = Command::cargo_bin("em").unwrap();
     cmd.arg("--root")
         .arg(dir.path())
         .arg("--json")
@@ -111,7 +111,7 @@ fn standing_request_list_outputs_machine_readable_json() {
     let output = cmd.assert().success().get_output().stdout.clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
 
-    assert_eq!(parsed["contract_version"], "0.2.0");
+    assert_eq!(parsed["contract_version"], "0.3.0");
     let requests = parsed["data"].as_array().expect("data should be an array");
     assert!(requests.iter().any(|r| r["id"] == id.as_str()));
 }
@@ -121,7 +121,7 @@ fn standing_request_show_outputs_machine_readable_json() {
     let dir = setup_workspace();
     let (id, _) = inject_standing_request(dir.path(), StandingRequestStatus::Proposed);
 
-    let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
+    let mut cmd = Command::cargo_bin("em").unwrap();
     cmd.arg("--root")
         .arg(dir.path())
         .arg("--json")
@@ -132,7 +132,7 @@ fn standing_request_show_outputs_machine_readable_json() {
     let output = cmd.assert().success().get_output().stdout.clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
 
-    assert_eq!(parsed["contract_version"], "0.2.0");
+    assert_eq!(parsed["contract_version"], "0.3.0");
     assert_eq!(parsed["ok"], true);
     assert_eq!(parsed["data"]["id"], id.as_str());
     assert_eq!(parsed["data"]["request"]["status"], "proposed");
@@ -143,7 +143,7 @@ fn standing_request_approve_outputs_machine_readable_json() {
     let dir = setup_workspace();
     let (id, _) = inject_standing_request(dir.path(), StandingRequestStatus::Proposed);
 
-    let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
+    let mut cmd = Command::cargo_bin("em").unwrap();
     cmd.arg("--root")
         .arg(dir.path())
         .arg("--json")
@@ -156,7 +156,7 @@ fn standing_request_approve_outputs_machine_readable_json() {
     let output = cmd.assert().success().get_output().stdout.clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
 
-    assert_eq!(parsed["contract_version"], "0.2.0");
+    assert_eq!(parsed["contract_version"], "0.3.0");
     assert_eq!(parsed["ok"], true);
     assert_eq!(parsed["data"]["status"], "approved");
 }
@@ -166,7 +166,7 @@ fn standing_request_reject_outputs_machine_readable_json() {
     let dir = setup_workspace();
     let (id, _) = inject_standing_request(dir.path(), StandingRequestStatus::Proposed);
 
-    let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
+    let mut cmd = Command::cargo_bin("em").unwrap();
     cmd.arg("--root")
         .arg(dir.path())
         .arg("--json")
@@ -179,7 +179,7 @@ fn standing_request_reject_outputs_machine_readable_json() {
     let output = cmd.assert().success().get_output().stdout.clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
 
-    assert_eq!(parsed["contract_version"], "0.2.0");
+    assert_eq!(parsed["contract_version"], "0.3.0");
     assert_eq!(parsed["ok"], true);
     assert_eq!(parsed["data"]["status"], "rejected");
 }
@@ -233,7 +233,7 @@ fn standing_request_apply_outputs_machine_readable_json() {
 
     let policy_id = inject_standing_policy(dir.path());
 
-    let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
+    let mut cmd = Command::cargo_bin("em").unwrap();
     cmd.arg("--root")
         .arg(dir.path())
         .arg("--json")
@@ -248,7 +248,7 @@ fn standing_request_apply_outputs_machine_readable_json() {
     let output = cmd.assert().success().get_output().stdout.clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
 
-    assert_eq!(parsed["contract_version"], "0.2.0");
+    assert_eq!(parsed["contract_version"], "0.3.0");
     assert_eq!(parsed["ok"], true);
     assert_eq!(parsed["data"]["status"], "applied");
     assert_eq!(parsed["data"]["target_id"], target_id.as_str());
@@ -258,7 +258,7 @@ fn standing_request_apply_outputs_machine_readable_json() {
 fn standing_request_show_missing_id_outputs_error_envelope() {
     let dir = setup_workspace();
 
-    let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
+    let mut cmd = Command::cargo_bin("em").unwrap();
     cmd.arg("--root")
         .arg(dir.path())
         .arg("--json")
@@ -269,7 +269,7 @@ fn standing_request_show_missing_id_outputs_error_envelope() {
     let output = cmd.assert().failure().get_output().stdout.clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
 
-    assert_eq!(parsed["contract_version"], "0.2.0");
+    assert_eq!(parsed["contract_version"], "0.3.0");
     assert_eq!(parsed["ok"], false);
     assert!(parsed["error"]["message"]
         .as_str()

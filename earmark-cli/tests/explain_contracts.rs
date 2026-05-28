@@ -10,7 +10,7 @@ use tempfile::tempdir;
 
 fn setup_workspace() -> tempfile::TempDir {
     let dir = tempdir().unwrap();
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -26,7 +26,7 @@ fn declare_explain_contracts() {
     let class_path = dir.path().join("test_class.yaml");
     std::fs::write(&class_path, "name: test_class\nversion: 0.1.0\nkind: object\nrequired_headers: []\npayload_schema: null\nstanding_rules: {}\nrelation_rules: []\nvalidators: []").unwrap();
 
-    let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
+    let mut cmd = Command::cargo_bin("em").unwrap();
     cmd.arg("--root")
         .arg(dir.path())
         .arg("--json")
@@ -39,7 +39,7 @@ fn declare_explain_contracts() {
     let output = cmd.assert().success().get_output().stdout.clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
 
-    assert_eq!(parsed["contract_version"], "0.2.0");
+    assert_eq!(parsed["contract_version"], "0.3.0");
     assert_eq!(parsed["ok"], true);
     assert!(parsed["data"]["explanation"]["title"].is_string());
 }
@@ -79,7 +79,7 @@ fn run_explain_contracts() {
 
     write_object_and_index(&store, &mut index, &obj).unwrap();
 
-    let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
+    let mut cmd = Command::cargo_bin("em").unwrap();
     cmd.arg("--root")
         .arg(dir.path())
         .arg("--json")
@@ -90,7 +90,7 @@ fn run_explain_contracts() {
     let output = cmd.assert().success().get_output().stdout.clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
 
-    assert_eq!(parsed["contract_version"], "0.2.0");
+    assert_eq!(parsed["contract_version"], "0.3.0");
     assert_eq!(parsed["ok"], true);
     assert_eq!(parsed["data"]["kind"], "run");
     assert!(parsed["data"]["summary"].is_string());
@@ -132,7 +132,7 @@ fn assignment_explain_contracts() {
 
     write_object_and_index(&store, &mut index, &obj).unwrap();
 
-    let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
+    let mut cmd = Command::cargo_bin("em").unwrap();
     cmd.arg("--root")
         .arg(dir.path())
         .arg("--json")
@@ -143,7 +143,7 @@ fn assignment_explain_contracts() {
     let output = cmd.assert().success().get_output().stdout.clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
 
-    assert_eq!(parsed["contract_version"], "0.2.0");
+    assert_eq!(parsed["contract_version"], "0.3.0");
     assert_eq!(parsed["ok"], true);
     assert_eq!(parsed["data"]["kind"], "assignment");
     assert!(parsed["data"]["summary"].is_string());
@@ -188,7 +188,7 @@ fn changeset_explain_contracts() {
 
     write_object_and_index(&store, &mut index, &obj).unwrap();
 
-    let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
+    let mut cmd = Command::cargo_bin("em").unwrap();
     cmd.arg("--root")
         .arg(dir.path())
         .arg("--json")
@@ -199,7 +199,7 @@ fn changeset_explain_contracts() {
     let output = cmd.assert().success().get_output().stdout.clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
 
-    assert_eq!(parsed["contract_version"], "0.2.0");
+    assert_eq!(parsed["contract_version"], "0.3.0");
     assert_eq!(parsed["ok"], true);
     assert_eq!(parsed["data"]["kind"], "change_set");
     assert!(parsed["data"]["summary"].is_string());
@@ -246,7 +246,7 @@ fn handoff_explain_contracts() {
 
     write_object_and_index(&store, &mut index, &obj).unwrap();
 
-    let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
+    let mut cmd = Command::cargo_bin("em").unwrap();
     cmd.arg("--root")
         .arg(dir.path())
         .arg("--json")
@@ -257,7 +257,7 @@ fn handoff_explain_contracts() {
     let output = cmd.assert().success().get_output().stdout.clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
 
-    assert_eq!(parsed["contract_version"], "0.2.0");
+    assert_eq!(parsed["contract_version"], "0.3.0");
     assert_eq!(parsed["ok"], true);
     assert_eq!(parsed["data"]["kind"], "handoff");
     assert!(parsed["data"]["summary"].is_string());
@@ -294,7 +294,7 @@ fn failure_explain_contracts() {
 
     write_object_and_index(&store, &mut index, &obj).unwrap();
 
-    let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
+    let mut cmd = Command::cargo_bin("em").unwrap();
     cmd.arg("--root")
         .arg(dir.path())
         .arg("--json")
@@ -305,7 +305,7 @@ fn failure_explain_contracts() {
     let output = cmd.assert().success().get_output().stdout.clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
 
-    assert_eq!(parsed["contract_version"], "0.2.0");
+    assert_eq!(parsed["contract_version"], "0.3.0");
     assert_eq!(parsed["ok"], true);
     assert_eq!(parsed["data"]["kind"], "failure");
     assert!(parsed["data"]["summary"].is_string());
@@ -348,7 +348,7 @@ fn relation_explain_contracts() {
 
     write_object_and_index(&store, &mut index, &obj).unwrap();
 
-    let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
+    let mut cmd = Command::cargo_bin("em").unwrap();
     cmd.arg("--root")
         .arg(dir.path())
         .arg("--json")
@@ -359,7 +359,7 @@ fn relation_explain_contracts() {
     let output = cmd.assert().success().get_output().stdout.clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
 
-    assert_eq!(parsed["contract_version"], "0.2.0");
+    assert_eq!(parsed["contract_version"], "0.3.0");
     assert_eq!(parsed["ok"], true);
     assert_eq!(parsed["data"]["kind"], "relation");
     assert!(parsed["data"]["summary"].is_string());

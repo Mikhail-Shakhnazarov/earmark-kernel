@@ -4,7 +4,7 @@ use tempfile::tempdir;
 
 fn verify_error_envelope(output: &[u8]) -> Value {
     let val: Value = serde_json::from_slice(output).expect("valid JSON error envelope");
-    assert_eq!(val["contract_version"], "0.2.0");
+    assert_eq!(val["contract_version"], "0.3.0");
     assert_eq!(val["ok"], false);
     assert!(val["error"]["message"].as_str().is_some());
     val
@@ -15,7 +15,7 @@ fn test_invalid_workspace() {
     let dir = tempdir().unwrap();
     let bad_path = dir.path().join("does_not_exist");
 
-    let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
+    let mut cmd = Command::cargo_bin("em").unwrap();
     let output = cmd
         .arg("--root")
         .arg(&bad_path)
@@ -48,7 +48,7 @@ fn test_invalid_workspace() {
 fn test_malformed_yaml() {
     let dir = tempdir().unwrap();
 
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -60,7 +60,7 @@ fn test_malformed_yaml() {
     let yaml_path = dir.path().join("bad.yaml");
     std::fs::write(&yaml_path, "[invalid yaml: {").unwrap();
 
-    let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
+    let mut cmd = Command::cargo_bin("em").unwrap();
     let output = cmd
         .arg("--root")
         .arg(dir.path())
@@ -88,7 +88,7 @@ fn test_malformed_yaml() {
 fn test_non_existent_object() {
     let dir = tempdir().unwrap();
 
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -97,7 +97,7 @@ fn test_non_existent_object() {
         .assert()
         .success();
 
-    let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
+    let mut cmd = Command::cargo_bin("em").unwrap();
     let output = cmd
         .arg("--root")
         .arg(dir.path())
@@ -125,7 +125,7 @@ fn test_non_existent_object() {
 fn test_non_existent_run() {
     let dir = tempdir().unwrap();
 
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -134,7 +134,7 @@ fn test_non_existent_run() {
         .assert()
         .success();
 
-    let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
+    let mut cmd = Command::cargo_bin("em").unwrap();
     let output = cmd
         .arg("--root")
         .arg(dir.path())
@@ -160,7 +160,7 @@ fn test_non_existent_run() {
 
 #[test]
 fn test_invalid_subcommand_emits_json_error_envelope() {
-    let output = Command::cargo_bin("earmark-cli")
+    let output = Command::cargo_bin("em")
         .unwrap()
         .arg("--json")
         .arg("workflow")
