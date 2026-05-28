@@ -1461,7 +1461,7 @@ fn demo_path_research_synthesis_full_workflow() {
         .clone();
     let parsed: Value = serde_json::from_slice(&output).unwrap();
     assert_eq!(parsed["ok"], true);
-    assert_eq!(parsed["data"]["status"], "partial");
+    assert_eq!(parsed["data"]["status"], "completed");
     let run_id = parsed["data"]["run_id"].as_str().unwrap().to_string();
     assert!(!parsed["data"]["created_assignments"]
         .as_array()

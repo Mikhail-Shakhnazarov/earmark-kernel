@@ -36,7 +36,7 @@ fn cli_backed_workspace_preserves_json_error_details() {
         .parent()
         .expect("workspace root")
         .to_path_buf();
-    let fallback_bin = repo_root.join("target/debug/earmark-cli");
+    let fallback_bin = repo_root.join("target/debug/em");
     if !fallback_bin.exists() {
         let status = std::process::Command::new("cargo")
             .arg("build")
