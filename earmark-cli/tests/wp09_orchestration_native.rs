@@ -9,7 +9,7 @@ fn test_orchestration_ingest_source_validation() {
     let root = dir.path();
 
     // 1. em init
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)
@@ -19,7 +19,7 @@ fn test_orchestration_ingest_source_validation() {
         .success();
 
     // 2. Try to ingest task with invalid source
-    let assert_res = Command::cargo_bin("earmark-cli")
+    let assert_res = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)
@@ -49,7 +49,7 @@ fn test_orchestration_ingest_native_json_single() {
     let root = dir.path();
 
     // 1. em init
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)
@@ -69,7 +69,7 @@ fn test_orchestration_ingest_native_json_single() {
     fs::write(&json_path, serde_json::to_string(&payload).unwrap()).unwrap();
 
     // 3. Ingest using native-json source
-    let ingest_output = Command::cargo_bin("earmark-cli")
+    let ingest_output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)
@@ -100,7 +100,7 @@ fn test_orchestration_ingest_native_json_batch() {
     let root = dir.path();
 
     // 1. em init
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)
@@ -133,7 +133,7 @@ fn test_orchestration_ingest_native_json_batch() {
     fs::write(&json_path, serde_json::to_string(&payload).unwrap()).unwrap();
 
     // 3. Ingest using local-json source
-    let ingest_output = Command::cargo_bin("earmark-cli")
+    let ingest_output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)

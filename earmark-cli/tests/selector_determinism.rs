@@ -10,7 +10,7 @@ use tempfile::tempdir;
 
 fn setup_workspace() -> tempfile::TempDir {
     let dir = tempdir().unwrap();
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -73,7 +73,7 @@ fn list_run_records_deterministic_order() {
         write_run(&store, &mut index, rec);
     }
 
-    let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
+    let mut cmd = Command::cargo_bin("em").unwrap();
     cmd.arg("--root")
         .arg(dir.path())
         .arg("--json")
@@ -114,7 +114,7 @@ fn latest_resolves_to_last_lexicographically_when_timestamps_equal() {
         write_run(&store, &mut index, rec);
     }
 
-    let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
+    let mut cmd = Command::cargo_bin("em").unwrap();
     cmd.arg("--root")
         .arg(dir.path())
         .arg("--json")
@@ -147,7 +147,7 @@ fn latest_respects_temporal_order_when_timestamps_differ() {
         write_run(&store, &mut index, rec);
     }
 
-    let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
+    let mut cmd = Command::cargo_bin("em").unwrap();
     cmd.arg("--root")
         .arg(dir.path())
         .arg("--json")
@@ -181,7 +181,7 @@ fn list_order_respects_temporal_then_lexicographic() {
         write_run(&store, &mut index, rec);
     }
 
-    let mut cmd = Command::cargo_bin("earmark-cli").unwrap();
+    let mut cmd = Command::cargo_bin("em").unwrap();
     cmd.arg("--root")
         .arg(dir.path())
         .arg("--json")

@@ -21,7 +21,7 @@ fn test_topology_demo_declarations_validate_and_explain_topology() {
     let workflow_manifest =
         repo_root.join("examples/risk-assessment-demo/workflows/risk_assessment_workflow.yaml");
 
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)
@@ -30,7 +30,7 @@ fn test_topology_demo_declarations_validate_and_explain_topology() {
         .assert()
         .success();
 
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)
@@ -43,7 +43,7 @@ fn test_topology_demo_declarations_validate_and_explain_topology() {
         .assert()
         .success();
 
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)
@@ -56,7 +56,7 @@ fn test_topology_demo_declarations_validate_and_explain_topology() {
         .assert()
         .success();
 
-    let explain_output = Command::cargo_bin("earmark-cli")
+    let explain_output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(root)

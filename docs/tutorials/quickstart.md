@@ -1,180 +1,110 @@
-# Quickstart
+# Quickstart: The 5-Minute Demo
 
-Get a working Earmark run in under 5 minutes using the built-in research synthesis demo.
+Get a working Earmark run using the built-in research synthesis demo. This demo runs **100% locally** using a mock provider — no API keys required.
 
-## Build the CLI
+## 1. Install the CLI
+
+The Earmark operator shell is called `em`.
 
 ```bash
-REPO_ROOT=$(pwd)
-cargo build -p earmark-cli
-alias em="$REPO_ROOT/target/debug/earmark-cli"
+# In the repository root:
+cargo install --path earmark-cli
 ```
 
-## Initialize a workspace
+*Verify the installation:*
+```bash
+em --version
+# Expected: earmark 0.1.0
+```
+
+## 2. Initialize a Workspace
+
+Create a new directory for your work and initialize it. Earmark will create a `.earmark` folder to store your durable work spine.
+
+> [!IMPORTANT]
+> To use the example assets in this demo, create your workspace as a sibling to the `examples` directory in your checkout of the Earmark repository.
 
 ```bash
-mkdir my-workspace && cd my-workspace
+# Assuming you are in the root of the Earmark repository:
+mkdir research-workspace && cd research-workspace
 em init
 ```
 
-You should see:
+## 3. Register the Demo Domain
 
-```json
-{
-  "next_commands": [
-    "em doctor",
-    "em status",
-    "em declare list-examples"
-  ],
-  "ok": true,
-  "paths": {
-    "canonical_dir": "/path/to/my-workspace/.earmark/canonical",
-    "declarations_dir": "/path/to/my-workspace/.earmark/declarations",
-    "index_path": "/path/to/my-workspace/.earmark/derived/index.sqlite",
-    "work_surfaces_dir": "/path/to/my-workspace/.earmark/work_surfaces"
-  },
-  "root": "/path/to/my-workspace",
-  "summary": "workspace initialized"
-}
-```
-
-## Register a system
-
-Use the example system manifest from the repository:
+You need a **System Definition** to tell Earmark what kind of work you are doing. We'll use the example research synthesis domain from the repository.
 
 ```bash
+# Define the path to your source checkout
+export REPO_ROOT=".." 
+
+# Register and activate the system
 em system register "$REPO_ROOT/examples/research-synthesis/declarations/systems/system.yaml"
 em system activate sys_research_synthesis
 ```
 
-Expected output for registration:
+This registers:
+- **Classes**: `source_note`, `finding`, `summary`.
+- **Instruction**: Logic for how to move between classes.
+- **Workflow**: The multi-stage `research_synthesis` pipeline.
 
-```json
-{
-  "ok": true,
-  "kind": "system_registration",
-  "object_id": "obj_...",
-  "version_id": "ver_..."
-}
-```
+## 4. Deposit Source Materials
 
-Object and version IDs will differ on each run. This registers the research synthesis domain — three object classes (`source_note`, `finding`, `summary`), two instructions, and one extraction-and-synthesis workflow.
-
-## Deposit some data
-
-Put a few source notes into the corpus:
+Put some raw research notes into your workspace. In a real workflow, these might be imported from documents or API results.
 
 ```bash
-em deposit --class source_note --title "Context Limits" --body "AI context should be task-specific, not a messy history."
-em deposit --class source_note --title "Lineage" --body "Every derived result should trace back to its origin."
+em deposit --class source_note --title "Architecture Goal" --body "AI context must be durable and bounded."
+em deposit --class source_note --title "Failure Modes" --body "Ephemeral chat history leads to context bleed."
 ```
 
-> [!NOTE]
-> Because you activated `sys_research_synthesis`, these deposits are validated against the system's admitted class list. If you tried to deposit a class not in the system definition, the command would fail.
+## 5. Run the Coordinated Workflow
 
-Expected output for each deposit:
-
-```json
-{
-  "ok": true,
-  "class": "source_note",
-  "kind": "object",
-  "object_id": "obj_...",
-  "version_id": "ver_...",
-  "title": "Context Limits"
-}
-```
-
-## Run the workflow
-
-Find your deposited objects:
+Find an object to process and then trigger the workflow. Earmark will execute all stages automatically using the built-in mock provider.
 
 ```bash
+# Find your object ID
 em query --class source_note
-```
 
-Expected output (snippet):
-
-```json
-[
-  {
-    "object_id": "obj_...",
-    "class": "source_note",
-    "kind": "object",
-    "title": "Context Limits",
-    "summary": "AI context should be task-specific, not a messy history.",
-    "standing_epistemic": "working",
-    "standing_process": "active",
-    "standing_review": "unreviewed",
-    "version_id": "ver_..."
-  }
-]
-```
-
-Pick an object ID from the output and run the workflow:
-
-```bash
+# Run the workflow (replace <object_id> with the returned ID)
 em workflow run research_synthesis --system-id sys_research_synthesis --with <object_id>
 ```
 
-Expected output (fields and counts will differ):
-
+**Expected output:**
 ```json
 {
-  "ok": true,
-  "run_id": "run_...",
   "status": "completed",
-  "created_assignments": ["obj_...", "obj_...", "obj_...", "obj_..."],
-  "created_change_sets": ["obj_...", "obj_...", "obj_...", "obj_..."],
-  "created_failures": [],
-  "created_handoffs": ["obj_...", "obj_...", "obj_...", "obj_..."],
+  "summary": "workflow run completed",
   "output_count": 2,
   "packet_count": 4
 }
 ```
 
-## Inspect the results
+## 6. Inspect the Work Spine
+
+Earmark records the full provenance of the result. You can inspect exactly what happened during each stage.
 
 ```bash
-# What happened in the run
+# See a summary of the latest run
 em run explain latest
 
-# Visual timeline of events
-em run timeline latest
-
-# Generate an HTML report you can open in a browser
+# Generate a visual HTML report
 em report run latest --output report.html
 ```
 
-`em run explain latest` will show:
+Open `report.html` in your browser to see the findings and summary linked to your original notes.
 
-```text
---- RUN Explanation: run_... ---
+---
 
-Summary: run run_... is completed
+## What Just Happened?
 
-Purpose: A run records the execution of a workflow system.
-Status: completed
+You executed a **Coordinated AI Transition**:
 
-Related Artifacts:
-  Assignments: 4
-  Change Sets: 4
-  Handoffs: 4
-  Failures: 0
-```
+1. **Extraction**: Earmark compiled a task-specific input from your raw notes and extracted findings.
+2. **Synthesis**: Earmark performed a handoff, passing the findings to the next stage while withholding the original source noise.
+3. **Audit**: Every step was recorded into the Git-backed spine.
 
-## What just happened?
+## Next Steps
 
-You ran a multi-stage workflow in one invocation:
-
-1. **Extraction**: Earmark compiled a **task-specific input set** containing only your source notes, then extracted findings. Each finding was linked back to its source automatically.
-
-2. **Synthesis**: Earmark performed a **coordinated transition**. It passed the findings to the next stage, but withheld the original source notes. The synthesis stage was constrained to receive *only* the validated findings.
-
-This reduces context leakage, helping ensure that the final summary is derived from the handed-off findings rather than from ambient noise in the original source material. Earmark records the context, output, and review state needed to challenge or repair a result. That's the power of the **work spine**.
-
-## Next steps
-
-- [Research Synthesis Demo](research-synthesis-demo.md) — deeper walkthrough of staged execution
-- [Context Compilation](../concepts/context-compilation.md) — how Earmark decides what a runtime sees
-- [Build a Domain Definition](build-a-domain-definition.md) — define your own classes and workflows
+- **[Stability Catalog](../reference/stability.md)** — See which commands are ready for production.
+- **[Limitations](../limitations.md)** — Understand current constraints.
+- **[Build a Domain](build-a-domain-definition.md)** — Define your own classes and workflows.

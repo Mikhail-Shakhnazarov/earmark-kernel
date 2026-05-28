@@ -1,114 +1,88 @@
-# Earmark: Coordinated AI Work
+# Earmark — v1 Preview (v0.1.0)
 
 [![CI](https://github.com/Mikhail-Shakhnazarov/earmark-workspace/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Mikhail-Shakhnazarov/earmark-workspace/actions/workflows/ci.yml)
 
-AI work usually runs on ephemeral chat history: some retrieved snippets, a long conversation, and whatever files are open. This works for quick questions. It falls apart when work needs to be **inspected, resumed, reviewed, or handed over.**
+Earmark is a local-first, Git-backed work spine for coordinated AI processing. 
 
-Without a durable spine, AI work faces common failure modes:
-- **Implicit Inheritance:** A later step silently "inherits" an assumption from an earlier prompt.
-- **Context Bloat:** A model sees 10,000 lines of history when it only needed 10 specific findings.
-- **Lost Evidence:** Failed work or intermediate derivations vanish when a session ends.
-- **Review Gap:** Approval is just a social convention in a chat, not a trackable system state.
+AI work usually runs on ephemeral chat history. This leads to common failure modes:
+- **Context Bleed:** A synthesis step sees original source noise it shouldn't have inherited.
+- **Context Bloat:** Models receive thousands of irrelevant lines instead of specific findings.
+- **Lost Lineage:** Work that cannot be traced, audited, or reliably resumed.
 
 **Earmark replaces ephemeral history with a durable, inspectable work spine.**
 
 ---
 
-## How It Works
+## The Vision: Coordinated AI Work
 
-Earmark lets you define exactly which **task materials** (objects) each step is allowed to see. It then compiles a **task-specific input set**, runs the operation, and records the authoritative result.
+Instead of one long conversation, Earmark breaks work into **coordinated transitions**. Each step sees only the specific **task materials** (objects) it is allowed to see. It then records the authoritative result back into the workspace.
 
-### The Problem: Ephemeral Context
 ```text
-Conversation: [Note A, Note B, Note C] → AI finds Finding 1 → (Prompt continues) → AI writes Briefing
+Source Notes → [Extraction Stage] → Findings → [Synthesis Stage] → Summary
 ```
-In a standard chat, the "Briefing" step sees all three notes, the finding, and any noise in between. Assumptions from Note A might bleed into the Briefing even if they were irrelevant to Finding 1.
 
-### The Earmark Solution: Bounded Transitions
-```text
-Note A → [Finding 1] → Briefing
-```
-1. **Stage 1 (Extraction):** Receives Note A. Produces Finding 1. Records exactly what changed.
-2. **Stage 2 (Synthesis):** Receives *only* Finding 1. It cannot see Note A.
-3. **Outcome:** The synthesis stage is constrained to receive only the authoritative findings, reducing context leakage from the source materials.
+1. **Extraction:** Receives raw notes. Produces findings. Links them to sources.
+2. **Synthesis:** Receives *only* the validated findings. Cannot see the original notes.
+3. **Outcome:** A summary derived strictly from authoritative evidence, not ambient noise.
 
 ---
 
-## Core Capabilities
+## Installation
 
-- **Task-Specific Inputs:** Every processing step sees only what its declaration allows. No more silent context inheritance.
-- **Durable Provenance:** Every result links back to its specific causes. You can always prove *why* an output exists.
-- **Durable Failure:** Failed work is preserved for audit, not discarded.
-- **Git-Backed History:** Workspace state is stored in a standard Git repository, providing a full audit trail and easy portability.
-- **Native Orchestration:** Self-hosting tools for tracking complex, multi-stage AI work programs.
-
----
-
-## Documentation (The Flow)
-
-If you are new to Earmark, follow this path:
-
-| Order | Guide | Purpose |
-| :--- | :--- | :--- |
-| 1 | **README** (You are here) | High-level "Should I use this?" |
-| 2 | **[One-Minute Flow](docs/tutorials/one-minute-flow.md)** | See it in action immediately |
-| 3 | **[Quickstart](docs/tutorials/quickstart.md)** | Your first successful run in 5 minutes |
-| 4 | **[Practical Guide](docs/tutorials/practical-guide.md)** | Concrete examples and plain-language "Why" |
-| 5 | **[Research Synthesis Demo](docs/tutorials/research-synthesis-demo.md)** | A complete, multi-stage example |
-| 6 | **[Native Orchestration Quickstart](docs/tutorials/native-orchestration-quickstart.md)** | Manage long-running AI work with dispatches, gates, and review |
-| 7 | **[Build a Domain](docs/tutorials/build-a-domain-definition.md)** | Create your own classes and workflows |
-| 8 | **[Concepts Overview](docs/concepts/coordinated-ai-work.md)** | Deep dive into the "Durable Spine" philosophy |
-| 9 | **[CLI Reference](docs/reference/cli.md)** | Command and schema lookup |
-| 10 | **[Limitations](docs/limitations.md)** | Known constraints and WIP status |
-
----
-
-## Getting Started
+The primary way to install the Earmark operator shell (`em`) is via Cargo:
 
 ```bash
-# Build the CLI
-cargo build -p earmark-cli
-alias em="$(pwd)/target/debug/earmark-cli"
+cargo install --path earmark-cli
+```
 
-# Initialize a workspace
-mkdir my-workspace && cd my-workspace
+*Nix users: A runnable app is available via the included `flake.nix` (`nix run .`).*
+
+*NixOS note: run build and test commands through the provided dev shell (`nix develop` or `nix develop --command ...`) so OpenSSL and `pkg-config` are wired correctly.*
+
+---
+
+## Quickstart (The 5-Minute Demo)
+
+Initialize a workspace and run a deterministic research synthesis demo offline:
+
+```bash
+# 1. Initialize
+mkdir my-work && cd my-work
 em init
 
-# Register a demo system
+# 2. Register example domain
 em system register ../examples/research-synthesis/declarations/systems/system.yaml
 em system activate sys_research_synthesis
 
-# Deposit work materials
-em deposit --class source_note --title "Architecture Note" --body "AI context must be limited."
+# 3. Deposit a note
+em deposit --class source_note --title "Context Limits" --body "AI context should be task-specific."
 
-# Retrieve the object ID
-em query --class source_note
-
-# Run a coordinated task using the returned object_id
+# 4. Run the workflow
+# (Replace <object_id> with the ID returned by 'em query --class source_note')
 em workflow run research_synthesis --system-id sys_research_synthesis --with <object_id>
 
-# Inspect the run
+# 5. Inspect
 em run explain latest
 em report run latest --output report.html
 ```
 
 ---
 
-## Technical Architecture
+## Documentation
 
-Earmark is built in Rust and uses:
-- **Canonical Store:** File-based, Git-backed object storage for durability.
-- **Derived Index:** A local SQLite index for fast search and lifecycle tracking.
-- **Declared Types:** YAML-based schemas for objects, relations, and instructions.
+- **[Quickstart Guide](docs/tutorials/quickstart.md)** — Step-by-step through your first run.
+- **[Limitations](docs/limitations.md)** — What Earmark is (and isn't) today.
+- **[Stability Catalog](docs/reference/stability.md)** — Maturity of commands and crates.
+- **[CLI Reference](docs/reference/cli.md)** — Command lookup and schema guides.
 
-### Current Status
+---
 
-Earmark is **pre-release software**. The local kernel and native orchestration path are usable for development and dogfooding, but packaging, multi-user operation, web-based observability, plugin loading, and large-scale performance remain active work.
+## Status: v1 Preview
 
-- **What Works:** Full ingestion, staged execution, relation authorization, and native orchestration.
-- **WIP:** Multi-actor coordination, advanced provider plugins, and web-based observability.
+Earmark is **pre-1.0 software**. This preview (v0.1.0) packages the local execution kernel and the native orchestration ledger for developer dogfooding.
 
-See **[Stability Catalog](docs/reference/stability.md)** for a detailed look at the current implementation status.
+- **Included:** Git-backed storage, staged execution, relation authorization, HTML reporting, and native orchestration.
+- **Excluded:** Hosted services, multi-user sync, and dynamic plugin loading.
 
 ---
 

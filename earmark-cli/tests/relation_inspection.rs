@@ -7,7 +7,7 @@ fn relation_inspection_and_explanation() {
     let dir = tempdir().unwrap();
 
     // 1. Init
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -18,7 +18,7 @@ fn relation_inspection_and_explanation() {
     // 2. Register classes
     let finding_yaml = r#"
 name: finding
-version: 0.2.0
+version: 0.3.0
 kind: object
 required_headers:
   - title
@@ -40,7 +40,7 @@ validators: []
     let finding_class_path = dir.path().join("finding.yaml");
     std::fs::write(&finding_class_path, finding_yaml).unwrap();
 
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -54,7 +54,7 @@ validators: []
 
     let source_note_yaml = r#"
 name: source_note
-version: 0.2.0
+version: 0.3.0
 kind: object
 required_headers:
   - title
@@ -71,7 +71,7 @@ validators: []
     let source_note_class_path = dir.path().join("source_note.yaml");
     std::fs::write(&source_note_class_path, source_note_yaml).unwrap();
 
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -84,7 +84,7 @@ validators: []
         .success();
 
     // 3. Deposit objects
-    let dep1 = Command::cargo_bin("earmark-cli")
+    let dep1 = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -103,7 +103,7 @@ validators: []
     let id1 = dep1_val["data"]["object_id"].as_str().unwrap().to_string();
     let vid1 = dep1_val["data"]["version_id"].as_str().unwrap().to_string();
 
-    let dep2 = Command::cargo_bin("earmark-cli")
+    let dep2 = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -163,7 +163,7 @@ validators: []
     };
 
     // 5. Test em relation show
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -174,7 +174,7 @@ validators: []
         .success();
 
     // 6. Test em relation explain surfaces creation mode
-    let explain_output = Command::cargo_bin("earmark-cli")
+    let explain_output = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -192,7 +192,7 @@ validators: []
     assert!(explain_text.contains("Creation Mode: privileged_system"));
 
     // 7. Test em relation list
-    Command::cargo_bin("earmark-cli")
+    Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())
@@ -261,7 +261,7 @@ validators: []
         rel_ref2.id.to_string()
     };
 
-    let explain_json = Command::cargo_bin("earmark-cli")
+    let explain_json = Command::cargo_bin("em")
         .unwrap()
         .arg("--root")
         .arg(dir.path())

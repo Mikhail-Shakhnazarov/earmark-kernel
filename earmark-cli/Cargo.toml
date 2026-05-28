@@ -2,7 +2,18 @@
 name = "earmark-cli"
 version.workspace = true
 edition.workspace = true
+authors.workspace = true
 license.workspace = true
+description = "Local-first work spine for coordinated AI processing"
+repository = "https://github.com/Mikhail-Shakhnazarov/earmark-workspace"
+readme = "../README.md"
+keywords = ["ai", "orchestration", "git", "local-first", "processing"]
+categories = ["command-line-utilities", "development-tools"]
+default-run = "em"
+
+[[bin]]
+name = "em"
+path = "src/main.rs"
 
 [dependencies]
 earmark-core = { path = "../earmark-core" }
