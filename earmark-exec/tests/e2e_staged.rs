@@ -377,7 +377,7 @@ guards: []
     let final_objects = store.scan_objects().unwrap().scanned_objects;
     let summary = final_objects
         .iter()
-        .find(|o| o.envelope.class.as_deref() == Some("summary"))
+        .find(|o| o.envelope.kind == Kind::Object && o.envelope.class.as_deref() == Some("summary"))
         .expect("Summary missing");
     let payload = summary.payload.as_utf8().unwrap();
     assert!(payload.contains("# Candidate Output"));
