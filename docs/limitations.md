@@ -1,27 +1,27 @@
 # Limitations
 
-Earmark is in early release. While the core "work spine" and orchestration logic are operational, the following limitations apply to the current version:
+Earmark is currently published as a hardened kernel baseline, not as a complete end-user runtime.
 
-## 1. Linux & NixOS Focus
-The current toolset and verification scripts are optimized for Linux (specifically NixOS). While the Rust core is cross-platform, the helper scripts and automated verification paths may require adjustments for macOS or Windows (WSL2 recommended).
+## 1. Kernel, Not Operator Shell
 
-## 2. Local-First Architecture
-Earmark currently runs as a local CLI tool using a Git-backed store. There is no central server or multi-user web dashboard in this release. All collaboration happens through the shared Git repository.
+This repository contains the durable record, store, index, declarations, and governance-facing crates. It does not currently publish a supported CLI operator shell.
 
-## 3. Single-Operator Assumptions
-The orchestration logic assumes a single operator is executing dispatches at any given time. While the data model is designed for multiple actors, the current runtime does not perform complex locking for concurrent dispatches from different machines.
+## 2. Local File Store
 
-## 4. Manual Verification Gates
-While the system supports automated gates (e.g., "all tests must pass"), many high-level "acceptance" steps in the orchestration lifecycle currently require manual operator commands (`em review`).
+The canonical store is file-backed JSON under `.earmark/`. The store is intended to be inspectable and portable, but large-workspace performance is not yet optimized.
 
-## 5. Storage Performance
-The Git-backed store is extremely robust, but the SQLite index may take several seconds to rebuild if the workspace grows to tens of thousands of objects. Optimization for massive corpora (100k+ objects) is ongoing.
+## 3. Derived Index
 
-## 6. Provider Extensibility
-Earmark now supports a bounded external plugin seam for provider aliases through YAML manifests discovered from plugin directories. That means named provider surfaces can be installed without recompiling, as long as they wrap adapters already compiled into the binary.
+The SQLite index is derived from the canonical store. It may be deleted and rebuilt, but not every lookup surface is complete yet.
 
-What still requires code additions or future work:
+## 4. Runtime Records, Not Runtime Execution
 
-- brand-new executable adapters
-- custom transition/operation plugins
-- WASM or dynamic-library plugin loading
+Runs, packets, dispatches, handoffs, provider records, and worker records are represented as durable records. This branch does not provide a full orchestration executor.
+
+## 5. Governance Baseline
+
+Review, standing, checks, and acceptance state are modeled explicitly. Enforcement is partial and should be treated as a kernel baseline rather than a complete policy engine.
+
+## 6. API Stability
+
+The crates are pre-1.0. Record shapes, trait boundaries, and module names may still change before a public v1.

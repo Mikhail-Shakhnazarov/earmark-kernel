@@ -4,6 +4,8 @@
 # Local tool state
 .agents/
 .codex/
+.earmark/
+.earmark_lock
 
 # Editor residue
 .DS_Store

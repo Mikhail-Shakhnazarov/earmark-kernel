@@ -1,7 +1,6 @@
 /*
- * Copyright (c) 2026 Mikhail Shakhnazarov. Dual-licensed under AGPL-3.0-or-later or commercial terms.
- * PROPRIETARY AND INTERNAL. ONLY LOCALLY COMMITTED.
- * v0.1_internal kernel.
+ * Copyright (c) 2026 Mikhail Shakhnazarov.
+ * Dual-licensed under AGPL-3.0-or-later or commercial terms.
  */
 
 use crate::errors::StoreError;
@@ -1275,43 +1274,27 @@ impl CanonicalStore for FileStore {
     ) -> Result<(), StoreError> {
         // 1. Declarations
         for class in archive.classes {
-            if overwrite || !self.classes_dir().join(class.class_id.as_str()).exists() {
-                self.save(
-                    self.classes_dir()
-                        .join(class.class_id.as_str())
-                        .join("declaration.json"),
-                    &class,
-                )?;
+            let path = self.classes_dir().join(format!("{}.json", class.class_id.as_str()));
+            if overwrite || !path.exists() {
+                self.save(path, &class)?;
             }
         }
         for system in archive.systems {
-            if overwrite || !self.systems_dir().join(system.system_id.as_str()).exists() {
-                self.save(
-                    self.systems_dir()
-                        .join(system.system_id.as_str())
-                        .join("declaration.json"),
-                    &system,
-                )?;
+            let path = self.systems_dir().join(format!("{}.json", system.system_id.as_str()));
+            if overwrite || !path.exists() {
+                self.save(path, &system)?;
             }
         }
         for workflow in archive.workflows {
-            if overwrite || !self.workflows_dir().join(workflow.workflow_id.as_str()).exists() {
-                self.save(
-                    self.workflows_dir()
-                        .join(workflow.workflow_id.as_str())
-                        .join("declaration.json"),
-                    &workflow,
-                )?;
+            let path = self.workflows_dir().join(format!("{}.json", workflow.workflow_id.as_str()));
+            if overwrite || !path.exists() {
+                self.save(path, &workflow)?;
             }
         }
         for pack in archive.system_packs {
-            if overwrite || !self.system_packs_dir().join(pack.pack_id.as_str()).exists() {
-                self.save(
-                    self.system_packs_dir()
-                        .join(pack.pack_id.as_str())
-                        .join("manifest.json"),
-                    &pack,
-                )?;
+            let path = self.system_packs_dir().join(format!("{}.json", pack.pack_id.as_str()));
+            if overwrite || !path.exists() {
+                self.save(path, &pack)?;
             }
         }
 
@@ -1330,62 +1313,57 @@ impl CanonicalStore for FileStore {
 
         // 3. Relations
         for rel in archive.relations {
-            self.save(self.relations_dir().join(rel.id.as_str()).join("record.json"), &rel)?;
+            self.save(self.relations_dir().join(format!("{}.json", rel.id.as_str())), &rel)?;
         }
 
         // 4. Runtime Records
         for run in archive.runs {
-            self.save(self.runs_dir().join(run.run_id.as_str()).join("record.json"), &run)?;
+            self.save(self.runs_dir().join(format!("{}.json", run.run_id.as_str())), &run)?;
         }
         for packet in archive.packets {
             self.save(
-                self.packets_dir().join(packet.packet_id.as_str()).join("record.json"),
+                self.packets_dir().join(format!("{}.json", packet.packet_id.as_str())),
                 &packet,
             )?;
         }
         for dispatch in archive.dispatches {
             self.save(
                 self.dispatches_dir()
-                    .join(dispatch.dispatch_id.as_str())
-                    .join("record.json"),
+                    .join(format!("{}.json", dispatch.dispatch_id.as_str())),
                 &dispatch,
             )?;
         }
         for review in archive.reviews {
             self.save(
-                self.reviews_dir().join(review.review_id.as_str()).join("record.json"),
+                self.reviews_dir().join(format!("{}.json", review.review_id.as_str())),
                 &review,
             )?;
         }
         for st in archive.standing {
             self.save(
                 self.standing_transitions_dir()
-                    .join(&st.transition_record_id)
-                    .join("record.json"),
+                    .join(format!("{}.json", st.transition_record_id)),
                 &st,
             )?;
         }
         for cs in archive.change_sets {
             self.save(
                 self.change_sets_dir()
-                    .join(cs.change_set_id.as_str())
-                    .join("record.json"),
+                    .join(format!("{}.json", cs.change_set_id.as_str())),
                 &cs,
             )?;
         }
         for handoff in archive.handoffs {
             self.save(
                 self.handoff_manifests_dir()
-                    .join(handoff.handoff_manifest_id.as_str())
-                    .join("record.json"),
+                    .join(format!("{}.json", handoff.handoff_manifest_id.as_str())),
                 &handoff,
             )?;
         }
         for migration in archive.migrations {
             self.save(
                 self.migrations_dir()
-                    .join(&migration.migration_id)
-                    .join("record.json"),
+                    .join(format!("{}.json", migration.migration_id)),
                 &migration,
             )?;
         }
