@@ -5,9 +5,8 @@
 
 use earmark_core::{
     ClassDeclaration, ClassId, ClassKind, PacketTemplateDeclaration, PacketTemplateId,
-    PayloadSchema, RuntimeProtocol, RuntimeProtocolId, SelectionPolicy, SelectionPolicyId,
-    SystemDeclaration, SystemId, TransitionDeclaration, TransitionKind, WorkflowDeclaration,
-    WorkflowId,
+    PayloadSchema, RuntimeProtocolId, SystemDeclaration, SystemId, TransitionDeclaration,
+    TransitionKind, WorkflowDeclaration, WorkflowId,
 };
 
 type RegisterFn = Box<dyn FnOnce(&mut crate::registry::InProcessRegistry)>;
