@@ -1,8 +1,6 @@
 # Contributing
 
-Earmark Hardened Kernel is public, pre-1.0 software. Small bug fixes,
-documentation corrections, tests, and tightly scoped crate improvements are the
-easiest changes to review. Larger design changes should begin as an issue.
+Earmark Hardened Kernel is public, pre-1.0 software. Small bug fixes, documentation corrections, tests, and tightly scoped crate improvements are the easiest changes to review. Larger design changes should begin as an issue.
 
 ## Local Setup
 
@@ -19,8 +17,7 @@ cargo check --workspace
 cargo test --workspace
 ```
 
-If the local environment uses Nix, `nix develop` provides a shell with the Rust
-toolchain and OpenSSL-related dependencies configured.
+If the local environment uses Nix, `nix develop` provides a shell with the Rust toolchain and OpenSSL-related dependencies configured.
 
 ## Verification
 
@@ -46,17 +43,13 @@ Open an issue before implementing changes that affect:
 - public documentation structure
 - compatibility expectations
 
-A good design issue states the current behavior, the proposed change,
-alternatives considered, and the compatibility risk.
+A good design issue states the current behavior, the proposed change, alternatives considered, and the compatibility risk.
 
 ## Documentation Changes
 
-Public documentation should explain the kernel as a standalone project. It
-should stay concrete, mechanically accurate, and free of release-planning
-residue.
+Public documentation should explain the kernel as a standalone project. It should stay concrete, mechanically accurate, and free of release-planning residue.
 
-Tutorial material should show expected outcomes after commands. Reference
-material should match the repository that exists.
+Tutorial material should show expected outcomes after commands. Reference material should match the repository that exists.
 
 ## Pull Requests
 
@@ -73,9 +66,7 @@ Keep unrelated changes out of the same pull request.
 
 ## Licensing Note
 
-The repository is distributed under the terms in `LICENSE`. By contributing,
-the contributor agrees that accepted changes may be distributed under those
-terms.
+The repository is distributed under the terms in `LICENSE`. By contributing, the contributor agrees that accepted changes may be distributed under those terms.
 
 This repository does not currently use a separate CLA or DCO.
 

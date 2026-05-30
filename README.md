@@ -1,15 +1,8 @@
 # Earmark Hardened Kernel (v0.1)
 
-AI-assisted work usually starts in a chat window and stays there too long. A
-task gets split across messages, notes, copied snippets, half-remembered files,
-and whatever happened to be open at the time. That is fine for a quick answer.
-It is bad for work that needs to be resumed, checked, reviewed, or handed to
-someone else.
+AI-assisted work usually starts in a chat window and stays there too long. A task gets split across messages, notes, copied snippets, half-remembered files, and whatever happened to be open at the time. That is fine for a quick answer. It is bad for work that needs to be resumed, checked, reviewed, or handed to someone else.
 
-Earmark is a Rust kernel for keeping that kind of work on durable ground. It
-stores objects, versions, relations, standing, and review state on disk in a
-plain directory structure, then builds indexing and governance on top of that
-record instead of hiding the process inside a service.
+Earmark is a Rust kernel for keeping that kind of work on durable ground. It stores objects, versions, relations, standing, and review state on disk in a plain directory structure, then builds indexing and governance on top of that record instead of hiding the process inside a service.
 
 ## What Lives Here
 
@@ -21,14 +14,11 @@ This repository contains the hardened kernel crates for Earmark.
 - `earmark-declarations`: systems, classes, workflows, and packet templates
 - `earmark-governance`: governance-facing types and extraction points
 
-Taken together, these crates define a durable work record that can be stored on
-disk, inspected directly, indexed for lookup, and checked through explicit
-governance rules.
+Taken together, these crates define a durable work record that can be stored on disk, inspected directly, indexed for lookup, and checked through explicit governance rules.
 
 ## Why The Kernel Matters
 
-Stable state and stable rules should survive changes in tools, providers, and
-day-to-day runtime habits.
+Stable state and stable rules should survive changes in tools, providers, and day-to-day runtime habits.
 
 The kernel is written so that the durable record is primary:
 
@@ -37,8 +27,7 @@ The kernel is written so that the durable record is primary:
 - the crates keep runtime assumptions out of the core record
 - review and standing are part of the data model, not comments around it
 
-That makes the kernel useful anywhere work needs custody, traceability, and a
-clean handoff path.
+That makes the kernel useful anywhere work needs custody, traceability, and a clean handoff path.
 
 ## Repository Layout
 
@@ -76,5 +65,4 @@ cargo test --workspace
 
 ## License
 
-This repository is dual-licensed under `AGPL-3.0-or-later` and a commercial
-license. See `LICENSE`.
+This repository is dual-licensed under `AGPL-3.0-or-later` and a commercial license. See `LICENSE`.

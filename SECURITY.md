@@ -1,12 +1,10 @@
 # Security Policy
 
-Earmark Hardened Kernel is pre-1.0 software. Security reports should go through
-a private reporting route first rather than through public issues.
+Earmark Hardened Kernel is pre-1.0 software. Security reports should go through a private reporting route first rather than through public issues.
 
 ## Supported Versions
 
-Security fixes target the default branch unless a later release process states
-otherwise. There is no separate supported maintenance line at this stage.
+Security fixes target the default branch unless a later release process states otherwise. There is no separate supported maintenance line at this stage.
 
 ## Reporting a Vulnerability
 
@@ -30,10 +28,8 @@ Useful reports include problems involving:
 
 ## Disclosure
 
-Public disclosure should wait until the issue has been reviewed and a fix or
-mitigation is available.
+Public disclosure should wait until the issue has been reviewed and a fix or mitigation is available.
 
-This policy does not promise a fixed response time. Reports are reviewed as
-maintainer capacity allows.
+This policy does not promise a fixed response time. Reports are reviewed as maintainer capacity allows.
 
 Copyright (c) 2026 Mikhail Shakhnazarov
