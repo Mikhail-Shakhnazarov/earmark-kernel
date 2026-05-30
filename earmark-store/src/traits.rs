@@ -13,7 +13,7 @@ use earmark_core::{
     WorkerProfileId, WorkflowDeclaration, WorkflowId,
 };
 
-pub trait CanonicalStore {
+pub trait CanonicalStore: Send + Sync {
     // Workspace Management
     fn is_initialized(&self) -> bool;
     fn init(&self) -> Result<(), StoreError>;
@@ -204,4 +204,42 @@ pub trait CanonicalStore {
         archive: earmark_core::records::archive::WorkspaceArchive,
         overwrite: bool,
     ) -> Result<(), StoreError>;
+}
+
+#[async_trait::async_trait]
+pub trait DerivedIndex: Send + Sync {
+    async fn rebuild_from_store(
+        &mut self,
+        store: &(dyn CanonicalStore + Sync),
+    ) -> Result<(), StoreError>;
+
+    async fn get_object(&self, id: &ObjectId) -> Result<ObjectRecord, StoreError>;
+    async fn get_head_version_id(&self, id: &ObjectId) -> Result<VersionId, StoreError>;
+    async fn get_relation(&self, id: &RelationId) -> Result<RelationRecord, StoreError>;
+
+    async fn find_objects(&self, query: ObjectQuery) -> Result<Vec<ObjectRecord>, StoreError>;
+    async fn find_relations_by_source(
+        &self,
+        source_id: &ObjectId,
+    ) -> Result<Vec<RelationRecord>, StoreError>;
+
+    async fn get_run(&self, id: &RunId) -> Result<RunRecord, StoreError>;
+    async fn get_dispatch(&self, id: &DispatchId) -> Result<DispatchRecord, StoreError>;
+    async fn get_packet(&self, id: &PacketId) -> Result<PacketRecord, StoreError>;
+    async fn get_handoff(
+        &self,
+        id: &HandoffManifestId,
+    ) -> Result<HandoffManifestRecord, StoreError>;
+    async fn get_review(&self, id: &ReviewId) -> Result<ReviewRecord, StoreError>;
+
+    async fn list_active_claims(&self) -> Result<Vec<DispatchRecord>, StoreError>;
+    async fn list_expired_leases(&self) -> Result<Vec<DispatchRecord>, StoreError>;
+
+    async fn upsert_object(&self, object: &ObjectRecord) -> Result<(), StoreError>;
+    async fn upsert_relation(&self, relation: &RelationRecord) -> Result<(), StoreError>;
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct ObjectQuery {
+    pub class_id: Option<earmark_core::ClassId>,
 }

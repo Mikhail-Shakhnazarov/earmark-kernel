@@ -16,8 +16,28 @@ pub trait IdSpec {
         Uuid::new_v4().to_string().replace("-", "")
     }
     fn validate_body(body: &str) -> Result<(), CoreError> {
-        if body.len() != 32 && body.len() != 36 {
-            // Basic validation, detailed ones can be overridden
+        if body.is_empty() {
+            return Err(CoreError::InvalidIdentifier(
+                "body cannot be empty".to_string(),
+            ));
+        }
+        if body
+            .chars()
+            .any(|c| c.is_whitespace() || c == '/' || c == '\\' || c.is_control())
+        {
+            return Err(CoreError::InvalidIdentifier(
+                "body contains illegal characters (whitespace, separators, or control chars)"
+                    .to_string(),
+            ));
+        }
+        if !body
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+        {
+            return Err(CoreError::InvalidIdentifier(
+                "body contains illegal characters (only alphanumeric, _, and - allowed)"
+                    .to_string(),
+            ));
         }
         Ok(())
     }
@@ -282,4 +302,35 @@ pub enum StandingTargetRef {
     Run(RunId),
     Review(ReviewId),
     CheckResult(CheckResultId),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_id_validation() {
+        // Valid IDs
+        assert!(ObjectId::parse("obj_valid_id-123").is_ok());
+        assert!(ObjectId::parse("obj_12345678901234567890123456789012").is_ok());
+
+        // Invalid: missing prefix
+        assert!(ObjectId::parse("valid_id").is_err());
+        // Invalid: wrong prefix
+        assert!(ObjectId::parse("ver_invalid").is_err());
+
+        // Invalid bodies
+        assert!(ObjectId::parse("obj_").is_err()); // empty
+        assert!(ObjectId::parse("obj_with space").is_err());
+        assert!(ObjectId::parse("obj_with/slash").is_err());
+        assert!(ObjectId::parse("obj_with\nnewline").is_err());
+        assert!(ObjectId::parse("obj_with!@#").is_err());
+    }
+
+    #[test]
+    fn test_id_generation() {
+        let id = ObjectId::generate();
+        assert!(id.as_str().starts_with("obj_"));
+        assert!(ObjectId::parse(id.as_str()).is_ok());
+    }
 }

@@ -38,6 +38,9 @@ pub enum StoreError {
     #[error("Regression violation: {0}")]
     Regression(String),
 
+    #[error("Consistency violation: {0}")]
+    Consistency(String),
+
     #[error("Dispatch already claimed: {0}")]
     AlreadyClaimed(String),
 

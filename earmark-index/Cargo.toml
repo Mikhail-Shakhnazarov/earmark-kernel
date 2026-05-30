@@ -8,8 +8,17 @@ license.workspace = true
 [dependencies]
 earmark-core = { path = "../earmark-core" }
 earmark-store = { path = "../earmark-store" }
+tracing.workspace = true
+metrics.workspace = true
+surrealdb = { workspace = true, optional = true }
+async-trait.workspace = true
+tokio.workspace = true
 rusqlite = { version = "0.33", features = ["bundled"] }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 chrono.workspace = true
+
+[features]
+default = []
+surreal = ["dep:surrealdb"]

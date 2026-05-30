@@ -1,0 +1,24 @@
+[package]
+name = "perf-bench"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+earmark-core = { path = "../earmark-core" }
+earmark-store = { path = "../earmark-store" }
+earmark-index = { path = "../earmark-index" }
+serde_json = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+
+[dev-dependencies]
+criterion = "0.5"
+tempfile = "3.10"
+tokio = { workspace = true }
+
+[[bench]]
+name = "earmark-bench"
+harness = false
+
+[features]
+surreal = ["earmark-index/surreal"]

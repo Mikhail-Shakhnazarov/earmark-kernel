@@ -1,4 +1,4 @@
-# Earmark Hardened Kernel
+# Earmark Hardened Kernel (v0.1)
 
 AI-assisted work usually starts in a chat window and stays there too long. A
 task gets split across messages, notes, copied snippets, half-remembered files,
@@ -62,6 +62,7 @@ clean handoff path.
 
 - `docs/architecture.md`: what the kernel does and how the pieces fit together
 - `docs/limitations.md`: the current rough edges and present scope of the code
+- `docs/kernel_contract.md`: the formal guarantees for v0.1 records
 - `docs/governance/README.md`: the release rules and hardening notes
 
 ## Build And Test

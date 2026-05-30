@@ -1,6 +1,6 @@
 # Limitations
 
-Earmark is currently published as a hardened kernel baseline, not as a complete end-user runtime.
+Earmark is currently published as a hardened kernel v0.1 baseline, not as a complete end-user runtime.
 
 ## 1. Kernel, Not Operator Shell
 

@@ -2,7 +2,7 @@ use chrono::Utc;
 use earmark_core::{ActorId, ObjectId, ObjectRecord, RelationId, RelationRecord, Standing};
 use earmark_declarations::InProcessRegistry;
 use earmark_index::sqlite_index::SqliteIndex;
-use earmark_index::traits::DerivedIndex;
+use earmark_index::DerivedIndex;
 use earmark_store::file_store::FileStore;
 use earmark_store::sanctioned::{deposit_object, DepositObjectInput};
 use earmark_store::traits::CanonicalStore;
@@ -58,8 +58,8 @@ fn test_store_consistency_audit() {
     assert!(violations[0].contains("latest version ver_broken missing"));
 }
 
-#[test]
-fn test_index_rebuild_from_store() {
+#[tokio::test]
+async fn test_index_rebuild_from_store() {
     let dir = tempdir().expect("Failed to create temp dir");
     let store_dir = dir.path().join("store");
     let index_path = dir.path().join("index.sqlite");
@@ -109,13 +109,14 @@ fn test_index_rebuild_from_store() {
 
     // Initialize Index and Rebuild
     let mut index = SqliteIndex::open(&index_path).unwrap();
-    index.rebuild_from_store(&store).unwrap();
+    index.init_schema().await.unwrap();
+    index.rebuild_from_store(&store).await.unwrap();
 
     // Verify discovery via index
-    let obj = index.get_object(&obj_id).unwrap();
+    let obj = index.get_object(&obj_id).await.unwrap();
     assert_eq!(obj.id, obj_id);
 
-    let relations = index.find_relations_by_source(&obj_id).unwrap();
+    let relations = index.find_relations_by_source(&obj_id).await.unwrap();
     assert_eq!(relations.len(), 1);
     assert_eq!(relations[0].target_id, target_id);
 }
