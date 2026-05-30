@@ -11,9 +11,10 @@ The repository now presents Earmark as a durable-record kernel rather than as a 
 ## Verification Evidence
 
 Verified on: 2026-05-30
-Commit: d4941a41e88c82adc5ebff90fdb7182ca6182d3d
+Commit: 0ffed90eb09f8c52d08c26877d6e884af074031c
 
 - `cargo fmt --all -- --check`: pass
+- `cargo clippy --workspace --all-targets -- -D warnings`: pass
 - `cargo check --workspace`: pass
 - `cargo test --workspace`: pass
 
