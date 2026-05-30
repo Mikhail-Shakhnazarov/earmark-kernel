@@ -1,9 +1,0 @@
-name: source_note
-version: "1.0.0"
-kind: object
-required_headers: []
-payload_schema: "{}"
-standing_rules: {}
-relation_rules: []
-validators: []
-description: A raw piece of information from a primary source.

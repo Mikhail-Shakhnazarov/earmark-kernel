@@ -1,17 +1,12 @@
 [package]
 name = "earmark-declarations"
 version.workspace = true
+authors.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
 earmark-core = { path = "../earmark-core" }
-earmark-store = { path = "../earmark-store" }
-earmark-index = { path = "../earmark-index" }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
-
-[dev-dependencies]
-tempfile.workspace = true
-proptest.workspace = true

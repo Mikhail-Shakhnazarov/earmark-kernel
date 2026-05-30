@@ -1,27 +1,22 @@
-//! Core error types for the earmark system.
+/*
+ * Copyright (c) 2026 Mikhail Shakhnazarov. Dual-licensed under AGPL-3.0-or-later or commercial terms.
+ * PROPRIETARY AND INTERNAL. ONLY LOCALLY COMMITTED.
+ * v0.1_internal kernel.
+ */
 
 use thiserror::Error;
 
-#[derive(Debug, Error)]
+#[derive(Error, Debug)]
 pub enum CoreError {
-    #[error("serde json error: {0}")]
-    SerdeJson(#[from] serde_json::Error),
-    #[error("serde yaml error: {0}")]
-    SerdeYaml(#[from] serde_yaml::Error),
-    #[error("invalid frontmatter: {0}")]
-    InvalidFrontmatter(String),
-    #[error("invalid kind: {0}")]
-    InvalidKind(String),
-    #[error("invalid identifier: {0}")]
+    #[error("Invalid identifier: {0}")]
     InvalidIdentifier(String),
-    #[error("payload too large: {0} bytes (max {1} bytes)")]
-    PayloadTooLarge(usize, usize),
-    #[error("unknown class: {0}")]
-    UnknownClass(String),
-    #[error("schema violation: {0}")]
-    SchemaViolation(String),
-    #[error("schema unavailable: {0}")]
-    SchemaUnavailable(String),
-    #[error("security violation: {0}")]
-    SecurityViolation(String),
+
+    #[error("Serialization error: {0}")]
+    Serialization(String),
+
+    #[error("Invalid standing: {0}")]
+    InvalidStanding(String),
+
+    #[error("Other error: {0}")]
+    Other(String),
 }

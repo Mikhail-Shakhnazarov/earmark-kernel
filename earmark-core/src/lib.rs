@@ -1,31 +1,15 @@
-mod context;
-mod declarations;
-mod errors;
-mod ids;
-mod kind;
-mod object;
-pub mod projection;
-mod provider;
-mod relations;
-mod runtime;
-mod serde_helpers;
-mod standing;
-mod system;
-mod validation;
-mod values;
+/*
+ * Copyright (c) 2026 Mikhail Shakhnazarov. Dual-licensed under AGPL-3.0-or-later or commercial terms.
+ * PROPRIETARY AND INTERNAL. ONLY LOCALLY COMMITTED.
+ * v0.1_internal kernel.
+ */
 
-pub use context::*;
-pub use declarations::*;
+pub mod errors;
+pub mod ids;
+pub mod records;
+pub mod standing;
+
 pub use errors::*;
 pub use ids::*;
-pub use kind::*;
-pub use object::*;
-pub use projection::*;
-pub use provider::*;
-pub use relations::*;
-pub use runtime::*;
-pub use serde_helpers::*;
+pub use records::*;
 pub use standing::*;
-pub use system::*;
-pub use validation::*;
-pub use values::*;

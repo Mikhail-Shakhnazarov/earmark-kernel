@@ -1,1 +1,0 @@
-Querying across a federated network introduces latency that is not present in centralized systems. Join operations across remote nodes are particularly expensive. For high-density cognitive research where rapid traversal of connections is required, the federated approach may introduce unacceptable friction.

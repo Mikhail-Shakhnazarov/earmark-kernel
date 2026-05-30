@@ -1,1 +1,0 @@
-While federated graphs provide local agility, they introduce significant overhead in schema alignment. Mapping local concepts to a global ontology requires constant semantic mediation. In the 2024 pilot, we found that 40% of research time was spent resolving terminology conflicts between the 'Biology' and 'Chemistry' nodes.

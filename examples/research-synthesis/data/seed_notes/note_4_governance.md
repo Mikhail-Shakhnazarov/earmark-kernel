@@ -1,1 +1,0 @@
-One major benefit of the federated model is that it naturally creates clear boundaries for data ownership. This makes it easier to audit who performed a specific transformation on a specific subset of the graph. However, maintaining a coherent global audit log remains a technical challenge.
