@@ -1,0 +1,24 @@
+name: Design discussion
+description: Propose or discuss a kernel-level design change
+title: "[Design]: "
+labels: ["design"]
+body:
+  - type: textarea
+    id: current
+    attributes:
+      label: Current behavior
+      description: What does the repository do today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposed
+    attributes:
+      label: Proposed change
+      description: Describe the change being proposed.
+    validations:
+      required: true
+  - type: textarea
+    id: tradeoffs
+    attributes:
+      label: Tradeoffs
+      description: What benefits, risks, or compatibility costs come with this change?
