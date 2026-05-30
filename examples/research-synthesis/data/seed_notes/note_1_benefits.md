@@ -1,1 +1,0 @@
-Federated knowledge graphs allow individual research units to maintain ownership of their data while still contributing to a global query space. This architecture reduces the bottleneck of central data governance and allows for rapid iteration on local schemas without breaking the global model.

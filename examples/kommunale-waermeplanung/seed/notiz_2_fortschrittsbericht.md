@@ -1,3 +1,0 @@
-Auszug: Fortschrittsbericht Kommunale Wärmeplanung, Stand Januar 2026.
-
-Zum Stichtag Januar 2026 haben bundesweit rund 14% der Kommunen mit mehr als 10.000 Einwohnern eine formale Wärmeplanung abgeschlossen. Für diese Größenklasse gilt nach GEG-Novelle die Frist zur Umsetzung bis Mitte 2028. Bei den Kommunen unter 10.000 Einwohnern ist der Anteil abgeschlossener Planungen deutlich niedriger, da Verfahren dort später gestartet wurden. Fördermittel aus NKI und BEW sind grundsätzlich verfügbar, die Inanspruchnahme unterscheidet sich jedoch stark zwischen den Bundesländern. In mehreren Ländern wurden Anträge früh gestellt, während andere Regionen bislang nur geringe Abrufquoten melden.

@@ -1,9 +1,0 @@
-name: export_policy
-version: "1.0.0"
-description: Policy for exporting assessments.
-transition_rules: []
-operation_requirements:
-  - operation: export
-    required_standing:
-      "kernel:review": "accepted"
-escalations: []

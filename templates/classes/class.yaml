@@ -1,9 +1,0 @@
-name: your_class_name
-version: 0.2.0
-description: Describe this class and what it represents.
-kind: object
-payload_schema: inline:any
-required_headers:
-  - title
-standing_rules: []
-relation_rules: []
