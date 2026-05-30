@@ -1,34 +1,15 @@
+# Rust build output
 /target/
 
-# Internal planning and review material
-/docs/internal/
-/docs/archive/
-/docs/review/
-/WORKSPACE_STATUS.md
-/PRODUCTIZATION_ROADMAP.md
-/GUI_WORKBENCH_CONCEPT.md
+# Local tool state
+.agents/
+.codex/
 
-.env
-.env.local
-
-# Local workspace state
-/.earmark/
-/.earmark_lock
+# Editor residue
 .DS_Store
-.direnv/
-
-# Nested Earmark dogfooding/runtime state
-**/.earmark/
-**/.earmark_lock
-
-# Generated dogfooding corpus objects unless explicitly promoted to fixtures
-/dogfooding
-
-# Local orchestration artifacts
-.orchestration/
-.opencode/
-/dogfooding
-opencode.json
-/dogfooding-demo-test
-
-
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
