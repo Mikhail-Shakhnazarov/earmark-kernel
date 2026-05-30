@@ -67,14 +67,20 @@ pub trait CanonicalStore {
     ) -> Result<earmark_core::PacketTemplateDeclaration, StoreError>;
     fn list_packet_templates(&self) -> Result<Vec<earmark_core::PacketTemplateId>, StoreError>;
 
-    fn register_runtime_protocol(&self, record: earmark_core::RuntimeProtocol) -> Result<(), StoreError>;
+    fn register_runtime_protocol(
+        &self,
+        record: earmark_core::RuntimeProtocol,
+    ) -> Result<(), StoreError>;
     fn get_runtime_protocol(
         &self,
         id: &earmark_core::RuntimeProtocolId,
     ) -> Result<earmark_core::RuntimeProtocol, StoreError>;
     fn list_runtime_protocols(&self) -> Result<Vec<earmark_core::RuntimeProtocolId>, StoreError>;
 
-    fn register_selection_policy(&self, record: earmark_core::SelectionPolicy) -> Result<(), StoreError>;
+    fn register_selection_policy(
+        &self,
+        record: earmark_core::SelectionPolicy,
+    ) -> Result<(), StoreError>;
     fn get_selection_policy(
         &self,
         id: &earmark_core::SelectionPolicyId,

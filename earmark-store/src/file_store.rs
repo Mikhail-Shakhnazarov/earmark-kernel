@@ -1266,7 +1266,6 @@ impl CanonicalStore for FileStore {
         Ok(reaped)
     }
 
-
     fn import_archive(
         &self,
         archive: earmark_core::records::archive::WorkspaceArchive,
@@ -1274,25 +1273,33 @@ impl CanonicalStore for FileStore {
     ) -> Result<(), StoreError> {
         // 1. Declarations
         for class in archive.classes {
-            let path = self.classes_dir().join(format!("{}.json", class.class_id.as_str()));
+            let path = self
+                .classes_dir()
+                .join(format!("{}.json", class.class_id.as_str()));
             if overwrite || !path.exists() {
                 self.save(path, &class)?;
             }
         }
         for system in archive.systems {
-            let path = self.systems_dir().join(format!("{}.json", system.system_id.as_str()));
+            let path = self
+                .systems_dir()
+                .join(format!("{}.json", system.system_id.as_str()));
             if overwrite || !path.exists() {
                 self.save(path, &system)?;
             }
         }
         for workflow in archive.workflows {
-            let path = self.workflows_dir().join(format!("{}.json", workflow.workflow_id.as_str()));
+            let path = self
+                .workflows_dir()
+                .join(format!("{}.json", workflow.workflow_id.as_str()));
             if overwrite || !path.exists() {
                 self.save(path, &workflow)?;
             }
         }
         for pack in archive.system_packs {
-            let path = self.system_packs_dir().join(format!("{}.json", pack.pack_id.as_str()));
+            let path = self
+                .system_packs_dir()
+                .join(format!("{}.json", pack.pack_id.as_str()));
             if overwrite || !path.exists() {
                 self.save(path, &pack)?;
             }
@@ -1313,16 +1320,25 @@ impl CanonicalStore for FileStore {
 
         // 3. Relations
         for rel in archive.relations {
-            self.save(self.relations_dir().join(format!("{}.json", rel.id.as_str())), &rel)?;
+            self.save(
+                self.relations_dir()
+                    .join(format!("{}.json", rel.id.as_str())),
+                &rel,
+            )?;
         }
 
         // 4. Runtime Records
         for run in archive.runs {
-            self.save(self.runs_dir().join(format!("{}.json", run.run_id.as_str())), &run)?;
+            self.save(
+                self.runs_dir()
+                    .join(format!("{}.json", run.run_id.as_str())),
+                &run,
+            )?;
         }
         for packet in archive.packets {
             self.save(
-                self.packets_dir().join(format!("{}.json", packet.packet_id.as_str())),
+                self.packets_dir()
+                    .join(format!("{}.json", packet.packet_id.as_str())),
                 &packet,
             )?;
         }
@@ -1335,7 +1351,8 @@ impl CanonicalStore for FileStore {
         }
         for review in archive.reviews {
             self.save(
-                self.reviews_dir().join(format!("{}.json", review.review_id.as_str())),
+                self.reviews_dir()
+                    .join(format!("{}.json", review.review_id.as_str())),
                 &review,
             )?;
         }

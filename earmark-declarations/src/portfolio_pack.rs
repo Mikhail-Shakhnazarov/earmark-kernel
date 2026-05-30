@@ -50,7 +50,9 @@ pub fn get_portfolio_pack_declarations() -> Vec<RegisterFn> {
         intrinsic_signal: false,
         origin_pack_id: Some(sp_portfolio_public_id.clone()),
     };
-    registers.push(Box::new(move |r| r.register_class(cls_professional_experience)));
+    registers.push(Box::new(move |r| {
+        r.register_class(cls_professional_experience)
+    }));
 
     let cls_architectural_proof = ClassDeclaration {
         class_id: ClassId::parse("cls_architectural_proof").unwrap(),
