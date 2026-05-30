@@ -8,6 +8,12 @@ This branch replaces the previous v1-preview surface with the hardened kernel ba
 
 The repository now presents Earmark as a durable-record kernel rather than as a complete CLI/runtime product.
 
+## Main Replacement
+
+Merged to `main` on 2026-05-30.
+
+The final pre-merge verification commit was `0ffed90eb09f8c52d08c26877d6e884af074031c`. Later commits before merge updated verification documentation only. The authoritative post-merge gate is the passing CI run on `main`.
+
 ## Verification Evidence
 
 Verified on: 2026-05-30
