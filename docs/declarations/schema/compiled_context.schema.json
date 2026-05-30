@@ -1,1 +1,0 @@
-{"$schema":"https://json-schema.org/draft/2020-12/schema","title":"CompiledContextTemplate","type":"object","required":["name","version","select","render","visibility"],"properties":{"name":{"type":"string"},"version":{"type":"string"},"description":{"type":["string","null"]},"select":{"type":"object"},"render":{"type":"object"},"visibility":{"type":"object"}}}
