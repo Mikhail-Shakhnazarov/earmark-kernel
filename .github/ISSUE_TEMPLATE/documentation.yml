@@ -1,0 +1,24 @@
+name: Documentation
+description: Report a documentation problem or propose a documentation improvement
+title: "[Docs]: "
+labels: ["documentation"]
+body:
+  - type: textarea
+    id: page
+    attributes:
+      label: Affected page or file
+      description: Which file or section is involved?
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What is unclear, incorrect, or missing?
+    validations:
+      required: true
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested improvement
+      description: If there is a clear fix, describe it here.
