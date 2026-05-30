@@ -8,10 +8,11 @@ This branch replaces the previous v1-preview surface with the hardened kernel ba
 
 The repository now presents Earmark as a durable-record kernel rather than as a complete CLI/runtime product.
 
-## Verified Gates
+## Pending Verification Gates
 
 - Workspace builds with `cargo check --workspace`.
 - Workspace tests pass with `cargo test --workspace`.
+- Formatting passes with `cargo fmt --all -- --check`.
 - Public docs describe the kernel branch directly.
 - Source headers match the public dual-license posture.
 - Archive import/export paths are symmetrical with normal store getters.
