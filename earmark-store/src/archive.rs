@@ -1,7 +1,6 @@
 /*
- * Copyright (c) 2026 Mikhail Shakhnazarov. Dual-licensed under AGPL-3.0-or-later or commercial terms.
- * PROPRIETARY AND INTERNAL. ONLY LOCALLY COMMITTED.
- * v0.1_internal kernel.
+ * Copyright (c) 2026 Mikhail Shakhnazarov.
+ * Dual-licensed under AGPL-3.0-or-later or commercial terms.
  */
 
 use crate::errors::StoreError;
@@ -50,11 +49,11 @@ pub fn export_workspace(
         dispatches.push(store.get_dispatch(&did)?);
     }
 
-    let mut change_sets = Vec::new();
+    let change_sets = Vec::new();
     // Assuming list_change_sets exists or we just collect them all if possible
     // For now, change_set support might be limited in the store trait
 
-    let mut handoffs = Vec::new();
+    let handoffs = Vec::new();
     // Similar for handoffs
 
     let mut standing = Vec::new();
