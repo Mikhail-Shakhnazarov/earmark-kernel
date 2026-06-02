@@ -150,7 +150,6 @@ impl DeclarationRegistry for InProcessRegistry {
             .ok_or_else(|| DeclarationError::NotFound(id.as_str().to_string()))
     }
 
-
     fn get_system_pack(&self, id: &SystemPackId) -> Result<SystemPackManifest, DeclarationError> {
         self.system_packs
             .get(id)

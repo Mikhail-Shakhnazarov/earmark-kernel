@@ -156,7 +156,6 @@ pub trait CanonicalStore: Send + Sync {
         id: &earmark_core::SystemPackId,
     ) -> Result<Vec<earmark_core::PackActivationRecord>, StoreError>;
 
-
     // Maintenance & Ledger Closure
     fn record_undo(&self, record: UndoRecord) -> Result<(), StoreError>;
     fn get_undo_history(
@@ -197,7 +196,6 @@ pub trait DerivedIndex: Send + Sync {
         id: &HandoffManifestId,
     ) -> Result<HandoffManifestRecord, StoreError>;
     async fn get_review(&self, id: &ReviewId) -> Result<ReviewRecord, StoreError>;
-
 
     async fn upsert_object(&self, object: &ObjectRecord) -> Result<(), StoreError>;
     async fn upsert_relation(&self, relation: &RelationRecord) -> Result<(), StoreError>;

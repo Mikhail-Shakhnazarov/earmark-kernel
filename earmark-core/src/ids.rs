@@ -131,7 +131,6 @@ impl IdSpec for RunIdSpec {
 }
 pub type RunId = TypedId<RunIdSpec>;
 
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PacketIdSpec;
 impl IdSpec for PacketIdSpec {
@@ -243,7 +242,6 @@ impl IdSpec for ProviderProfileIdSpec {
     const PREFIX: &'static str = "pro";
 }
 pub type ProviderProfileId = TypedId<ProviderProfileIdSpec>;
-
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ExternalConnectionIdSpec;

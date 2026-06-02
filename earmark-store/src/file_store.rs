@@ -6,11 +6,10 @@
 use crate::errors::StoreError;
 use crate::traits::CanonicalStore;
 use earmark_core::{
-    ChangeSetId, ChangeSetRecord, CheckResultId, CheckResultRecord,
-    ExternalConnectionRecord, HandoffManifestId, HandoffManifestRecord, ObjectId, ObjectRecord,
-    PacketId, PacketRecord, ProviderProfile, ProviderProfileId, ProviderRecord, RelationId,
-    RelationRecord, ReviewId, ReviewRecord, RunId, RunRecord, StandingTransitionRecord, UndoRecord,
-    VersionId, VersionRecord,
+    ChangeSetId, ChangeSetRecord, CheckResultId, CheckResultRecord, ExternalConnectionRecord,
+    HandoffManifestId, HandoffManifestRecord, ObjectId, ObjectRecord, PacketId, PacketRecord,
+    ProviderProfile, ProviderProfileId, ProviderRecord, RelationId, RelationRecord, ReviewId,
+    ReviewRecord, RunId, RunRecord, StandingTransitionRecord, UndoRecord, VersionId, VersionRecord,
 };
 use metrics::{counter, histogram};
 use serde::Serialize;
@@ -574,7 +573,6 @@ impl CanonicalStore for FileStore {
         Ok(packets)
     }
 
-
     fn create_change_set(&self, record: ChangeSetRecord) -> Result<(), StoreError> {
         self.sanction_write()?;
         let path = self
@@ -756,7 +754,6 @@ impl CanonicalStore for FileStore {
             .join(format!("{}.json", record.connection_id.as_str()));
         self.save(path, &record)
     }
-
 
     // Declaration Management
     fn register_class(&self, record: earmark_core::ClassDeclaration) -> Result<(), StoreError> {
@@ -1110,7 +1107,6 @@ impl CanonicalStore for FileStore {
         }
         Ok(history)
     }
-
 
     fn import_archive(
         &self,

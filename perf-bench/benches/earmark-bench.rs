@@ -77,7 +77,6 @@ fn create_mock_packet(i: usize) -> earmark_core::PacketRecord {
         protocol_ref: earmark_core::RuntimeProtocolId::parse("prt_bench").unwrap(),
         selection_ref: None,
         provider_profile_ref: None,
-        worker_profile_ref: None,
         output_contract_ref: ClassId::parse("cls_bench").unwrap(),
         rendered_manifest: None,
         selection_trace: vec![],

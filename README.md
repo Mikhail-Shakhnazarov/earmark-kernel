@@ -1,5 +1,7 @@
 # Earmark Hardened Kernel (v0.1)
 
+![CI](https://github.com/Mikhail-Shakhnazarov/earmark-workspace/actions/workflows/ci.yml/badge.svg)
+
 AI-assisted work usually starts in a chat window and stays there too long. A task gets split across messages, notes, copied snippets, half-remembered files, and whatever happened to be open at the time. That is fine for a quick answer. It is bad for work that needs to be resumed, checked, reviewed, or handed to someone else.
 
 Earmark is a Rust kernel for keeping that kind of work on durable ground. It stores objects, versions, relations, standing, and review state on disk in a plain directory structure, then builds indexing and governance on top of that record instead of hiding the process inside a service.

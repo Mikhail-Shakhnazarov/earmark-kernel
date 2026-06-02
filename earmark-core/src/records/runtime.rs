@@ -4,9 +4,9 @@
  */
 
 use crate::ids::{
-    ActorId, ChangeSetId, CheckResultId, ClassId, HandoffManifestId, ObjectId, ObjectRef,
-    PacketId, PacketTemplateId, ProviderProfileId, RelationId, RunId, RuntimeProtocolId,
-    SelectionPolicyId, SystemId, SystemPackId, TransitionId, WorkflowId,
+    ActorId, ChangeSetId, CheckResultId, ClassId, HandoffManifestId, ObjectId, ObjectRef, PacketId,
+    PacketTemplateId, ProviderProfileId, RelationId, RunId, RuntimeProtocolId, SelectionPolicyId,
+    SystemId, SystemPackId, TransitionId, WorkflowId,
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -95,7 +95,6 @@ pub struct SelectionTraceEntry {
     pub decision: String,
     pub reason: Option<String>,
 }
-
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ChangeSetRecord {

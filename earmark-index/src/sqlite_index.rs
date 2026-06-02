@@ -84,7 +84,8 @@ impl SqliteIndex {
             CREATE INDEX IF NOT EXISTS idx_relations_source ON relations(source_id);
             CREATE INDEX IF NOT EXISTS idx_versions_object ON versions(object_id);
             "#,
-        ).map_err(|e| earmark_store::StoreError::Generic(e.to_string()))?;
+        )
+        .map_err(|e| earmark_store::StoreError::Generic(e.to_string()))?;
         Ok(())
     }
 }
@@ -179,7 +180,6 @@ impl DerivedIndex for SqliteIndex {
             )
             .map_err(|e| StoreError::Generic(e.to_string()))?;
         }
-
 
         // 5. Rebuild Packets
         let packet_ids = store
@@ -365,7 +365,6 @@ impl DerivedIndex for SqliteIndex {
             .ok_or_else(|| StoreError::Generic(format!("Review {} not found", id)))?;
         serde_json::from_str(&json).map_err(|e| StoreError::Generic(e.to_string()))
     }
-
 
     async fn upsert_object(&self, object: &ObjectRecord) -> Result<(), StoreError> {
         let conn = self.conn.lock().await;

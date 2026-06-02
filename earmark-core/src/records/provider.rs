@@ -3,9 +3,7 @@
  * Dual-licensed under AGPL-3.0-or-later or commercial terms.
  */
 
-use crate::ids::{
-    ActorId, ExternalConnectionId, ObjectId, PacketId, ProviderProfileId,
-};
+use crate::ids::{ActorId, ExternalConnectionId, ObjectId, PacketId, ProviderProfileId};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 

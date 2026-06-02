@@ -3,18 +3,18 @@
  * Dual-licensed under AGPL-3.0-or-later or commercial terms.
  */
 
+use chrono::Utc;
 use earmark_core::*;
-use earmark_store::file_store::FileStore;
 use earmark_store::archive::{export_workspace, import_workspace};
+use earmark_store::file_store::FileStore;
 use earmark_store::traits::CanonicalStore;
 use tempfile::tempdir;
-use chrono::Utc;
 
 #[test]
 fn test_archive_round_trip_v1_integrity() {
     let source_dir = tempdir().unwrap();
     let source_store = FileStore::new(source_dir.path());
-    
+
     // 1. Populate source store
     let obj_id = ObjectId::generate();
     let ver_id = VersionId::generate();
@@ -35,7 +35,7 @@ fn test_archive_round_trip_v1_integrity() {
         created_by: None,
     };
     source_store.deposit_object(obj, ver).unwrap();
-    
+
     let run_id = RunId::generate();
     let run = RunRecord {
         run_id: run_id.clone(),
@@ -45,24 +45,24 @@ fn test_archive_round_trip_v1_integrity() {
         updated_at: Utc::now(),
     };
     source_store.create_run(run).unwrap();
-    
+
     // 2. Export
     let archive = export_workspace(&source_store, false).unwrap();
-    
+
     // 3. Import to target store
     let target_dir = tempdir().unwrap();
     let target_store = FileStore::new(target_dir.path());
     target_store.init().unwrap(); // Initialize dirs
-    
+
     import_workspace(&target_store, archive, true).unwrap();
-    
+
     // 4. Verify integrity
     let fetched_obj = target_store.get_object(&obj_id).unwrap();
     assert_eq!(fetched_obj.id, obj_id);
-    
+
     let fetched_run = target_store.get_run(&run_id).unwrap();
     assert_eq!(fetched_run.run_id, run_id);
-    
+
     assert_eq!(target_store.list_objects().unwrap().len(), 1);
     assert_eq!(target_store.list_runs().unwrap().len(), 1);
 }

@@ -44,7 +44,6 @@ pub fn export_workspace(
         packets.push(store.get_packet(&pid)?);
     }
 
-
     let change_sets = Vec::new();
     // Assuming list_change_sets exists or we just collect them all if possible
     // For now, change_set support might be limited in the store trait

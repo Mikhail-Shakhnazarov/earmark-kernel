@@ -69,7 +69,7 @@ mod store_invariants {
     fn test_file_store_directory_bootstrap() {
         let dir = tempdir().unwrap();
         let store = FileStore::new(dir.path());
-        
+
         let obj_id = ObjectId::generate();
         let ver_id = VersionId::generate();
         let obj = ObjectRecord {
@@ -88,18 +88,23 @@ mod store_invariants {
             created_at: chrono::Utc::now(),
             created_by: None,
         };
-        
+
         store.deposit_object(obj.clone(), ver).unwrap();
-        
+
         assert!(dir.path().join(".earmark/objects").exists());
-        assert!(dir.path().join(".earmark/objects").join(obj.id.as_str()).join("record.json").exists());
+        assert!(dir
+            .path()
+            .join(".earmark/objects")
+            .join(obj.id.as_str())
+            .join("record.json")
+            .exists());
     }
 
     #[test]
     fn test_file_store_record_round_trip() {
         let dir = tempdir().unwrap();
         let store = FileStore::new(dir.path());
-        
+
         let run_id = RunId::generate();
         let run = RunRecord {
             run_id: run_id.clone(),
@@ -108,10 +113,10 @@ mod store_invariants {
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
         };
-        
+
         store.create_run(run.clone()).unwrap();
         let fetched = store.get_run(&run_id).unwrap();
-        
+
         assert_eq!(fetched.run_id, run.run_id);
         assert_eq!(fetched.status, run.status);
     }
