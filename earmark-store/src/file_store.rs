@@ -5,14 +5,12 @@
 
 use crate::errors::StoreError;
 use crate::traits::CanonicalStore;
-use chrono::Utc;
 use earmark_core::{
-    ActorId, ChangeSetId, ChangeSetRecord, CheckResultId, CheckResultRecord, DispatchId,
-    DispatchRecord, DispatchStatus, ExternalConnectionRecord, HandoffManifestId,
-    HandoffManifestRecord, ObjectId, ObjectRecord, PacketId, PacketRecord, ProviderProfile,
-    ProviderProfileId, ProviderRecord, RelationId, RelationRecord, ReviewId, ReviewRecord, RunId,
-    RunRecord, StandingTransitionRecord, UndoRecord, VersionId, VersionRecord, WorkerProfile,
-    WorkerProfileId,
+    ChangeSetId, ChangeSetRecord, CheckResultId, CheckResultRecord,
+    ExternalConnectionRecord, HandoffManifestId, HandoffManifestRecord, ObjectId, ObjectRecord,
+    PacketId, PacketRecord, ProviderProfile, ProviderProfileId, ProviderRecord, RelationId,
+    RelationRecord, ReviewId, ReviewRecord, RunId, RunRecord, StandingTransitionRecord, UndoRecord,
+    VersionId, VersionRecord,
 };
 use metrics::{counter, histogram};
 use serde::Serialize;
@@ -46,9 +44,6 @@ impl FileStore {
     fn packets_dir(&self) -> PathBuf {
         self.dot_earmark().join("packets")
     }
-    fn dispatches_dir(&self) -> PathBuf {
-        self.dot_earmark().join("dispatches")
-    }
     fn change_sets_dir(&self) -> PathBuf {
         self.dot_earmark().join("change_sets")
     }
@@ -72,9 +67,6 @@ impl FileStore {
     }
     fn external_connections_dir(&self) -> PathBuf {
         self.dot_earmark().join("external_connections")
-    }
-    fn worker_profiles_dir(&self) -> PathBuf {
-        self.dot_earmark().join("worker_profiles")
     }
     fn system_packs_dir(&self) -> PathBuf {
         self.root.join(".earmark/declarations/packs")
@@ -175,16 +167,12 @@ impl CanonicalStore for FileStore {
         fs::create_dir_all(self.relations_dir())?;
         fs::create_dir_all(self.runs_dir())?;
         fs::create_dir_all(self.packets_dir())?;
-        fs::create_dir_all(self.dispatches_dir())?;
-        fs::create_dir_all(self.change_sets_dir())?;
-        fs::create_dir_all(self.check_results_dir())?;
         fs::create_dir_all(self.handoff_manifests_dir())?;
         fs::create_dir_all(self.reviews_dir())?;
         fs::create_dir_all(self.standing_transitions_dir())?;
         fs::create_dir_all(self.provider_profiles_dir())?;
         fs::create_dir_all(self.provider_records_dir())?;
         fs::create_dir_all(self.external_connections_dir())?;
-        fs::create_dir_all(self.worker_profiles_dir())?;
         fs::create_dir_all(self.system_packs_dir())?;
         fs::create_dir_all(self.selection_policies_dir())?;
         fs::create_dir_all(self.packet_templates_dir())?;
@@ -335,11 +323,6 @@ impl CanonicalStore for FileStore {
         for pid in self.list_packets()? {
             if let Err(e) = self.get_packet(&pid) {
                 violations.push(format!("Packet {} corrupt: {}", pid.as_str(), e));
-            }
-        }
-        for did in self.list_dispatches()? {
-            if let Err(e) = self.get_dispatch(&did) {
-                violations.push(format!("Dispatch {} corrupt: {}", did.as_str(), e));
             }
         }
         for rid in self.list_reviews()? {
@@ -591,41 +574,6 @@ impl CanonicalStore for FileStore {
         Ok(packets)
     }
 
-    fn create_dispatch(&self, record: DispatchRecord) -> Result<(), StoreError> {
-        self.sanction_write()?;
-        let path = self
-            .dispatches_dir()
-            .join(format!("{}.json", record.dispatch_id.as_str()));
-        self.save(path, &record)
-    }
-
-    fn update_dispatch(&self, record: DispatchRecord) -> Result<(), StoreError> {
-        self.create_dispatch(record)
-    }
-
-    fn get_dispatch(&self, id: &DispatchId) -> Result<DispatchRecord, StoreError> {
-        let path = self.dispatches_dir().join(format!("{}.json", id.as_str()));
-        let json = fs::read_to_string(path)?;
-        Ok(serde_json::from_str(&json)?)
-    }
-
-    fn list_dispatches(&self) -> Result<Vec<DispatchId>, StoreError> {
-        let mut dispatches = Vec::new();
-        if !self.dispatches_dir().exists() {
-            return Ok(dispatches);
-        }
-        for entry in fs::read_dir(self.dispatches_dir())? {
-            let entry = entry?;
-            if entry.file_type()?.is_file() {
-                let name = entry.file_name().to_string_lossy().to_string();
-                if name.ends_with(".json") {
-                    let id = name.trim_end_matches(".json");
-                    dispatches.push(DispatchId::parse(id)?);
-                }
-            }
-        }
-        Ok(dispatches)
-    }
 
     fn create_change_set(&self, record: ChangeSetRecord) -> Result<(), StoreError> {
         self.sanction_write()?;
@@ -809,39 +757,6 @@ impl CanonicalStore for FileStore {
         self.save(path, &record)
     }
 
-    fn register_worker_profile(&self, record: WorkerProfile) -> Result<(), StoreError> {
-        self.sanction_write()?;
-        let path = self
-            .worker_profiles_dir()
-            .join(format!("{}.json", record.worker_profile_id.as_str()));
-        self.save(path, &record)
-    }
-
-    fn get_worker_profile(&self, id: &WorkerProfileId) -> Result<WorkerProfile, StoreError> {
-        let path = self
-            .worker_profiles_dir()
-            .join(format!("{}.json", id.as_str()));
-        let json = fs::read_to_string(path)?;
-        Ok(serde_json::from_str(&json)?)
-    }
-
-    fn list_worker_profiles(&self) -> Result<Vec<WorkerProfileId>, StoreError> {
-        let mut profiles = Vec::new();
-        if !self.worker_profiles_dir().exists() {
-            return Ok(profiles);
-        }
-        for entry in fs::read_dir(self.worker_profiles_dir())? {
-            let entry = entry?;
-            if entry.file_type()?.is_file() {
-                let name = entry.file_name().to_string_lossy().to_string();
-                if name.ends_with(".json") {
-                    let id = name.trim_end_matches(".json");
-                    profiles.push(WorkerProfileId::parse(id)?);
-                }
-            }
-        }
-        Ok(profiles)
-    }
 
     // Declaration Management
     fn register_class(&self, record: earmark_core::ClassDeclaration) -> Result<(), StoreError> {
@@ -1196,115 +1111,6 @@ impl CanonicalStore for FileStore {
         Ok(history)
     }
 
-    fn claim_dispatch(
-        &self,
-        id: &DispatchId,
-        claimer: ActorId,
-        lease_duration_secs: i64,
-    ) -> Result<DispatchRecord, StoreError> {
-        let mut dispatch = self.get_dispatch(id)?;
-
-        if dispatch.status != DispatchStatus::Queued {
-            return Err(StoreError::AlreadyClaimed(format!(
-                "Dispatch {} is not in Queued state (status: {:?})",
-                id.as_str(),
-                dispatch.status
-            )));
-        }
-
-        dispatch.status = DispatchStatus::Running;
-        dispatch.claimed_by = Some(claimer);
-        dispatch.claimed_at = Some(Utc::now());
-        dispatch.lease_expires_at =
-            Some(Utc::now() + chrono::Duration::seconds(lease_duration_secs));
-        dispatch.updated_at = Utc::now();
-
-        self.update_dispatch(dispatch.clone())?;
-        Ok(dispatch)
-    }
-
-    fn release_dispatch_claim(
-        &self,
-        id: &DispatchId,
-        claimer: &ActorId,
-    ) -> Result<DispatchRecord, StoreError> {
-        let mut dispatch = self.get_dispatch(id)?;
-
-        if dispatch.claimed_by.as_ref() != Some(claimer) {
-            return Err(StoreError::NotClaimed(format!(
-                "Dispatch {} is not claimed by {}",
-                id.as_str(),
-                claimer.as_str()
-            )));
-        }
-
-        dispatch.claimed_by = None;
-        dispatch.claimed_at = None;
-        dispatch.lease_expires_at = None;
-        dispatch.updated_at = Utc::now();
-
-        self.update_dispatch(dispatch.clone())?;
-        Ok(dispatch)
-    }
-
-    fn renew_lease(
-        &self,
-        id: &DispatchId,
-        claimer: &ActorId,
-        lease_duration_secs: i64,
-    ) -> Result<DispatchRecord, StoreError> {
-        let mut dispatch = self.get_dispatch(id)?;
-
-        if dispatch.claimed_by.as_ref() != Some(claimer) {
-            return Err(StoreError::NotClaimed(format!(
-                "Dispatch {} is not claimed by {}",
-                id.as_str(),
-                claimer.as_str()
-            )));
-        }
-
-        if let Some(expires) = dispatch.lease_expires_at {
-            if expires < Utc::now() {
-                return Err(StoreError::LeaseExpired(format!(
-                    "Lease for dispatch {} expired at {}",
-                    id.as_str(),
-                    expires
-                )));
-            }
-        }
-
-        dispatch.lease_expires_at =
-            Some(Utc::now() + chrono::Duration::seconds(lease_duration_secs));
-        dispatch.updated_at = Utc::now();
-
-        self.update_dispatch(dispatch.clone())?;
-        Ok(dispatch)
-    }
-
-    fn reap_expired_leases(&self) -> Result<Vec<DispatchId>, StoreError> {
-        let mut reaped = Vec::new();
-        let now = Utc::now();
-
-        for did in self.list_dispatches()? {
-            let dispatch = self.get_dispatch(&did)?;
-            if dispatch.status == earmark_core::DispatchStatus::Running {
-                if let Some(expires) = dispatch.lease_expires_at {
-                    if expires < now {
-                        let mut dispatch = dispatch;
-                        dispatch.status = earmark_core::DispatchStatus::Queued;
-                        dispatch.claimed_by = None;
-                        dispatch.claimed_at = None;
-                        dispatch.lease_expires_at = None;
-                        dispatch.updated_at = now;
-                        self.update_dispatch(dispatch)?;
-                        reaped.push(did);
-                    }
-                }
-            }
-        }
-
-        Ok(reaped)
-    }
 
     fn import_archive(
         &self,
@@ -1380,13 +1186,6 @@ impl CanonicalStore for FileStore {
                 self.packets_dir()
                     .join(format!("{}.json", packet.packet_id.as_str())),
                 &packet,
-            )?;
-        }
-        for dispatch in archive.dispatches {
-            self.save(
-                self.dispatches_dir()
-                    .join(format!("{}.json", dispatch.dispatch_id.as_str())),
-                &dispatch,
             )?;
         }
         for review in archive.reviews {

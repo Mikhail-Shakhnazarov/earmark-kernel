@@ -5,9 +5,8 @@
 
 use async_trait::async_trait;
 use earmark_core::{
-    DispatchId, DispatchRecord, HandoffManifestId, HandoffManifestRecord, ObjectId, ObjectRecord,
-    PacketId, PacketRecord, RelationId, RelationRecord, ReviewId, ReviewRecord, RunId, RunRecord,
-    VersionId,
+    HandoffManifestId, HandoffManifestRecord, ObjectId, ObjectRecord, PacketId, PacketRecord,
+    RelationId, RelationRecord, ReviewId, ReviewRecord, RunId, RunRecord, VersionId,
 };
 use earmark_store::traits::{DerivedIndex, ObjectQuery};
 use earmark_store::{CanonicalStore, StoreError};
@@ -66,20 +65,6 @@ impl SqliteIndex {
                 record_json TEXT NOT NULL
             );
 
-            CREATE TABLE IF NOT EXISTS dispatches (
-                dispatch_id TEXT PRIMARY KEY,
-                run_id TEXT NOT NULL,
-                record_json TEXT NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS active_dispatch_claims (
-                dispatch_id TEXT PRIMARY KEY,
-                claimed_by TEXT NOT NULL,
-                claimed_at TEXT NOT NULL,
-                lease_expires_at TEXT NOT NULL,
-                record_json TEXT NOT NULL
-            );
-
             CREATE TABLE IF NOT EXISTS packets (
                 packet_id TEXT PRIMARY KEY,
                 record_json TEXT NOT NULL
@@ -98,7 +83,6 @@ impl SqliteIndex {
             -- Indices for traversal and filtering
             CREATE INDEX IF NOT EXISTS idx_relations_source ON relations(source_id);
             CREATE INDEX IF NOT EXISTS idx_versions_object ON versions(object_id);
-            CREATE INDEX IF NOT EXISTS idx_claims_expires ON active_dispatch_claims(lease_expires_at);
             "#,
         ).map_err(|e| earmark_store::StoreError::Generic(e.to_string()))?;
         Ok(())
@@ -126,8 +110,6 @@ impl DerivedIndex for SqliteIndex {
         conn.execute("DELETE FROM relations", [])
             .map_err(|e| StoreError::Generic(e.to_string()))?;
         conn.execute("DELETE FROM runs", [])
-            .map_err(|e| StoreError::Generic(e.to_string()))?;
-        conn.execute("DELETE FROM dispatches", [])
             .map_err(|e| StoreError::Generic(e.to_string()))?;
         conn.execute("DELETE FROM packets", [])
             .map_err(|e| StoreError::Generic(e.to_string()))?;
@@ -198,22 +180,6 @@ impl DerivedIndex for SqliteIndex {
             .map_err(|e| StoreError::Generic(e.to_string()))?;
         }
 
-        // 4. Rebuild Dispatches
-        let dispatch_ids = store
-            .list_dispatches()
-            .map_err(|e| StoreError::Generic(e.to_string()))?;
-        for did in dispatch_ids {
-            let dispatch = store
-                .get_dispatch(&did)
-                .map_err(|e| StoreError::Generic(e.to_string()))?;
-            let dispatch_json =
-                serde_json::to_string(&dispatch).map_err(|e| StoreError::Generic(e.to_string()))?;
-            conn.execute(
-                "INSERT OR REPLACE INTO dispatches (dispatch_id, record_json) VALUES (?1, ?2)",
-                params![did.as_str(), dispatch_json],
-            )
-            .map_err(|e| StoreError::Generic(e.to_string()))?;
-        }
 
         // 5. Rebuild Packets
         let packet_ids = store
@@ -358,19 +324,6 @@ impl DerivedIndex for SqliteIndex {
         serde_json::from_str(&json).map_err(|e| StoreError::Generic(e.to_string()))
     }
 
-    async fn get_dispatch(&self, id: &DispatchId) -> Result<DispatchRecord, StoreError> {
-        let conn = self.conn.lock().await;
-        let mut stmt = conn
-            .prepare("SELECT record_json FROM dispatches WHERE dispatch_id = ?1")
-            .map_err(|e| StoreError::Generic(e.to_string()))?;
-        let json: String = stmt
-            .query_row(params![id.as_str()], |row| row.get(0))
-            .optional()
-            .map_err(|e| StoreError::Generic(e.to_string()))?
-            .ok_or_else(|| StoreError::Generic(format!("Dispatch {} not found", id)))?;
-        serde_json::from_str(&json).map_err(|e| StoreError::Generic(e.to_string()))
-    }
-
     async fn get_packet(&self, id: &PacketId) -> Result<PacketRecord, StoreError> {
         let conn = self.conn.lock().await;
         let mut stmt = conn
@@ -413,47 +366,6 @@ impl DerivedIndex for SqliteIndex {
         serde_json::from_str(&json).map_err(|e| StoreError::Generic(e.to_string()))
     }
 
-    async fn list_active_claims(&self) -> Result<Vec<DispatchRecord>, StoreError> {
-        let conn = self.conn.lock().await;
-        let mut stmt = conn
-            .prepare("SELECT record_json FROM active_dispatch_claims WHERE lease_expires_at > ?1")
-            .map_err(|e| StoreError::Generic(e.to_string()))?;
-        let now = chrono::Utc::now().to_rfc3339();
-        let rows = stmt
-            .query_map(params![now], |row| {
-                let json: String = row.get(0)?;
-                Ok(json)
-            })
-            .map_err(|e| StoreError::Generic(e.to_string()))?;
-        let mut results = Vec::new();
-        for row in rows {
-            let json = row.map_err(|e| StoreError::Generic(e.to_string()))?;
-            results
-                .push(serde_json::from_str(&json).map_err(|e| StoreError::Generic(e.to_string()))?);
-        }
-        Ok(results)
-    }
-
-    async fn list_expired_leases(&self) -> Result<Vec<DispatchRecord>, StoreError> {
-        let conn = self.conn.lock().await;
-        let mut stmt = conn
-            .prepare("SELECT record_json FROM active_dispatch_claims WHERE lease_expires_at <= ?1")
-            .map_err(|e| StoreError::Generic(e.to_string()))?;
-        let now = chrono::Utc::now().to_rfc3339();
-        let rows = stmt
-            .query_map(params![now], |row| {
-                let json: String = row.get(0)?;
-                Ok(json)
-            })
-            .map_err(|e| StoreError::Generic(e.to_string()))?;
-        let mut results = Vec::new();
-        for row in rows {
-            let json = row.map_err(|e| StoreError::Generic(e.to_string()))?;
-            results
-                .push(serde_json::from_str(&json).map_err(|e| StoreError::Generic(e.to_string()))?);
-        }
-        Ok(results)
-    }
 
     async fn upsert_object(&self, object: &ObjectRecord) -> Result<(), StoreError> {
         let conn = self.conn.lock().await;

@@ -5,12 +5,11 @@
 
 use crate::errors::StoreError;
 use earmark_core::{
-    ActorId, ChangeSetId, ChangeSetRecord, CheckResultId, CheckResultRecord, DispatchId,
-    DispatchRecord, ExternalConnectionRecord, HandoffManifestId, HandoffManifestRecord, ObjectId,
-    ObjectRecord, PacketId, PacketRecord, ProviderProfile, ProviderProfileId, ProviderRecord,
-    RelationId, RelationRecord, ReviewId, ReviewRecord, RunId, RunRecord, StandingTransitionRecord,
-    SystemDeclaration, SystemId, UndoRecord, VersionId, VersionRecord, WorkerProfile,
-    WorkerProfileId, WorkflowDeclaration, WorkflowId,
+    ChangeSetId, ChangeSetRecord, CheckResultId, CheckResultRecord, ExternalConnectionRecord,
+    HandoffManifestId, HandoffManifestRecord, ObjectId, ObjectRecord, PacketId, PacketRecord,
+    ProviderProfile, ProviderProfileId, ProviderRecord, RelationId, RelationRecord, ReviewId,
+    ReviewRecord, RunId, RunRecord, StandingTransitionRecord, SystemDeclaration, SystemId,
+    UndoRecord, VersionId, VersionRecord, WorkflowDeclaration, WorkflowId,
 };
 
 pub trait CanonicalStore: Send + Sync {
@@ -103,11 +102,6 @@ pub trait CanonicalStore: Send + Sync {
     fn get_packet(&self, id: &PacketId) -> Result<PacketRecord, StoreError>;
     fn list_packets(&self) -> Result<Vec<PacketId>, StoreError>;
 
-    fn create_dispatch(&self, record: DispatchRecord) -> Result<(), StoreError>;
-    fn update_dispatch(&self, record: DispatchRecord) -> Result<(), StoreError>;
-    fn get_dispatch(&self, id: &DispatchId) -> Result<DispatchRecord, StoreError>;
-    fn list_dispatches(&self) -> Result<Vec<DispatchId>, StoreError>;
-
     fn create_change_set(&self, record: ChangeSetRecord) -> Result<(), StoreError>;
     fn get_change_set(&self, id: &ChangeSetId) -> Result<ChangeSetRecord, StoreError>;
 
@@ -143,11 +137,6 @@ pub trait CanonicalStore: Send + Sync {
         record: ExternalConnectionRecord,
     ) -> Result<(), StoreError>;
 
-    // Worker Profiles
-    fn register_worker_profile(&self, record: WorkerProfile) -> Result<(), StoreError>;
-    fn get_worker_profile(&self, id: &WorkerProfileId) -> Result<WorkerProfile, StoreError>;
-    fn list_worker_profiles(&self) -> Result<Vec<WorkerProfileId>, StoreError>;
-
     // System Packs
     fn register_system_pack(
         &self,
@@ -167,28 +156,6 @@ pub trait CanonicalStore: Send + Sync {
         id: &earmark_core::SystemPackId,
     ) -> Result<Vec<earmark_core::PackActivationRecord>, StoreError>;
 
-    // Claim & Lease Operations
-    fn claim_dispatch(
-        &self,
-        id: &DispatchId,
-        claimer: ActorId,
-        lease_duration_secs: i64,
-    ) -> Result<DispatchRecord, StoreError>;
-
-    fn release_dispatch_claim(
-        &self,
-        id: &DispatchId,
-        claimer: &ActorId,
-    ) -> Result<DispatchRecord, StoreError>;
-
-    fn renew_lease(
-        &self,
-        id: &DispatchId,
-        claimer: &ActorId,
-        lease_duration_secs: i64,
-    ) -> Result<DispatchRecord, StoreError>;
-
-    fn reap_expired_leases(&self) -> Result<Vec<DispatchId>, StoreError>;
 
     // Maintenance & Ledger Closure
     fn record_undo(&self, record: UndoRecord) -> Result<(), StoreError>;
@@ -224,7 +191,6 @@ pub trait DerivedIndex: Send + Sync {
     ) -> Result<Vec<RelationRecord>, StoreError>;
 
     async fn get_run(&self, id: &RunId) -> Result<RunRecord, StoreError>;
-    async fn get_dispatch(&self, id: &DispatchId) -> Result<DispatchRecord, StoreError>;
     async fn get_packet(&self, id: &PacketId) -> Result<PacketRecord, StoreError>;
     async fn get_handoff(
         &self,
@@ -232,8 +198,6 @@ pub trait DerivedIndex: Send + Sync {
     ) -> Result<HandoffManifestRecord, StoreError>;
     async fn get_review(&self, id: &ReviewId) -> Result<ReviewRecord, StoreError>;
 
-    async fn list_active_claims(&self) -> Result<Vec<DispatchRecord>, StoreError>;
-    async fn list_expired_leases(&self) -> Result<Vec<DispatchRecord>, StoreError>;
 
     async fn upsert_object(&self, object: &ObjectRecord) -> Result<(), StoreError>;
     async fn upsert_relation(&self, relation: &RelationRecord) -> Result<(), StoreError>;

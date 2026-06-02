@@ -44,10 +44,6 @@ pub fn export_workspace(
         packets.push(store.get_packet(&pid)?);
     }
 
-    let mut dispatches = Vec::new();
-    for did in store.list_dispatches()? {
-        dispatches.push(store.get_dispatch(&did)?);
-    }
 
     let change_sets = Vec::new();
     // Assuming list_change_sets exists or we just collect them all if possible
@@ -92,7 +88,6 @@ pub fn export_workspace(
         relations,
         runs,
         packets,
-        dispatches,
         change_sets,
         handoffs,
         reviews,
