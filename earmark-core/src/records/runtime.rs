@@ -4,9 +4,9 @@
  */
 
 use crate::ids::{
-    ActorId, ChangeSetId, CheckResultId, ClassId, DispatchId, HandoffManifestId, ObjectId,
-    ObjectRef, PacketId, PacketTemplateId, ProviderProfileId, RelationId, RunId, RuntimeProtocolId,
-    SelectionPolicyId, SystemId, SystemPackId, TransitionId, WorkerProfileId, WorkflowId,
+    ActorId, ChangeSetId, CheckResultId, ClassId, HandoffManifestId, ObjectId, ObjectRef,
+    PacketId, PacketTemplateId, ProviderProfileId, RelationId, RunId, RuntimeProtocolId,
+    SelectionPolicyId, SystemId, SystemPackId, TransitionId, WorkflowId,
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -51,8 +51,6 @@ pub struct PacketRecord {
     pub protocol_ref: RuntimeProtocolId,
     pub selection_ref: Option<SelectionPolicyId>,
     pub provider_profile_ref: Option<ProviderProfileId>,
-    #[serde(default)]
-    pub worker_profile_ref: Option<WorkerProfileId>,
     pub output_contract_ref: ClassId,
     pub rendered_manifest: Option<String>,
     #[serde(default)]
@@ -93,52 +91,17 @@ pub struct ProviderExposureTraceEntry {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SelectionTraceEntry {
     pub selection_id: SelectionPolicyId,
-    pub candidate_worker_id: Option<WorkerProfileId>,
     pub candidate_provider_id: Option<ProviderProfileId>,
     pub decision: String,
     pub reason: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct DispatchRecord {
-    pub dispatch_id: DispatchId,
-    pub run_id: RunId,
-    pub transition_id: TransitionId,
-    pub packet_id: PacketId,
-    pub actor_ref: Option<ActorId>,
-    pub provider_ref: Option<ProviderProfileId>,
-    pub worker_profile_ref: Option<crate::ids::WorkerProfileId>,
-    pub status: DispatchStatus,
-    pub input_object_ids: Vec<ObjectId>,
-    pub candidate_refs: Vec<ObjectRef>,
-    pub check_result_ids: Vec<CheckResultId>,
-    pub completion_change_set_id: Option<ChangeSetId>,
-    pub handoff_manifest_id: Option<HandoffManifestId>,
-    pub blocked_reason: Option<String>,
-    pub claimed_by: Option<ActorId>,
-    pub claimed_at: Option<DateTime<Utc>>,
-    pub lease_expires_at: Option<DateTime<Utc>>,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-    pub completed_at: Option<DateTime<Utc>>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum DispatchStatus {
-    Queued,
-    Running,
-    Completed,
-    Failed,
-    Cancelled,
-}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ChangeSetRecord {
     pub change_set_id: ChangeSetId,
     pub run_id: RunId,
     pub transition_id: TransitionId,
-    pub dispatch_id: Option<DispatchId>,
     pub agent_or_actor_ref: Option<ActorId>,
     pub input_object_ids: Vec<ObjectId>,
     pub created_object_ids: Vec<ObjectId>,
@@ -157,7 +120,6 @@ pub struct CheckResultRecord {
     pub check_result_id: CheckResultId,
     pub run_id: Option<RunId>,
     pub transition_id: Option<TransitionId>,
-    pub dispatch_id: Option<DispatchId>,
     pub validator_id: Option<ObjectId>,
     pub check_type: String,
     pub status: CheckStatus,
@@ -181,13 +143,11 @@ pub struct HandoffManifestRecord {
     pub run_id: RunId,
     pub from_transition_id: TransitionId,
     pub to_transition_id: Option<TransitionId>,
-    pub source_dispatch_id: DispatchId,
     pub source_change_set_id: ChangeSetId,
     pub root_object_ids: Vec<ObjectId>,
     pub newly_created_object_ids: Vec<ObjectId>,
     pub newly_created_relation_ids: Vec<RelationId>,
     pub consumed_at: Option<DateTime<Utc>>,
-    pub consuming_dispatch_id: Option<DispatchId>,
     pub created_at: DateTime<Utc>,
 }
 

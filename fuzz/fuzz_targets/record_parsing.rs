@@ -6,6 +6,5 @@ fuzz_target!(|data: &[u8]| {
         let _: Result<earmark_core::ObjectRecord, _> = serde_json::from_str(s);
         let _: Result<earmark_core::RunRecord, _> = serde_json::from_str(s);
         let _: Result<earmark_core::PacketRecord, _> = serde_json::from_str(s);
-        let _: Result<earmark_core::DispatchRecord, _> = serde_json::from_str(s);
     }
 });

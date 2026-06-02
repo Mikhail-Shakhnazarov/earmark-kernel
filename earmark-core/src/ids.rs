@@ -131,12 +131,6 @@ impl IdSpec for RunIdSpec {
 }
 pub type RunId = TypedId<RunIdSpec>;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct DispatchIdSpec;
-impl IdSpec for DispatchIdSpec {
-    const PREFIX: &'static str = "dis";
-}
-pub type DispatchId = TypedId<DispatchIdSpec>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PacketIdSpec;
@@ -250,12 +244,6 @@ impl IdSpec for ProviderProfileIdSpec {
 }
 pub type ProviderProfileId = TypedId<ProviderProfileIdSpec>;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct WorkerProfileIdSpec;
-impl IdSpec for WorkerProfileIdSpec {
-    const PREFIX: &'static str = "wrk";
-}
-pub type WorkerProfileId = TypedId<WorkerProfileIdSpec>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ExternalConnectionIdSpec;
@@ -289,7 +277,6 @@ pub enum ReviewTargetRef {
     Object(ObjectRef),
     Relation(RelationId),
     ChangeSet(ChangeSetId),
-    Dispatch(DispatchId),
     Run(RunId),
     Report(ReportId),
 }
@@ -298,7 +285,6 @@ pub enum ReviewTargetRef {
 pub enum StandingTargetRef {
     Object(ObjectId),
     Relation(RelationId),
-    Dispatch(DispatchId),
     Run(RunId),
     Review(ReviewId),
     CheckResult(CheckResultId),

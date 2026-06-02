@@ -4,7 +4,7 @@
  */
 
 use crate::ids::{
-    ActorId, DispatchId, ExternalConnectionId, ObjectId, PacketId, ProviderProfileId,
+    ActorId, ExternalConnectionId, ObjectId, PacketId, ProviderProfileId,
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -36,7 +36,6 @@ pub enum ProviderType {
 pub struct ProviderRecord {
     pub provider_record_id: String,
     pub provider_profile_ref: ProviderProfileId,
-    pub dispatch_id: DispatchId,
     pub packet_id: PacketId,
     pub request_metadata: serde_json::Value,
     pub response_metadata: serde_json::Value,
@@ -140,7 +139,7 @@ pub enum ProviderLoggingPolicy {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ProviderFailurePolicy {
-    FailDispatch,
+    Fail,
     RecordCheckResult,
     Retry { max_attempts: u8 },
 }

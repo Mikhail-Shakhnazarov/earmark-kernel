@@ -3,7 +3,7 @@
  * Dual-licensed under AGPL-3.0-or-later or commercial terms.
  */
 
-use crate::ids::{ActorId, DispatchId, PacketId, ReviewId, RunId};
+use crate::ids::{ActorId, PacketId, ReviewId, RunId};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -24,7 +24,6 @@ pub enum SignalIntegrityState {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ProductionContext {
-    pub dispatch_id: Option<DispatchId>,
     pub run_id: Option<RunId>,
     pub packet_id: Option<PacketId>,
     pub actor_id: Option<ActorId>,

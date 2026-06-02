@@ -11,7 +11,6 @@ pub mod migration;
 pub mod provider;
 pub mod runtime;
 pub mod signal;
-pub mod worker;
 
 pub use self::archive::*;
 pub use self::core::*;
@@ -21,4 +20,3 @@ pub use self::migration::*;
 pub use self::provider::*;
 pub use self::runtime::*;
 pub use self::signal::*;
-pub use self::worker::*;

@@ -5,9 +5,8 @@
 
 use crate::ids::{
     ClassId, PacketTemplateId, ProviderProfileId, RelationRuleId, RuntimeProtocolId,
-    SelectionPolicyId, SystemId, SystemPackId, ValidatorId, WorkerProfileId, WorkflowId,
+    SelectionPolicyId, SystemId, SystemPackId, ValidatorId, WorkflowId,
 };
-use crate::records::worker::AdapterKind;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -137,10 +136,6 @@ pub struct SelectionPolicy {
     pub required_capabilities: Vec<String>,
     pub preference_logic: Option<String>, // e.g., "fastest", "cheapest"
     pub fallback_provider_ref: Option<ProviderProfileId>,
-    #[serde(default)]
-    pub fallback_worker_ref: Option<WorkerProfileId>,
-    #[serde(default)]
-    pub adapter_kind_filter: Option<AdapterKind>,
     pub origin_pack_id: Option<SystemPackId>,
 }
 

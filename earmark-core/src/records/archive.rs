@@ -4,9 +4,8 @@
  */
 
 use crate::records::{
-    ChangeSetRecord, DispatchRecord, HandoffManifestRecord, ObjectRecord, PacketRecord,
-    RelationRecord, ReviewRecord, RunRecord, StandingTransitionRecord, SystemPackManifest,
-    VersionRecord,
+    ChangeSetRecord, HandoffManifestRecord, ObjectRecord, PacketRecord, RelationRecord,
+    ReviewRecord, RunRecord, StandingTransitionRecord, SystemPackManifest, VersionRecord,
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -17,7 +16,6 @@ pub struct WorkspaceArchive {
     pub relations: Vec<RelationRecord>,
     pub runs: Vec<RunRecord>,
     pub packets: Vec<PacketRecord>,
-    pub dispatches: Vec<DispatchRecord>,
     pub change_sets: Vec<ChangeSetRecord>,
     pub handoffs: Vec<HandoffManifestRecord>,
     pub reviews: Vec<ReviewRecord>,

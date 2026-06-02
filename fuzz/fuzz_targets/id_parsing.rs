@@ -6,6 +6,5 @@ fuzz_target!(|data: &[u8]| {
         let _ = earmark_core::ObjectId::parse(s);
         let _ = earmark_core::RunId::parse(s);
         let _ = earmark_core::PacketId::parse(s);
-        let _ = earmark_core::DispatchId::parse(s);
     }
 });
