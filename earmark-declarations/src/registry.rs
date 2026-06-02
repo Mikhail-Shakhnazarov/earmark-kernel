@@ -9,7 +9,7 @@ use earmark_core::{
     ClassDeclaration, ClassId, PacketTemplateDeclaration, PacketTemplateId, RelationRule,
     RelationRuleId, RuntimeProtocol, RuntimeProtocolId, SelectionPolicy, SelectionPolicyId,
     SystemDeclaration, SystemId, SystemPackId, SystemPackManifest, ValidatorDeclaration,
-    ValidatorId, WorkerProfile, WorkerProfileId, WorkflowDeclaration, WorkflowId,
+    ValidatorId, WorkflowDeclaration, WorkflowId,
 };
 use std::collections::HashMap;
 
@@ -22,7 +22,6 @@ pub struct InProcessRegistry {
     validators: HashMap<ValidatorId, ValidatorDeclaration>,
     relation_rules: HashMap<RelationRuleId, RelationRule>,
     selection_policies: HashMap<SelectionPolicyId, SelectionPolicy>,
-    worker_profiles: HashMap<WorkerProfileId, WorkerProfile>,
     system_packs: HashMap<SystemPackId, SystemPackManifest>,
 }
 
@@ -43,7 +42,6 @@ impl InProcessRegistry {
             validators: HashMap::new(),
             relation_rules: HashMap::new(),
             selection_policies: HashMap::new(),
-            worker_profiles: HashMap::new(),
             system_packs: HashMap::new(),
         }
     }
@@ -80,10 +78,6 @@ impl InProcessRegistry {
     pub fn register_selection_policy(&mut self, decl: SelectionPolicy) {
         self.selection_policies
             .insert(decl.selection_id.clone(), decl);
-    }
-    pub fn register_worker_profile(&mut self, decl: WorkerProfile) {
-        self.worker_profiles
-            .insert(decl.worker_profile_id.clone(), decl);
     }
     pub fn register_system_pack(&mut self, decl: SystemPackManifest) {
         self.system_packs.insert(decl.pack_id.clone(), decl);
@@ -156,12 +150,6 @@ impl DeclarationRegistry for InProcessRegistry {
             .ok_or_else(|| DeclarationError::NotFound(id.as_str().to_string()))
     }
 
-    fn get_worker_profile(&self, id: &WorkerProfileId) -> Result<WorkerProfile, DeclarationError> {
-        self.worker_profiles
-            .get(id)
-            .cloned()
-            .ok_or_else(|| DeclarationError::NotFound(id.as_str().to_string()))
-    }
 
     fn get_system_pack(&self, id: &SystemPackId) -> Result<SystemPackManifest, DeclarationError> {
         self.system_packs

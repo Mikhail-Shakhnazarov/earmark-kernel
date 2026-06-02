@@ -496,8 +496,6 @@ pub fn get_dev_pack_declarations() -> Vec<RegisterFn> {
                 required_capabilities: vec!["compute".to_string()],
                 preference_logic: Some("fastest".to_string()),
                 fallback_provider_ref: None,
-                fallback_worker_ref: None,
-                adapter_kind_filter: None,
                 origin_pack_id: Some(id),
             })
         }

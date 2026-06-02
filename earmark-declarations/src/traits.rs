@@ -7,8 +7,8 @@ use crate::errors::DeclarationError;
 use earmark_core::{
     ClassDeclaration, ClassId, PacketTemplateDeclaration, PacketTemplateId, RelationRule,
     RelationRuleId, RuntimeProtocol, RuntimeProtocolId, SelectionPolicyId, SystemDeclaration,
-    SystemId, SystemPackId, SystemPackManifest, ValidatorDeclaration, ValidatorId, WorkerProfile,
-    WorkerProfileId, WorkflowDeclaration, WorkflowId,
+    SystemId, SystemPackId, SystemPackManifest, ValidatorDeclaration, ValidatorId,
+    WorkflowDeclaration, WorkflowId,
 };
 
 pub trait DeclarationRegistry {
@@ -29,7 +29,6 @@ pub trait DeclarationRegistry {
         &self,
         id: &SelectionPolicyId,
     ) -> Result<earmark_core::SelectionPolicy, DeclarationError>;
-    fn get_worker_profile(&self, id: &WorkerProfileId) -> Result<WorkerProfile, DeclarationError>;
     fn get_system_pack(&self, id: &SystemPackId) -> Result<SystemPackManifest, DeclarationError>;
     fn verify_registry(&self) -> Result<Vec<String>, DeclarationError>;
 }
